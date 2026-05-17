@@ -1,0 +1,49 @@
+services:
+  api:
+    build: .
+    container_name: vig-api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    networks:
+      - vig-network
+
+  worker:
+    build: .
+    container_name: vig-worker
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: python -m src.worker
+    networks:
+      - vig-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vig-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    networks:
+      - vig-network
+
+volumes:
+  redis_data:
+
+networks:
+  vig-network:
+    driver: bridge

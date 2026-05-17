@@ -1,0 +1,35 @@
+# Credentials & secrets
+*.json
+!package.json
+.env
+.env.*
+!.env.example
+credentials/*
+!credentials/.gitkeep
+data/*
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# DB
+*.db
+*.sqlite
+
+# Docker
+docker-compose.override.yml
+
+# Worktrees
+.worktrees/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pytest
+.pytest_cache/
