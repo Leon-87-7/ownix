@@ -1,0 +1,185 @@
+Total unique: 184
+  [tool] n8n
+  [service] OpenWeatherMap
+  [service] Tavi (api.tavi.com)
+  [library] HTTP Request
+  [tool] API Documentation
+  [tool] Curl Command
+  [service] Google Cloud
+  [library] Production Grade Agent Skills Library
+  [service] GitHub
+  [service] Claude
+  [tool] Chrome's MCP
+  [service] Nitn
+  [tool] Excalibraw
+  [service] Slack
+  [library] Gmail tool
+  [library] Google Contacts tool
+  [concept] AI Agent/Node/Chat Model
+  [architecture_concept] Subworkflow
+  [service] trigger.dev
+  [tool] Claude Code
+  [service] ClickUp
+  [service] Yelp Fusion API
+  [library] TypeScript
+  [tool] Excalidraw
+  [service] YouTube API
+  [library] YAML
+  [repo] Hermes Agent (https
+  [library] Gemma 4
+  [tool] Ollama
+  [service] Firecrawl
+  [tool] Docker
+  [service] Telegram Bot
+  [library] Shadcn
+  [tool] Shadcn Create
+  [library] Base UI
+  [library] Radix UI
+  [library] Next.js
+  [library] Tailwind CSS
+  [service] Strait of Hormuz
+  [service] Bab el-Mandeb
+  [service] Claude / Opus 4.5
+  [tool] Research-Plan-Implement (RPI)
+  [service] Hackernews
+  [repo] Beads
+  [repo] OpenClaw Pete
+  [tool] DeepSeek V4 Pro
+  [tool] DeepSeek V4 Flash
+  [tool] Compressed Sparse Attention (CSA)
+  [tool] Heavy Compressed Attention (HCA)
+  [service] DeepSeek API
+  [repo] Hugging Face
+  [service] chat.deepseek.com (chat.deepseek.com)
+  [tool] OpenClaude
+  [tool] OpenCode
+  [tool] Opus 4.6
+  [tool] GPT 5.4
+  [service] OpenAI GPT-5.5
+  [service] OpenAI GPT-5.4
+  [tool] Codex
+  [service] OpenAI image model
+  [service] DeepSeek model
+  [service] GLM 5.1
+  [service] Muse (from Meta)
+  [service] Opus 4.7
+  [indicator] MACD
+  [indicator] Simple Moving Averages (50/200 day/week)
+  [indicator] Stochastics
+  [indicator] RSI (Relative Strength Index)
+  [indicator] Bollinger Bands
+  [indicator] Donchian Channels
+  [indicator] Fibonacci Retracement
+  [indicator] Volume
+  [service] Telegram Channel (Link in description)
+  [service] Claude AI
+  [library] Streamlit
+  [tool] VS Code
+  [service] Yahoo Finance
+  [library] Plotly
+  [service] Instantly AI
+  [service] LinkedIn
+  [service] School
+  [tool] CRM
+  [tool] Visual Studio Code (VS Code)
+  [service] Claude (paid plan)
+  [framework] WAT Framework
+  [language] Python
+  [language] Markdown
+  [file] claude.md
+  [service] Free School Community
+  [tool] memory.mmd
+  [tool] Automemory
+  [framework] Chyros
+  [tool] Claude code session start hook
+  [resource] John Connelly's article
+  [concept] Pavl Hurin's concept
+  [service] Codeex Desktop App
+  [service] ChatGPT 5.5 Codex
+  [service] OpenAI Image Gen Model (Image 2)
+  [service] Google NotebookLM
+  [service] AI Profit Boardroom (Link is in the description)
+  [service] AI Success Lab (Links are in the comments and description)
+  [tool] Google Gemini
+  [service] Google Workspace
+  [tool] Ask Gemini in Chat
+  [tool] Workspace Studio
+  [service] Asana
+  [service] Jira
+  [service] Salesforce
+  [website] AI Hero (https
+  [repo] Exercise Repo
+  [tool] TLDraw
+  [service] Notion
+  [service] Sesan HR (sesanhr.com)
+  [service] G2
+  [service] Capterra
+  [service] Reddit
+  [tool] Ahrefs
+  [service] Gmail
+  [service] Docs
+  [service] Sheets
+  [service] Slides
+  [service] Drive
+  [service] Meet
+  [service] Chat
+  [event] Google Cloud Next
+  [service] AI Profit Boardroom
+  [service] AI Success Lab
+  [service] Zoom
+  [service] Teams
+  [service] Microsoft Copilot
+  [service] OpenAI
+  [LLM] Gemini
+  [service] Nanabanana
+  [service] Vercel
+  [LLM] GPT models
+  [skill] Skill Creator
+  [skill] Superpowers
+  [plugin] GSD (Get Stuff Done)
+  [command] /review & /ultra review
+  [plugin] Context Mode
+  [plugin] ClaudeMem
+  [skill] Front-End Design skill
+  [service] ClaudeCode
+  [service] Anthropic
+  [library] Playwright
+  [library] skill.md
+  [tool] Remotion
+  [service] zioo.com (zioo.com)
+  [service] Agentic Academy
+  [tool] Bash
+  [service] Google Sheets
+  [library] OTEL (OpenTelemetry)
+  [service] Firecrawl / Apify
+  [service] HeyReach
+  [library] Flask
+  [library] FastAPI
+  [library] Celery
+  [tool] TimescaleDB
+  [library] React
+  [service] OpenAI API
+  [service] School community
+  [repo] Trading Agents
+  [library] LangGraph
+  [library] Pydantic
+  [service] arXiv
+  [service] OpenAI GPT
+  [service] Anthropic Claude
+  [service] XAI Grok
+  [service] DeepSeek
+  [service] Qwen
+  [service] GLM
+  [service] OpenRouter
+  [service] Azure OpenAI
+  [tool] RSI
+  [service] Make
+  [service] Zapier
+  [service] Anthropic Managed Agents
+  [service] Airtable Hyper Agent
+  [service] Lovable
+  [tool] Open Claw
+  [repo] AutoGPT
+  [repo] BabyAGI
+  [service] ChatGPT
+  [model] GPT-3
