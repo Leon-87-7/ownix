@@ -956,7 +956,16 @@ Bad: "coding tutorial", "market analysis", "general tips"
 - If (B): Focus on tickers ($), entry/exit strategies, macro indicators, and price targets.
 - If (C): Focus on core concepts and a high-level summary.
 
-### STEP 4: OUTPUT FORMAT
+### STEP 4: URL RESOLUTION RULES (applies to every entry in `tools`)
+The `url` field is REQUIRED for every tool entry. Resolve it as follows:
+1. If the transcript or video description names a specific URL, use that.
+2. Else if the tool is well-known (open-source library, public framework, public SaaS, named API, public GitHub repo), use its canonical homepage URL — even when the video does not explicitly name the URL. Examples: `n8n` → `https://n8n.io`, `OpenWeatherMap` → `https://openweathermap.org`, `GitHub` → `https://github.com`, `Claude` → `https://claude.ai`, `OpenAI` → `https://openai.com`, `Tavily` → `https://tavily.com`, `LangChain` → `https://langchain.com`.
+3. For market tickers (`type: "symbol"`), use the exchange URL when unambiguous (`$AAPL` → `https://finance.yahoo.com/quote/AAPL`); otherwise leave empty.
+4. Only leave `url` empty when the tool is so generic or obscure that no canonical URL can be reliably inferred (e.g. "HTTP Request", "API Documentation", "Curl Command" — these are concepts, not products).
+
+The `url` field is the primary signal used downstream for semantic-graph ingestion. Populating it for every named product is the single most important quality lever in this prompt.
+
+### STEP 5: OUTPUT FORMAT
 Respond ONLY with a valid JSON object. No markdown, no backticks, no text before or after the JSON.
 
 {{
@@ -968,7 +977,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no text before
     {{
       "name": "Tool/Library/Ticker name",
       "type": "tool|repo|library|symbol|service",
-      "url": "URL if mentioned, else empty string",
+      "url": "Canonical URL per STEP 4 rules — empty string only for true concepts (e.g. 'HTTP Request')",
       "description": "One sentence role/context"
     }}
   ],
@@ -3027,6 +3036,16 @@ The same `_rebuild_lock` is checked by `refresh_stale_links` — if held, the sc
 
 **Symmetry note:** All four model-extracted link sources (short Vision, long description, long enrichment tools, long PRD tech_stack) feed brain through the same fire-and-forget call. Soft dedup means a tool appearing in multiple sources for the same video produces `seen_count += 1` per source — stronger signal, not duplicate noise.
 
+**Feed quality hierarchy for long videos:**
+
+| Feed | Quality | Why |
+|------|---------|-----|
+| **Phase 2 — `ai_tools[]` URLs** | **High** (primary) | Model-curated list of tools the video actually teaches, with type classification and per-tool description. The STEP 4 URL Resolution Rules (§2 enrichment prompt) make the `url` field required for every named product; this is the dominant long-video brain feed. |
+| Phase 3 — `prd.tech_stack[]` URLs | High | Same shape as ai_tools but more deliberate (Pro model on intent slot). Adds whatever the user-directed PRD includes. Reinforces ai_tools nodes via dedup `seen_count`. |
+| Phase 1 — `description_links_raw` URLs | Low (secondary) | Whatever the creator put in the YouTube description — mostly sponsor links, Patreon/social, course CTAs, affiliate codes. Occasionally substantive (a repo for the demo project). Kept in the feed because (a) the rare substantive link matters, (b) brain's `seen_count` and cosine similarity naturally weight signal over noise, (c) removing the path adds a code change that has to be re-justified if you change your mind later. |
+
+The hierarchy is the rationale for §13.15 backfill choosing **re-enrichment of historical transcripts** over leaning on `description_links_raw` from historical sheets — the substantive long-video signal lives in `ai_tools` (with the new URL-resolution rules in §2), not in the description link column.
+
 ### 13.11 New Dependencies
 
 ```txt
@@ -3126,28 +3145,53 @@ await brain.ingest_links(
 
 **Per-row ingestion logic — long Sheet (`SHEETS_ID_LONG`):**
 
-The long Sheet stores extracted tools per video in the `ai_tools` column as pipe-joined records (each: `[type] name (url): description`). Parser TBD when a sample row is shared; expected shape:
+Long sheet column shape (verified from real rows): `url, video_id, title, channel, description_links_raw, char_count, drive_file_id, drive_url, fetched_at, status, ai_objective, ai_action_points, ai_tools, ai_category, ai_topic, ai_market_data`. Note the long sheet has **no `job_id` column** — `video_id` is the YouTube video ID (e.g. `qZkX_gIlwsY`) and is what ties a row to its source.
+
+**The wrong path (rejected):** `description_links_raw` is bare URLs from the YouTube description box — mostly sponsor links, creator socials, affiliate codes, course CTAs. Too shallow to use as the backfill brain feed (see §13.10 feed quality hierarchy). The substantive long-video signal lives in `ai_tools`, not in description links.
+
+**The historical `ai_tools` problem:** rows produced under the old enrichment prompt have `ai_tools` shaped `[type] name: description | ...` with no `url` field. The new prompt (§2) requires URLs per tool. So historical rows must be **re-enriched** with the new prompt to gain URL-bearing tools[] before brain ingestion.
+
+**Re-enrichment path (chosen):** every historical row has a `drive_url` pointing to its transcript `.md` on Drive (the `drive_file_id` column is the cached ID for direct API access). Backfill fetches the transcript text, runs it through the new enrichment prompt, parses the URL-bearing tools[], and ingests to brain. One Gemini call per historical long video — bounded, one-time, produces brain nodes in the same shape as new videos.
 
 ```python
-TOOL_REC = re.compile(r"\[(?P<type>[^\]]+)\]\s*(?P<name>[^(]+?)\s*\((?P<url>https?://[^)]+)\):\s*(?P<desc>.+?)(?=\s*\||$)")
+import re
 
-def parse_long_tools(ai_tools: str) -> list[dict]:
-    if not ai_tools:
+# `ai_tools` in the legacy row is captured as audit context only; brain ingestion does not parse it.
+# We re-derive structured tools[] from the transcript itself.
+
+async def reenrich_historical_long_row(row) -> list[dict]:
+    """Fetch the cached transcript, run the new enrichment prompt, return URL-bearing tools[]."""
+    if row.status != "ok":
         return []
+    transcript_md = await drive.read_file_text(row.drive_file_id)   # see services/drive.py
+    transcript = strip_transcript_frontmatter(transcript_md)         # drop the # Title + **Channel:** lines
+    enrichment = await gemini_text_enrich(transcript, title=row.title)   # same function used in live pipeline
+    # Keep only tools whose new-prompt resolution actually produced a URL
     return [
-        {"url": m["url"], "label": m["name"].strip(), "description": m["desc"].strip(), "type": m["type"].strip()}
-        for m in TOOL_REC.finditer(ai_tools)
+        {"url": t["url"], "label": t["name"], "description": t.get("description")}
+        for t in enrichment.tools
+        if t.get("url")
     ]
 
-links = parse_long_tools(row.ai_tools)
+# Per-row ingestion call
+links = await reenrich_historical_long_row(row)
 if not links:
-    continue
+    continue   # tools without URLs, or empty transcript, or status != 'ok'
 await brain.ingest_links(
     links=links,
-    topic=row.ai_topic or row.title,   # long sheet has a real ai_topic from enrichment
-    source_job_id=f"backfill_long_{row.job_id}",
+    topic=row.ai_topic or row.title,             # legacy ai_topic stays useful as the topic field
+    source_job_id=f"backfill_long_{row.video_id}",
 )
 ```
+
+`strip_transcript_frontmatter()` is a small helper that removes the markdown header block from the `.md` file (the `# Title` + `**Channel:** …` + `**Char count:** …` + `---` lines) so only the raw transcript reaches the model. Lives in `utils/markdown.py` alongside `build_transcript_markdown()`.
+
+**Operational notes specific to long backfill:**
+- **Cost ceiling:** N historical long videos × 1 Gemini enrichment call each. Bounded and predictable (e.g. 200 videos ≈ 200 Flash calls ≈ negligible cost).
+- **Drive read rate-limits:** Drive API allows ~1000 reads/100s per user. For typical backfill scale this is non-issue; for larger archives, add `await asyncio.sleep(0.1)` between row reads.
+- **Failure tolerance:** if `drive.read_file_text(drive_file_id)` fails (file deleted, permission changed) → log + skip that row, continue. Don't abort the whole backfill on per-row failures.
+- **Skip rows where re-enrichment returns zero URL-bearing tools** — accept that some historical videos genuinely don't have well-known products to canonicalize (general educational content, market analysis without named platforms).
+- **Idempotent:** soft dedup in `brain.ingest_links` means re-running the backfill after a parser fix only bumps `seen_count` on existing links — no duplicate nodes.
 
 **Run-once script structure** (`scripts/backfill_brain.py`):
 
