@@ -1,9 +1,4 @@
-"""POST /webhook — receives Telegram updates, creates job, enqueues task envelope.
-
-Slice #1 scope: validate secret, parse message, route URL via detect_pipeline(), create
-the job row, enqueue {"task":"video","job_id":...}, reply with the job_id. Pipeline
-logic itself lives in slices #2 (short) and #3 (long).
-"""
+"""POST /webhook — receives Telegram updates and callback queries."""
 
 from __future__ import annotations
 
@@ -11,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 
 from src import database, queue
 from src.config import settings
-from src.telegram.sender import send_message
+from src.telegram.sender import answer_callback_query, send_message
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline
 
@@ -19,17 +14,53 @@ log = get_logger(__name__)
 router = APIRouter()
 
 
+async def _handle_callback(callback: dict) -> None:
+    """Dispatch callback_query events from inline keyboard button presses."""
+    cq_id = callback.get("id", "")
+    data = callback.get("data", "")
+    chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
+
+    log.info("callback_received", callback_data=data, chat_id=chat_id)
+
+    if data.startswith("gemini_no:"):
+        job_id = data.split(":", 1)[1]
+        await database.update_job_status(job_id, "complete")
+        await answer_callback_query(cq_id)
+
+    elif data.startswith("gemini_yes:"):
+        # Slice #4 implements enrichment; stub here
+        job_id = data.split(":", 1)[1]
+        log.info("gemini_yes_stub", job_id=job_id, note="Phase 2 not yet implemented")
+        await answer_callback_query(cq_id, text="Gemini enrichment coming soon!")
+
+    elif data.startswith("prd_build_spec:"):
+        # Slice #7 implements intent routing; stub here
+        job_id = data.split(":", 1)[1]
+        log.info("prd_build_spec_stub", job_id=job_id, note="PRD spec not yet implemented")
+        await answer_callback_query(cq_id)
+
+    else:
+        log.warning("unknown_callback", data=data)
+        await answer_callback_query(cq_id)
+
+
 @router.post("/webhook")
 async def webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
 ) -> dict[str, bool]:
-    # Validate the secret header from Telegram (PRD §2.2.1).
     if x_telegram_bot_api_secret_token != settings.TELEGRAM_WEBHOOK_SECRET:
         log.warning("webhook_invalid_secret")
         raise HTTPException(status_code=403, detail="invalid secret")
 
     update = await request.json()
+
+    # Handle callback queries (inline keyboard button presses)
+    callback = update.get("callback_query")
+    if callback:
+        await _handle_callback(callback)
+        return {"ok": True}
+
     message = update.get("message") or update.get("edited_message") or {}
     chat = message.get("chat") or {}
     chat_id = chat.get("id")
@@ -44,7 +75,6 @@ async def webhook(
     )
 
     if not chat_id or not text:
-        # Non-text update (sticker, photo without caption, edited reaction, etc.) — ack and ignore.
         return {"ok": True}
 
     pipeline = detect_pipeline(text)

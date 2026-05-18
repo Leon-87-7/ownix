@@ -1,8 +1,6 @@
 """Background worker — dequeues task envelopes and dispatches to processors.
 
-Slice #1 scope: dispatch on `task["task"]`, log task_started / task_complete, no real
-processing yet. Later slices add cases:
-    - slice #2/#3: 'video'      → processors.short_video / long_video
+Later slices add cases:
     - slice #4:    'enrichment' → processors.enrichment.run
     - slice #6:    'prd_auto'   → processors.prd.run_auto
     - slice #7:    'prd_intent' → processors.prd.run_intent
@@ -34,8 +32,8 @@ async def _dispatch(task: dict) -> None:
                 from src.processors import short_video
                 await short_video.run(job)
             elif job["content_type"] == "long":
-                # Slice #3 implements this
-                log.info("long_video_stub", job_id=job_id)
+                from src.processors import long_video
+                await long_video.run(job)
             else:
                 log.error("unknown_content_type", job_id=job_id, content_type=job["content_type"])
         except Exception:

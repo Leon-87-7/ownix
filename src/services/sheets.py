@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Any
 
 from google.oauth2 import service_account
@@ -49,3 +50,46 @@ async def append_short_row(job: dict) -> None:
         log.info("sheets_short_appended", job_id=job.get("id"))
     except Exception:
         log.exception("sheets_short_failed", job_id=job.get("id"))
+
+
+async def append_long_row(
+    job: dict,
+    *,
+    video_id: str,
+    channel: str,
+    views: str,
+    description_links_raw: str,
+    char_count: int,
+    drive_file_id: str,
+) -> None:
+    """
+    Append one row to GOOGLE_SHEETS_ID_LONG.
+    Columns (§13.15 verified shape):
+      url, video_id, title, channel, description_links_raw, char_count,
+      drive_file_id, drive_url, fetched_at, status,
+      ai_objective, ai_action_points, ai_tools, ai_category, ai_topic, ai_market_data
+    """
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    row = [
+        job.get("url", ""),
+        video_id,
+        job.get("title", ""),
+        channel,
+        description_links_raw,
+        char_count,
+        drive_file_id,
+        job.get("drive_url", ""),
+        fetched_at,
+        "ok",
+        "",  # ai_objective — filled by Phase 2
+        "",  # ai_action_points
+        "",  # ai_tools
+        "",  # ai_category
+        "",  # ai_topic
+        "",  # ai_market_data
+    ]
+    try:
+        await asyncio.to_thread(_append_sync, settings.GOOGLE_SHEETS_ID_LONG, row)
+        log.info("sheets_long_appended", job_id=job.get("id"))
+    except Exception:
+        log.exception("sheets_long_failed", job_id=job.get("id"))

@@ -79,6 +79,49 @@ async def send_photo(
     return body.get("result", {})
 
 
+async def send_document(
+    chat_id: int,
+    file_bytes: bytes,
+    filename: str,
+    *,
+    caption: str | None = None,
+) -> dict[str, Any]:
+    """Send a document via multipart/form-data."""
+    data: dict[str, Any] = {"chat_id": str(chat_id)}
+    if caption:
+        data["caption"] = caption
+    files = {"document": (filename, file_bytes, "text/markdown")}
+    response = await _http().post(_endpoint("sendDocument"), data=data, files=files)
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        log.error("telegram_document_failed", chat_id=chat_id, response=body)
+        raise RuntimeError(f"Telegram sendDocument failed: {body!r}")
+    log.info("telegram_document_sent", chat_id=chat_id, filename=filename)
+    return body.get("result", {})
+
+
+async def send_inline_keyboard(
+    chat_id: int,
+    text: str,
+    buttons: list[list[dict]],
+) -> dict[str, Any]:
+    """Send a message with an inline keyboard. buttons is the inline_keyboard array."""
+    payload: dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": text,
+        "reply_markup": {"inline_keyboard": buttons},
+    }
+    response = await _http().post(_endpoint("sendMessage"), json=payload)
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        log.error("telegram_keyboard_failed", chat_id=chat_id, response=body)
+        raise RuntimeError(f"Telegram sendMessage (keyboard) failed: {body!r}")
+    log.info("telegram_keyboard_sent", chat_id=chat_id)
+    return body.get("result", {})
+
+
 async def answer_callback_query(callback_query_id: str, text: str | None = None) -> None:
     """Acknowledge a Telegram callback query to dismiss the loading state."""
     payload: dict[str, Any] = {"callback_query_id": callback_query_id}

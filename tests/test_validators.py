@@ -1,6 +1,6 @@
 import pytest
 
-from src.utils.validators import detect_pipeline, is_video_url
+from src.utils.validators import detect_pipeline, extract_description_links, is_video_url, slugify
 
 
 @pytest.mark.parametrize(
@@ -91,3 +91,70 @@ def test_is_video_url() -> None:
     assert is_video_url("https://instagram.com/reel/xyz/") is True
     assert is_video_url("https://example.com") is False
     assert is_video_url("not a url") is False
+
+
+# ---------------------------------------------------------------------------
+# extract_description_links
+# ---------------------------------------------------------------------------
+
+def test_extract_description_links_generic_roots_bare() -> None:
+    desc = "Follow me on GitHub: https://github.com"
+    results = extract_description_links(desc)
+    urls = [r["url"] for r in results]
+    assert "https://github.com" not in urls
+
+
+def test_extract_description_links_github_repo_passes() -> None:
+    desc = "Source repo: https://github.com/user/myrepo — check the source"
+    results = extract_description_links(desc)
+    urls = [r["url"] for r in results]
+    assert any("github.com/user/myrepo" in u for u in urls)
+
+
+def test_extract_description_links_promo_subdomain() -> None:
+    desc = "Try for free: https://get.example.com/start"
+    results = extract_description_links(desc)
+    urls = [r["url"] for r in results]
+    assert "https://get.example.com/start" not in urls
+
+
+def test_extract_description_links_label_keyword() -> None:
+    desc = "📚 docs: https://docs.example.com/guide"
+    results = extract_description_links(desc)
+    urls = [r["url"] for r in results]
+    assert any("docs.example.com" in u for u in urls)
+
+
+def test_extract_description_links_empty() -> None:
+    assert extract_description_links("") == []
+    assert extract_description_links("No links here, just text.") == []
+
+
+# ---------------------------------------------------------------------------
+# slugify
+# ---------------------------------------------------------------------------
+
+def test_slugify_basic() -> None:
+    assert slugify("Hello World") == "hello_world"
+
+
+def test_slugify_unicode() -> None:
+    result = slugify("Héllo Wörld")
+    # unicode chars get folded to underscores
+    assert re.match(r"^[a-z0-9_]+$", result)
+
+
+def test_slugify_empty() -> None:
+    assert slugify("") == ""
+
+
+def test_slugify_all_special() -> None:
+    assert slugify("!@#$%^&*()") == ""
+
+
+def test_slugify_max_length() -> None:
+    long_title = "a" * 100
+    assert len(slugify(long_title)) == 80
+
+
+import re  # noqa: E402 — imported here to avoid top-level shadowing in this test module
