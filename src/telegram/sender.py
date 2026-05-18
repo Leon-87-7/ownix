@@ -56,3 +56,33 @@ async def send_message(
         raise RuntimeError(f"Telegram sendMessage failed: {body!r}")
     log.info("telegram_message_sent", chat_id=chat_id)
     return body.get("result", {})
+
+
+async def send_photo(
+    chat_id: int,
+    photo_bytes: bytes,
+    *,
+    caption: str | None = None,
+) -> dict[str, Any]:
+    """Send a photo via multipart/form-data."""
+    data: dict[str, Any] = {"chat_id": str(chat_id)}
+    if caption:
+        data["caption"] = caption
+    files = {"photo": ("photo.jpg", photo_bytes, "image/jpeg")}
+    response = await _http().post(_endpoint("sendPhoto"), data=data, files=files)
+    response.raise_for_status()
+    body = response.json()
+    if not body.get("ok"):
+        log.error("telegram_photo_failed", chat_id=chat_id, response=body)
+        raise RuntimeError(f"Telegram sendPhoto failed: {body!r}")
+    log.info("telegram_photo_sent", chat_id=chat_id)
+    return body.get("result", {})
+
+
+async def answer_callback_query(callback_query_id: str, text: str | None = None) -> None:
+    """Acknowledge a Telegram callback query to dismiss the loading state."""
+    payload: dict[str, Any] = {"callback_query_id": callback_query_id}
+    if text:
+        payload["text"] = text
+    response = await _http().post(_endpoint("answerCallbackQuery"), json=payload)
+    response.raise_for_status()
