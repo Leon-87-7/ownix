@@ -31,6 +31,19 @@ services:
     networks:
       - vig-network
 
+  transcript-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.transcript
+    container_name: vig-transcript
+    environment:
+      - INSTAGRAM_COOKIES=/app/credentials/instagram_cookies.txt
+    volumes:
+      - ./credentials:/app/credentials:ro
+    restart: unless-stopped
+    networks:
+      - vig-network
+
   redis:
     image: redis:7-alpine
     container_name: vig-redis

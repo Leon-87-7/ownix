@@ -28,7 +28,10 @@ import shutil
 from PIL import Image
 import io
 
-INSTAGRAM_COOKIES = r"C:\Users\leone\Desktop\codeKitchen\yt_scrap\instagram_cookies.txt"
+INSTAGRAM_COOKIES = os.environ.get(
+    "INSTAGRAM_COOKIES",
+    r"C:\\Users\\leone\\Desktop\\codeKitchen\\vig\\credentials\\instagram_cookies.txt",
+)
 INSTAGRAM_MAX_SLIDES = 10
 
 app = Flask(__name__)
@@ -60,9 +63,7 @@ def get_primary_media_info(info):
 def get_transcript():
     url = request.args.get("url")
     if not url:
-        return jsonify(
-            [{"error": {"type": "missing_url", "message": "No URL provided"}}]
-        ), 400
+        return jsonify([{"error": {"type": "missing_url", "message": "No URL provided"}}]), 400
 
     video_id = extract_video_id(url)
     if not video_id:
@@ -252,9 +253,7 @@ def get_short_frames():
 
         # Collect and encode frames
         frame_files = sorted(
-            f
-            for f in os.listdir(tmp_frame_dir)
-            if f.startswith("frame_") and f.endswith(".jpg")
+            f for f in os.listdir(tmp_frame_dir) if f.startswith("frame_") and f.endswith(".jpg")
         )
         frames = []
         for i, fname in enumerate(frame_files):
