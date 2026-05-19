@@ -99,23 +99,13 @@ def test_load_embeddings_bad_length_skipped(caplog):
 # _resolve_title_sync
 # ---------------------------------------------------------------------------
 
-def _fake_genai(generate_content_fn):
-    """Return a fake google.generativeai module for sys.modules injection."""
-    import sys
-    fake = MagicMock()
-    fake.GenerativeModel.return_value.generate_content.side_effect = generate_content_fn
-    return fake
-
-
 def test_resolve_title_github():
     """GitHub URL should return owner/repo hint (Gemini echoes hint back)."""
-    import sys
     url = "https://github.com/vercel/next.js"
     topic = "web dev"
-    fake = MagicMock()
-    fake.GenerativeModel.return_value.generate_content.return_value = MagicMock(text="vercel/next.js")
 
-    with patch.dict(sys.modules, {"google.generativeai": fake}):
+    with patch("google.genai.Client") as MockClient:
+        MockClient.return_value.models.generate_content.return_value = MagicMock(text="vercel/next.js")
         result = _resolve_title_sync(url, topic, api_key="fake-key")
 
     assert result == "vercel/next.js"
@@ -123,16 +113,14 @@ def test_resolve_title_github():
 
 def test_resolve_title_strip_tld():
     """Non-GitHub URL strips www. and TLD; Gemini echoes back the hint."""
-    import sys
     url = "https://docs.tailwindcss.com/getting-started"
     topic = "css"
-    fake = MagicMock()
-    # Return whatever hint was embedded in the prompt string
-    fake.GenerativeModel.return_value.generate_content.side_effect = (
-        lambda prompt: MagicMock(text=prompt.split("'")[1])
-    )
 
-    with patch.dict(sys.modules, {"google.generativeai": fake}):
+    with patch("google.genai.Client") as MockClient:
+        # Extract the hint embedded in the contents string
+        MockClient.return_value.models.generate_content.side_effect = (
+            lambda model, contents: MagicMock(text=contents.split("'")[1])
+        )
         result = _resolve_title_sync(url, topic, api_key="fake-key")
 
     assert result == "docs.tailwindcss"

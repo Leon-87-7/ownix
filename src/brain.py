@@ -48,15 +48,16 @@ def generate_link_id() -> str:
 
 
 def _embed_sync(text: str, api_key: str) -> np.ndarray:
-    import google.generativeai as genai  # lazy import
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=api_key)
-    result = genai.embed_content(
+    client = genai.Client(api_key=api_key)
+    response = client.models.embed_content(
         model=settings.GEMINI_EMBEDDING_MODEL,
-        content=text,
-        output_dimensionality=EMBEDDING_DIM,
+        contents=text,
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
     )
-    return np.array(result["embedding"], dtype=np.float32)
+    return np.array(response.embeddings[0].values, dtype=np.float32)
 
 
 async def _embed(text: str) -> np.ndarray | None:
@@ -100,12 +101,12 @@ def _resolve_title_sync(url: str, topic: str, api_key: str) -> str:
         bare = re.sub(r"\.[a-z]{2,}$", "", bare)
         hint = bare
 
-    import google.generativeai as genai  # lazy import
+    from google import genai
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-lite")
-    response = model.generate_content(
-        f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-lite",
+        contents=f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'.",
     )
     return response.text.strip()
 

@@ -39,14 +39,16 @@ def _extract_json(raw: str) -> dict:
 
 
 def _call_vision_sync(frames: list[dict], api_key: str) -> dict:
-    import google.generativeai as genai  # lazy — not installed in test env
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    parts = [_VISION_PROMPT] + [
-        {"inline_data": {"mime_type": f["mime_type"], "data": f["base64"]}}
+    import base64
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=api_key)
+    parts: list = [_VISION_PROMPT] + [
+        types.Part.from_bytes(data=base64.b64decode(f["base64"]), mime_type=f["mime_type"])
         for f in frames
     ]
-    response = model.generate_content(parts)
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=parts)
     return _extract_json(response.text)
 
 

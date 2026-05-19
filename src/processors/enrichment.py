@@ -117,11 +117,10 @@ def _parse_enrichment(data: dict) -> Enrichment:
 
 
 def _call_gemini_sync(prompt: str, api_key: str) -> str:
-    import google.generativeai as genai  # lazy — not installed in test env
+    from google import genai  # lazy — not installed in test env
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    response = model.generate_content(prompt)
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     return response.text
 
 

@@ -19,7 +19,7 @@ def _build_analysis_markdown(
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
     parts = [
-        f"# Short Video Analysis\n",
+        "# Short Video Analysis\n",
         f"**Source:** {job['url']}",
         f"**Platform:** {platform}",
         f"**Video ID:** {video_id}",
