@@ -26,7 +26,7 @@ async def _handle_callback(callback: dict) -> None:
 
     if data.startswith("gemini_no:"):
         job_id = data.split(":", 1)[1]
-        await database.update_job_status(job_id, "complete")
+        await database.update_job_status(job_id, "done")
         await answer_callback_query(cq_id)
 
     elif data.startswith("gemini_yes:"):
@@ -90,28 +90,34 @@ async def webhook(
             await send_message(chat_id, "Usage: /find <query>")
             return {"ok": True}
         from src import brain
+
         results = await brain.search_links(query, top_k=5)
         if not results:
             await send_message(chat_id, "No relevant links found in your brain.")
         else:
             lines = []
             for r in results:
-                lines.append(f"🔗 *{r['title']}* — {r['url']}\n   Topic: {r['topic']}\n   Score: {r['score']:.2f}")
+                lines.append(
+                    f"🔗 *{r['title']}* — {r['url']}\n   Topic: {r['topic']}\n   Score: {r['score']:.2f}"
+                )
             await send_message(chat_id, "\n\n".join(lines), parse_mode="Markdown")
         return {"ok": True}
 
     if text == "/rebuild-graph":
         from src import brain
+
         if brain._rebuild_lock.locked():
             await send_message(chat_id, "Rebuild already in progress — please wait.")
             return {"ok": True}
         await send_message(chat_id, "Brain rebuild started — will take a few minutes")
+
         async def _do_rebuild():
             try:
                 n = await brain.rebuild_graph()
                 await send_message(chat_id, f"Graph rebuilt — {n} nodes written.")
             except Exception:
                 await send_message(chat_id, "Rebuild failed. Check logs.")
+
         asyncio.create_task(_do_rebuild())
         return {"ok": True}
 

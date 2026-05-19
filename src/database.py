@@ -58,9 +58,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
     CHECK(content_type IN ('short', 'long')),
-    CHECK(status IN ('pending','processing','transcript_done','enriching','complete','error','cancelled')),
-    CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','complete','error')),
-    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','complete','error'))
+    CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
+    CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);

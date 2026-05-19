@@ -27,8 +27,8 @@ class Enrichment:
     topic: str
     objective: str
     action_points_str: str  # pipe-joined
-    tools_str: str           # pipe-joined
-    tools_raw: list[dict]    # raw parsed list for brain feed
+    tools_str: str  # pipe-joined
+    tools_raw: list[dict]  # raw parsed list for brain feed
     market_data: str
 
 
@@ -118,6 +118,7 @@ def _parse_enrichment(data: dict) -> Enrichment:
 
 def _call_gemini_sync(prompt: str, api_key: str) -> str:
     import google.generativeai as genai  # lazy — not installed in test env
+
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(prompt)
@@ -162,7 +163,9 @@ def _build_enrichment_message(job: dict, enrichment: Enrichment) -> str:
 
     action_lines = [f"• {ap}" for ap in enrichment.action_points_str.split(" | ") if ap]
 
-    transcript_line = f"📄 [Transcript]({drive_url})" if drive_url else "📄 Transcript _(unavailable)_"
+    transcript_line = (
+        f"📄 [Transcript]({drive_url})" if drive_url else "📄 Transcript _(unavailable)_"
+    )
 
     parts = [
         f"{tag}",
@@ -212,7 +215,8 @@ async def run(job_id: str) -> None:
 
     now = datetime.now(timezone.utc).isoformat()
     await database.update_job_status(
-        job_id, "complete",
+        job_id,
+        "done",
         ai_category=enrichment.category,
         ai_topic=enrichment.topic,
         ai_objective=enrichment.objective,
