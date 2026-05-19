@@ -131,7 +131,7 @@ async def test_webhook_accepts_long_url_and_enqueues(client) -> None:
     sent = fake_http.calls[0]["json"]
     assert sent["chat_id"] == 12345
     assert "Received" in sent["text"]
-    assert env["job_id"] in sent["text"]
+    assert env["job_id"][-4:] in sent["text"]
 
 
 async def test_webhook_accepts_short_url(client) -> None:

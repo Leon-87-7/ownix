@@ -22,7 +22,22 @@ async def _dispatch(task: dict) -> None:
     task_type = task["task"]
     job_id = task["job_id"]
 
-    if task_type == "video":
+    if task_type == "enrichment":
+        job = await database.get_job(job_id)
+        if not job:
+            log.error("job_not_found", job_id=job_id)
+            return
+        try:
+            from src.processors import enrichment
+            await enrichment.run(job_id)
+        except Exception:
+            log.exception("enrichment_processor_error", job_id=job_id)
+            try:
+                from src.telegram.sender import send_message
+                await send_message(job["chat_id"], f"job_{job_id[-4:]}:\n❌ Enrichment failed. Please try again.")
+            except Exception:
+                pass
+    elif task_type == "video":
         job = await database.get_job(job_id)
         if not job:
             log.error("job_not_found", job_id=job_id)

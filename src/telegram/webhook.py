@@ -28,10 +28,14 @@ async def _handle_callback(callback: dict) -> None:
         await answer_callback_query(cq_id)
 
     elif data.startswith("gemini_yes:"):
-        # Slice #4 implements enrichment; stub here
         job_id = data.split(":", 1)[1]
-        log.info("gemini_yes_stub", job_id=job_id, note="Phase 2 not yet implemented")
-        await answer_callback_query(cq_id, text="Gemini enrichment coming soon!")
+        job = await database.get_job(job_id)
+        if not job or job.get("status") != "transcript_done":
+            await answer_callback_query(cq_id, text="This job is not ready for enrichment.")
+            return
+        await database.update_job_status(job_id, "enriching")
+        await queue.enqueue({"task": "enrichment", "job_id": job_id})
+        await answer_callback_query(cq_id)
 
     elif data.startswith("prd_build_spec:"):
         # Slice #7 implements intent routing; stub here
