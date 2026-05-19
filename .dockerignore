@@ -1,0 +1,10 @@
+.env
+.git/
+data/
+logs/
+credentials/
+docs/
+**/__pycache__/
+*.pyc
+*.pyo
+*.md
