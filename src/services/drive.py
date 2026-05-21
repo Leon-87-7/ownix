@@ -61,3 +61,27 @@ async def upload_file(
     file_id, link = await asyncio.to_thread(_upload_sync, content, filename, folder_id, mime_type)
     log.info("drive_uploaded", filename=filename, file_id=file_id)
     return file_id, link
+
+
+def _update_sync(file_id: str, content: str | bytes, mime_type: str) -> str:
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    service = _build_service()
+    media = MediaInMemoryUpload(content, mimetype=mime_type, resumable=False)
+    result = (
+        service.files()
+        .update(fileId=file_id, media_body=media, fields="webViewLink", supportsAllDrives=True)
+        .execute()
+    )
+    return result["webViewLink"]
+
+
+async def update_file(
+    file_id: str,
+    content: str | bytes,
+    mime_type: str = "text/markdown",
+) -> str:
+    """In-place update of a Drive file. Returns the (unchanged) webViewLink."""
+    link = await asyncio.to_thread(_update_sync, file_id, content, mime_type)
+    log.info("drive_updated", file_id=file_id)
+    return link
