@@ -67,6 +67,13 @@ async def _dispatch(task: dict) -> None:
             log.exception("prd_auto_error", job_id=job_id)
             try:
                 job = await database.get_job(job_id)
+                if job and job.get("prd_auto_status") == "generating":
+                    async with database.connection() as conn:
+                        await conn.execute(
+                            "UPDATE jobs SET prd_auto_status='error', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (job_id,),
+                        )
+                        await conn.commit()
                 if job:
                     from src.telegram.sender import send_inline_keyboard
                     await send_inline_keyboard(
@@ -90,6 +97,13 @@ async def _dispatch(task: dict) -> None:
             log.exception("prd_intent_error", job_id=job_id)
             try:
                 job = await database.get_job(job_id)
+                if job and job.get("prd_intent_status") == "generating":
+                    async with database.connection() as conn:
+                        await conn.execute(
+                            "UPDATE jobs SET prd_intent_status='error', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (job_id,),
+                        )
+                        await conn.commit()
                 if job:
                     from src.telegram.sender import send_inline_keyboard
                     await send_inline_keyboard(
