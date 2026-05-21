@@ -317,34 +317,58 @@ async def run_auto(job_id: str) -> None:
         except Exception:
             log.warning("prd.gemini.fallback", job_id=job_id)
     if raw_prd is None:
-        log.error("prd.gemini.both_keys_failed", job_id=job_id)
+        log.error("prd.gemini.both_keys_failed", job_id=job_id, slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
+        from src.telegram.sender import send_inline_keyboard
+        await send_inline_keyboard(
+            chat_id,
+            "⚠️ PRD generation failed (Gemini keys exhausted). Try again in a few minutes.",
+            buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
+        )
         return
 
     # e. Parse JSON
     try:
         prd_data = _extract_json(raw_prd)
     except Exception:
-        log.error("prd.parse_failed", job_id=job_id, raw_preview=raw_prd[:200])
+        log.error("prd.parse_failed", job_id=job_id, raw_preview=raw_prd[:200], slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
+        from src.telegram.sender import send_inline_keyboard
+        await send_inline_keyboard(
+            chat_id,
+            "⚠️ PRD generation produced invalid output.",
+            buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
+        )
         return
 
     # f. Build markdown
     md_content = build_prd_markdown(prd_data)
 
-    # g. Upload to Drive
-    from src.services.drive import upload_file
+    # g. Drive upload (create on first run, update in place thereafter)
+    from src.services.drive import upload_file, update_file
 
     slug = re.sub(r"[^a-z0-9]+", "_", (prd_data.get("project") or "prd").lower())[:40].strip("_")
     filename = f"{slug}_{job_id[-4:]}_auto.md"
+    cached_file_id = job.get("prd_auto_drive_file_id")
     try:
-        file_id, drive_url = await upload_file(
-            md_content, filename, settings.GOOGLE_DRIVE_FOLDER_PRD
-        )
-        log.info("prd.drive.uploaded", job_id=job_id, file_id=file_id)
+        if cached_file_id:
+            drive_url = await update_file(cached_file_id, md_content)
+            file_id = cached_file_id
+            log.info("prd.drive.updated", job_id=job_id, file_id=file_id, slot="auto")
+        else:
+            file_id, drive_url = await upload_file(
+                md_content, filename, settings.GOOGLE_DRIVE_FOLDER_PRD
+            )
+            log.info("prd.drive.uploaded", job_id=job_id, file_id=file_id, slot="auto")
     except Exception:
-        log.error("prd.drive.failed", job_id=job_id)
+        log.error("prd.drive.failed", job_id=job_id, slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
+        from src.telegram.sender import send_inline_keyboard
+        await send_inline_keyboard(
+            chat_id,
+            "⚠️ Drive upload failed.",
+            buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
+        )
         return
 
     # h. Sheets append
@@ -356,10 +380,18 @@ async def run_auto(job_id: str) -> None:
             video_url=job["url"],
             title=job.get("title", ""),
             drive_url=drive_url,
+            slot="auto",
         )
-        log.info("prd.sheets.appended", job_id=job_id)
+        log.info("prd.sheets.appended", job_id=job_id, slot="auto")
     except Exception:
-        log.warning("prd.sheets_failed", job_id=job_id)
+        log.warning("prd.sheets.failed", job_id=job_id, slot="auto")
+        from src.telegram.sender import send_inline_keyboard
+        await send_inline_keyboard(
+            chat_id,
+            "⚠️ PRD generated but sheet append failed.",
+            buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
+        )
+        # Continue to deliver the document — sheets failure isn't fatal for the user
 
     # i. Update job DB
     await database.update_job_status(
@@ -389,16 +421,17 @@ async def run_auto(job_id: str) -> None:
         log.info("prd.brain.dispatched", job_id=job_id, count=len(brain_links))
 
     # k. Telegram delivery
-    from src.telegram.sender import send_document, send_inline_keyboard
-
+    from src.telegram.sender import send_document, send_message, send_inline_keyboard
     await send_document(
         chat_id,
         md_content.encode("utf-8"),
         filename,
         caption="📐 Auto-generated PRD",
     )
+    summary_lines = build_summary_lines(prd_data)
+    await send_message(chat_id, "\n".join(summary_lines))
     await send_inline_keyboard(
         chat_id,
-        "💡 Want a deeper spec? Text your intent.",
-        buttons=[[{"text": "✍️ Text your intent", "callback_data": f"prd_intent_stub:{job_id}"}]],
+        "💡 Want to refine? Build a deeper spec:",
+        buttons=[[{"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"}]],
     )
