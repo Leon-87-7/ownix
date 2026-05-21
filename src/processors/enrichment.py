@@ -235,8 +235,3 @@ async def run(job_id: str) -> None:
     )
 
     log.info("enrichment_complete", job_id=job_id, category=enrichment.category)
-
-    if enrichment.category == "Technical Tutorial" and settings.GOOGLE_DRIVE_FOLDER_PRD:
-        from src import queue as _queue
-        await _queue.enqueue({"task": "prd_auto", "job_id": job_id})
-        log.info("prd.auto.enqueued", job_id=job_id)
