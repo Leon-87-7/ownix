@@ -171,3 +171,117 @@ async def test_webhook_ignores_non_text_messages(client) -> None:
     assert response.status_code == 200
     assert fake_redis._lists.get("video_jobs", []) == []
     assert fake_http.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Callback handler unit tests (slice #7)
+# ---------------------------------------------------------------------------
+
+import tempfile
+from unittest.mock import AsyncMock, patch
+
+import aiosqlite
+
+
+@pytest.fixture
+async def temp_db():
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    with patch("src.config.settings.DB_PATH", path):
+        from src import database as db
+        await db.init_db()
+        yield path
+    os.unlink(path)
+
+
+async def _seed_job(path: str, job_id: str, chat_id: int = 1, **fields) -> None:
+    cols = ["id", "chat_id", "url", "content_type", "status"]
+    vals = [job_id, chat_id, "u", fields.get("content_type", "long"), fields.get("status", "done")]
+    for k, v in fields.items():
+        if k in ("content_type", "status"):
+            continue
+        cols.append(k)
+        vals.append(v)
+    placeholders = ",".join("?" * len(cols))
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals
+        )
+        await conn.commit()
+
+
+@pytest.mark.asyncio
+async def test_callback_prd_build_spec_sends_submenu(temp_db, monkeypatch):
+    from src.telegram import webhook
+    sent_kb = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", sent_kb)
+    monkeypatch.setattr("src.telegram.sender.answer_callback_query", AsyncMock())
+    callback = {"id": "CB1", "data": "prd_build_spec:J1", "message": {"chat": {"id": 100}}}
+    await webhook._handle_callback(callback)
+    sent_kb.assert_awaited_once()
+    args, kwargs = sent_kb.await_args
+    # Should send a 2-button sub-menu
+    buttons = kwargs.get("buttons") or args[2]
+    btn_texts = [b["text"] for row in buttons for b in row]
+    assert "🤖 Build auto Spec" in btn_texts
+    assert "✍️ Text your intent" in btn_texts
+
+
+@pytest.mark.asyncio
+async def test_callback_prd_auto_resend_when_status_done(temp_db, monkeypatch):
+    from src.telegram import webhook
+    await _seed_job(temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}')
+    enqueued = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enqueued)
+    monkeypatch.setattr("src.telegram.sender.send_message", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.answer_callback_query", AsyncMock())
+    await webhook._handle_callback(
+        {"id": "CB", "data": "prd_auto:J_DONE", "message": {"chat": {"id": 100}}}
+    )
+    enqueued.assert_awaited_once_with({"task": "prd_auto_resend", "job_id": "J_DONE"})
+
+
+@pytest.mark.asyncio
+async def test_callback_prd_auto_lazy_when_status_null(temp_db, monkeypatch):
+    from src.telegram import webhook
+    await _seed_job(temp_db, "J_NULL", chat_id=100)
+    enqueued = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enqueued)
+    monkeypatch.setattr("src.telegram.sender.send_message", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.answer_callback_query", AsyncMock())
+    await webhook._handle_callback(
+        {"id": "CB", "data": "prd_auto:J_NULL", "message": {"chat": {"id": 100}}}
+    )
+    enqueued.assert_awaited_once_with({"task": "prd_auto", "job_id": "J_NULL"})
+
+
+@pytest.mark.asyncio
+async def test_callback_prd_intent_prompt_arms_state(temp_db, monkeypatch):
+    from src.telegram import webhook
+    from src import database as db
+    await _seed_job(temp_db, "J_ARM", chat_id=100)
+    fr = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_force_reply", fr)
+    monkeypatch.setattr("src.telegram.sender.answer_callback_query", AsyncMock())
+    await webhook._handle_callback(
+        {"id": "CB", "data": "prd_intent_prompt:J_ARM", "message": {"chat": {"id": 100}}}
+    )
+    state = await db.get_chat_state(100)
+    assert state is not None
+    assert state["job_id"] == "J_ARM"
+    fr.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_callback_prd_intent_prompt_debounces_same_job(temp_db, monkeypatch):
+    from src.telegram import webhook
+    from src import database as db
+    await _seed_job(temp_db, "J_DBN", chat_id=100)
+    await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_DBN")
+    fr = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_force_reply", fr)
+    monkeypatch.setattr("src.telegram.sender.answer_callback_query", AsyncMock())
+    await webhook._handle_callback(
+        {"id": "CB", "data": "prd_intent_prompt:J_DBN", "message": {"chat": {"id": 100}}}
+    )
+    fr.assert_not_awaited()

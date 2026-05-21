@@ -105,10 +105,15 @@ async def _batch_auto_close(chat_id: int) -> None:
 
 async def _handle_callback(callback: dict) -> None:
     """Dispatch callback_query events from inline keyboard button presses."""
+    from src.telegram.sender import (
+        answer_callback_query,
+        send_force_reply,
+        send_inline_keyboard,
+        send_message,
+    )
     cq_id = callback.get("id", "")
     data = callback.get("data", "")
     chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
-
     log.info("callback_received", callback_data=data, chat_id=chat_id)
 
     if data.startswith("gemini_no:"):
@@ -127,10 +132,67 @@ async def _handle_callback(callback: dict) -> None:
         await answer_callback_query(cq_id)
 
     elif data.startswith("prd_build_spec:"):
-        # Slice #7 implements intent routing; stub here
         job_id = data.split(":", 1)[1]
-        log.info("prd_build_spec_stub", job_id=job_id, note="PRD spec not yet implemented")
+        await send_inline_keyboard(
+            chat_id,
+            "📐 Build Spec — pick a path:",
+            buttons=[[
+                {"text": "🤖 Build auto Spec", "callback_data": f"prd_auto:{job_id}"},
+                {"text": "✍️ Text your intent", "callback_data": f"prd_intent_prompt:{job_id}"},
+            ]],
+        )
         await answer_callback_query(cq_id)
+
+    elif data.startswith("prd_auto:") or data.startswith("prd_retry_auto:"):
+        job_id = data.split(":", 1)[1]
+        job = await database.get_job(job_id)
+        if not job:
+            await answer_callback_query(cq_id, text="Job not found.")
+            return
+        await answer_callback_query(cq_id)
+        if job.get("prd_auto_status") == "done" and job.get("prd_auto_json"):
+            await send_message(chat_id, "📐 Re-sending your PRD...")
+            await queue.enqueue({"task": "prd_auto_resend", "job_id": job_id})
+        else:
+            # Lazy generation. Atomic lock try before enqueueing.
+            async with database.connection() as conn:
+                cur = await conn.execute(
+                    "UPDATE jobs SET prd_auto_status='generating', updated_at=CURRENT_TIMESTAMP "
+                    "WHERE id=? AND (prd_auto_status IS NULL OR prd_auto_status='error')",
+                    (job_id,),
+                )
+                await conn.commit()
+                acquired = cur.rowcount > 0
+            if acquired:
+                await send_message(chat_id, "📐 Generating PRD, hang tight...")
+                await queue.enqueue({"task": "prd_auto", "job_id": job_id})
+            else:
+                await send_message(chat_id, "📐 PRD already generating, hang tight.")
+
+    elif data.startswith("prd_intent_prompt:"):
+        job_id = data.split(":", 1)[1]
+        existing = await database.get_chat_state(chat_id)
+        if existing and existing["job_id"] == job_id:
+            await answer_callback_query(cq_id)
+            return
+        await database.set_chat_state(chat_id=chat_id, mode="awaiting_intent", job_id=job_id)
+        log.info("prd.chat_state.armed", chat_id=chat_id, job_id=job_id)
+        await send_force_reply(
+            chat_id,
+            'Reply with your project direction. Example: "desktop app for agentic image '
+            'processing" (reply within 10 minutes; type /cancel to abandon)',
+        )
+        await answer_callback_query(cq_id)
+
+    elif data.startswith("prd_retry_intent:"):
+        job_id = data.split(":", 1)[1]
+        job = await database.get_job(job_id)
+        if not job or not (job.get("prd_intent_text") or "").strip():
+            await answer_callback_query(cq_id, text="No prior intent to retry — use ✍️ New Intent.")
+            return
+        await answer_callback_query(cq_id)
+        await send_message(chat_id, "📐 Generating PRD, hang tight...")
+        await queue.enqueue({"task": "prd_intent", "job_id": job_id})
 
     else:
         log.warning("unknown_callback", data=data)
