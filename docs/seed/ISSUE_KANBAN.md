@@ -20,6 +20,7 @@
 | [#6](https://github.com/Leon-87-7/vig/issues/6) | Mini-PRD auto slot — tail-call enqueue, Flash, JSON schema, Drive + Sheets + brain | Mini-PRD | Merged; GH issue still open |
 | [#7](https://github.com/Leon-87-7/vig/issues/7) | Mini-PRD intent slot + /spec command + chat_state routing                          | Mini-PRD | Merged; GH issue still open |
 | [#13](https://github.com/Leon-87-7/vig/issues/13) | Add retry button on Gemini enrichment failures                                     | Long Video    | Merged; GH issue still open |
+| [#15](https://github.com/Leon-87-7/vig/issues/15) | feat: extend transcript sidecar to support TikTok/Instagram via yt-dlp            | Short Video   | Merged; closed on GH        |
 
 ---
 
@@ -60,4 +61,5 @@ Ordered by unblocked-first, then dependency chain.
     └── (feeds #4 via URL-resolution)
 
 #10 BotFather (standalone, any time)
+#15 Transcript sidecar TikTok/Instagram ✓
 ```

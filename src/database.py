@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     prd_intent_text             TEXT,
     prd_intent_completed_at     TEXT,
     sheets_row_id               TEXT,
+    -- Template system (issue #17/#18)
+    template                    TEXT,
+    template_analysis           TEXT,
+    key_phrases                 TEXT,
+    validation_warning_sent     INTEGER DEFAULT 0,
+    template_detection_method   TEXT,
     processing_time_ms          INTEGER,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -95,6 +101,19 @@ async def init_db() -> None:
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA foreign_keys=ON")
         await conn.executescript(SCHEMA_SQL)
+        # One-time column additions for existing DBs (no-op on fresh schema)
+        _TEMPLATE_COLUMNS = [
+            "ALTER TABLE jobs ADD COLUMN template TEXT",
+            "ALTER TABLE jobs ADD COLUMN template_analysis TEXT",
+            "ALTER TABLE jobs ADD COLUMN key_phrases TEXT",
+            "ALTER TABLE jobs ADD COLUMN validation_warning_sent INTEGER DEFAULT 0",
+            "ALTER TABLE jobs ADD COLUMN template_detection_method TEXT",
+        ]
+        for stmt in _TEMPLATE_COLUMNS:
+            try:
+                await conn.execute(stmt)
+            except Exception:
+                pass  # column already exists (fresh schema or re-run)
         await conn.commit()
     log.info("db_initialized", path=settings.DB_PATH)
 
@@ -115,16 +134,17 @@ async def create_job(
     url: str,
     content_type: str,
     message_id: int | None = None,
+    template: str | None = None,
 ) -> str:
     """Insert a new job row with status='pending' and return the job_id."""
     job_id = generate_job_id()
     async with connection() as conn:
         await conn.execute(
             """
-            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status)
-            VALUES (?, ?, ?, ?, ?, 'pending')
+            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status, template)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?)
             """,
-            (job_id, chat_id, message_id, url, content_type),
+            (job_id, chat_id, message_id, url, content_type, template),
         )
         await conn.commit()
     log.info("job_created", job_id=job_id, chat_id=chat_id, content_type=content_type)
