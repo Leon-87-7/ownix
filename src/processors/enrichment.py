@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from src import database
 from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
+from src.templates import PROMPT_TEMPLATES
+from src.validation import validate_template_choice
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -32,12 +34,25 @@ class Enrichment:
     market_data: str
 
 
-def _build_prompt(title: str, transcript: str) -> str:
+def _build_prompt(
+    title: str,
+    transcript: str,
+    template: str = "summary",
+    key_phrases: list[str] | None = None,
+) -> str:
     truncated = (
         transcript[:MAX_TRANSCRIPT_CHARS] + "\n\n[transcript truncated]"
         if len(transcript) > MAX_TRANSCRIPT_CHARS
         else transcript
     )
+    extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
+    context = ""
+    if key_phrases:
+        context = (
+            f"\n### KEY CONTEXT\n"
+            f"The transcript frequently mentions: {', '.join(key_phrases)}. "
+            f"Pay attention to how these topics are explained.\n"
+        )
     return f"""Analyze this YouTube transcript for a video titled: "{title}".
 
 ### STEP 1: CLASSIFICATION
@@ -84,6 +99,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no text before
   "market_data": "Summary of symbols, trends, or price levels if Category B, else empty string"
 }}
 
+{extra}{context}
 ### TRANSCRIPT:
 {truncated}"""
 
@@ -128,11 +144,13 @@ async def _call_gemini(prompt: str, api_key: str) -> str:
     return await asyncio.to_thread(_call_gemini_sync, prompt, api_key)
 
 
-async def enrich(job: dict) -> Enrichment:
+async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""
-    prompt = _build_prompt(title, transcript)
+    template = job.get("template") or "summary"
+    key_phrases = json.loads(job.get("key_phrases") or "[]")
+    prompt = _build_prompt(title, transcript, template, key_phrases)
 
     for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
         if not key:
@@ -140,16 +158,61 @@ async def enrich(job: dict) -> Enrichment:
         try:
             raw = await _call_gemini(prompt, key)
             data = _extract_json(raw)
+            template_analysis = data.pop("template_analysis", None)
             result = _parse_enrichment(data)
             log.info("enrichment_ok", category=result.category, topic=result.topic)
-            return result
+            return result, template_analysis
         except Exception:
             log.warning("enrichment_key_failed")
 
     raise EnrichmentUnavailableError("Both Gemini keys failed for enrichment")
 
 
-def _build_enrichment_message(job: dict, enrichment: Enrichment) -> str:
+def _format_template_analysis(template: str, analysis: dict) -> str:
+    lines = [f"\n📋 {template.capitalize()} Analysis"]
+    if template == "method":
+        for i, step in enumerate(analysis.get("steps", []), 1):
+            lines.append(f"{i}. {step.get('action', '')}: {step.get('details', '')}")
+        if analysis.get("common_mistakes"):
+            lines += ["", "⚠️ Common Mistakes", analysis["common_mistakes"]]
+        if analysis.get("pro_tips"):
+            lines += ["", "💡 Pro Tips", analysis["pro_tips"]]
+    elif template == "technical":
+        if analysis.get("tech_stack"):
+            lines += ["", "🔧 Tech Stack", ", ".join(analysis["tech_stack"])]
+        if analysis.get("architecture"):
+            lines += ["", "🏗 Architecture", analysis["architecture"]]
+        if analysis.get("config_notes"):
+            lines += ["", "⚙️ Config", analysis["config_notes"]]
+        if analysis.get("debugging"):
+            lines += ["", "🐛 Debugging", analysis["debugging"]]
+    elif template == "review":
+        for f in analysis.get("features", []):
+            rating = f" ({f['rating']})" if f.get("rating") else ""
+            lines.append(f"• {f.get('feature', '')}{rating}: {f.get('description', '')}")
+        if analysis.get("pros"):
+            lines += ["", "✅ Pros"] + [f"• {p}" for p in analysis["pros"]]
+        if analysis.get("cons"):
+            lines += ["", "❌ Cons"] + [f"• {c}" for c in analysis["cons"]]
+        if analysis.get("verdict"):
+            lines += ["", "🏆 Verdict", analysis["verdict"]]
+        if analysis.get("price_value"):
+            lines += ["", "💰 Price/Value", analysis["price_value"]]
+    elif template == "narrative":
+        if analysis.get("thesis"):
+            lines += ["", "💡 Thesis", analysis["thesis"]]
+        if analysis.get("supporting_points"):
+            lines += ["", "📌 Supporting Points"] + [f"• {p}" for p in analysis["supporting_points"]]
+        if analysis.get("key_quotes"):
+            lines += ["", "💬 Key Quotes"] + [f'"{q}"' for q in analysis["key_quotes"]]
+        if analysis.get("conclusion"):
+            lines += ["", "🎯 Conclusion", analysis["conclusion"]]
+    return "\n".join(lines)
+
+
+def _build_enrichment_message(
+    job: dict, enrichment: Enrichment, template_analysis: dict | None = None
+) -> str:
     tag = f"job_{job['id'][-4:]}:"
     title = job.get("title", "Untitled")
     drive_url = job.get("drive_url", "")
@@ -185,6 +248,9 @@ def _build_enrichment_message(job: dict, enrichment: Enrichment) -> str:
         "",
         "📐 Build Spec available — use the button below",
     ]
+    if template_analysis:
+        template = job.get("template") or "summary"
+        parts.append(_format_template_analysis(template, template_analysis))
     return "\n".join(parts)
 
 
@@ -204,8 +270,17 @@ async def run(job_id: str) -> None:
     await database.update_job_status(job_id, "enriching")
     await send_message(chat_id, f"{tag}\n🍪 now bakin' by Gemini")
 
+    # Mismatch warning — explicit commands only
+    if job.get("template_detection_method") == "explicit_command":
+        transcript = job.get("transcript", "") or ""
+        template = job.get("template") or "summary"
+        warning = validate_template_choice(template, transcript)
+        if warning:
+            await send_message(chat_id, warning)
+            await database.update_job_status(job_id, "enriching", validation_warning_sent=1)
+
     try:
-        enrichment = await enrich(job)
+        enrichment, template_analysis = await enrich(job)
     except EnrichmentUnavailableError:
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
@@ -226,10 +301,11 @@ async def run(job_id: str) -> None:
         ai_action_points=enrichment.action_points_str,
         ai_tools=enrichment.tools_str,
         ai_market_data=enrichment.market_data,
+        template_analysis=json.dumps(template_analysis) if template_analysis else None,
         completed_at=now,
     )
 
-    msg = _build_enrichment_message(job, enrichment)
+    msg = _build_enrichment_message(job, enrichment, template_analysis)
     await send_message(chat_id, msg, parse_mode="Markdown")
 
     await send_inline_keyboard(

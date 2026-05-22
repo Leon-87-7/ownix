@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from datetime import datetime, timezone
 
 from src import database
+from src.analysis import extract_key_phrases
 from src.config import settings
 from src.services import brave, frames, gemini, sheets
+from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.telegram.sender import send_message, send_photo
 from src.utils.logger import get_logger
@@ -150,3 +153,46 @@ async def run(job: dict) -> None:
         )
 
     log.info("short_video_complete", job_id=job_id, duration_ms=elapsed_ms)
+
+    # Template path — explicit slash command only; plain URL jobs exit above
+    template = job.get("template")
+    if not template:
+        return
+
+    try:
+        transcript_resp = await transcript_svc.fetch_transcript(url)
+        short_transcript = transcript_resp.get("text", "")
+    except Exception:
+        short_transcript = ""
+
+    if not short_transcript:
+        await send_message(
+            chat_id,
+            f"{tag}\nNo transcript available — template analysis skipped.",
+        )
+        return
+
+    key_phrases = extract_key_phrases(short_transcript, max_phrases=8)
+    await database.update_job_status(
+        job_id, "done",
+        transcript=short_transcript,
+        key_phrases=json.dumps(key_phrases),
+    )
+    enriched_job = await database.get_job(job_id)
+    if not enriched_job:
+        return
+
+    from src.processors import enrichment as enrichment_proc
+    try:
+        enrichment_result, template_analysis = await enrichment_proc.enrich(enriched_job)
+    except enrichment_proc.EnrichmentUnavailableError:
+        await send_message(chat_id, f"{tag}\n⚠️ Template analysis failed — Gemini unavailable.")
+        return
+
+    if template_analysis:
+        section = enrichment_proc._format_template_analysis(template, template_analysis)
+        await send_message(chat_id, f"{tag}{section}")
+        await database.update_job_status(
+            job_id, "done",
+            template_analysis=json.dumps(template_analysis),
+        )

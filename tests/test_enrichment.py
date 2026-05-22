@@ -144,12 +144,13 @@ async def test_enrich_returns_enrichment_on_success(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch("src.processors.enrichment._call_gemini_sync", return_value=_SAMPLE_GEMINI_JSON):
-        result = await enrich({"title": "Test Video", "transcript": "some transcript"})
+        result, template_analysis = await enrich({"title": "Test Video", "transcript": "some transcript"})
 
     assert isinstance(result, Enrichment)
     assert result.category == "Technical Tutorial"
     assert result.topic == "claude code + n8n"
     assert "Use Claude API" in result.action_points_str
+    assert template_analysis is None
 
 
 # ---------------------------------------------------------------------------

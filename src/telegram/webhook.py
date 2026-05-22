@@ -16,6 +16,7 @@ from src.telegram.sender import (
     send_inline_keyboard,
     send_message,
 )
+from src.templates import PROMPT_TEMPLATES
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline
 
@@ -209,7 +210,7 @@ async def _handle_callback(callback: dict) -> None:
         await answer_callback_query(cq_id)
 
 
-async def _dispatch_slash(chat_id: int, text: str) -> None:
+async def _dispatch_slash(chat_id: int, text: str, message_id: int | None = None) -> None:
     """Slash command dispatch. Clears chat_state as a side effect (except /cancel reads first)."""
     parts = text.split()
     cmd = parts[0].lower()
@@ -272,6 +273,37 @@ async def _dispatch_slash(chat_id: int, text: str) -> None:
             await send_message(chat_id, "No active batch — use /photoBatch-start first.")
             return
         asyncio.create_task(_process_batch(chat_id))
+        return
+    if cmd[1:] in PROMPT_TEMPLATES:
+        template = cmd[1:]
+        if len(parts) < 2:
+            await send_message(
+                chat_id,
+                f"Usage: `/{template} <url>`\nExample: `/{template} https://youtube.com/watch?v=...`",
+            )
+            return
+        url = parts[1]
+        pipeline = detect_pipeline(url)
+        if pipeline == "rejected":
+            await send_message(
+                chat_id,
+                "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+                "Instagram Reels, and TikTok videos.",
+            )
+            return
+        job_id = await database.create_job(
+            chat_id=chat_id,
+            url=url,
+            content_type=pipeline,
+            message_id=message_id,
+            template=template,
+        )
+        await database.update_job_status(
+            job_id, "pending",
+            template_detection_method="explicit_command",
+        )
+        await queue.enqueue({"task": "video", "job_id": job_id})
+        await send_message(chat_id, f"📥 Received with **{template}** template!\njob_{job_id[-4:]}")
         return
     # /start, /help, and any other slash falls through — Telegram handles natively
 
@@ -426,7 +458,7 @@ async def webhook(
 
     # 1. Slash command path
     if text.startswith("/"):
-        await _dispatch_slash(chat_id, text)
+        await _dispatch_slash(chat_id, text, message_id)
         return {"ok": True}
 
     # 2. Awaiting-intent path

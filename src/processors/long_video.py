@@ -1,17 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from src import database
+from src.analysis import extract_key_phrases
 from src.config import settings
 from src.services.drive import upload_file
 from src.services import sheets, transcript as transcript_svc
 from src.telegram.sender import send_document, send_inline_keyboard, send_message
+from src.templates import PROMPT_TEMPLATES
 from src.utils.logger import get_logger
 from src.utils.markdown import build_transcript_markdown
 from src.utils.validators import extract_description_links, slugify
 
 log = get_logger(__name__)
+
+
+def detect_template(title: str, description: str) -> str:
+    text = f"{title} {description}".lower()
+    scores = {
+        name: sum(1 for p in tmpl.trigger_patterns if p in text)
+        for name, tmpl in PROMPT_TEMPLATES.items()
+        if name != "summary"
+    }
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else "summary"
 
 
 async def run(job: dict) -> None:
@@ -42,7 +56,22 @@ async def run(job: dict) -> None:
     views = meta_resp.get("views", "")
     description = meta_resp.get("description", "")
 
-    # 2. Extract description links (failure must not block the pipeline)
+    # 2. Auto-detect template (plain URL jobs only) and extract key phrases
+    if not job.get("template"):
+        detected = detect_template(title, description)
+        await database.update_job_status(
+            job_id, "processing",
+            template=detected,
+            template_detection_method="metadata",
+        )
+
+    key_phrases = extract_key_phrases(transcript, max_phrases=8)
+    await database.update_job_status(
+        job_id, "processing",
+        key_phrases=json.dumps(key_phrases),
+    )
+
+    # 3. Extract description links (failure must not block the pipeline)
     try:
         description_links = extract_description_links(description)
     except Exception:
@@ -51,7 +80,7 @@ async def run(job: dict) -> None:
 
     description_links_raw = "\n".join(lnk["url"] for lnk in description_links)
 
-    # 3. Build transcript markdown and upload to Drive
+    # 4. Build transcript markdown and upload to Drive
     slug = slugify(title) or "untitled"
     md_text = build_transcript_markdown(title, channel, views, video_id, url, transcript)
 
@@ -59,7 +88,7 @@ async def run(job: dict) -> None:
 
     file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG)
 
-    # 4. Update job to transcript_done, caching title + transcript for Phase 2
+    # 5. Update job to transcript_done, caching title + transcript for Phase 2
     await database.update_job_status(
         job_id, "transcript_done",
         drive_url=drive_url,
@@ -67,7 +96,7 @@ async def run(job: dict) -> None:
         transcript=transcript,
     )
 
-    # 5. Telegram delivery sequence
+    # 6. Telegram delivery sequence
     await send_document(chat_id, md_text.encode(), filename=f"{slug}.md", caption=f"{tag}\n📜 The transcript is here")
     await send_message(chat_id, f"{tag}\n✅ Transcript saved to Drive!")
     await send_inline_keyboard(
@@ -84,7 +113,7 @@ async def run(job: dict) -> None:
         ],
     )
 
-    # 6. Sheets logging (fire-and-forget)
+    # 7. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job
     asyncio.create_task(
         sheets.append_long_row(
