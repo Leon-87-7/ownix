@@ -59,39 +59,75 @@ def get_primary_media_info(info):
     return info
 
 
+def _parse_vtt(path: str) -> str:
+    with open(path, encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    text_lines = []
+    for line in content.splitlines():
+        s = line.strip()
+        if (
+            not s
+            or s.startswith("WEBVTT")
+            or s.startswith("NOTE")
+            or s.startswith("Kind:")
+            or s.startswith("Language:")
+            or re.match(r"^\d{2}:\d{2}[\d:,.]+\s+-->\s+", s)
+        ):
+            continue
+        cleaned = re.sub(r"<[^>]+>", "", s)
+        if cleaned:
+            text_lines.append(cleaned)
+    # Auto-captions repeat lines aggressively — deduplicate consecutive dupes
+    deduped: list[str] = []
+    for line in text_lines:
+        if not deduped or line != deduped[-1]:
+            deduped.append(line)
+    return " ".join(deduped)
+
+
 @app.route("/transcript", methods=["GET"])
 def get_transcript():
     url = request.args.get("url")
     if not url:
         return jsonify([{"error": {"type": "missing_url", "message": "No URL provided"}}]), 400
 
+    # YouTube path (unchanged)
     video_id = extract_video_id(url)
-    if not video_id:
-        return jsonify(
-            [
-                {
-                    "error": {
-                        "type": "invalid_url",
-                        "message": "Could not extract video ID",
-                    }
-                }
-            ]
-        ), 400
+    if video_id:
+        try:
+            ytt = YouTubeTranscriptApi()
+            transcript = ytt.fetch(video_id)
+            text = " ".join([snippet.text for snippet in transcript])
+            return jsonify([{"videoId": video_id, "text": text}])
+        except Exception as e:
+            return jsonify([{"error": {"type": type(e).__name__, "message": str(e)}}])
 
+    # Non-YouTube fallback: yt-dlp subtitle extraction (TikTok, Instagram Reels, etc.)
+    tmp_dir = tempfile.mkdtemp()
     try:
-        ytt = YouTubeTranscriptApi()
-        transcript = ytt.fetch(video_id)
-        text = " ".join([snippet.text for snippet in transcript])
-        return jsonify(
-            [
-                {
-                    "videoId": video_id,
-                    "text": text,
-                }
-            ]
-        )
+        ydl_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "writeautomaticsub": True,
+            "writesubtitles": True,
+            "subtitleslangs": ["en", "en-orig"],
+            "subtitlesformat": "vtt",
+            "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
+            info = ydl.extract_info(url, download=True)
+        info = get_primary_media_info(info)
+        vid = info.get("id", "unknown")
+        vtt_files = [f for f in os.listdir(tmp_dir) if f.endswith(".vtt")]
+        if not vtt_files:
+            return jsonify([{"error": {"type": "no_transcript", "message": "No captions available for this video"}}])
+        text = _parse_vtt(os.path.join(tmp_dir, vtt_files[0]))
+        return jsonify([{"videoId": vid, "text": text}])
     except Exception as e:
         return jsonify([{"error": {"type": type(e).__name__, "message": str(e)}}])
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @app.route("/metadata", methods=["GET"])
