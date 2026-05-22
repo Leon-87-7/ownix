@@ -18,6 +18,8 @@
 | [#9](https://github.com/Leon-87-7/vig/issues/9) | Long Sheet brain backfill + resolve_tool_urls helper + URL Resolution Prompt  | Brain / Long  | Merged; GH issue still open |
 | [#11](https://github.com/Leon-87-7/vig/issues/11) | Photo link extraction — Gemini Vision OCR on uploaded screenshots           | Photo / Brain | Merged; GH issue still open |
 | [#6](https://github.com/Leon-87-7/vig/issues/6) | Mini-PRD auto slot — tail-call enqueue, Flash, JSON schema, Drive + Sheets + brain | Mini-PRD | Merged; GH issue still open |
+| [#7](https://github.com/Leon-87-7/vig/issues/7) | Mini-PRD intent slot + /spec command + chat_state routing                          | Mini-PRD | Merged; GH issue still open |
+| [#13](https://github.com/Leon-87-7/vig/issues/13) | Add retry button on Gemini enrichment failures                                     | Long Video    | Merged; GH issue still open |
 
 ---
 
@@ -27,8 +29,7 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                 # | Title                                                                              | Area          | Depends On          |
 | ------------------------------------------------: | ---------------------------------------------------------------------------------- | ------------- | ------------------- |
-| [#7](https://github.com/Leon-87-7/vig/issues/7)   | Mini-PRD intent slot + /spec command + chat_state routing                          | Mini-PRD      | #5 ✓, #6 ✓         |
-| [#13](https://github.com/Leon-87-7/vig/issues/13) | Add retry button on Gemini enrichment failures                                     | Long Video    | #7 (retry pattern)  |
+| (none)                                            |                                                                                    |               |                     |
 
 ---
 
@@ -54,8 +55,8 @@ Ordered by unblocked-first, then dependency chain.
     ├── #9 ✓
     ├── #11 Photo link extraction ✓
     ├── #6 Mini-PRD auto ✓
-    │   └── #7 Mini-PRD intent  ← next
-    │       └── #13 Enrichment retry button (pattern from #7)
+    │   └── #7 Mini-PRD intent ✓
+    │       └── #13 Enrichment retry button ✓
     └── (feeds #4 via URL-resolution)
 
 #10 BotFather (standalone, any time)

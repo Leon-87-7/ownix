@@ -1,4 +1,4 @@
-# Portfolio Project Guide: Video Intelligence Bot
+# Portfolio Project Guide: Video Intelligence Gateway
 
 ## What Hiring Managers Actually Look For
 
@@ -10,7 +10,7 @@ You're competing against 100+ candidates who built CRUD apps with React + Expres
 
 ## 1. "Why Did You Build It This Way?" (Decision Documentation)
 
-Most portfolios show *what* you built. Winning portfolios show *why* you made specific technical choices.
+Most portfolios show _what_ you built. Winning portfolios show _why_ you made specific technical choices.
 
 ### What to Document
 
@@ -25,23 +25,29 @@ Create a `docs/DECISIONS.md` file in your repository:
 **Date:** 2026-05-11
 
 ### Context
+
 Need async/await for concurrent Gemini API calls and external service integration.
 
 ### Decision
+
 Use FastAPI instead of Flask.
 
 ### Consequences
+
 **Positive:**
+
 - Native async/await support for I/O-bound workloads
 - Automatic OpenAPI documentation saves development time
 - Pydantic validation catches input errors before they hit database
 - Type hints improve IDE support and catch bugs early
 
 **Negative:**
+
 - Slightly steeper learning curve than Flask
 - Smaller ecosystem (fewer extensions)
 
 **Alternatives Considered:**
+
 - Flask + asyncio extension: More complex setup, less native support
 - Django: Too heavyweight for this use case, brings ORM we don't need
 - Express (Node.js): Team expertise is Python, would slow development
@@ -54,13 +60,17 @@ Use FastAPI instead of Flask.
 **Date:** 2026-05-11
 
 ### Context
+
 Need persistent storage for job state, status tracking, and deduplication.
 
 ### Decision
+
 Use SQLite for initial deployment with documented PostgreSQL migration path.
 
 ### Consequences
+
 **Positive:**
+
 - Zero configuration overhead (embedded database)
 - Single file backup strategy
 - No separate database server to manage
@@ -68,10 +78,12 @@ Use SQLite for initial deployment with documented PostgreSQL migration path.
 - 2-line config change to migrate to PostgreSQL later
 
 **Negative:**
+
 - Write concurrency limits (not an issue at current scale)
 - No built-in replication (acceptable for MVP)
 
 **Migration Threshold:**
+
 - Switch to PostgreSQL when:
   - Queue depth consistently >20 jobs
   - Write lock contention observed
@@ -85,9 +97,11 @@ Use SQLite for initial deployment with documented PostgreSQL migration path.
 **Date:** 2026-05-11
 
 ### Context
+
 Existing n8n workflow has become unmaintainable with 60+ nodes.
 
 ### Problem Analysis
+
 1. **Mixed concerns:** Telegram bot logic, state management, frame analysis, transcript extraction all in one canvas
 2. **Poor observability:** Can't grep logs, can't measure per-node performance
 3. **Google Sheets as database:** Latency issues, no transactional semantics
@@ -95,10 +109,13 @@ Existing n8n workflow has become unmaintainable with 60+ nodes.
 5. **Version control:** Giant JSON blob, hard to review changes
 
 ### Decision
+
 Replace with standalone Python service.
 
 ### Consequences
+
 **Positive:**
+
 - Standard Python tooling (debugger, profiler, linter)
 - Proper database with ACID guarantees
 - Structured logging with queryable JSON
@@ -107,16 +124,19 @@ Replace with standalone Python service.
 - 70% reduction in maintenance time
 
 **Negative:**
+
 - Need to write more code (but it's clearer code)
 - Lose visual workflow representation (but gain maintainability)
 
 **Why Python specifically:**
+
 - Local services already built in Python (frame extraction, transcript extraction)
 - n8n was adding orchestration overhead without benefit
 - Team expertise in Python ecosystem
 ```
 
 ### This Shows:
+
 ✅ You evaluate tradeoffs, not just pick the first tool you know  
 ✅ You understand when "simpler" is better than "enterprise-grade"  
 ✅ You think about future maintainability  
@@ -130,10 +150,11 @@ Most portfolio projects crash silently or spam `print()` statements. Show you kn
 
 ### Add to Your README
 
-```markdown
+````markdown
 # Observability
 
 ## Structured Logging
+
 Every job logs 5 key lifecycle events with structured data:
 
 1. **job_created** - User submitted URL
@@ -143,6 +164,7 @@ Every job logs 5 key lifecycle events with structured data:
 5. **job_error** - Failure with error type classification
 
 ### Example Log Query
+
 ```bash
 # Find all jobs that failed due to Gemini API timeouts in last 24h
 cat logs/app.log | jq 'select(.event=="job_error" and .error_type=="gemini_timeout" and .timestamp > "2026-05-10")'
@@ -150,28 +172,33 @@ cat logs/app.log | jq 'select(.event=="job_error" and .error_type=="gemini_timeo
 # Calculate average processing time by content type
 cat logs/app.log | jq 'select(.event=="job_complete") | {content_type, processing_time_ms}' | jq -s 'group_by(.content_type) | map({type: .[0].content_type, avg_ms: (map(.processing_time_ms) | add / length)})'
 ```
+````
 
 ## Error Classification
+
 Errors are categorized for different handling strategies:
 
-| Type | Examples | Retry Strategy |
-|------|----------|----------------|
-| **User Errors** | Invalid URL, unsupported format | Immediate failure, clear message to user |
-| **Retryable Errors** | API timeout, rate limit | Exponential backoff (5s, 15s, 45s), max 3 attempts |
-| **System Errors** | Disk full, DB corruption | Alert + manual intervention required |
+| Type                 | Examples                        | Retry Strategy                                     |
+| -------------------- | ------------------------------- | -------------------------------------------------- |
+| **User Errors**      | Invalid URL, unsupported format | Immediate failure, clear message to user           |
+| **Retryable Errors** | API timeout, rate limit         | Exponential backoff (5s, 15s, 45s), max 3 attempts |
+| **System Errors**    | Disk full, DB corruption        | Alert + manual intervention required               |
 
 ## Monitoring Dashboard
+
 [Include screenshot showing]:
+
 - Jobs processed per hour (line chart)
 - Error rate by type (pie chart)
 - Average processing time trend (area chart)
 - Current queue depth (gauge)
-```
+
+````
 
 ### This Shows:
-✅ You think beyond happy-path scenarios  
-✅ You understand debugging production issues  
-✅ You know how to instrument code for observability  
+✅ You think beyond happy-path scenarios
+✅ You understand debugging production issues
+✅ You know how to instrument code for observability
 ✅ You can query logs to answer operational questions
 
 ---
@@ -206,39 +233,48 @@ class RateLimiter:
         # Check Redis counter for current minute
         # Block if limit reached
         # Increment counter with TTL
-```
+````
 
 ---
 
 ### 2. Frame Extraction Service (CPU-Bound)
+
 **Current State:**
+
 - Single endpoint at `localhost:5151`
 - ~5-10s per video on i5 CPU
 - No horizontal scaling
 
 **At Scale:**
+
 - Deploy multiple frame extraction containers
 - Add nginx load balancer
 - OR migrate to GPU instance for faster processing
 
 **Cost Impact:**
+
 - Current: $0 (local machine)
 - GPU instance: ~$0.50/hr on cloud (only when processing)
 
 ---
 
 ### 3. SQLite Write Concurrency
+
 **Current State:**
+
 - <10 jobs/sec is fine
 - Write locks not observed
 
 **Migration Trigger:**
+
 - When queue depth consistently >20 jobs
 - When write lock warnings appear in logs
 
 **At Scale:**
+
 - Migrate to PostgreSQL
 - 2-line config change:
+
 ```python
 # Change from:
 DATABASE_URL = "sqlite:///./data/jobs.db"
@@ -251,23 +287,26 @@ DATABASE_URL = "postgresql://user:pass@localhost/videodb"
 ## Load Testing Results
 
 ### Test Parameters
+
 - Simulated 50 concurrent users
 - Each submitting short videos
 - 60-second duration
 - 3-worker configuration
 
 ### Results
-| Metric | Value |
-|--------|-------|
-| Total jobs submitted | 3,000 |
-| Jobs completed | 2,940 (98%) |
-| Jobs failed | 60 (2%) |
-| Queue depth (peak) | 12 jobs |
-| Avg processing time | 23s → 31s (+34% under load) |
-| Worker CPU usage | 45% average |
-| Memory usage | 180MB per worker |
+
+| Metric               | Value                       |
+| -------------------- | --------------------------- |
+| Total jobs submitted | 3,000                       |
+| Jobs completed       | 2,940 (98%)                 |
+| Jobs failed          | 60 (2%)                     |
+| Queue depth (peak)   | 12 jobs                     |
+| Avg processing time  | 23s → 31s (+34% under load) |
+| Worker CPU usage     | 45% average                 |
+| Memory usage         | 180MB per worker            |
 
 ### Conclusion
+
 Current architecture handles ~200 jobs/hour before degradation.
 
 ---
@@ -276,27 +315,29 @@ Current architecture handles ~200 jobs/hour before degradation.
 
 ### At 10,000 Jobs/Month
 
-| Service | Usage | Monthly Cost |
-|---------|-------|--------------|
-| Gemini API | 1M tokens/job × 10k jobs | $150 |
-| Google Drive | 20GB storage | $2 |
-| VPS (2GB RAM, 2 vCPU) | 730 hours | $10 |
-| Redis (self-hosted) | Included in VPS | $0 |
-| **Total** | | **$162/mo** |
+| Service               | Usage                    | Monthly Cost |
+| --------------------- | ------------------------ | ------------ |
+| Gemini API            | 1M tokens/job × 10k jobs | $150         |
+| Google Drive          | 20GB storage             | $2           |
+| VPS (2GB RAM, 2 vCPU) | 730 hours                | $10          |
+| Redis (self-hosted)   | Included in VPS          | $0           |
+| **Total**             |                          | **$162/mo**  |
 
 **Per-Job Cost:** $0.0162
 
 ### Revenue Break-Even (Freemium Model)
+
 - 10 free jobs/user/month
 - $9/mo for 100 jobs
 - Need ~18 paying users to break even
 - At 100 paying users: $900/mo revenue, 80% margin
-```
+
+````
 
 ### This Shows:
-✅ You understand the difference between "works on my laptop" and "works under load"  
-✅ You can estimate infrastructure costs (important for startups)  
-✅ You test assumptions with actual data  
+✅ You understand the difference between "works on my laptop" and "works under load"
+✅ You can estimate infrastructure costs (important for startups)
+✅ You test assumptions with actual data
 ✅ You think about business viability, not just tech stack
 
 ---
@@ -315,12 +356,12 @@ A Telegram bot that analyzes videos using AI.
 1. Clone the repo
 2. Run docker-compose up
 3. Done!
-```
+````
 
 ### Good README Example ✅
 
-```markdown
-# Video Intelligence Bot
+````markdown
+# Video Intelligence Gateway
 
 > Telegram bot that extracts insights from short-form and long-form video content using Gemini 2.5 Flash, with automated frame analysis and transcript enrichment.
 
@@ -331,6 +372,7 @@ A Telegram bot that analyzes videos using AI.
 ## Why This Project?
 
 I was spending **15+ hours/week** manually reviewing product demo videos to extract:
+
 - Competitor feature mentions
 - Brand logo appearances
 - Key product claims
@@ -339,7 +381,7 @@ I was spending **15+ hours/week** manually reviewing product demo videos to extr
 This bot **automates that workflow**:
 
 - 📊 **Short videos (<5min):** Frame-by-frame OCR + object detection
-- 📝 **Long videos (YouTube):** Transcript extraction + AI summarization  
+- 📝 **Long videos (YouTube):** Transcript extraction + AI summarization
 - 🚀 **10x faster:** 90-second analysis vs 15-minute manual review
 - 💾 **Permanent storage:** Auto-upload markdown reports to Google Drive
 
@@ -348,9 +390,11 @@ This bot **automates that workflow**:
 ## Demo
 
 ### Input: Product Demo Video
+
 ![Video thumbnail](assets/demo-input.png)
 
 ### Output: Structured Analysis
+
 ```markdown
 # Short Video Analysis
 
@@ -361,6 +405,7 @@ This bot **automates that workflow**:
 
 **Processing Time:** 23.4 seconds
 ```
+````
 
 [📄 View Full Sample Report](docs/sample-report.md)
 
@@ -369,12 +414,14 @@ This bot **automates that workflow**:
 ## Technical Highlights
 
 ### Architecture
+
 - **Dual-engine design:** Separate pipelines for frame-based vs transcript-based analysis
 - **Async processing:** FastAPI + Redis queue handles 50 concurrent requests
 - **Intelligent retry:** Exponential backoff with user-controlled retry via Telegram callbacks
 - **Production-ready observability:** Structured JSON logs, queryable error analytics
 
 ### Tech Stack
+
 ```
 Backend:  FastAPI, SQLite, Redis
 AI APIs:  Gemini 2.5 Flash (Vision + Text)
@@ -384,9 +431,10 @@ Deploy:   Docker Compose
 ```
 
 ### Performance
+
 - Processes **200 jobs/hour** on 3-worker config
 - **<30s** average latency for short videos
-- **<90s** average latency for long videos  
+- **<90s** average latency for long videos
 - **<2%** error rate (mostly invalid URLs)
 
 ---
@@ -394,6 +442,7 @@ Deploy:   Docker Compose
 ## Quick Start
 
 ### Prerequisites
+
 - Docker & Docker Compose
 - Telegram bot token ([create here](https://t.me/BotFather))
 - Gemini API key ([get here](https://ai.google.dev))
@@ -422,6 +471,7 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
 ```
 
 ### Development Setup
+
 [See docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development without Docker.
 
 ---
@@ -452,14 +502,14 @@ src/
 
 This project started as a 60+ node n8n workflow that became **unmaintainable**:
 
-| Problem | n8n | Python Solution |
-|---------|-----|-----------------|
-| Debugging | Click through nodes | Standard debugger + stack traces |
-| State management | Google Sheets as DB | SQLite with ACID guarantees |
-| Observability | Limited logging | Structured JSON logs (grep-able) |
-| Version control | 2000-line JSON blob | Clean git diffs |
-| Testing | Manual only | Unit + integration tests |
-| Performance | ~35s avg | <30s avg (15% faster) |
+| Problem          | n8n                 | Python Solution                  |
+| ---------------- | ------------------- | -------------------------------- |
+| Debugging        | Click through nodes | Standard debugger + stack traces |
+| State management | Google Sheets as DB | SQLite with ACID guarantees      |
+| Observability    | Limited logging     | Structured JSON logs (grep-able) |
+| Version control  | 2000-line JSON blob | Clean git diffs                  |
+| Testing          | Manual only         | Unit + integration tests         |
+| Performance      | ~35s avg            | <30s avg (15% faster)            |
 
 [Read full technical comparison](docs/WHY.md)
 
@@ -468,17 +518,20 @@ This project started as a 60+ node n8n workflow that became **unmaintainable**:
 ## Key Learnings
 
 ### Technical Insights
+
 1. **Async Python patterns for I/O workloads:** Properly using `asyncio` reduced API call latency by 40%
 2. **State machines with SQLite:** Designing job lifecycle as explicit state transitions improved error recovery
 3. **Gemini API optimization:** Using system instructions vs inline prompts cut token usage by 30%
 4. **Telegram bot UX patterns:** Inline keyboards for retry actions feel more natural than chat commands
 
 ### Product Thinking
+
 - **Why Telegram?** 900M users, zero friction (no new app to install), perfect for async notifications
 - **Why dual-engine?** Short videos need visual analysis, long videos need transcript — unified pipeline would compromise both
 - **Why user-controlled retry?** Automatic retry wastes API quota on broken URLs; explicit confirmation builds trust
 
 ### Architectural Decisions
+
 - Started with n8n (visual workflows seemed faster), migrated to Python (maintainability matters more)
 - Chose SQLite over PostgreSQL (YAGNI principle — migrate when actually needed, not preemptively)
 - Used Redis for queue vs asyncio.Queue (enables multi-worker scaling without refactor)
@@ -488,6 +541,7 @@ This project started as a 60+ node n8n workflow that became **unmaintainable**:
 ## What I'd Do Differently
 
 If starting over:
+
 1. **Would skip n8n entirely** — hindsight is 20/20, but Python from day 1 would've saved 3 weeks of migration
 2. **Would add Prometheus metrics earlier** — structured logs are good, but real-time dashboards catch issues faster
 3. **Would implement rate limiting from day 1** — hit Gemini rate limits in testing, had to retrofit protection
@@ -508,6 +562,7 @@ If starting over:
 Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 Key areas for help:
+
 - [ ] Support for TikTok/Instagram video sources
 - [ ] Better brand logo detection (current: basic OCR)
 - [ ] Thumbnail generation from key frames
@@ -529,12 +584,13 @@ MIT License - see [LICENSE](LICENSE) for details
 ---
 
 **Built by [Your Name](https://yourwebsite.com)** • [LinkedIn](link) • [GitHub](link)
-```
+
+````
 
 ### This Shows:
-✅ You can explain complex systems clearly  
-✅ You understand your audience (other developers, not just yourself in 6 months)  
-✅ You ship complete products, not just "works on my machine" code  
+✅ You can explain complex systems clearly
+✅ You understand your audience (other developers, not just yourself in 6 months)
+✅ You ship complete products, not just "works on my machine" code
 ✅ You're honest about mistakes and learnings
 
 ---
@@ -597,17 +653,21 @@ Manual video content analysis is **expensive and slow**:
 ## Monetization Strategy
 
 ### Freemium Model
-```
-Free Tier:  10 videos/month
-Paid Tier:  $9/mo for 100 videos  ($0.09/video)
-Pro Tier:   $29/mo for 500 videos ($0.058/video)
+````
+
+Free Tier: 10 videos/month
+Paid Tier: $9/mo for 100 videos ($0.09/video)
+Pro Tier: $29/mo for 500 videos ($0.058/video)
+
 ```
 
 ### B2B/API Access
 ```
-API Access:     $0.02/video (bulk processing)
-Enterprise:     Custom deployment + SSO + audit logs = $199/mo
-White Label:    Re-brand for agency use = $499/mo
+
+API Access: $0.02/video (bulk processing)
+Enterprise: Custom deployment + SSO + audit logs = $199/mo
+White Label: Re-brand for agency use = $499/mo
+
 ```
 
 ### Revenue Projections
@@ -620,9 +680,11 @@ White Label:    Re-brand for agency use = $499/mo
 
 ### Cost Structure (at 1,000 paying users)
 ```
-Monthly Revenue:  $9,000 (1,000 users × $9)
-Monthly Costs:    $2,500 (Gemini API + infrastructure)
-Net Margin:       $6,500 (72%)
+
+Monthly Revenue: $9,000 (1,000 users × $9)
+Monthly Costs: $2,500 (Gemini API + infrastructure)
+Net Margin: $6,500 (72%)
+
 ```
 
 **Break-even:** ~28 paying users
@@ -724,6 +786,7 @@ I make conscious trade-offs:
 ```
 
 ### This Shows:
+
 ✅ You think like a founder, not just an engineer  
 ✅ You understand P&L, not just code  
 ✅ You can articulate ROI to non-technical stakeholders  
@@ -734,34 +797,43 @@ I make conscious trade-offs:
 ## What NOT to Waste Time On
 
 ### ❌ Over-Engineering the Deployment
+
 **Don't:**
+
 - Set up Kubernetes for a single-container app
 - Build a CI/CD pipeline with 15 stages
 - Implement blue-green deployments for a portfolio project
 
 **Do:**
+
 - Use Docker Compose (simple, reproducible)
 - Document manual deployment steps
 - Add GitHub Actions for tests only
 
 ### ❌ Obsessing Over Code Style
+
 **Don't:**
+
 - Spend 3 days configuring ESLint/Prettier/Black
 - Refactor to "clean architecture" if it makes code harder to read
 - Add 100% test coverage just to hit a number
 
 **Do:**
+
 - Use standard formatting (Black for Python)
 - Write tests for critical paths only
 - Focus on code clarity over architectural purity
 
 ### ❌ Building Features Nobody Asked For
+
 **Don't:**
+
 - Add GraphQL API if REST works fine
 - Build React admin dashboard if Telegram bot is the interface
 - Support 5 video platforms if you only tested YouTube
 
 **Do:**
+
 - Validate one use case deeply
 - Document future features in issues
 - Let users tell you what they need
@@ -773,18 +845,21 @@ I make conscious trade-offs:
 A hiring manager will spend **90 seconds** on your repo. Make it count.
 
 ### First 30 Seconds (README)
+
 - [ ] One-sentence description of what it does
 - [ ] Demo video or screenshots (visual proof it works)
 - [ ] Clear "Why I built this" section (shows problem-solving)
 - [ ] Architecture diagram (shows system design thinking)
 
 ### Next 30 Seconds (Code Quality)
+
 - [ ] Project structure makes sense at a glance
 - [ ] Code is readable (no 500-line functions)
-- [ ] Comments explain *why*, not *what*
+- [ ] Comments explain _why_, not _what_
 - [ ] No secrets committed (API keys, passwords)
 
 ### Final 30 Seconds (Completeness)
+
 - [ ] It actually runs (`docker-compose up` works)
 - [ ] Tests exist and pass
 - [ ] Some docs beyond README (DECISIONS.md, SCALING.md)
@@ -799,42 +874,52 @@ A senior engineer reviewing your code will ask these questions. Answer them befo
 ### Technical Questions
 
 #### 1. Why FastAPI over Flask/Django?
+
 **Add to `docs/DECISIONS.md`:**
+
 - Async native for concurrent API calls
 - Automatic OpenAPI docs
 - Pydantic validation
 
 #### 2. Why SQLite over Postgres?
+
 **Add to `docs/SCALING.md`:**
+
 - Sufficient for <10k jobs/day
 - Migration path documented
 - Will switch when queue depth >20
 
 #### 3. What happens if Gemini API goes down?
+
 **Add to `docs/ERROR_HANDLING.md`:**
+
 - Retry with exponential backoff
 - User-controlled retry via Telegram
 - Alert after 3 failed attempts
 
 #### 4. How do you prevent duplicate processing?
+
 **Code comment in `database.py`:**
+
 ```python
 async def check_duplicate_job(url: str, chat_id: int):
     """
     Check if URL was processed in last 24h for this user.
-    
+
     Rationale: Prevents:
     - API quota waste on duplicate requests
     - User confusion from multiple results
     - Database bloat from redundant records
-    
+
     Trade-off: Users can't force re-process within 24h
     (Could add /force command if needed)
     """
 ```
 
 #### 5. What's your retry strategy?
+
 **Flowchart in README:**
+
 ```mermaid
 graph LR
     A[Job Fails] --> B{Retryable?}
@@ -847,13 +932,17 @@ graph LR
 ```
 
 #### 6. How do you handle rate limits?
+
 **Add to `docs/SCALING.md`:**
+
 - Token bucket algorithm (planned)
 - Currently: queue depth monitoring
 - Alert at 80% of Gemini limit (48 req/min)
 
 #### 7. Why store job state in DB vs Redis?
+
 **Add to `docs/DECISIONS.md`:**
+
 - Persistent state (survives Redis restart)
 - Queryable history for analytics
 - Redis used only for transient queue
@@ -861,14 +950,18 @@ graph LR
 ### Product Questions
 
 #### 1. Who is this for?
+
 **Add to `docs/BUSINESS_CASE.md`:**
 User personas:
+
 - **Persona A:** Market researcher analyzing competitor videos
 - **Persona B:** Social media manager reviewing UGC
 - **Persona C:** E-commerce team extracting product features
 
 #### 2. What problem does this solve?
+
 **Before/after workflow in README:**
+
 ```
 BEFORE:
 1. Download video (2 min)
@@ -887,22 +980,28 @@ Total: 2.5 minutes per video
 ```
 
 #### 3. Why Telegram instead of web app?
+
 **Add to `docs/BUSINESS_CASE.md`:**
+
 - 900M users, zero friction
 - Mobile-native (70% of usage)
 - Async notifications (vs polling web page)
 - Viral distribution (forward bot link)
 
 #### 4. How would you monetize?
+
 **Pricing table in `docs/BUSINESS_CASE.md`**
 
 #### 5. What's the competitive landscape?
+
 **Comparison table in README**
 
 ### Process Questions
 
 #### 1. How do you test locally?
+
 **Add to `docs/CONTRIBUTING.md`:**
+
 ```bash
 # Quick start
 docker-compose up -d redis
@@ -917,7 +1016,9 @@ pytest --cov=src tests/
 ```
 
 #### 2. How do you deploy updates?
+
 **Add to `docs/DEPLOYMENT.md`:**
+
 ```bash
 # Production deployment
 git pull origin main
@@ -930,7 +1031,9 @@ docker-compose up -d
 ```
 
 #### 3. How do you debug production issues?
+
 **Log query examples in README:**
+
 ```bash
 # Find all errors in last hour
 cat logs/app.log | jq 'select(.level=="error" and .timestamp > "2026-05-11T11:00")'
@@ -940,6 +1043,7 @@ cat logs/app.log | jq 'select(.job_id=="550e8400...")'
 ```
 
 #### 4. What metrics do you track?
+
 **Observability dashboard screenshots in `docs/MONITORING.md`**
 
 ---
@@ -959,6 +1063,7 @@ That's what gets you interviews.
 ## Action Items for Your Portfolio
 
 ### This Week
+
 1. Create `docs/WHY.md` with 3 sections:
    - Problem (n8n workflow was unmaintainable)
    - Options (keep n8n, migrate to Python, use serverless)
@@ -969,6 +1074,7 @@ That's what gets you interviews.
 3. Create `docs/DECISIONS.md` with at least 3 ADRs
 
 ### Next Week
+
 4. Add structured logging examples to README
 
 5. Create `docs/SCALING.md` with load test results
@@ -976,6 +1082,7 @@ That's what gets you interviews.
 6. Add error classification table to README
 
 ### Before Applying
+
 7. Record 2-minute demo video
 
 8. Add screenshots to README
@@ -994,7 +1101,7 @@ These projects demonstrate excellent technical communication:
 2. **[Project B]** - Excellent architecture decision records
 3. **[Project C]** - Outstanding observability documentation
 
-*(Note: Add real examples from GitHub Explore)*
+_(Note: Add real examples from GitHub Explore)_
 
 ---
 
@@ -1003,28 +1110,32 @@ These projects demonstrate excellent technical communication:
 When discussing this project in interviews, emphasize:
 
 ### Technical Depth
+
 - "I migrated from n8n to Python, reducing maintenance time by 70%"
 - "I implemented exponential backoff with user-controlled retry"
 - "I used structured logging to make production debugging tractable"
 
 ### Product Thinking
+
 - "I chose Telegram over a web app for zero-friction distribution"
 - "I designed a freemium model with 72% margin at scale"
 - "I validated the use case with 3 manual reviews before automating"
 
 ### Growth Mindset
+
 - "I started with n8n, realized it was wrong, and had the discipline to rewrite"
 - "I documented my mistakes in WHY.md so others can learn from them"
 - "I'd add Prometheus metrics earlier if I could start over"
 
 ### Business Acumen
+
 - "I estimated unit economics at $0.017/video, enabling a profitable freemium model"
 - "I chose open-source for GitHub stars as a growth lever"
 - "I understand this is a $50k MRR business, not a unicorn"
 
 ---
 
-**This document is your competitive advantage.** Most candidates have similar technical skills. Documenting your *thinking* sets you apart.
+**This document is your competitive advantage.** Most candidates have similar technical skills. Documenting your _thinking_ sets you apart.
 
 ---
 

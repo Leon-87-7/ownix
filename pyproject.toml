@@ -1,7 +1,7 @@
 [project]
 name = "vig"
 version = "0.1.0"
-description = "Video Intelligence Bot — FastAPI service replacing an n8n workflow"
+description = "Video Intelligence Gateway — FastAPI service replacing an n8n workflow"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]

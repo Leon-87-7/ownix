@@ -208,7 +208,11 @@ async def run(job_id: str) -> None:
         enrichment = await enrich(job)
     except EnrichmentUnavailableError:
         title = job.get("title", "(unknown video)")
-        await send_message(chat_id, f"{tag}\n⚠️ Gemini failed to enrich: {title}")
+        await send_inline_keyboard(
+            chat_id,
+            f"{tag}\n⚠️ Gemini failed to enrich: {title}",
+            buttons=[[{"text": "🔄 Retry", "callback_data": f"enrichment_retry:{job_id}"}]],
+        )
         await database.update_job_status(job_id, "error")
         return
 

@@ -1,4 +1,4 @@
-# Video Intelligence Bot — Tech Stack
+# Video Intelligence Gateway — Tech Stack
 
 **Last Updated:** 2026-05-17  
 **Rule:** Every technology earns its place. This document records what's here, why it was chosen over the alternatives, and the concrete signal that should trigger a replacement.
@@ -7,30 +7,30 @@
 
 ## Summary Table
 
-| Layer | Technology | Alternative Waiting |
-|-------|-----------|---------------------|
-| Web framework | FastAPI | — |
-| Database | SQLite + aiosqlite | PostgreSQL |
-| Queue | Redis | asyncio.Queue (downgrade) |
-| HTTP client | httpx | — |
-| Config | pydantic-settings | — |
-| Logging | structlog | — |
-| AI — Vision + Text + PRD (auto) | Gemini 2.5 Flash | — |
-| AI — PRD (intent slot) | Gemini 2.5 Pro | — |
-| AI — Embeddings | text-embedding-004 | — |
-| AI enrichment fallback | Gemini Paid API key | — |
-| Link verification | Brave Search API | — |
-| File storage | Google Drive API v3 | — |
-| Reporting | Google Sheets API v4 | — |
-| Transcript extraction | youtube-transcript-api | — |
-| Video download + metadata | yt-dlp | — |
-| Video frame extraction | ffmpeg (subprocess) | — |
-| Image processing | Pillow | — |
-| Sidecar server | Flask + Waitress | FastAPI (if rewriting) |
-| Cron scheduling | APScheduler | — |
-| Vector math | NumPy | pgvector / Qdrant |
-| Deployment | Docker Compose | — |
-| Testing | pytest + pytest-asyncio | — |
+| Layer                           | Technology              | Alternative Waiting       |
+| ------------------------------- | ----------------------- | ------------------------- |
+| Web framework                   | FastAPI                 | —                         |
+| Database                        | SQLite + aiosqlite      | PostgreSQL                |
+| Queue                           | Redis                   | asyncio.Queue (downgrade) |
+| HTTP client                     | httpx                   | —                         |
+| Config                          | pydantic-settings       | —                         |
+| Logging                         | structlog               | —                         |
+| AI — Vision + Text + PRD (auto) | Gemini 2.5 Flash        | —                         |
+| AI — PRD (intent slot)          | Gemini 2.5 Pro          | —                         |
+| AI — Embeddings                 | text-embedding-004      | —                         |
+| AI enrichment fallback          | Gemini Paid API key     | —                         |
+| Link verification               | Brave Search API        | —                         |
+| File storage                    | Google Drive API v3     | —                         |
+| Reporting                       | Google Sheets API v4    | —                         |
+| Transcript extraction           | youtube-transcript-api  | —                         |
+| Video download + metadata       | yt-dlp                  | —                         |
+| Video frame extraction          | ffmpeg (subprocess)     | —                         |
+| Image processing                | Pillow                  | —                         |
+| Sidecar server                  | Flask + Waitress        | FastAPI (if rewriting)    |
+| Cron scheduling                 | APScheduler             | —                         |
+| Vector math                     | NumPy                   | pgvector / Qdrant         |
+| Deployment                      | Docker Compose          | —                         |
+| Testing                         | pytest + pytest-asyncio | —                         |
 
 ---
 
@@ -39,6 +39,7 @@
 **What:** Async Python web framework. Handles the `/webhook`, `/callback`, `/health`, `/links/search`, and `/links/rebuild` endpoints.
 
 **Why here:**
+
 - Native `async/await` — the bot is I/O-bound (Telegram, Gemini, Drive, SQLite). Blocking workers would serialize requests that should run concurrently.
 - Automatic OpenAPI docs at `/docs` — useful during development to inspect webhook payloads without writing a test client.
 - Dependency injection for auth (`validate_telegram_webhook`) is clean and composable.
@@ -57,6 +58,7 @@
 **What:** Embedded relational database. Stores the `jobs` table (job state machine, AI enrichment fields, transcript cache) and the `links` table (Second Brain corpus). `aiosqlite` wraps SQLite with an async interface so it doesn't block the FastAPI event loop.
 
 **Why here:**
+
 - Zero infrastructure. No extra Docker container, no connection pooling config, no migration daemon — the database is a single file at `data/jobs.db`.
 - The workload is one user, tens of jobs per day. SQLite in WAL mode handles concurrent reads and the occasional write without contention.
 - Easy backup: `cp data/jobs.db data/backups/jobs_$(date +%Y%m%d).db`. No `pg_dump`.
@@ -65,6 +67,7 @@
 **Why not PostgreSQL:** Operational overhead with no benefit at this scale. Running Postgres in Docker Compose adds a container, health checks, a connection pool, and a migration strategy — none of which buy anything when there's one user and ~50 jobs/day.
 
 **Switch when:**
+
 - More than one API container writes to the database simultaneously (SQLite's write lock becomes a bottleneck).
 - Jobs/day consistently exceed ~5,000 (WAL mode checkpoint pressure).
 - Need `JSONB` columns, full-text search (`tsvector`), or row-level security.
@@ -77,6 +80,7 @@
 **What:** Redis `lpush` / `brpop` used as a FIFO queue on the `video_jobs` key. Workers block on `brpop` with a 30s timeout. `asyncio.Queue` is the documented fallback for single-container deployments.
 
 **Why here:**
+
 - The queue survives a worker crash. If the worker process dies mid-poll, the job ID stays in Redis and the next worker restart picks it up — no lost jobs.
 - Multiple worker containers can pull from the same queue without coordination. Scaling from 1 to 3 workers is `docker-compose scale worker=3`.
 - Redis is already a well-understood operational dependency. Monitoring queue depth (`LLEN video_jobs`) is one command.
@@ -98,6 +102,7 @@
 **What:** Async HTTP client used for all outbound HTTP: Telegram Bot API, Brave Search API, Gemini REST calls, and the `transcript_server.py` sidecar endpoints.
 
 **Why here:**
+
 - Native async (`AsyncClient`) — no thread pool needed, no blocking event loop.
 - `httpx` has the same API as `requests`, so it's immediately readable.
 - Connection pooling via a long-lived `AsyncClient` instance avoids re-handshaking Telegram on every message.
@@ -114,6 +119,7 @@
 **What:** `BaseSettings` subclass that reads environment variables (from `.env` or shell) and validates them at startup. All env vars are typed, required fields crash the process immediately if missing.
 
 **Why here:**
+
 - Fail-fast on misconfiguration. A missing `GEMINI_FREE_API_KEY` raises a `ValidationError` before the first request is served — not on the first job that tries to use it.
 - Single source of truth: `config.GEMINI_FREE_API_KEY` everywhere, no `os.getenv()` scattered across files.
 - Pydantic is already a FastAPI dependency — no extra install.
@@ -127,6 +133,7 @@
 **What:** Structured JSON logging. Every log event is a machine-parseable JSON object with `timestamp`, `level`, `event`, and context fields (`job_id`, `chat_id`, `content_type`, etc.).
 
 **Why here:**
+
 - JSON logs are queryable with `jq`. Finding all failed jobs in the last hour is one pipeline: `cat logs/app.log | jq 'select(.event=="job_error")'`.
 - Context binding (`log.bind(job_id=job_id)`) propagates fields automatically without threading them through every function call.
 - Replaces the `print()` / `logging.info()` pattern that was the only observability in the n8n workflow.
@@ -140,12 +147,14 @@
 ## 7. AI — Gemini 2.5 Flash + Pro (Vision + Text + Mini-PRD)
 
 **What:** Google's multimodal model family. Used in three modes across two tiers:
+
 - **Vision (Flash):** Short video pipeline — frames sent as base64 JPEG inline data, model extracts links, tools, and a summary.
 - **Text — enrichment (Flash):** Long video pipeline — transcript (capped at 12,000 chars) sent with a structured prompt, model returns `{category, topic, objective, action_points[], tools[], market_data}` as JSON.
 - **Text — Mini-PRD auto slot (Flash):** Long video Phase 3, fires automatically when `ai_category == "Technical Tutorial"`. Transcript (capped at 60,000 chars, three-window sample if longer) + enrichment scaffolding → structured PRD JSON.
 - **Text — Mini-PRD intent slot (Pro):** Long video Phase 3, user-triggered via 📐 button or `/spec` command with intent text. Same prompt shape as auto, biased by user-supplied project direction. Pro is selected for deeper reasoning on phase ordering and gap identification — the user is already prepared to wait the extra ~7s.
 
 **Why here:**
+
 - Gemini 2.5 Flash has a free tier sufficient for personal use. Both `GEMINI_FREE_API_KEY` and `GEMINI_PAID_API_KEY` are Gemini keys — no second vendor needed. Pro is exposed via the same keys at higher per-token cost.
 - 1M token context window handles long transcripts without chunking — including the 60k PRD transcript cap.
 - Native multimodal: the Vision mode accepts inline image bytes without a separate image hosting step. The `PRD_INCLUDE_FRAMES=false` flag exists as a v2 escape hatch to extend multimodal to long-video PRDs once a frame-selection strategy is built.
@@ -157,11 +166,13 @@
 **PRD fallback chain:** Per slot, same shape: free → paid. Failure handling differs by trigger — silent for auto-fire (logged only; user gets enrichment normally), user-facing message for manual button or `/spec` trigger. Parse failures don't retry on the paid key (model confusion is unlikely to resolve on the same prompt).
 
 **Why Flash for auto PRD but Pro for intent PRD:**
+
 - Flash auto: fires for every Technical Tutorial — keeps the default cost low (~$0.005 per generation at 15k input tokens) and latency ~3s, which fits the "user just enabled enrichment" flow.
 - Pro intent: user explicitly invested by supplying a direction — wait tolerance is higher, reasoning quality matters more for ordering phases and identifying open questions. ~$0.035 per generation at 15k input. The 15s cooldown gate (`PRD_INTENT_COOLDOWN_SECONDS`) bounds spam cost.
 - The split is a single config flag — `PRD_AUTO_MODEL=gemini-2.5-flash`, `PRD_INTENT_MODEL=gemini-2.5-pro`. Flipping either is one env change.
 
 **Switch when:**
+
 - Free tier rate limits become a daily blocker (>60 requests/min sustained). Current mitigation: paid key fallback.
 - Gemini 2.5 Flash is deprecated — upgrade to the next Flash model (prompt schema is stable JSON, migration is a model ID string change).
 - A competing model demonstrates meaningfully better structured JSON output for the enrichment or PRD schema. The prompts are self-contained in `processors/enrichment.py` and `processors/prd.py` — swapping models is isolated.
@@ -174,12 +185,14 @@
 **What:** Google's text embedding model. Used exclusively by `brain.py` to embed links (document: `"{url} {title} {topic}"`) and search queries for cosine similarity ranking.
 
 **Why here:**
+
 - 768-dimension output. 768 × 4 bytes × 10,000 links = ~30MB in memory — trivially fits with NumPy. No vector database needed.
 - Pinned to 768 dims explicitly on every call (`output_dimensionality=768`) to guard against SDK drift changing the default.
 - Already on the Gemini platform — no second API key vendor for embeddings.
 - `GEMINI_BRAIN_API_KEY` isolates brain quota from pipeline quota (optional — falls back to free key if unset).
 
 **Switch when:**
+
 - Corpus grows past ~100k links and in-memory numpy similarity becomes the latency bottleneck (currently <10ms for 10k links).
 - At that point, migrate embeddings to `pgvector` (if already on PostgreSQL) or Qdrant. The `brain.py` interface doesn't change — only the storage and similarity query backend.
 
@@ -190,6 +203,7 @@
 **What:** REST API used in the short video pipeline to verify and enrich extracted links. Given a URL or domain, returns a title and snippet from Brave's index.
 
 **Why here:**
+
 - Free tier (100 queries/month) covers personal use.
 - Gives Gemini-extracted links a human-readable label and description without scraping the target page directly.
 - Opt-in via `ENABLE_BRAVE_SEARCH=true`. The pipeline degrades gracefully when disabled — links are sent without enrichment.
@@ -203,6 +217,7 @@
 ## 10. File Storage — Google Drive API v3
 
 **What:** Markdown files are uploaded to Google Drive via a service account. Four folders:
+
 - `DRIVE_FOLDER_SHORT` — short video analysis reports
 - `DRIVE_FOLDER_LONG` — long video transcript `.md` files
 - `DRIVE_FOLDER_BRAIN` — Second Brain Obsidian vault `.md` nodes
@@ -211,6 +226,7 @@
 Files are shared "anyone with link" (reader). The shareable URL is sent to the user via Telegram.
 
 **Why here:**
+
 - The n8n workflow already used Drive. Users have existing folders with historical data.
 - Drive files open directly in the browser (Google Docs viewer renders markdown) — no self-hosted file server needed.
 - The Obsidian vault use case requires Drive specifically: the Google Drive desktop app syncs the Brain folder locally, which Obsidian reads as a vault. No other storage backend supports this workflow.
@@ -229,6 +245,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 - `SHEETS_ID_PRD` columns: `job_id, video_url, title, slot, intent_text, drive_url, created_at` — one row per PRD generation (max 2 per job from the two-slot model). `slot` is `'auto'` or `'intent'`; `intent_text` is NULL for auto. Independent from `SHEETS_ID_LONG` because PRD generations happen at unpredictable times (e.g. weeks later via `/spec`) and append-only semantics require independent rows rather than retroactive updates.
 
 **Why here:**
+
 - Historical compatibility — the n8n workflow used Sheets as its database. The Python replacement demotes it to a read-only audit log while SQLite becomes the source of truth.
 - Sheets is the easiest way to browse and filter job history without writing a dashboard.
 - The Apps Script `fillTopics` tool (`scripts/apps-script-in-sheet.js`) runs inside Sheets and can retroactively fill missing `ai_topic` fields — this workflow only works with Sheets.
@@ -244,6 +261,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** Python library that fetches YouTube caption data without downloading the video. Used in `transcript_server.py` at `GET /transcript`.
 
 **Why here:**
+
 - Fastest path to transcript text — no video download, no audio processing, no speech-to-text.
 - Captions are usually more accurate than STT for technical content (proper nouns, library names, ticker symbols).
 - Zero cost — captions are served by YouTube's own API.
@@ -257,10 +275,12 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 ## 13. Video Download + Metadata — yt-dlp
 
 **What:** CLI/library used in `transcript_server.py` for two purposes:
+
 - `GET /short_frames`: downloads the video file (`bestvideo[ext=mp4]+bestaudio[ext=m4a]/best`) so ffmpeg can extract frames.
 - `GET /metadata`: extracts `title`, `channel`, `views`, `upload_date`, `description` without downloading the video (`skip_download=True`).
 
 **Why here:**
+
 - Supports YouTube Shorts, Instagram Reels, TikTok, and hundreds of other platforms via a unified interface.
 - Actively maintained — cookie handling, rate-limit circumvention, and format negotiation are updated with each platform change.
 - Instagram cookies (`instagram_cookies.txt`) are already configured for authenticated Instagram access.
@@ -274,6 +294,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** System binary called via `subprocess.run` inside `transcript_server.py`. Extracts JPEG frames from the downloaded video at a configurable interval (`fps=1/{interval}`) up to `max_frames`, scaled to `max_width`.
 
 **Why here:**
+
 - ffmpeg is the universal standard for video frame extraction. No Python-native library matches its format support, performance, or reliability.
 - The `subprocess` call is straightforward: fixed command, fixed args, check returncode.
 - Frames are written to a temp directory and cleaned up in a `finally` block.
@@ -289,6 +310,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** Used in `transcript_server.py` after ffmpeg extraction. Opens each JPEG frame, re-encodes it at `quality=85`, and base64-encodes the result for the JSON response.
 
 **Why here:**
+
 - Re-encoding at quality=85 reduces frame size ~30–40% vs ffmpeg's default output before base64 inflation.
 - Pillow is a single-purpose step: open → encode → close. No complex image manipulation needed.
 
@@ -313,6 +335,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** `AsyncIOScheduler` registered on FastAPI startup. Runs `brain.refresh_stale_links()` on cron `0 9 * * 0,3` (9 AM UTC, Sunday and Wednesday).
 
 **Why here:**
+
 - APScheduler integrates with asyncio natively — the scheduled coroutine runs on the same event loop as the FastAPI app. No separate process or container needed.
 - Cron expression `0 9 * * 0,3` is readable and matches the design spec exactly.
 - The scheduler is registered once in `main.py` and is invisible to the rest of the codebase.
@@ -326,11 +349,13 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 ## 18. Vector Math — NumPy
 
 **What:** Used in `brain.py` to:
+
 - Store embeddings as a 2D float32 matrix (rows = links, cols = 768 dims)
 - Compute cosine similarity: `dot(query, corpus.T) / (norm(query) * norm(corpus, axis=1))`
 - Rank and filter results by `BRAIN_MIN_SCORE`
 
 **Why here:**
+
 - 768 floats × N links is a small matrix. 10,000 links = ~30MB. In-memory is faster than any database round-trip.
 - NumPy cosine similarity over 10k vectors takes <5ms. No approximate nearest-neighbour index needed at this scale.
 - NumPy is a transitive dependency of many packages already — no net new dependency in practice.
@@ -345,6 +370,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** Three-container setup: `api` (FastAPI + APScheduler), `worker` (background job processor), `redis`. All share a `video-bot-network` bridge network and mount `./data` and `./logs` volumes.
 
 **Why here:**
+
 - `docker-compose up -d` is the entire deployment. No systemd units, no manual process management.
 - Worker can be scaled independently of the API: `docker-compose up --scale worker=3`.
 - `transcript_server.py` runs outside Docker (on the host machine), accessed via `host.docker.internal:5151` from inside containers.
@@ -358,6 +384,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 **What:** `pytest` as the test runner. `pytest-asyncio` enables `async def test_*` functions and marks async fixtures. `pytest.ini` or `pyproject.toml` sets `asyncio_mode = auto` so every async test is handled without manual `@pytest.mark.asyncio` decoration.
 
 **Why here:**
+
 - pytest is the Python testing standard. `pytest-asyncio` is its natural async extension.
 - `anyio` or `trio` are alternatives, but `pytest-asyncio` integrates directly with the asyncio event loop that FastAPI and aiosqlite use — no backend switching.
 

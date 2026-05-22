@@ -464,6 +464,43 @@ async def test_spec_with_intent_enqueues_intent(temp_db, _patch_webhook_secret, 
     assert job["prd_intent_text"] == "desktop app for image processing"
 
 
+# ---------------------------------------------------------------------------
+# enrichment_retry callback tests (issue #13)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_callback_enrichment_retry_enqueues_on_error_status(temp_db, monkeypatch):
+    from src.telegram import webhook
+    await _seed_job(temp_db, "J_ERR", chat_id=100, status="error")
+    enqueued = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enqueued)
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
+    await webhook._handle_callback(
+        {"id": "CB", "data": "enrichment_retry:J_ERR", "message": {"chat": {"id": 100}}}
+    )
+    enqueued.assert_awaited_once_with({"task": "enrichment", "job_id": "J_ERR"})
+    from src import database as db
+    job = await db.get_job("J_ERR")
+    assert job["status"] == "enriching"
+
+
+@pytest.mark.asyncio
+async def test_callback_enrichment_retry_rejects_on_done_status(temp_db, monkeypatch):
+    from src.telegram import webhook
+    await _seed_job(temp_db, "J_DONE2", chat_id=100, status="done")
+    enqueued = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enqueued)
+    ack = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
+    await webhook._handle_callback(
+        {"id": "CB", "data": "enrichment_retry:J_DONE2", "message": {"chat": {"id": 100}}}
+    )
+    enqueued.assert_not_awaited()
+    _, kwargs = ack.await_args
+    assert "done" in kwargs.get("text", "")
+
+
 @pytest.mark.asyncio
 async def test_intent_text_never_appears_in_log_records(temp_db, _patch_webhook_secret, monkeypatch, caplog):
     """intent_text must never appear in any log record — only intent_text_len."""

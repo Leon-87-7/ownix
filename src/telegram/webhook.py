@@ -187,6 +187,23 @@ async def _handle_callback(callback: dict) -> None:
         await send_message(chat_id, "📐 Generating PRD, hang tight...")
         await queue.enqueue({"task": "prd_intent", "job_id": job_id})
 
+    elif data.startswith("enrichment_retry:"):
+        job_id = data.split(":", 1)[1]
+        job = await database.get_job(job_id)
+        if not job:
+            await answer_callback_query(cq_id, text="Job not found.")
+            return
+        status = job.get("status")
+        if status not in ("error", "transcript_done"):
+            log.warning("enrichment_retry_rejected", job_id=job_id, status=status)
+            await answer_callback_query(cq_id, text=f"Can't retry — job is in status '{status}'.")
+            return
+        await answer_callback_query(cq_id)
+        await database.update_job_status(job_id, "enriching")
+        await queue.enqueue({"task": "enrichment", "job_id": job_id})
+        log.info("enrichment_retry_enqueued", job_id=job_id)
+        await send_message(chat_id, "🍪 Retrying Gemini enrichment...")
+
     else:
         log.warning("unknown_callback", data=data)
         await answer_callback_query(cq_id)

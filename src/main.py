@@ -17,6 +17,7 @@ log = get_logger(__name__)
 
 async def _register_webhook() -> None:
     from src.config import settings
+
     if not settings.WEBHOOK_URL:
         log.warning("webhook_url_not_set", msg="Set WEBHOOK_URL in .env to auto-register")
         return
@@ -37,12 +38,15 @@ async def _register_webhook() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from src.config import settings
+
     log.info("api_starting")
     await database.init_db()
     from src import brain
+
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         await brain.init_db()
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
         scheduler.start()
@@ -55,9 +59,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await queue.close()
 
 
-app = FastAPI(title="vig — Video Intelligence Bot", lifespan=lifespan)
+app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
 app.include_router(webhook.router)
 from src.api import brain_router
+
 app.include_router(brain_router)
 
 
