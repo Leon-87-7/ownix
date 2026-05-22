@@ -33,3 +33,8 @@ Thumbs.db
 
 # pytest
 .pytest_cache/
+
+# folders
+
+docs/images/*
+docs/features/*
