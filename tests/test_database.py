@@ -105,3 +105,57 @@ async def test_get_recent_jobs_orders_desc_and_limits(temp_db):
     rows = await db.get_recent_jobs(1, limit=5)
     assert len(rows) == 5
     assert rows[0]["title"] == "job 6"  # most recent first
+
+
+@pytest.mark.asyncio
+async def test_create_job_with_template_writes_column(temp_db):
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test",
+        content_type="long",
+        template="method",
+    )
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["template"] == "method"
+
+
+@pytest.mark.asyncio
+async def test_create_job_without_template_defaults_none(temp_db):
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test2",
+        content_type="long",
+    )
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["template"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_writes_template_detection_method(temp_db):
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test3",
+        content_type="long",
+    )
+    await db.update_job_status(job_id, "pending", template_detection_method="explicit_command")
+    job = await db.get_job(job_id)
+    assert job["template_detection_method"] == "explicit_command"
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_writes_key_phrases(temp_db):
+    import json
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test4",
+        content_type="long",
+    )
+    await db.update_job_status(job_id, "transcript_done", key_phrases=json.dumps(["stripe", "nextjs"]))
+    job = await db.get_job(job_id)
+    assert json.loads(job["key_phrases"]) == ["stripe", "nextjs"]
