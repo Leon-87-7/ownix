@@ -9,7 +9,13 @@ from fastapi import APIRouter, Header, HTTPException, Request
 
 from src import database, queue
 from src.config import settings
-from src.telegram.sender import answer_callback_query, download_photo, send_message
+from src.telegram.sender import (
+    answer_callback_query,
+    download_photo,
+    send_force_reply,
+    send_inline_keyboard,
+    send_message,
+)
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline
 
@@ -23,12 +29,13 @@ async def _is_batch_active(chat_id: int) -> bool:
 
 async def _add_to_batch(chat_id: int, file_id: str) -> None:
     client = queue._client()
-    await client.rpush(f"photo_batch_files:{chat_id}", file_id)
+    # redis-py async stubs miss rpush/lrange — they're awaitable at runtime.
+    await client.rpush(f"photo_batch_files:{chat_id}", file_id)  # pyright: ignore[reportGeneralTypeIssues]
     await client.expire(f"photo_batch_files:{chat_id}", 300)
 
 
 async def _get_batch_files(chat_id: int) -> list[str]:
-    return await queue._client().lrange(f"photo_batch_files:{chat_id}", 0, -1)
+    return await queue._client().lrange(f"photo_batch_files:{chat_id}", 0, -1)  # pyright: ignore[reportGeneralTypeIssues]
 
 
 async def _clear_batch(chat_id: int) -> None:
@@ -105,12 +112,6 @@ async def _batch_auto_close(chat_id: int) -> None:
 
 async def _handle_callback(callback: dict) -> None:
     """Dispatch callback_query events from inline keyboard button presses."""
-    from src.telegram.sender import (
-        answer_callback_query,
-        send_force_reply,
-        send_inline_keyboard,
-        send_message,
-    )
     cq_id = callback.get("id", "")
     data = callback.get("data", "")
     chat_id = (callback.get("message") or {}).get("chat", {}).get("id")

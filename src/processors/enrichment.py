@@ -121,7 +121,7 @@ def _call_gemini_sync(prompt: str, api_key: str) -> str:
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return response.text
+    return response.text or ""
 
 
 async def _call_gemini(prompt: str, api_key: str) -> str:

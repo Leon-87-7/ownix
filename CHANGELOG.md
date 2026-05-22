@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Photo link hallucination (#11)** — Gemini was appending `.com` to every brand name/card label visible in screenshots (e.g. `threadcan.com`, `redactai.com`) because the prompt instructed it to "infer full URL from brand name". Rewrote `_PHOTO_PROMPT` to require a verbatim OCR quote for each link, and added `_filter_grounded_links()` post-filter: any URL whose domain doesn't appear literally in the model's quoted `verbatim` substring (or the summary) is dropped before the user sees it. Also updated the monkeypatches in 6 PRD callback tests to target the now-top-level `src.telegram.webhook` bindings.
+
 ### Added
 
 - **Mini-PRD intent slot** (#7) — long-video PRDs can now be personalized with a user-supplied project direction. Tapping `📐 Build Spec` opens a sub-menu (`🤖 Build auto Spec` / `✍️ Text your intent`); the intent path arms a 10-minute `chat_state` window, prompts via ForceReply, and generates a PRD biased by the user's text using `gemini-2.5-pro`.
