@@ -439,8 +439,8 @@ async def test_intent_cooldown_allows_after_15s(temp_db_for_prd, monkeypatch):
         await conn.commit()
 
     monkeypatch.setattr(
-        "src.processors.prd._call_gemini_intent_sync",
-        lambda prompt, key: '{"project":"X","category":"Other","overview":"","phases":[],"open_questions":[]}',
+        "src.processors.prd._call_gemini_sync",
+        lambda prompt, key, model: '{"project":"X","category":"Other","overview":"","phases":[],"open_questions":[]}',
     )
     monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FID","URL")))
     monkeypatch.setattr("src.services.drive.update_file", AsyncMock(return_value="URL"))
@@ -463,3 +463,137 @@ async def test_intent_cooldown_allows_after_15s(temp_db_for_prd, monkeypatch):
         )).fetchone()
     assert row["prd_intent_status"] == "done"
     assert row["prd_intent_completed_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# run_prd skeleton tests (issue #24)
+# ---------------------------------------------------------------------------
+
+_CANNED_PRD_JSON = '{"project":"SkeletonBot","category":"Other","overview":"Test overview.","phases":[],"open_questions":[]}'
+
+
+@pytest.mark.asyncio
+async def test_run_prd_auto_completes_full_pipeline(temp_db_for_prd, monkeypatch):
+    """run_prd with slot='auto' runs the full pipeline end-to-end."""
+    import aiosqlite
+    from src.processors import prd
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        await conn.execute(
+            "INSERT INTO jobs (id, chat_id, url, content_type, status, transcript) "
+            "VALUES ('J_AUTO', 1, 'http://example.com', 'long', 'done', 'Some transcript')"
+        )
+        await conn.commit()
+
+    monkeypatch.setattr(
+        "src.processors.prd._call_gemini_sync",
+        lambda prompt, key, model: _CANNED_PRD_JSON,
+    )
+    monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FILE_ID", "http://drive/auto")))
+    monkeypatch.setattr("src.services.drive.update_file", AsyncMock(return_value="http://drive/auto"))
+    monkeypatch.setattr("src.services.sheets.append_prd_row", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_document", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_message", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", AsyncMock())
+    from src.config import settings
+    monkeypatch.setattr(settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "")
+    monkeypatch.setattr(settings, "GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr(settings, "GEMINI_PAID_API_KEY", "")
+
+    await prd.run_prd("J_AUTO", slot="auto", model="gemini-model",
+                      build_prompt=lambda j: "canned prompt")
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        conn.row_factory = aiosqlite.Row
+        row = await (await conn.execute(
+            "SELECT prd_auto_status, prd_auto_drive_file_id, prd_auto_drive_url, prd_auto_json "
+            "FROM jobs WHERE id='J_AUTO'"
+        )).fetchone()
+
+    assert row["prd_auto_status"] == "done"
+    assert row["prd_auto_drive_file_id"] == "FILE_ID"
+    assert row["prd_auto_drive_url"] == "http://drive/auto"
+    assert "SkeletonBot" in row["prd_auto_json"]
+
+
+@pytest.mark.asyncio
+async def test_run_prd_intent_sets_completed_at(temp_db_for_prd, monkeypatch):
+    """run_prd with slot='intent' writes prd_intent_completed_at on success."""
+    import aiosqlite
+    from src.processors import prd
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        await conn.execute(
+            "INSERT INTO jobs (id, chat_id, url, content_type, status, transcript, prd_intent_text) "
+            "VALUES ('J_INT2', 1, 'http://example.com', 'long', 'done', 'transcript', 'my intent')"
+        )
+        await conn.commit()
+
+    monkeypatch.setattr(
+        "src.processors.prd._call_gemini_sync",
+        lambda prompt, key, model: _CANNED_PRD_JSON,
+    )
+    monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FID2", "http://drive/intent")))
+    monkeypatch.setattr("src.services.drive.update_file", AsyncMock(return_value="http://drive/intent"))
+    monkeypatch.setattr("src.services.sheets.append_prd_row", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_document", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_message", AsyncMock())
+    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", AsyncMock())
+    from src.config import settings
+    monkeypatch.setattr(settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "")
+    monkeypatch.setattr(settings, "GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr(settings, "GEMINI_PAID_API_KEY", "")
+    monkeypatch.setattr(settings, "PRD_INTENT_COOLDOWN_SECONDS", 0)
+
+    await prd.run_prd("J_INT2", slot="intent", model="gemini-model",
+                      build_prompt=lambda j: "canned prompt")
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        conn.row_factory = aiosqlite.Row
+        row = await (await conn.execute(
+            "SELECT prd_intent_status, prd_intent_completed_at FROM jobs WHERE id='J_INT2'"
+        )).fetchone()
+
+    assert row["prd_intent_status"] == "done"
+    assert row["prd_intent_completed_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_run_prd_auto_gemini_fail_sends_retry_keyboard(temp_db_for_prd, monkeypatch):
+    """When both Gemini keys fail for slot='auto', a single Retry button is sent."""
+    import aiosqlite
+    from src.processors import prd
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        await conn.execute(
+            "INSERT INTO jobs (id, chat_id, url, content_type, status, transcript) "
+            "VALUES ('J_FAIL', 1, 'http://example.com', 'long', 'done', 'transcript')"
+        )
+        await conn.commit()
+
+    def _raise(prompt, key, model):
+        raise RuntimeError("Gemini down")
+
+    monkeypatch.setattr("src.processors.prd._call_gemini_sync", _raise)
+    send_keyboard = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", send_keyboard)
+    from src.config import settings
+    monkeypatch.setattr(settings, "GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr(settings, "GEMINI_PAID_API_KEY", "paid-key")
+
+    await prd.run_prd("J_FAIL", slot="auto", model="gemini-model",
+                      build_prompt=lambda j: "canned prompt")
+
+    send_keyboard.assert_awaited_once()
+    _, kwargs = send_keyboard.await_args
+    buttons = kwargs.get("buttons") or send_keyboard.await_args[0][2]
+    # auto slot → single Retry button
+    assert len(buttons[0]) == 1
+    assert buttons[0][0]["callback_data"] == "prd_retry_auto:J_FAIL"
+
+    async with aiosqlite.connect(temp_db_for_prd) as conn:
+        conn.row_factory = aiosqlite.Row
+        row = await (await conn.execute(
+            "SELECT prd_auto_status FROM jobs WHERE id='J_FAIL'"
+        )).fetchone()
+    assert row["prd_auto_status"] == "error"
