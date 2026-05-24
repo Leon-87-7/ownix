@@ -62,14 +62,7 @@ def _embed_sync(text: str, api_key: str) -> np.ndarray:
 
 async def _embed(text: str) -> np.ndarray | None:
     """Try brain key → free key → paid key. Return None if all fail (NULL stored; refresh repairs)."""
-    keys = [
-        k
-        for k in [
-            settings.GEMINI_BRAIN_API_KEY or settings.GEMINI_FREE_API_KEY,
-            settings.GEMINI_PAID_API_KEY,
-        ]
-        if k
-    ]
+    keys = [k for k in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY] if k]
     for key in keys:
         try:
             return await asyncio.to_thread(_embed_sync, text, key)
@@ -79,41 +72,10 @@ async def _embed(text: str) -> np.ndarray | None:
     return None
 
 
-def _resolve_title_sync(url: str, topic: str, api_key: str) -> str:
-    """Derive a short human title for a URL via Gemini."""
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    hostname = parsed.hostname or ""
-    path = parsed.path or ""
-
-    # Step 1: GitHub → owner/repo
-    if "github.com" in hostname:
-        parts = [p for p in path.split("/") if p]
-        if len(parts) >= 2:
-            hint = f"{parts[0]}/{parts[1]}"
-        else:
-            hint = hostname
-    else:
-        # Step 2: strip www. and TLD from hostname
-        # e.g. docs.tailwindcss.com → docs.tailwindcss
-        bare = re.sub(r"^www\.", "", hostname)
-        bare = re.sub(r"\.[a-z]{2,}$", "", bare)
-        hint = bare
-
-    from google import genai
-
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
-        contents=f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'.",
-    )
-    return response.text.strip()
-
-
 async def _resolve_title(url: str, topic: str) -> str:
-    """Wrap _resolve_title_sync in a thread; fall back to URL hint on any error."""
+    """Resolve a short human title for a URL via GeminiClient; fall back to URL hint on any error."""
     from urllib.parse import urlparse
+    from src.services.gemini_client import gemini_client, GeminiUnavailableError
 
     parsed = urlparse(url)
     hostname = parsed.hostname or url
@@ -128,20 +90,12 @@ async def _resolve_title(url: str, topic: str) -> str:
         bare = re.sub(r"\.[a-z]{2,}$", "", bare)
         hint = bare
 
-    keys = [
-        k
-        for k in [
-            settings.GEMINI_BRAIN_API_KEY or settings.GEMINI_FREE_API_KEY,
-            settings.GEMINI_PAID_API_KEY,
-        ]
-        if k
-    ]
-    for key in keys:
-        try:
-            return await asyncio.to_thread(_resolve_title_sync, url, topic, key)
-        except Exception as exc:
-            log.warning("brain.resolve_title_failed", url=url, error=str(exc))
-    return hint
+    prompt = f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
+    try:
+        result = await gemini_client.generate(prompt, model="gemini-2.0-flash-lite")
+        return result.strip()
+    except GeminiUnavailableError:
+        return hint
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

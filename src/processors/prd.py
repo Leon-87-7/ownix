@@ -245,23 +245,6 @@ async def reaper_intent() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Gemini call (sync wrapper for asyncio.to_thread)
-# ---------------------------------------------------------------------------
-
-def _call_gemini_sync(prompt: str, api_key: str, model: str) -> str:
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=api_key)
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_schema=PRD_JSON_SCHEMA,
-    )
-    response = client.models.generate_content(model=model, contents=prompt, config=config)
-    return response.text
-
-
-# ---------------------------------------------------------------------------
 # Prompt builders
 # ---------------------------------------------------------------------------
 
@@ -424,18 +407,15 @@ async def run_prd(
     prompt = build_prompt(job)
 
     # d. Call Gemini (free → paid fallback)
-    raw_prd = None
+    from src.services.gemini_client import gemini_client, GeminiUnavailableError
+    raw_prd: str | None = None
     last_error: str | None = None
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
-        try:
-            raw_prd = await asyncio.to_thread(_call_gemini_sync, prompt, key, model)
-            log.info("prd.gemini.success", job_id=job_id, slot=slot)
-            break
-        except Exception as exc:
-            last_error = str(exc).splitlines()[0][:120]
-            log.warning("prd.gemini.fallback", job_id=job_id, slot=slot)
+    try:
+        raw_prd = await gemini_client.generate(prompt, model=model, schema=PRD_JSON_SCHEMA)
+        log.info("prd.gemini.success", job_id=job_id, slot=slot)
+    except GeminiUnavailableError as exc:
+        last_error = str(exc)[:120]
+        log.warning("prd.gemini.both_keys_failed", job_id=job_id, slot=slot)
     if raw_prd is None:
         log.error("prd.gemini.both_keys_failed", job_id=job_id, slot=slot)
         await database.update_job_status(job_id, job["status"], **{lock_col: "error"})

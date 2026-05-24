@@ -73,13 +73,14 @@ async def call_gemini_vision(frames: list[dict], free_key: str, paid_key: str) -
     raise RuntimeError("Both Gemini API keys failed for Vision call")
 
 
-def _resolve_urls_sync(tools: list[dict], api_key: str) -> list[dict]:
+async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
+    """Resolve canonical URLs for tool/product list via Gemini. Returns tools with 'url' key added."""
     import json
     import re as _re
+    from src.services.gemini_client import gemini_client, GeminiUnavailableError
 
-    from google import genai
-
-    client = genai.Client(api_key=api_key)
+    if not tools:
+        return tools
     lines = "\n".join(f"- [{t.get('type', 'tool')}] {t['name']}" for t in tools)
     prompt = (
         f"For each item in this list, provide the canonical homepage URL.\n"
@@ -89,32 +90,20 @@ def _resolve_urls_sync(tools: list[dict], api_key: str) -> list[dict]:
         f"Return ONLY JSON array: [{{\"name\": \"...\", \"url\": \"https://...\" or null}}]\n\n"
         f"Items:\n{lines}"
     )
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    raw = response.text
+    try:
+        raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
+    except GeminiUnavailableError:
+        log.error("gemini_resolve_urls_all_keys_failed")
+        return [{**t, "url": None} for t in tools]
     clean = _re.sub(r"^```json\s*", "", raw, flags=_re.IGNORECASE)
     clean = _re.sub(r"```\s*$", "", clean).strip()
     m = _re.search(r"\[[\s\S]*\]", clean)
-    resolved = json.loads(m.group(0) if m else clean)
+    try:
+        resolved = json.loads(m.group(0) if m else clean)
+    except Exception:
+        log.error("gemini_resolve_urls_parse_failed")
+        return [{**t, "url": None} for t in tools]
     url_map = {item["name"]: item.get("url") for item in resolved if "name" in item}
-    return [{**t, "url": url_map.get(t["name"])} for t in tools]
-
-
-async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
-    """Resolve canonical URLs for tool/product list via Gemini. Returns tools with 'url' key added."""
-    import asyncio
-
-    from src.config import settings
-
-    if not tools:
-        return tools
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
-        try:
-            result = await asyncio.to_thread(_resolve_urls_sync, tools, key)
-            log.info("gemini_resolve_urls_ok", count=len(result))
-            return result
-        except Exception:
-            log.warning("gemini_resolve_urls_key_failed")
-    log.error("gemini_resolve_urls_all_keys_failed")
-    return [{**t, "url": None} for t in tools]
+    result = [{**t, "url": url_map.get(t["name"])} for t in tools]
+    log.info("gemini_resolve_urls_ok", count=len(result))
+    return result
