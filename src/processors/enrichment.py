@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from src import database
-from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES
 from src.validation import validate_template_choice
@@ -132,42 +130,25 @@ def _parse_enrichment(data: dict) -> Enrichment:
     )
 
 
-def _call_gemini_sync(prompt: str, api_key: str) -> str:
-    from google import genai  # lazy — not installed in test env
-
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return response.text or ""
-
-
-async def _call_gemini(prompt: str, api_key: str) -> str:
-    return await asyncio.to_thread(_call_gemini_sync, prompt, api_key)
-
-
 async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
+    from src.services.gemini_client import gemini_client, GeminiUnavailableError
+
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""
     template = job.get("template") or "summary"
     key_phrases = json.loads(job.get("key_phrases") or "[]")
     prompt = _build_prompt(title, transcript, template, key_phrases)
 
-    last_error: str | None = None
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
-        try:
-            raw = await _call_gemini(prompt, key)
-            data = _extract_json(raw)
-            template_analysis = data.pop("template_analysis", None)
-            result = _parse_enrichment(data)
-            log.info("enrichment_ok", category=result.category, topic=result.topic)
-            return result, template_analysis
-        except Exception as exc:
-            last_error = str(exc).splitlines()[0][:120]
-            log.warning("enrichment_key_failed", error=last_error)
-
-    raise EnrichmentUnavailableError(last_error or "Both Gemini keys failed")
+    try:
+        raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
+    except GeminiUnavailableError as exc:
+        raise EnrichmentUnavailableError(str(exc)) from exc
+    data = _extract_json(raw)
+    template_analysis = data.pop("template_analysis", None)
+    result = _parse_enrichment(data)
+    log.info("enrichment_ok", category=result.category, topic=result.topic)
+    return result, template_analysis
 
 
 def _escape_md(text: str) -> str:
