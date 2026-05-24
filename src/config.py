@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str = ""
     TELEGRAM_STICKER_GEMINI_FAIL: str = ""
     TELEGRAM_STICKER_DRIVE_FAIL: str = ""
+    GITHUB_TOKEN: str = ""
 
     # Slices #2/#3 — sidecar
     FRAME_SERVICE_URL: str = "http://10.0.0.4:5151"

@@ -185,8 +185,8 @@ async def run(job: dict) -> None:
     from src.processors import enrichment as enrichment_proc
     try:
         enrichment_result, template_analysis = await enrichment_proc.enrich(enriched_job)
-    except enrichment_proc.EnrichmentUnavailableError:
-        await send_message(chat_id, f"{tag}\n⚠️ Template analysis failed — Gemini unavailable.")
+    except enrichment_proc.EnrichmentUnavailableError as exc:
+        await send_message(chat_id, f"{tag}\n⚠️ Template analysis failed\nerror: {exc}\njob_title: {title}")
         return
 
     if template_analysis:

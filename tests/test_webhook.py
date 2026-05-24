@@ -23,9 +23,14 @@ import src.telegram.sender as sender_module
 class FakeRedis:
     def __init__(self) -> None:
         self._lists: dict[str, list[str]] = {}
+        self._strings: dict[str, str] = {}
 
     async def lpush(self, key: str, value: str) -> int:
         self._lists.setdefault(key, []).insert(0, value)
+        return len(self._lists[key])
+
+    async def rpush(self, key: str, value: str) -> int:
+        self._lists.setdefault(key, []).append(value)
         return len(self._lists[key])
 
     async def brpop(self, keys, timeout=0):  # noqa: ANN001
@@ -34,6 +39,26 @@ class FakeRedis:
         if not items:
             return None
         return (key, items.pop())
+
+    async def lrange(self, key: str, start: int, end: int) -> list[str]:
+        items = self._lists.get(key, [])
+        return items[start:] if end == -1 else items[start : end + 1]
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._strings[key] = value
+
+    async def get(self, key: str) -> str | None:
+        return self._strings.get(key)
+
+    async def delete(self, *keys: str) -> int:
+        removed = 0
+        for k in keys:
+            removed += self._strings.pop(k, None) is not None
+            removed += self._lists.pop(k, None) is not None
+        return removed
+
+    async def expire(self, key: str, seconds: int) -> None:
+        pass
 
     async def close(self) -> None:
         pass
@@ -122,6 +147,7 @@ async def test_webhook_accepts_long_url_and_enqueues(client) -> None:
     queued = fake_redis._lists.get("video_jobs", [])
     assert len(queued) == 1
     import json
+
     env = json.loads(queued[0])
     assert env["task"] == "video"
     assert env["job_id"].startswith("20")  # YYYYMMDD prefix
@@ -189,6 +215,7 @@ async def temp_db():
     os.close(fd)
     with patch("src.config.settings.DB_PATH", path):
         from src import database as db
+
         await db.init_db()
         yield path
     os.unlink(path)
@@ -204,15 +231,14 @@ async def _seed_job(path: str, job_id: str, chat_id: int = 1, **fields) -> None:
         vals.append(v)
     placeholders = ",".join("?" * len(cols))
     async with aiosqlite.connect(path) as conn:
-        await conn.execute(
-            f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals
-        )
+        await conn.execute(f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals)
         await conn.commit()
 
 
 @pytest.mark.asyncio
 async def test_callback_prd_build_spec_sends_submenu(temp_db, monkeypatch):
     from src.telegram import webhook
+
     sent_kb = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_inline_keyboard", sent_kb)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
@@ -230,6 +256,7 @@ async def test_callback_prd_build_spec_sends_submenu(temp_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_callback_prd_auto_resend_when_status_done(temp_db, monkeypatch):
     from src.telegram import webhook
+
     await _seed_job(temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}')
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
@@ -244,6 +271,7 @@ async def test_callback_prd_auto_resend_when_status_done(temp_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_callback_prd_auto_lazy_when_status_null(temp_db, monkeypatch):
     from src.telegram import webhook
+
     await _seed_job(temp_db, "J_NULL", chat_id=100)
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
@@ -256,6 +284,7 @@ async def test_callback_prd_auto_lazy_when_status_null(temp_db, monkeypatch):
     # Webhook MUST NOT pre-acquire the lock — worker is the single source of truth.
     # Otherwise run_auto's own atomic lock fails with lock_contention and the PRD never generates.
     from src import database as db
+
     job = await db.get_job("J_NULL")
     assert job["prd_auto_status"] is None
 
@@ -264,6 +293,7 @@ async def test_callback_prd_auto_lazy_when_status_null(temp_db, monkeypatch):
 async def test_callback_prd_auto_already_generating(temp_db, monkeypatch):
     """If status='generating', reply 'already generating' and skip enqueue."""
     from src.telegram import webhook
+
     await _seed_job(temp_db, "J_GEN", chat_id=100, prd_auto_status="generating")
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
@@ -281,6 +311,7 @@ async def test_callback_prd_auto_already_generating(temp_db, monkeypatch):
 async def test_callback_prd_intent_prompt_arms_state(temp_db, monkeypatch):
     from src.telegram import webhook
     from src import database as db
+
     await _seed_job(temp_db, "J_ARM", chat_id=100)
     fr = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
@@ -298,6 +329,7 @@ async def test_callback_prd_intent_prompt_arms_state(temp_db, monkeypatch):
 async def test_callback_prd_intent_prompt_debounces_same_job(temp_db, monkeypatch):
     from src.telegram import webhook
     from src import database as db
+
     await _seed_job(temp_db, "J_DBN", chat_id=100)
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_DBN")
     fr = AsyncMock()
@@ -313,12 +345,19 @@ async def test_callback_prd_intent_prompt_debounces_same_job(temp_db, monkeypatc
 # Routing + /spec + /cancel tests (Task 13)
 # ---------------------------------------------------------------------------
 
+
 async def _post_webhook(text: str, chat_id: int = 100, secret: str = "S"):
     """Helper that invokes the webhook handler with a text message."""
+
     class _Req:
-        def __init__(self, body): self._body = body
-        async def json(self): return self._body
+        def __init__(self, body):
+            self._body = body
+
+        async def json(self):
+            return self._body
+
     from src.telegram.webhook import webhook
+
     body = {"message": {"chat": {"id": chat_id}, "text": text, "message_id": 1}}
     return await webhook(_Req(body), x_telegram_bot_api_secret_token=secret)
 
@@ -328,9 +367,19 @@ def _patch_webhook_secret(monkeypatch):
     monkeypatch.setattr("src.config.settings.TELEGRAM_WEBHOOK_SECRET", "S")
 
 
+@pytest.fixture
+def _patch_redis(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(queue_module, "_redis", fake)
+    return fake
+
+
 @pytest.mark.asyncio
-async def test_routing_awaiting_intent_plain_text_enqueues(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_routing_awaiting_intent_plain_text_enqueues(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
+
     await _seed_job(temp_db, "J_TXT", chat_id=100, transcript="t")
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_TXT")
     enq = AsyncMock()
@@ -344,8 +393,11 @@ async def test_routing_awaiting_intent_plain_text_enqueues(temp_db, _patch_webho
 
 
 @pytest.mark.asyncio
-async def test_routing_awaiting_intent_too_short(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_routing_awaiting_intent_too_short(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
+
     await _seed_job(temp_db, "J_S", chat_id=100)
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_S")
     enq = AsyncMock()
@@ -360,8 +412,11 @@ async def test_routing_awaiting_intent_too_short(temp_db, _patch_webhook_secret,
 
 
 @pytest.mark.asyncio
-async def test_routing_awaiting_intent_too_long(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_routing_awaiting_intent_too_long(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
+
     await _seed_job(temp_db, "J_L", chat_id=100)
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_L")
     enq = AsyncMock()
@@ -376,8 +431,11 @@ async def test_routing_awaiting_intent_too_long(temp_db, _patch_webhook_secret, 
 
 
 @pytest.mark.asyncio
-async def test_routing_awaiting_intent_url_starts_new_job(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_routing_awaiting_intent_url_starts_new_job(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
+
     await _seed_job(temp_db, "J_U", chat_id=100)
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_U")
     enq = AsyncMock()
@@ -389,8 +447,9 @@ async def test_routing_awaiting_intent_url_starts_new_job(temp_db, _patch_webhoo
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     from src import database as db
+
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J")
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
@@ -400,7 +459,7 @@ async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/cancel")
@@ -408,7 +467,7 @@ async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_spec_no_args_usage(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_spec_no_args_usage(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/spec")
@@ -416,7 +475,9 @@ async def test_spec_no_args_usage(temp_db, _patch_webhook_secret, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_spec_no_match_shows_recent(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_spec_no_match_shows_recent(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     await _seed_job(temp_db, "20260101_120000_AAAA", chat_id=100, title="A")
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
@@ -427,7 +488,7 @@ async def test_spec_no_match_shows_recent(temp_db, _patch_webhook_secret, monkey
 
 
 @pytest.mark.asyncio
-async def test_spec_short_only_rejection(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_spec_short_only_rejection(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     await _seed_job(temp_db, "20260101_120000_AAAA", chat_id=100, content_type="short", title="S")
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
@@ -436,10 +497,16 @@ async def test_spec_short_only_rejection(temp_db, _patch_webhook_secret, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_spec_single_long_match_enqueues_auto(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_spec_single_long_match_enqueues_auto(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     await _seed_job(
-        temp_db, "20260101_120000_AAAA", chat_id=100, content_type="long",
-        status="done", title="Tutorial"
+        temp_db,
+        "20260101_120000_AAAA",
+        chat_id=100,
+        content_type="long",
+        status="done",
+        title="Tutorial",
     )
     enq = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enq)
@@ -449,11 +516,19 @@ async def test_spec_single_long_match_enqueues_auto(temp_db, _patch_webhook_secr
 
 
 @pytest.mark.asyncio
-async def test_spec_with_intent_enqueues_intent(temp_db, _patch_webhook_secret, monkeypatch):
+async def test_spec_with_intent_enqueues_intent(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
+
     await _seed_job(
-        temp_db, "20260101_120000_AAAA", chat_id=100, content_type="long",
-        status="done", title="Tutorial", transcript="t"
+        temp_db,
+        "20260101_120000_AAAA",
+        chat_id=100,
+        content_type="long",
+        status="done",
+        title="Tutorial",
+        transcript="t",
     )
     enq = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enq)
@@ -468,9 +543,11 @@ async def test_spec_with_intent_enqueues_intent(temp_db, _patch_webhook_secret, 
 # enrichment_retry callback tests (issue #13)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_callback_enrichment_retry_enqueues_on_error_status(temp_db, monkeypatch):
     from src.telegram import webhook
+
     await _seed_job(temp_db, "J_ERR", chat_id=100, status="error")
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
@@ -481,6 +558,7 @@ async def test_callback_enrichment_retry_enqueues_on_error_status(temp_db, monke
     )
     enqueued.assert_awaited_once_with({"task": "enrichment", "job_id": "J_ERR"})
     from src import database as db
+
     job = await db.get_job("J_ERR")
     assert job["status"] == "enriching"
 
@@ -488,6 +566,7 @@ async def test_callback_enrichment_retry_enqueues_on_error_status(temp_db, monke
 @pytest.mark.asyncio
 async def test_callback_enrichment_retry_rejects_on_done_status(temp_db, monkeypatch):
     from src.telegram import webhook
+
     await _seed_job(temp_db, "J_DONE2", chat_id=100, status="done")
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
@@ -502,10 +581,13 @@ async def test_callback_enrichment_retry_rejects_on_done_status(temp_db, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_intent_text_never_appears_in_log_records(temp_db, _patch_webhook_secret, monkeypatch, caplog):
+async def test_intent_text_never_appears_in_log_records(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch, caplog
+):
     """intent_text must never appear in any log record — only intent_text_len."""
     import logging
     from src import database as db
+
     await _seed_job(temp_db, "J_PRIV", chat_id=100, transcript="t")
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J_PRIV")
     monkeypatch.setattr("src.queue.enqueue", AsyncMock())
@@ -522,6 +604,73 @@ async def test_intent_text_never_appears_in_log_records(temp_db, _patch_webhook_
         )
         for key, value in record.__dict__.items():
             if isinstance(value, str) and secret_intent in value:
-                raise AssertionError(
-                    f"intent_text leaked in record attribute {key!r}: {value!r}"
-                )
+                raise AssertionError(f"intent_text leaked in record attribute {key!r}: {value!r}")
+
+
+# ---------------------------------------------------------------------------
+# Two-step pending-template flow (issue #24)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_template_command_alone_arms_redis(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/method with no URL stores the template in Redis and prompts the user."""
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/method")
+    assert _patch_redis._strings.get("pending_template:100") == "method"
+    assert "ready" in sent.await_args.args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_template_command_alone_then_url_uses_template(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """URL sent after a bare /method command is processed with that template."""
+    from src import database as db
+
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+
+    await _post_webhook("/method")
+    await _post_webhook("https://instagram.com/reel/DVNolBNE6vV/")
+
+    assert enq.await_args.args[0]["task"] == "video"
+    job_id = enq.await_args.args[0]["job_id"]
+    job = await db.get_job(job_id)
+    assert job["template"] == "method"
+    assert job["template_detection_method"] == "explicit_command"
+    assert _patch_redis._strings.get("pending_template:100") is None
+
+
+@pytest.mark.asyncio
+async def test_template_pending_cleared_by_slash_command(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """A subsequent slash command clears the pending template."""
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    monkeypatch.setattr("src.queue.enqueue", AsyncMock())
+
+    await _post_webhook("/method")
+    assert _patch_redis._strings.get("pending_template:100") == "method"
+    await _post_webhook("/cancel")
+    assert _patch_redis._strings.get("pending_template:100") is None
+
+
+@pytest.mark.asyncio
+async def test_template_pending_not_applied_to_rejected_url(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """A rejected URL does not consume the pending template."""
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    monkeypatch.setattr("src.queue.enqueue", AsyncMock())
+
+    await _post_webhook("/method")
+    await _post_webhook("https://instagram.com/p/abc/")
+
+    assert "Unsupported" in sent.await_args.args[1]
+    assert _patch_redis._strings.get("pending_template:100") is None

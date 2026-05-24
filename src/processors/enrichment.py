@@ -152,6 +152,7 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
     key_phrases = json.loads(job.get("key_phrases") or "[]")
     prompt = _build_prompt(title, transcript, template, key_phrases)
 
+    last_error: str | None = None
     for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
         if not key:
             continue
@@ -162,51 +163,65 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
             result = _parse_enrichment(data)
             log.info("enrichment_ok", category=result.category, topic=result.topic)
             return result, template_analysis
-        except Exception:
-            log.warning("enrichment_key_failed")
+        except Exception as exc:
+            last_error = str(exc).splitlines()[0][:120]
+            log.warning("enrichment_key_failed", error=last_error)
 
-    raise EnrichmentUnavailableError("Both Gemini keys failed for enrichment")
+    raise EnrichmentUnavailableError(last_error or "Both Gemini keys failed")
+
+
+def _escape_md(text: str) -> str:
+    """Escape Telegram Markdown V1 special chars in AI-generated text."""
+    for ch in ("_", "*", "`", "["):
+        text = text.replace(ch, f"\\{ch}")
+    return text
 
 
 def _format_template_analysis(template: str, analysis: dict) -> str:
     lines = [f"\n📋 {template.capitalize()} Analysis"]
     if template == "method":
         for i, step in enumerate(analysis.get("steps", []), 1):
-            lines.append(f"{i}. {step.get('action', '')}: {step.get('details', '')}")
+            action = _escape_md(step.get("action", ""))
+            details = _escape_md(step.get("details", ""))
+            lines.append(f"{i}. {action}: {details}")
         if analysis.get("common_mistakes"):
-            lines += ["", "⚠️ Common Mistakes", analysis["common_mistakes"]]
+            lines += ["", "⚠️ Common Mistakes", _escape_md(analysis["common_mistakes"])]
         if analysis.get("pro_tips"):
-            lines += ["", "💡 Pro Tips", analysis["pro_tips"]]
+            lines += ["", "💡 Pro Tips", _escape_md(analysis["pro_tips"])]
     elif template == "technical":
         if analysis.get("tech_stack"):
-            lines += ["", "🔧 Tech Stack", ", ".join(analysis["tech_stack"])]
+            lines += ["", "🔧 Tech Stack", ", ".join(_escape_md(t) for t in analysis["tech_stack"])]
         if analysis.get("architecture"):
-            lines += ["", "🏗 Architecture", analysis["architecture"]]
+            lines += ["", "🏗 Architecture", _escape_md(analysis["architecture"])]
         if analysis.get("config_notes"):
-            lines += ["", "⚙️ Config", analysis["config_notes"]]
+            lines += ["", "⚙️ Config", _escape_md(analysis["config_notes"])]
         if analysis.get("debugging"):
-            lines += ["", "🐛 Debugging", analysis["debugging"]]
+            lines += ["", "🐛 Debugging", _escape_md(analysis["debugging"])]
     elif template == "review":
         for f in analysis.get("features", []):
-            rating = f" ({f['rating']})" if f.get("rating") else ""
-            lines.append(f"• {f.get('feature', '')}{rating}: {f.get('description', '')}")
+            rating = f" ({_escape_md(f['rating'])})" if f.get("rating") else ""
+            feature = _escape_md(f.get("feature", ""))
+            desc = _escape_md(f.get("description", ""))
+            lines.append(f"• {feature}{rating}: {desc}")
         if analysis.get("pros"):
-            lines += ["", "✅ Pros"] + [f"• {p}" for p in analysis["pros"]]
+            lines += ["", "✅ Pros"] + [f"• {_escape_md(p)}" for p in analysis["pros"]]
         if analysis.get("cons"):
-            lines += ["", "❌ Cons"] + [f"• {c}" for c in analysis["cons"]]
+            lines += ["", "❌ Cons"] + [f"• {_escape_md(c)}" for c in analysis["cons"]]
         if analysis.get("verdict"):
-            lines += ["", "🏆 Verdict", analysis["verdict"]]
+            lines += ["", "🏆 Verdict", _escape_md(analysis["verdict"])]
         if analysis.get("price_value"):
-            lines += ["", "💰 Price/Value", analysis["price_value"]]
+            lines += ["", "💰 Price/Value", _escape_md(analysis["price_value"])]
     elif template == "narrative":
         if analysis.get("thesis"):
-            lines += ["", "💡 Thesis", analysis["thesis"]]
+            lines += ["", "💡 Thesis", _escape_md(analysis["thesis"])]
         if analysis.get("supporting_points"):
-            lines += ["", "📌 Supporting Points"] + [f"• {p}" for p in analysis["supporting_points"]]
+            lines += ["", "📌 Supporting Points"] + [
+                f"• {_escape_md(p)}" for p in analysis["supporting_points"]
+            ]
         if analysis.get("key_quotes"):
-            lines += ["", "💬 Key Quotes"] + [f'"{q}"' for q in analysis["key_quotes"]]
+            lines += ["", "💬 Key Quotes"] + [f'"{_escape_md(q)}"' for q in analysis["key_quotes"]]
         if analysis.get("conclusion"):
-            lines += ["", "🎯 Conclusion", analysis["conclusion"]]
+            lines += ["", "🎯 Conclusion", _escape_md(analysis["conclusion"])]
     return "\n".join(lines)
 
 
@@ -214,16 +229,18 @@ def _build_enrichment_message(
     job: dict, enrichment: Enrichment, template_analysis: dict | None = None
 ) -> str:
     tag = f"job_{job['id'][-4:]}:"
-    title = job.get("title", "Untitled")
+    title = _escape_md(job.get("title", "Untitled"))
     drive_url = job.get("drive_url", "")
 
     tools_lines = []
     for t in enrichment.tools_raw:
-        prefix = "$" if t.get("type") == "symbol" else f"[{t.get('type', 'tool')}]"
+        prefix = "$" if t.get("type") == "symbol" else f"\\[{_escape_md(t.get('type', 'tool'))}]"
         url_part = f" ({t['url']})" if t.get("url") else ""
-        tools_lines.append(f"• {prefix} {t['name']}{url_part}: {t.get('description', '')}")
+        name = _escape_md(t["name"])
+        desc = _escape_md(t.get("description", ""))
+        tools_lines.append(f"• {prefix} {name}{url_part}: {desc}")
 
-    action_lines = [f"• {ap}" for ap in enrichment.action_points_str.split(" | ") if ap]
+    action_lines = [f"• {_escape_md(ap)}" for ap in enrichment.action_points_str.split(" | ") if ap]
 
     transcript_line = (
         f"📄 [Transcript]({drive_url})" if drive_url else "📄 Transcript _(unavailable)_"
@@ -232,11 +249,11 @@ def _build_enrichment_message(
     parts = [
         f"{tag}",
         f"=📺 {title}",
-        f"🗃️ {enrichment.category}",
-        f"🎫 {enrichment.topic}",
+        f"🗃️ {_escape_md(enrichment.category)}",
+        f"🎫 {_escape_md(enrichment.topic)}",
         "",
         "🎯 Objective",
-        enrichment.objective,
+        _escape_md(enrichment.objective),
         "",
         "✅ Action Points",
         *action_lines,
@@ -281,11 +298,11 @@ async def run(job_id: str) -> None:
 
     try:
         enrichment, template_analysis = await enrich(job)
-    except EnrichmentUnavailableError:
+    except EnrichmentUnavailableError as exc:
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            f"{tag}\n⚠️ Gemini failed to enrich: {title}",
+            f"{tag}\n⚠️ Gemini failed to enrich\nerror: {exc}\njob_title: {title}",
             buttons=[[{"text": "🔄 Retry", "callback_data": f"enrichment_retry:{job_id}"}]],
         )
         await database.update_job_status(job_id, "error")

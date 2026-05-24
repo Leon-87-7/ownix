@@ -383,6 +383,7 @@ async def run_auto(job_id: str) -> None:
 
     # d. Call Gemini (free → paid fallback)
     raw_prd = None
+    last_error: str | None = None
     for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
         if not key:
             continue
@@ -390,15 +391,17 @@ async def run_auto(job_id: str) -> None:
             raw_prd = await asyncio.to_thread(_call_gemini_prd_sync, prompt, key)
             log.info("prd.gemini.success", job_id=job_id)
             break
-        except Exception:
+        except Exception as exc:
+            last_error = str(exc).splitlines()[0][:120]
             log.warning("prd.gemini.fallback", job_id=job_id)
     if raw_prd is None:
         log.error("prd.gemini.both_keys_failed", job_id=job_id, slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generation failed (Gemini keys exhausted). Try again in a few minutes.",
+            f"⚠️ PRD generation failed\nerror: {last_error or 'Gemini keys exhausted'}\njob_title: {title}",
             buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
         )
         return
@@ -406,13 +409,15 @@ async def run_auto(job_id: str) -> None:
     # e. Parse JSON
     try:
         prd_data = _extract_json(raw_prd)
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.parse_failed", job_id=job_id, raw_preview=raw_prd[:200], slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generation produced invalid output.",
+            f"⚠️ PRD generation produced invalid output\nerror: {err_msg}\njob_title: {title}",
             buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
         )
         return
@@ -436,13 +441,15 @@ async def run_auto(job_id: str) -> None:
                 md_content, filename, settings.GOOGLE_DRIVE_FOLDER_PRD
             )
             log.info("prd.drive.uploaded", job_id=job_id, file_id=file_id, slot="auto")
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.drive.failed", job_id=job_id, slot="auto")
         await database.update_job_status(job_id, job["status"], prd_auto_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ Drive upload failed.",
+            f"⚠️ Drive upload failed\nerror: {err_msg}\njob_title: {title}",
             buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
         )
         return
@@ -459,12 +466,14 @@ async def run_auto(job_id: str) -> None:
             slot="auto",
         )
         log.info("prd.sheets.appended", job_id=job_id, slot="auto")
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.warning("prd.sheets.failed", job_id=job_id, slot="auto")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generated but sheet append failed.",
+            f"⚠️ PRD generated but sheet append failed\nerror: {err_msg}\njob_title: {title}",
             buttons=[[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
         )
         # Continue to deliver the document — sheets failure isn't fatal for the user
@@ -570,6 +579,7 @@ async def run_intent(job_id: str) -> None:
 
     # c. Gemini call (free → paid fallback). Model = PRD_INTENT_MODEL.
     raw_prd = None
+    last_error: str | None = None
     for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
         if not key:
             continue
@@ -577,15 +587,17 @@ async def run_intent(job_id: str) -> None:
             raw_prd = await asyncio.to_thread(_call_gemini_intent_sync, prompt, key)
             log.info("prd.gemini.success", job_id=job_id, slot="intent")
             break
-        except Exception:
+        except Exception as exc:
+            last_error = str(exc).splitlines()[0][:120]
             log.warning("prd.gemini.fallback", job_id=job_id, slot="intent")
     if raw_prd is None:
         log.error("prd.gemini.both_keys_failed", job_id=job_id, slot="intent")
         await database.update_job_status(job_id, job["status"], prd_intent_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generation failed (Gemini keys exhausted). Try again in a few minutes.",
+            f"⚠️ PRD generation failed\nerror: {last_error or 'Gemini keys exhausted'}\njob_title: {title}",
             buttons=[[
                 {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
                 {"text": "✍️ New Intent", "callback_data": f"prd_intent_prompt:{job_id}"},
@@ -596,13 +608,15 @@ async def run_intent(job_id: str) -> None:
     # d. Parse JSON
     try:
         prd_data = _extract_json(raw_prd)
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.parse_failed", job_id=job_id, slot="intent", raw_preview=raw_prd[:200])
         await database.update_job_status(job_id, job["status"], prd_intent_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generation produced invalid output.",
+            f"⚠️ PRD generation produced invalid output\nerror: {err_msg}\njob_title: {title}",
             buttons=[[
                 {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
                 {"text": "✍️ New Intent", "callback_data": f"prd_intent_prompt:{job_id}"},
@@ -628,13 +642,15 @@ async def run_intent(job_id: str) -> None:
                 md_content, filename, settings.GOOGLE_DRIVE_FOLDER_PRD
             )
             log.info("prd.drive.uploaded", job_id=job_id, file_id=file_id, slot="intent")
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.drive.failed", job_id=job_id, slot="intent")
         await database.update_job_status(job_id, job["status"], prd_intent_status="error")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ Drive upload failed.",
+            f"⚠️ Drive upload failed\nerror: {err_msg}\njob_title: {title}",
             buttons=[[
                 {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
                 {"text": "✍️ New Intent", "callback_data": f"prd_intent_prompt:{job_id}"},
@@ -654,12 +670,14 @@ async def run_intent(job_id: str) -> None:
             intent_text=intent_text,
         )
         log.info("prd.sheets.appended", job_id=job_id, slot="intent")
-    except Exception:
+    except Exception as exc:
+        err_msg = str(exc).splitlines()[0][:120]
         log.warning("prd.sheets.failed", job_id=job_id, slot="intent")
         from src.telegram.sender import send_inline_keyboard
+        title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
             chat_id,
-            "⚠️ PRD generated but sheet append failed.",
+            f"⚠️ PRD generated but sheet append failed\nerror: {err_msg}\njob_title: {title}",
             buttons=[[
                 {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
             ]],

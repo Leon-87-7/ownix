@@ -218,14 +218,16 @@ async def _dispatch_slash(chat_id: int, text: str, message_id: int | None = None
     if cmd == "/cancel":
         state = await database.get_chat_state(chat_id)
         await database.clear_chat_state(chat_id)
+        await queue._client().delete(f"pending_template:{chat_id}")
         if state and state.get("mode") == "awaiting_intent":
             await send_message(chat_id, "✍️ Intent canceled.")
         else:
             await send_message(chat_id, "Nothing to cancel.")
         return
 
-    # All other slash commands clear chat_state first
+    # All other slash commands clear chat_state and any pending template first
     await database.clear_chat_state(chat_id)
+    await queue._client().delete(f"pending_template:{chat_id}")
 
     if cmd == "/spec":
         await _handle_spec(chat_id, parts)
@@ -277,10 +279,8 @@ async def _dispatch_slash(chat_id: int, text: str, message_id: int | None = None
     if cmd[1:] in PROMPT_TEMPLATES:
         template = cmd[1:]
         if len(parts) < 2:
-            await send_message(
-                chat_id,
-                f"Usage: `/{template} <url>`\nExample: `/{template} https://youtube.com/watch?v=...`",
-            )
+            await queue._client().set(f"pending_template:{chat_id}", template, ex=120)
+            await send_message(chat_id, f"📥 `/{template}` ready — send the URL now (2 min window).")
             return
         url = parts[1]
         pipeline = detect_pipeline(url)
@@ -480,6 +480,11 @@ async def webhook(
             # fall through to normal URL routing
 
     # 3. Normal URL routing
+    client = queue._client()
+    pending_template: str | None = await client.get(f"pending_template:{chat_id}")
+    if pending_template:
+        await client.delete(f"pending_template:{chat_id}")
+
     pipeline = detect_pipeline(text)
     if pipeline == "rejected":
         await send_message(
@@ -492,7 +497,16 @@ async def webhook(
 
     job_id = await database.create_job(
         chat_id=chat_id, url=text, content_type=pipeline, message_id=message_id,
+        template=pending_template,
     )
+    if pending_template:
+        await database.update_job_status(
+            job_id, "pending",
+            template_detection_method="explicit_command",
+        )
     await queue.enqueue({"task": "video", "job_id": job_id})
-    await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+    if pending_template:
+        await send_message(chat_id, f"📥 Received with **{pending_template}** template!\njob_{job_id[-4:]}")
+    else:
+        await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
     return {"ok": True}

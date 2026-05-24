@@ -16,11 +16,23 @@
 | [#5](https://github.com/Leon-87-7/vig/issues/5) | Second Brain — brain.py module (ingest, search, rebuild, refresh worker)      | Brain       | Merged; GH issue still open |
 | [#8](https://github.com/Leon-87-7/vig/issues/8) | Short Sheet brain backfill — one-off script to seed brain corpus              | Brain / Short | Merged; GH issue still open |
 | [#9](https://github.com/Leon-87-7/vig/issues/9) | Long Sheet brain backfill + resolve_tool_urls helper + URL Resolution Prompt  | Brain / Long  | Merged; GH issue still open |
+| [#10](https://github.com/Leon-87-7/vig/issues/10) | BotFather command registration + ops runbook updates                        | Ops           | Closed on GH                |
 | [#11](https://github.com/Leon-87-7/vig/issues/11) | Photo link extraction — Gemini Vision OCR on uploaded screenshots           | Photo / Brain | Merged; GH issue still open |
 | [#6](https://github.com/Leon-87-7/vig/issues/6) | Mini-PRD auto slot — tail-call enqueue, Flash, JSON schema, Drive + Sheets + brain | Mini-PRD | Merged; GH issue still open |
 | [#7](https://github.com/Leon-87-7/vig/issues/7) | Mini-PRD intent slot + /spec command + chat_state routing                          | Mini-PRD | Merged; GH issue still open |
 | [#13](https://github.com/Leon-87-7/vig/issues/13) | Add retry button on Gemini enrichment failures                                     | Long Video    | Merged; GH issue still open |
 | [#15](https://github.com/Leon-87-7/vig/issues/15) | feat: extend transcript sidecar to support TikTok/Instagram via yt-dlp            | Short Video   | Merged; closed on GH        |
+| [#16](https://github.com/Leon-87-7/vig/issues/16) | feat: template + transcript enhancement system                                     | Templates     | Parent issue; closed on GH  |
+| [#17](https://github.com/Leon-87-7/vig/issues/17) | feat: template system — data layer (Phases 1–4)                                    | Templates     | Merged; closed on GH        |
+| [#18](https://github.com/Leon-87-7/vig/issues/18) | feat: template system — handler layer (Phases 5–8)                                 | Templates     | Merged; closed on GH        |
+
+---
+
+## Needs Triage
+
+|                                                 # | Title                                                              | Area          | Depends On |
+| ------------------------------------------------: | ------------------------------------------------------------------ | ------------- | ---------- |
+| (none)                                            |                                                                    |               |            |
 
 ---
 
@@ -30,7 +42,13 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                 # | Title                                                                              | Area          | Depends On          |
 | ------------------------------------------------: | ---------------------------------------------------------------------------------- | ------------- | ------------------- |
-| (none)                                            |                                                                                    |               |                     |
+| [#21](https://github.com/Leon-87-7/vig/issues/21) | feat: GitHub service + Redis cache for repo enrichment             | Photo / GitHub | —                   |
+| [#23](https://github.com/Leon-87-7/vig/issues/23) | refactor: GeminiClient core module                                 | Refactor       | —                   |
+| [#24](https://github.com/Leon-87-7/vig/issues/24) | refactor: PRD skeleton unification                                 | Refactor       | —                   |
+| [#25](https://github.com/Leon-87-7/vig/issues/25) | refactor: webhook callback dispatch table                          | Refactor       | —                   |
+| [#22](https://github.com/Leon-87-7/vig/issues/22) | feat: wire repo enrichment into photo pipeline                     | Photo / GitHub | #21                 |
+| [#26](https://github.com/Leon-87-7/vig/issues/26) | refactor: GeminiClient — migrate remaining callers                 | Refactor       | #23                 |
+| [#27](https://github.com/Leon-87-7/vig/issues/27) | refactor: webhook slash dispatch table                             | Refactor       | #25                 |
 
 ---
 
@@ -38,7 +56,7 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                 # | Title                                                | Area | Notes                                    |
 | ------------------------------------------------: | ---------------------------------------------------- | ---- | ---------------------------------------- |
-| [#10](https://github.com/Leon-87-7/vig/issues/10) | BotFather command registration + ops runbook updates | Ops  | Manual config in BotFather; no code path |
+| (none)                                            |                                                      |      |                                          |
 
 ---
 
@@ -55,11 +73,25 @@ Ordered by unblocked-first, then dependency chain.
     ├── #8 ✓
     ├── #9 ✓
     ├── #11 Photo link extraction ✓
+    │   ├── #21 GitHub service + cache
+    │   │   └── #22 Photo pipeline wiring (repo enrichment)
     ├── #6 Mini-PRD auto ✓
     │   └── #7 Mini-PRD intent ✓
     │       └── #13 Enrichment retry button ✓
     └── (feeds #4 via URL-resolution)
 
-#10 BotFather (standalone, any time)
+#10 BotFather ✓
 #15 Transcript sidecar TikTok/Instagram ✓
+#16 Template system parent ✓
+    ├── #17 Template data layer ✓
+    └── #18 Template handler layer ✓
+
+#23 GeminiClient core
+└── #26 GeminiClient migrate remaining callers
+        (not parallel with #24 — both touch prd.py)
+
+#24 PRD skeleton unification
+
+#25 Webhook callback dispatch table
+└── #27 Webhook slash dispatch table
 ```
