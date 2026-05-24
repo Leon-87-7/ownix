@@ -159,3 +159,16 @@ async def test_update_job_status_writes_key_phrases(temp_db):
     await db.update_job_status(job_id, "transcript_done", key_phrases=json.dumps(["stripe", "nextjs"]))
     job = await db.get_job(job_id)
     assert json.loads(job["key_phrases"]) == ["stripe", "nextjs"]
+
+
+@pytest.mark.asyncio
+async def test_promise_gap_column_exists(tmp_path, monkeypatch) -> None:
+    """promise_gap column must exist after init_db()."""
+    db_file = str(tmp_path / "test.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+    async with aiosqlite.connect(db_file) as conn:
+        cursor = await conn.execute("PRAGMA table_info(jobs)")
+        cols = {row[1] async for row in cursor}
+    assert "promise_gap" in cols

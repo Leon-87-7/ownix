@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     validation_warning_sent     INTEGER DEFAULT 0,
     template_detection_method   TEXT,
     processing_time_ms          INTEGER,
+    promise_gap                 TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -115,6 +116,11 @@ async def init_db() -> None:
             except Exception:
                 pass  # column already exists (fresh schema or re-run)
         await conn.commit()
+        try:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN promise_gap TEXT")
+            await conn.commit()
+        except Exception:
+            pass  # column already exists
     log.info("db_initialized", path=settings.DB_PATH)
 
 
