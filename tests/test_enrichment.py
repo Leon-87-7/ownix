@@ -15,6 +15,7 @@ from src.processors.enrichment import (
     _parse_enrichment,
     enrich,
 )
+from src.services.gemini_client import GeminiClient
 
 
 # ---------------------------------------------------------------------------
@@ -129,10 +130,10 @@ async def test_enrich_both_keys_failed_raises(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
 
-    def _boom(prompt: str, api_key: str) -> str:
+    def _boom(prompt: str, api_key: str, model: str, schema: type | dict | None) -> str:
         raise RuntimeError("network error")
 
-    with patch("src.processors.enrichment._call_gemini_sync", side_effect=_boom):
+    with patch.object(GeminiClient, "_call_sync", side_effect=_boom):
         with pytest.raises(EnrichmentUnavailableError):
             await enrich({"title": "Test Video", "transcript": "some transcript"})
 
@@ -143,7 +144,7 @@ async def test_enrich_returns_enrichment_on_success(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
-    with patch("src.processors.enrichment._call_gemini_sync", return_value=_SAMPLE_GEMINI_JSON):
+    with patch.object(GeminiClient, "_call_sync", return_value=_SAMPLE_GEMINI_JSON):
         result, template_analysis = await enrich({"title": "Test Video", "transcript": "some transcript"})
 
     assert isinstance(result, Enrichment)
