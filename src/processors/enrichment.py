@@ -145,7 +145,7 @@ def _parse_enrichment(data: dict) -> Enrichment:
     )
 
 
-async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
+async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
     from src.services.gemini_client import gemini_client, GeminiUnavailableError
 
@@ -161,9 +161,10 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None]:
         raise EnrichmentUnavailableError(str(exc)) from exc
     data = _extract_json(raw)
     template_analysis = data.pop("template_analysis", None)
+    promise_gap = data.pop("promise_gap", None)
     result = _parse_enrichment(data)
     log.info("enrichment_ok", category=result.category, topic=result.topic)
-    return result, template_analysis
+    return result, template_analysis, promise_gap
 
 
 def _build_audio_prompt(title: str, template: str) -> str:
@@ -349,7 +350,7 @@ async def run(job_id: str) -> None:
             await database.update_job_status(job_id, "enriching", validation_warning_sent=1)
 
     try:
-        enrichment, template_analysis = await enrich(job)
+        enrichment, template_analysis, promise_gap = await enrich(job)
     except EnrichmentUnavailableError as exc:
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(

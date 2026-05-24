@@ -124,6 +124,10 @@ _SAMPLE_GEMINI_JSON = json.dumps({
         {"name": "Claude", "type": "service", "url": "https://claude.ai", "description": "AI assistant"},
     ],
     "market_data": "",
+    "promise_gap": {
+        "gaps": ["Advanced deployment never covered"],
+        "hidden_value": ["Practical n8n error handling tips"],
+    },
 })
 
 
@@ -148,13 +152,36 @@ async def test_enrich_returns_enrichment_on_success(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch.object(GeminiClient, "_call_sync", return_value=_SAMPLE_GEMINI_JSON):
-        result, template_analysis = await enrich({"title": "Test Video", "transcript": "some transcript"})
+        result, template_analysis, promise_gap = await enrich({"title": "Test Video", "transcript": "some transcript"})
 
     assert isinstance(result, Enrichment)
     assert result.category == "Technical Tutorial"
     assert result.topic == "claude code + n8n"
     assert "Use Claude API" in result.action_points_str
     assert template_analysis is None
+    assert promise_gap == {
+        "gaps": ["Advanced deployment never covered"],
+        "hidden_value": ["Practical n8n error handling tips"],
+    }
+
+
+@pytest.mark.asyncio
+async def test_enrich_pops_and_returns_promise_gap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """enrich() must pop promise_gap from parsed JSON and return it as 3rd element."""
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    with patch.object(GeminiClient, "_call_sync", return_value=_SAMPLE_GEMINI_JSON):
+        result, template_analysis, promise_gap = await enrich(
+            {"title": "Test Video", "transcript": "some transcript"}
+        )
+
+    assert promise_gap == {
+        "gaps": ["Advanced deployment never covered"],
+        "hidden_value": ["Practical n8n error handling tips"],
+    }
+    assert template_analysis is None
+    assert isinstance(result, Enrichment)
 
 
 # ---------------------------------------------------------------------------
