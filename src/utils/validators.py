@@ -132,6 +132,28 @@ def _is_github_path(parsed) -> bool:
     return host == "github.com" and len(path_segs) >= 1
 
 
+def filter_vision_links(links: list[dict]) -> list[dict]:
+    """Drop generic-root and promo links; deduplicate by hostname+first-path-segment."""
+    seen_prefix: set[str] = set()
+    result = []
+    for lnk in links:
+        url = lnk.get("url") or ""
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            continue
+        if _is_generic(parsed) or _is_promo(parsed):
+            continue
+        host = (parsed.hostname or "").lower()
+        segs = [s for s in (parsed.path or "").split("/") if s]
+        prefix = f"{host}/{segs[0]}" if segs else host
+        if prefix in seen_prefix:
+            continue
+        seen_prefix.add(prefix)
+        result.append(lnk)
+    return result
+
+
 def extract_description_links(description: str) -> list[dict]:
     """
     Extract meaningful links from a YouTube video description (PRD §7).

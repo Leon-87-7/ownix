@@ -14,6 +14,7 @@ from src.services.drive import upload_file
 from src.telegram.sender import send_message, send_photo
 from src.utils.logger import get_logger
 from src.utils.markdown import build_enriched_links_message
+from src.utils.validators import filter_vision_links
 
 log = get_logger(__name__)
 
@@ -95,7 +96,7 @@ async def run(job: dict) -> None:
     )
     main_idx = max(0, min(vision.get("main_frame_index", 0), len(raw_frames) - 1))
     summary = vision.get("summary", "")
-    links: list[dict] = vision.get("links", [])
+    links: list[dict] = filter_vision_links(vision.get("links", []))
 
     # 3. Brave Search enrichment (opt-in)
     if links:

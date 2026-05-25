@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import html
+import re
 
 import httpx
 
@@ -10,6 +11,13 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 _BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean(text: str | None) -> str | None:
+    if not text:
+        return text
+    return html.unescape(_TAG_RE.sub("", text)).strip() or None
 
 
 async def verify_links(links: list[dict]) -> list[dict]:
@@ -24,7 +32,7 @@ async def verify_links(links: list[dict]) -> list[dict]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         for link in links[:5]:
             try:
-                query = urlparse(link["url"]).hostname or link["url"]
+                query = link["url"]
                 resp = await client.get(
                     _BRAVE_URL,
                     params={"q": query, "count": "1"},
@@ -33,10 +41,12 @@ async def verify_links(links: list[dict]) -> list[dict]:
                 if resp.status_code == 200:
                     results = resp.json().get("web", {}).get("results", [])
                     if results:
+                        hit = results[0]
                         link = {
                             **link,
-                            "label": results[0].get("title") or link.get("label"),
-                            "description": results[0].get("description") or link.get("description"),
+                            "url": hit.get("url") or link["url"],
+                            "label": _clean(hit.get("title")) or link.get("label"),
+                            "description": _clean(hit.get("description")) or link.get("description"),
                         }
             except Exception:
                 log.warning("brave_link_failed", url=link.get("url"))
