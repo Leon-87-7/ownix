@@ -94,7 +94,11 @@ def _download_audio_b64(url: str, tmp_dir: str) -> tuple[str, str]:
         "outtmpl": os.path.join(tmp_dir, "audio.%(ext)s"),
     }
     if INSTAGRAM_COOKIES and os.path.exists(INSTAGRAM_COOKIES):
-        ydl_opts["cookiefile"] = INSTAGRAM_COOKIES
+        # Copy to writable tmp location — /app/credentials/ is read-only, and
+        # yt-dlp tries to write updated cookies back to the cookiefile path.
+        tmp_cookies = os.path.join(tmp_dir, "cookies.txt")
+        shutil.copy2(INSTAGRAM_COOKIES, tmp_cookies)
+        ydl_opts["cookiefile"] = tmp_cookies
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
         ydl.extract_info(url, download=True)
