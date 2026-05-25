@@ -10,8 +10,7 @@ from src import database
 from src.brain import EMBEDDING_DIM
 from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
-from src.templates import PROMPT_TEMPLATES
-from src.validation import validate_template_choice
+from src.templates import PROMPT_TEMPLATES, validate_template_choice
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
