@@ -71,8 +71,8 @@ async def _enrich_github_repos(links: list[dict]) -> list[dict]:
     (404, network error, or missing token).
 
     If ``settings.GITHUB_TOKEN`` is absent, returns ``links`` unchanged
-    (no ``_enriched`` keys are set, so callers can still fall back to
-    ``build_links_message``).
+    (no ``_enriched`` keys are set, so ``build_enriched_links_message``
+    renders them via its un-enriched ``others`` branch).
     """
     from urllib.parse import urlparse
     from src.services.github import enrich_repo
@@ -132,7 +132,7 @@ async def _enrich_github_repos(links: list[dict]) -> list[dict]:
 
 async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) -> None:
     from src.services.gemini_photo import call_gemini_photo_links
-    from src.utils.markdown import build_links_message, build_enriched_links_message
+    from src.utils.markdown import build_enriched_links_message
 
     await send_message(chat_id, "🔍 Scanning image for links...")
     photo_bytes, mime_type = await download_photo(file_id)
@@ -146,10 +146,7 @@ async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) 
     summary = result.get("summary", "")
     if links:
         links = await _enrich_github_repos(links)
-        if any(lnk.get("_enriched") for lnk in links):
-            await send_message(chat_id, build_enriched_links_message(links))
-        else:
-            await send_message(chat_id, build_links_message(links))
+        await send_message(chat_id, build_enriched_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
             asyncio.create_task(
@@ -164,7 +161,7 @@ async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) 
 
 async def _process_batch(chat_id: int) -> None:
     from src.services.gemini_photo import call_gemini_photo_links
-    from src.utils.markdown import build_links_message, build_enriched_links_message
+    from src.utils.markdown import build_enriched_links_message
 
     file_ids = await _get_batch_files(chat_id)
     await _clear_batch(chat_id)
@@ -182,10 +179,7 @@ async def _process_batch(chat_id: int) -> None:
     links = result.get("links", [])
     if links:
         links = await _enrich_github_repos(links)
-        if any(lnk.get("_enriched") for lnk in links):
-            await send_message(chat_id, build_enriched_links_message(links))
-        else:
-            await send_message(chat_id, build_links_message(links))
+        await send_message(chat_id, build_enriched_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
             asyncio.create_task(

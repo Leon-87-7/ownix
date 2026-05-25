@@ -87,8 +87,8 @@ CREATE TABLE IF NOT EXISTS chat_state (
 """
 
 
-def generate_job_id() -> str:
-    """YYYYMMDD_HHMMSS_XXXX where XXXX is 4 hex chars."""
+def generate_id() -> str:
+    """YYYYMMDD_HHMMSS_XXXX where XXXX is 4 hex chars (job IDs and link IDs)."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     suffix = secrets.token_hex(2).upper()
     return f"{ts}_{suffix}"
@@ -143,7 +143,7 @@ async def create_job(
     template: str | None = None,
 ) -> str:
     """Insert a new job row with status='pending' and return the job_id."""
-    job_id = generate_job_id()
+    job_id = generate_id()
     async with connection() as conn:
         await conn.execute(
             """

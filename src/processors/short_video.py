@@ -13,7 +13,7 @@ from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.telegram.sender import send_message, send_photo
 from src.utils.logger import get_logger
-from src.utils.markdown import build_links_message
+from src.utils.markdown import build_enriched_links_message
 
 log = get_logger(__name__)
 
@@ -126,7 +126,7 @@ async def run(job: dict) -> None:
 
     # 7. Send links message (if any)
     if links:
-        await send_message(chat_id, f"{tag}\n{build_links_message(links)}")
+        await send_message(chat_id, f"{tag}\n{build_enriched_links_message(links)}")
 
     # 8. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job

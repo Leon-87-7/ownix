@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -12,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from src.config import settings
+from src.database import generate_id
 from src.services.drive import upload_file
 from src.utils.logger import get_logger
 
@@ -38,13 +38,6 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 """
-
-
-def generate_link_id() -> str:
-    """YYYYMMDD_HHMMSS_XXXX where XXXX is 4 hex chars (same format as job IDs)."""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    suffix = secrets.token_hex(2).upper()
-    return f"{ts}_{suffix}"
 
 
 def _embed_sync(text: str, api_key: str) -> np.ndarray:
@@ -279,7 +272,7 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
                 embedding_arr = await _embed(embed_doc)
                 embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
 
-                link_id = generate_link_id()
+                link_id = generate_id()
                 await conn.execute(
                     """
                     INSERT INTO links

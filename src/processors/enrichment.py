@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from src import database
+from src.brain import EMBEDDING_DIM
 from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES
@@ -16,7 +17,6 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 MAX_TRANSCRIPT_CHARS = 12_000
-EMBEDDING_DIM = 768
 
 _PROMISE_GAP_SUFFIX = """
 
