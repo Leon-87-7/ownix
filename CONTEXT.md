@@ -1,4 +1,4 @@
-# vig — Domain Context
+﻿# vig — Domain Context
 
 This document is the single source of truth for domain language and architecture decisions in this repository. It grows lazily via `/grill-with-docs` sessions as new terms and decisions crystallise.
 
@@ -10,7 +10,7 @@ This document is the single source of truth for domain language and architecture
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Job**                          | A unit of work representing one URL submitted by a user. Lives in the `jobs` table. ID format: `YYYYMMDD_HHMMSS_XXXX`.                                                                                                                                                                                                                                                                                                                           |
 | **Short video**                  | Instagram Reel, TikTok, or YouTube Short — processed via `processors/short_video.py`. Transcript via sidecar, then Gemini text enrichment + Brave Search.                                                                                                                                                                                                                                                                                        |
-| **Long video**                   | Full-length YouTube video — processed via `processors/long_video.py`. Same pipeline as short but with frame extraction.                                                                                                                                                                                                                                                                                                                          |
+| **Long video**                   | Full-length YouTube video — processed via `processors/long_video.py`. Two-phase pipeline: Phase 1 produces a transcript markdown uploaded to Drive; Phase 2 is Gemini enrichment, triggered either by user confirmation (plain-URL jobs) or automatically (explicit-command jobs). Unlike short video, enrichment is a separate queued task, not inline.                                                                                           |
 | **Content type**                 | Enum: `short` or `long`. Detected at webhook routing time by `validators.detect_pipeline`.                                                                                                                                                                                                                                                                                                                                                       |
 | **Status FSM**                   | Job status lifecycle: `pending → processing → transcript_done → enriching → done` (or `error`/`cancelled`).                                                                                                                                                                                                                                                                                                                                      |
 | **Enrichment**                   | Gemini text pass that classifies the job: category, topic, objective, action points, tools, market data.                                                                                                                                                                                                                                                                                                                                         |
@@ -22,7 +22,7 @@ This document is the single source of truth for domain language and architecture
 | **Brain ingest**                 | Fire-and-forget `brain.ingest_links(links, topic, source_job_id)` — does not block the user-facing response.                                                                                                                                                                                                                                                                                                                                     |
 | **Photo pipeline**               | Inline (no DB job, no queue) path for Telegram photo messages. Gemini Vision extracts verbatim-grounded URLs; `_filter_grounded_links` drops hallucinations.                                                                                                                                                                                                                                                                                     |
 | **Verbatim**                     | The exact phrase Gemini quotes from the image that proves a URL/domain is literally rendered as text (not inferred from a brand name). Required field for photo link extraction.                                                                                                                                                                                                                                                                 |
-| **UI chrome**                    | Social media interface elements (follower counts, "Followed by X", timestamps) that are not promoted resources. Photo pipeline drops links whose verbatim contains "followed by".                                                                                                                                                                                                                                                                |
+| **UI chrome**                    | Social media interface elements (follower counts, "Followed by X", timestamps) that are not promoted resources. Photo pipeline drops links whose verbatim matches any pattern in `_UI_CHROME_PATTERNS` (includes "followed by" and related account-context phrases). Fixed to cover all UI-chrome variants in commit 2df529e (PR #48).                                                                                                           |
 | **Transcript service**           | Python sidecar (`vig-transcript` container) that downloads videos via yt-dlp and returns transcript text. On caption-less videos, falls back to returning raw audio bytes (base64) for the worker to send to Gemini. Called by short/long processors via HTTP.                                                                                                                                                                                   |
 | **Audio fallback**               | When the transcript service finds no VTT caption files, it downloads audio-only via yt-dlp and returns `{"audio_b64": "...", "mime_type": "audio/...", "fallback": "audio"}`. The worker, not the transcript service, sends this to Gemini.                                                                                                                                                                                                      |
 | **Audio enrichment**             | A single Gemini `generate_content` call that receives inline base64 audio + the enrichment/template prompt. Gemini transcribes and analyzes in one shot. Used only in the template path when captions are unavailable. Preserves the two-call budget (Vision + Audio-Enrichment).                                                                                                                                                                |
@@ -55,6 +55,11 @@ This document is the single source of truth for domain language and architecture
 | **Template analysis**            | A structured JSON sub-object appended by Gemini to the enrichment output for non-`summary` templates (e.g. `steps`/`common_mistakes`/`pro_tips` for `method`). Stored in `jobs.template_analysis` and rendered alongside the standard enrichment fields. `summary` jobs never produce a `template_analysis` block.                                                                                                                               |
 | **URL deduplication**            | Per-chat gate that blocks resubmission of a URL whose job is still pending, processing, or done. Bypassed when a template slash command is the active trigger (explicit reprocess intent). The duplicate notice includes a "Show job done" inline button that forwards the original completion message.                                                                                                                                            |
 | **Force reprocess**              | `/force <url>` bypasses the dedup gate and resets the existing job row in-place — same job ID, `attempt` incremented, all result fields cleared — before re-enqueuing. Falls back to creating a fresh job only when no prior row exists for that URL in the chat.                                                                                                                                                                                 |
+| **Ignored domain**               | A user-managed per-chat blocklist stored in the `ignored_domains` SQLite table. Added via `/ignore <domain\|URL>` (space-separated, one or more per call), removed via `/unignore`, listed via `/ignore_list`. `github.com` is protected and cannot be added. The short pipeline's `filter_vision_links` receives the list as `extra_ignored` and drops matching links before Brave enrichment.                                                   |
+| **Enrichment confirmation gate** | Inline keyboard sent to the user after a long-video transcript is ready, offering "👎 No Thanks / ✨ Run Gemini / 📐 Build Spec". Present only for plain-URL long-video jobs (`template_detection_method != "explicit_command"`). Skipped entirely when the job was submitted via a template slash command — the worker auto-enqueues the enrichment task without asking. Tapping "✨ Run Gemini" now opens the **template picker keyboard** instead of immediately enqueuing enrichment. |
+| **Template picker keyboard**     | Sub-keyboard shown after the user taps "✨ Run Gemini" in the enrichment confirmation gate. Presents all five prompt templates (summary, method, technical, review, narrative) plus "✍️ Freestyle" as inline buttons (3×2 layout). After the user picks any option the keyboard collapses to "You chose {template}" and the chosen analysis is enqueued. Picking "✍️ Freestyle" arms an `awaiting_freestyle` chat state instead of immediately enqueuing. |
+| **Freestyle prompt**             | A user-supplied Gemini instruction that replaces the standard template's `extra_instructions`. The user types any free-form text; the enrichment worker substitutes it in place of the template's structured extraction instructions. Available in both pipelines: as a button inside the **template picker keyboard** (long video) and as a `/freestyle <url>` slash command (both pipelines). Short video requires a transcript; the transcript is fetched on demand when the user confirms. |
+| **Awaiting freestyle**           | `chat_state` mode (`mode='awaiting_freestyle'`) armed when the user selects "✍️ Freestyle" from the template picker keyboard. Same `force_reply` + 10-minute expiry pattern as `awaiting_intent`. The user's reply text becomes the freestyle prompt, stored in `jobs.freestyle_prompt`, then the enrichment task is enqueued. |
 
 ---
 
@@ -117,11 +122,38 @@ External services used by both containers:
 ```
 URL arrives → jobs row (pending) → Redis enqueue
 → worker dequeues → short_video.run
-  → transcript service (yt-dlp) → transcript text stored in jobs.transcript
-  → status = transcript_done → Telegram: ask user to enrich?
-  [user confirms] → enrichment.run
-    → Gemini text: category, topic, objective, action_points, tools, market_data
-    → Drive upload → Sheets append → Telegram delivery
+  → frames service → Gemini Vision analysis → links
+  → Drive upload → Sheets append → Telegram delivery (photo + links)
+  → fire-and-forget brain.ingest_links
+  → status = done
+  → if template set (slash command): transcript service → Gemini enrichment → Telegram delivery
+
+/freestyle <url> (slash command — works for both short and long URLs)
+→ create job row (pending, template=freestyle)
+→ arm chat_state(awaiting_freestyle, job_id) → ForceReply: "What should Gemini focus on?"
+[user types prompt]
+→ store jobs.freestyle_prompt → clear chat_state → enqueue {"task":"video"}
+→ same pipeline.run path; enrichment uses freestyle_prompt in place of template extra_instructions
+```
+
+## Data Flow — Long Video
+
+```
+URL arrives → jobs row (pending) → Redis enqueue
+→ worker dequeues → long_video.run   [Phase 1]
+  → transcript service (yt-dlp) → transcript + metadata
+  → template auto-detect (plain-URL jobs only; explicit-command jobs skip)
+  → Drive upload of transcript markdown
+  → status = transcript_done → Telegram: send transcript document
+  → if explicit_command: worker auto-enqueues {"task":"enrichment"} (no user prompt)
+  → if plain URL: Telegram keyboard [No Thanks] [Run Gemini] [Build Spec]
+  [user clicks ✨ Run Gemini] → template picker keyboard (5 templates + Freestyle)
+    [user picks template] → collapse keyboard to "You chose {template}" → enqueue {"task":"enrichment"}
+    [user picks Freestyle] → arm chat_state(awaiting_freestyle) → ForceReply
+      [user types prompt] → store jobs.freestyle_prompt → enqueue {"task":"enrichment"}
+→ worker dequeues → enrichment.run   [Phase 2]
+  → Gemini text enrichment
+    → Drive upload → Sheets append → Telegram delivery + "Build Spec" button
     → fire-and-forget brain.ingest_links
   → status = done
 ```

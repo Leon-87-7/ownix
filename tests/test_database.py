@@ -240,3 +240,76 @@ async def test_migration_from_version_zero_adds_columns(tmp_path, monkeypatch) -
     }
     assert migration_cols <= cols
     assert version == len(database._MIGRATIONS)
+
+
+@pytest.mark.asyncio
+async def test_freestyle_prompt_column_exists(tmp_path, monkeypatch) -> None:
+    """freestyle_prompt column must exist after init_db()."""
+    db_file = str(tmp_path / "test.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+    async with aiosqlite.connect(db_file) as conn:
+        cursor = await conn.execute("PRAGMA table_info(jobs)")
+        cols = {row[1] async for row in cursor}
+    assert "freestyle_prompt" in cols
+
+
+@pytest.mark.asyncio
+async def test_create_job_with_freestyle_prompt(temp_db):
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=fp1",
+        content_type="long",
+        freestyle_prompt="Summarise the key risks mentioned.",
+    )
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["freestyle_prompt"] == "Summarise the key risks mentioned."
+
+
+@pytest.mark.asyncio
+async def test_create_job_without_freestyle_prompt_defaults_none(temp_db):
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=fp2",
+        content_type="long",
+    )
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["freestyle_prompt"] is None
+
+
+@pytest.mark.asyncio
+async def test_migration_v1_to_v2_adds_freestyle_prompt(tmp_path, monkeypatch) -> None:
+    """A DB at user_version=1 must gain freestyle_prompt after running migrations."""
+    db_file = str(tmp_path / "v1.db")
+    # Simulate a v1 DB: jobs table with template columns but no freestyle_prompt.
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs ("
+            "id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, url TEXT NOT NULL,"
+            " content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',"
+            " template TEXT, template_analysis TEXT, key_phrases TEXT,"
+            " validation_warning_sent INTEGER DEFAULT 0, template_detection_method TEXT,"
+            " promise_gap TEXT, bot_message_id INTEGER,"
+            " created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        )
+        await conn.execute("PRAGMA user_version = 1")
+        await conn.commit()
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("PRAGMA table_info(jobs)")
+        cols = {row[1] async for row in cur}
+        cur2 = await conn.execute("PRAGMA user_version")
+        version = (await cur2.fetchone())[0]
+
+    assert "freestyle_prompt" in cols
+    assert version == len(database._MIGRATIONS)

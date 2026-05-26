@@ -8,7 +8,7 @@ from src.analysis import extract_key_phrases
 from src.config import settings
 from src.services.drive import upload_file
 from src.services import sheets, transcript as transcript_svc
-from src.telegram.sender import send_document, send_inline_keyboard, send_message
+from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message
 from src.templates import PROMPT_TEMPLATES
 from src.utils.logger import get_logger
 from src.services.github import enrich_github_links
@@ -38,7 +38,8 @@ async def run(job: dict) -> None:
     tag = f"job_{job_id[-4:]}:"
 
     await database.update_job_status(job_id, "processing")
-    await send_message(chat_id, f"{tag}\n🔊 Analyzing your video, It is on it's way 🪽🪽")
+    status_result = await send_message(chat_id, f"{tag}\n🔊 Analyzing your video, It is on it's way 🪽🪽")
+    status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Fetch transcript + metadata in parallel
     transcript_resp, meta_resp = await asyncio.gather(
@@ -97,7 +98,10 @@ async def run(job: dict) -> None:
     slug = slugify(title) or "untitled"
     md_text = build_transcript_markdown(title, channel, views, video_id, url, transcript)
 
-    await send_message(chat_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")
+    if status_msg_id:
+        await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")
+    else:
+        await send_message(chat_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")
 
     file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG)
 
@@ -117,19 +121,20 @@ async def run(job: dict) -> None:
     bot_message_id = doc_result.get("message_id")
     if bot_message_id:
         await database.update_job_status(job_id, "transcript_done", bot_message_id=bot_message_id)
-    await send_inline_keyboard(
-        chat_id,
-        f"{tag}\nRun Gemini analysis on this video?",
-        buttons=[
-            [
-                {"text": "👎 No Thanks", "callback_data": f"gemini_no:{job_id}"},
-                {"text": "✨ Run Gemini", "callback_data": f"gemini_yes:{job_id}"},
+    if job.get("template_detection_method") != "explicit_command":
+        await send_inline_keyboard(
+            chat_id,
+            f"{tag}\nRun Gemini analysis on this video?",
+            buttons=[
+                [
+                    {"text": "👎 No Thanks", "callback_data": f"gemini_no:{job_id}"},
+                    {"text": "✨ Run Gemini", "callback_data": f"gemini_yes:{job_id}"},
+                ],
+                [
+                    {"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"},
+                ],
             ],
-            [
-                {"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"},
-            ],
-        ],
-    )
+        )
 
     if description_links:
         await send_message(chat_id, f"{tag}\n{build_enriched_links_message(description_links)}")

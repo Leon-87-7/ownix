@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Explicit-command auto-enrichment** — long-video jobs submitted via a template slash command (`/method <url>` or the two-step `/method` → URL flow) no longer show the "Run Gemini analysis?" confirmation keyboard. The worker detects `template_detection_method == "explicit_command"` after Phase 1 completes and auto-enqueues the enrichment task if the job reached `transcript_done`. The confirmation gate is preserved for plain-URL long-video jobs.
+
+### Changed
+
+- **Long-video status message collapses to one** — the initial "🔊 Analyzing your video..." message now edits in-place to "🍪 Transcript done, now sent to Drive" via `editMessageText` instead of sending a second message, reducing chat noise during processing.
+- **Template command reception message** — replaced `"📥 Received with **{template}** template!"` with `"📥 Received\n✨ Kicking off Gemini analysis ({template})"` in both the one-shot (`/method <url>`) and two-step (`/method` → URL) paths to reflect the intent-first UX.
+
 ### Fixed
 
 - **Instagram cookies read-only crash** — `transcript_server` now copies Instagram cookies to a writable `tmp_dir` before passing them to yt-dlp; the production `/app/credentials/` mount is read-only and yt-dlp's attempt to write back updated cookies caused `EROFS errno 30`.

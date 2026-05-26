@@ -41,15 +41,19 @@
 | [#41](https://github.com/Leon-87-7/vig/issues/41) | refactor(database): add set_prd_slot_status — narrow the update_job_status escape hatch | DB / PRD           | Merged; PR #44; closed on GH                                             |
 | [#43](https://github.com/Leon-87-7/vig/issues/43) | refactor(database): replace silent ALTER TABLE blocks with PRAGMA user_version migration tracking | DB    | Merged; PR #45; closed on GH; 17 db tests green                         |
 | —                                                  | fix(database): phantom status filter in find_recent_job_by_url ('failed'/'stale')   | DB / Dedup              | No issue; fixed directly; committed to main                              |
+| [#36](https://github.com/Leon-87-7/vig/issues/36) | fix: photo pipeline missing ADR-0005 UI-chrome filter (3 red tests)                 | Photo                   | Merged; PR #48; commit 2df529e; closed on GH                            |
+| [#46](https://github.com/Leon-87-7/vig/issues/46) | bug(gemini_photo): _filter_grounded_links not dropping 'followed by' UI-chrome links | Photo                  | Closed as dup of #36; fixed by PR #48                                   |
+| [#39](https://github.com/Leon-87-7/vig/issues/39) | Collapse the Gemini service triplet into one module (ADR-0011)                      | Refactor                | Merged; PR #49; commit bd4d949; closed on GH                            |
+| [#42](https://github.com/Leon-87-7/vig/issues/42) | refactor(database): move links table DDL from brain.py into database.py             | DB / Brain              | Completed; links DDL in database.py SCHEMA_SQL; brain.py SCHEMA_SQL removed; closed on GH |
+| [#47](https://github.com/Leon-87-7/vig/issues/47) | bug(test_short_video): short_video.run() hits no such table: ignored_domains        | Test / DB               | Merged; PR #50; commit 5dbdd2b; closed on GH                            |
 
 ---
 
 ## Needs Triage
 
-|                                                 # | Title                                                                                           | Area       | Depends On |
-| ------------------------------------------------: | ----------------------------------------------------------------------------------------------- | ---------- | ---------- |
-| [#42](https://github.com/Leon-87-7/vig/issues/42) | refactor(database): move links table DDL from brain.py into database.py                        | DB / Brain | none       |
-| [#47](https://github.com/Leon-87-7/vig/issues/47) | bug(test_short_video): short_video.run() hits no such table: ignored_domains in template tests | Test / DB  | none       |
+|      # | Title | Area | Depends On |
+| -----: | ----- | ---- | ---------- |
+| (none) |       |      |            |
 
 ---
 
@@ -57,10 +61,12 @@
 
 Ordered by unblocked-first, then dependency chain.
 
-|                                                 # | Title                                                               | Area     | Depends On |
-| ------------------------------------------------: | ------------------------------------------------------------------- | -------- | ---------- |
-| [#36](https://github.com/Leon-87-7/vig/issues/36) | fix: photo pipeline missing ADR-0005 UI-chrome filter (3 red tests) | Photo    | none       |
-| [#39](https://github.com/Leon-87-7/vig/issues/39) | Collapse the Gemini service triplet into one module (HITL)          | Refactor | none       |
+|      # | Title | Area | Depends On |
+| -----: | ----- | ---- | ---------- |
+| [#51](https://github.com/Leon-87-7/vig/issues/51) | feat(db): add jobs.freestyle_prompt column | DB | — |
+| [#52](https://github.com/Leon-87-7/vig/issues/52) | feat(enrichment): substitute freestyle_prompt in place of template extra_instructions | Enrichment | #51 |
+| [#53](https://github.com/Leon-87-7/vig/issues/53) | feat(webhook): template picker keyboard replaces direct gemini_yes enqueue (ADR-0012) | Webhook / Long Video | #51, #52 |
+| [#54](https://github.com/Leon-87-7/vig/issues/54) | feat(webhook): /freestyle slash command for both short and long pipelines | Webhook / Templates | #51, #52, #53 |
 
 ---
 
@@ -109,18 +115,24 @@ Ordered by unblocked-first, then dependency chain.
 
 #37 Slimming sweep — dedup ID gen / links formatter / EMBEDDING_DIM ✓ (slimming-doc #3/#4/#5)
 #38 Unify template-matching tables ✓
-#39 Collapse Gemini service triplet (HITL) 🤖 ready-for-agent (slimming-doc #1; reversal approved → ADR-0011)
+#39 Collapse Gemini service triplet → ADR-0011 ✓ (PR #49)
 
 #33 Promise-gap extraction ✓
 └── #34 Promise-gap Telegram render ✓ (needs #33)
 
 #35 Orphaned-job reaper (ADR-0010) ✓
-#36 Photo UI-chrome filter (ADR-0005) 🤖 ready-for-agent
+#36 Photo UI-chrome filter (ADR-0005) ✓ (PR #48)
+└── #46 _filter_grounded_links UI-chrome dup ✓ (closed as dup of #36)
 
 — fix: phantom status filter (find_recent_job_by_url) ✓ (no issue; committed directly)
 
 #41 add set_prd_slot_status ✓
-#42 move links DDL into database.py 🔍 needs-triage
+#42 move links DDL into database.py ✓
 #43 PRAGMA user_version migrations ✓ (best after #42)
-#47 short_video ignored_domains missing in tests 🔍 needs-triage
+#47 short_video ignored_domains missing in tests ✓ (PR #50)
+
+#51 jobs.freestyle_prompt column
+└── #52 enrichment freestyle substitution
+    └── #53 template picker keyboard (ADR-0012)
+        └── #54 /freestyle slash command
 ```

@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     processing_time_ms          INTEGER,
     promise_gap                 TEXT,
     bot_message_id              INTEGER,
+    -- Freestyle Gemini prompt (issue #51 / ADR-0012)
+    freestyle_prompt            TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -132,6 +134,10 @@ _MIGRATIONS: list[list[str]] = [
         "ALTER TABLE jobs ADD COLUMN template_detection_method TEXT",
         "ALTER TABLE jobs ADD COLUMN promise_gap TEXT",
         "ALTER TABLE jobs ADD COLUMN bot_message_id INTEGER",
+    ],
+    # v1 → v2: freestyle Gemini prompt (issue #51 / ADR-0012)
+    [
+        "ALTER TABLE jobs ADD COLUMN freestyle_prompt TEXT",
     ],
 ]
 
@@ -214,16 +220,17 @@ async def create_job(
     content_type: str,
     message_id: int | None = None,
     template: str | None = None,
+    freestyle_prompt: str | None = None,
 ) -> str:
     """Insert a new job row with status='pending' and return the job_id."""
     job_id = generate_id()
     async with connection() as conn:
         await conn.execute(
             """
-            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status, template)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status, template, freestyle_prompt)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
             """,
-            (job_id, chat_id, message_id, url, content_type, template),
+            (job_id, chat_id, message_id, url, content_type, template, freestyle_prompt),
         )
         await conn.commit()
     log.info("job_created", job_id=job_id, chat_id=chat_id, content_type=content_type)
