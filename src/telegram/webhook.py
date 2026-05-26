@@ -349,6 +349,41 @@ async def _handle_callback(callback: dict) -> None:
     await handler(ctx)
 
 
+async def _handle_freestyle_url(chat_id: int, url: str, pipeline: str, message_id: int | None) -> None:
+    """Shared logic for /freestyle <url> and pending_template=freestyle URL message."""
+    job_id = await database.create_job(
+        chat_id=chat_id, url=url, content_type=pipeline, message_id=message_id, template="freestyle",
+    )
+    await database.update_job_status(job_id, "pending", template_detection_method="explicit_command")
+    if pipeline == "long":
+        await queue.enqueue({"task": "video", "job_id": job_id})
+        await send_message(chat_id, f"📥 Received\n✨ Kicking off Gemini analysis (freestyle)\njob_{job_id[-4:]}")
+    await database.set_chat_state(chat_id, mode="awaiting_freestyle", job_id=job_id, expires_minutes=10)
+    await send_force_reply(
+        chat_id,
+        "✍️ Reply with your Gemini prompt (reply within 10 min; /cancel to abandon)",
+        input_field_placeholder="Your Gemini prompt...",
+    )
+    log.info("freestyle.url.received", chat_id=chat_id, job_id=job_id, pipeline=pipeline)
+
+
+async def _cmd_freestyle(ctx: SlashCtx) -> None:
+    if len(ctx.parts) < 2:
+        await queue._client().set(f"pending_template:{ctx.chat_id}", "freestyle", ex=120)
+        await send_message(ctx.chat_id, "📥 `/freestyle` ready — send the URL now (2 min window).")
+        return
+    url = ctx.parts[1]
+    pipeline = detect_pipeline(url)
+    if pipeline == "rejected":
+        await send_message(
+            ctx.chat_id,
+            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+            "Instagram Reels, and TikTok videos.",
+        )
+        return
+    await _handle_freestyle_url(ctx.chat_id, url, pipeline, ctx.message_id)
+
+
 async def _cmd_cancel(ctx: SlashCtx) -> None:
     state = await database.get_chat_state(ctx.chat_id)
     await database.clear_chat_state(ctx.chat_id)
@@ -566,6 +601,7 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
     "/ignore":          _cmd_ignore,
     "/unignore":        _cmd_unignore,
     "/ignore_list":     _cmd_ignore_list,
+    "/freestyle":        _cmd_freestyle,
     **{f"/{t}": _cmd_template for t in PROMPT_TEMPLATES},
 }
 
@@ -650,7 +686,11 @@ async def _handle_awaiting_freestyle(chat_id: int, text: str, state: dict) -> No
     await database.clear_chat_state(chat_id)
     log.info("freestyle.prompt.stored", chat_id=chat_id, job_id=job_id, prompt_len=len(stripped))
     job = await database.get_job(job_id)
-    if job and job.get("status") == "transcript_done":
+    if job and job.get("content_type") == "short":
+        await queue.enqueue({"task": "video", "job_id": job_id})
+        log.info("freestyle.video.enqueued", chat_id=chat_id, job_id=job_id)
+        await send_message(chat_id, f"📥 Received\n✨ Kicking off Gemini analysis (freestyle)\njob_{job_id[-4:]}")
+    elif job and job.get("status") == "transcript_done":
         await queue.enqueue({"task": "enrichment", "job_id": job_id})
         log.info("freestyle.enrichment.enqueued", chat_id=chat_id, job_id=job_id)
         await send_message(chat_id, f"job_{job_id[-4:]}:\n✨ Freestyle prompt received — starting Gemini analysis")
@@ -805,6 +845,10 @@ async def webhook(
             "Instagram Reels (not /p/ carousels), and TikTok videos.",
         )
         log.info("url_rejected", chat_id=chat_id, url=text)
+        return {"ok": True}
+
+    if pending_template == "freestyle":
+        await _handle_freestyle_url(chat_id, text, pipeline, message_id)
         return {"ok": True}
 
     if not pending_template:

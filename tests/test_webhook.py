@@ -1005,3 +1005,110 @@ async def test_cmd_cancel_awaiting_intent_sends_intent_canceled(temp_db, monkeyp
     assert args[0] == 7
     assert "✍️ Intent canceled." in args[1]
     assert await db.get_chat_state(7) is None
+
+
+# ---------------------------------------------------------------------------
+# /freestyle slash command tests (issue #54)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cmd_freestyle_no_url_sets_pending_template(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/freestyle with no URL sets pending_template in Redis and prompts the user."""
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/freestyle")
+    assert _patch_redis._strings.get("pending_template:100") == "freestyle"
+    assert "ready" in sent.await_args.args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_cmd_freestyle_long_url_enqueues_and_arms_state(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/freestyle <long_url> enqueues video task immediately and arms awaiting_freestyle."""
+    from src import database as db
+
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    fr = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    await _post_webhook("/freestyle https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    enq.assert_awaited_once()
+    task = enq.await_args.args[0]
+    assert task["task"] == "video"
+    fr.assert_awaited_once()
+    state = await db.get_chat_state(100)
+    assert state is not None
+    assert state["mode"] == "awaiting_freestyle"
+    job = await db.get_job(task["job_id"])
+    assert job["template"] == "freestyle"
+    assert job["content_type"] == "long"
+
+
+@pytest.mark.asyncio
+async def test_cmd_freestyle_short_url_arms_state_no_enqueue(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/freestyle <short_url> arms awaiting_freestyle but does NOT enqueue video yet."""
+    from src import database as db
+
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    fr = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    await _post_webhook("/freestyle https://instagram.com/reel/DVNolBNE6vV/")
+    enq.assert_not_awaited()
+    fr.assert_awaited_once()
+    state = await db.get_chat_state(100)
+    assert state is not None
+    assert state["mode"] == "awaiting_freestyle"
+
+
+@pytest.mark.asyncio
+async def test_pending_template_freestyle_with_url_message(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/freestyle then URL message: long video enqueues immediately; short video defers."""
+    from src import database as db
+
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    monkeypatch.setattr("src.telegram.webhook.send_force_reply", AsyncMock())
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+
+    await _post_webhook("/freestyle")
+    await _post_webhook("https://instagram.com/reel/DVNolBNE6vV/")
+
+    enq.assert_not_awaited()
+    state = await db.get_chat_state(100)
+    assert state is not None
+    assert state["mode"] == "awaiting_freestyle"
+    assert _patch_redis._strings.get("pending_template:100") is None
+
+
+@pytest.mark.asyncio
+async def test_awaiting_freestyle_short_video_enqueues_video_task(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """For short video: user reply with prompt enqueues video task and sends confirmation."""
+    from src import database as db
+
+    await _seed_job(temp_db, "J_SH", chat_id=100, content_type="short", status="pending")
+    await db.set_chat_state(chat_id=100, mode="awaiting_freestyle", job_id="J_SH")
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("Extract the key frameworks from this video")
+    enq.assert_awaited_once_with({"task": "video", "job_id": "J_SH"})
+    job = await db.get_job("J_SH")
+    assert job["freestyle_prompt"] == "Extract the key frameworks from this video"
+    assert await db.get_chat_state(100) is None
+    msg = sent.await_args.args[1]
+    assert "freestyle" in msg.lower()
+    assert "J_SH"[-4:] in msg
