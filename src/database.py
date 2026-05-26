@@ -1,8 +1,8 @@
 """SQLite database layer.
 
-Schema lands here as `CREATE TABLE` DDL (greenfield — no migration runner). When the
-schema changes post-launch, run a one-off `ALTER TABLE` script (see PRD §14.1
-greenfield note).
+Schema DDL is in SCHEMA_SQL. Post-launch column additions are tracked via
+PRAGMA user_version so every migration step either commits or raises visibly —
+no silent swallowing.
 """
 
 from __future__ import annotations
@@ -118,38 +118,59 @@ def generate_id() -> str:
     return f"{ts}_{suffix}"
 
 
+# Each list entry is one migration step (v0→v1, v1→v2, …).
+# Statements in a step run together; if any raises it propagates — except
+# "duplicate column name", which means the column was already added by an
+# older code path and is safe to skip.
+_MIGRATIONS: list[list[str]] = [
+    # v0 → v1: template system, promise_gap, bot_message_id (post-launch columns)
+    [
+        "ALTER TABLE jobs ADD COLUMN template TEXT",
+        "ALTER TABLE jobs ADD COLUMN template_analysis TEXT",
+        "ALTER TABLE jobs ADD COLUMN key_phrases TEXT",
+        "ALTER TABLE jobs ADD COLUMN validation_warning_sent INTEGER DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN template_detection_method TEXT",
+        "ALTER TABLE jobs ADD COLUMN promise_gap TEXT",
+        "ALTER TABLE jobs ADD COLUMN bot_message_id INTEGER",
+    ],
+]
+
+
+async def _run_migrations(conn: aiosqlite.Connection) -> None:
+    cur = await conn.execute("PRAGMA user_version")
+    row = await cur.fetchone()
+    current_version: int = row[0]
+    for step, statements in enumerate(_MIGRATIONS[current_version:], start=current_version):
+        for stmt in statements:
+            try:
+                await conn.execute(stmt)
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc):
+                    raise
+        new_version = step + 1
+        await conn.execute(f"PRAGMA user_version = {new_version}")
+        await conn.commit()
+        log.info("db_migration_applied", version=new_version)
+
+
 async def init_db() -> None:
-    """Create the database file (if absent), apply DDL, set WAL mode."""
+    """Create the database file (if absent), apply DDL, run pending migrations."""
     db_path = Path(settings.DB_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         await conn.execute("PRAGMA journal_mode=WAL")
         await conn.execute("PRAGMA foreign_keys=ON")
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'"
+        )
+        is_fresh = await cur.fetchone() is None
         await conn.executescript(SCHEMA_SQL)
-        # One-time column additions for existing DBs (no-op on fresh schema)
-        _TEMPLATE_COLUMNS = [
-            "ALTER TABLE jobs ADD COLUMN template TEXT",
-            "ALTER TABLE jobs ADD COLUMN template_analysis TEXT",
-            "ALTER TABLE jobs ADD COLUMN key_phrases TEXT",
-            "ALTER TABLE jobs ADD COLUMN validation_warning_sent INTEGER DEFAULT 0",
-            "ALTER TABLE jobs ADD COLUMN template_detection_method TEXT",
-        ]
-        for stmt in _TEMPLATE_COLUMNS:
-            try:
-                await conn.execute(stmt)
-            except Exception:
-                pass  # column already exists (fresh schema or re-run)
-        await conn.commit()
-        try:
-            await conn.execute("ALTER TABLE jobs ADD COLUMN promise_gap TEXT")
+        if is_fresh:
+            # DDL already includes all columns; skip past all migration steps.
+            await conn.execute(f"PRAGMA user_version = {len(_MIGRATIONS)}")
             await conn.commit()
-        except Exception:
-            pass  # column already exists
-        try:
-            await conn.execute("ALTER TABLE jobs ADD COLUMN bot_message_id INTEGER")
-            await conn.commit()
-        except Exception:
-            pass  # column already exists
+        else:
+            await _run_migrations(conn)
     log.info("db_initialized", path=settings.DB_PATH)
 
 

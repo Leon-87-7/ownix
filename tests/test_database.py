@@ -192,3 +192,51 @@ async def test_promise_gap_column_exists(tmp_path, monkeypatch) -> None:
         cursor = await conn.execute("PRAGMA table_info(jobs)")
         cols = {row[1] async for row in cursor}
     assert "promise_gap" in cols
+
+
+@pytest.mark.asyncio
+async def test_fresh_install_sets_user_version(tmp_path, monkeypatch) -> None:
+    """Fresh init_db() must stamp user_version = len(_MIGRATIONS), skipping migrations."""
+    db_file = str(tmp_path / "fresh.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("PRAGMA user_version")
+        row = await cur.fetchone()
+    assert row[0] == len(database._MIGRATIONS)
+
+
+@pytest.mark.asyncio
+async def test_migration_from_version_zero_adds_columns(tmp_path, monkeypatch) -> None:
+    """A DB at user_version=0 with an existing jobs table must have new columns added."""
+    db_file = str(tmp_path / "old.db")
+    # Simulate an old DB: jobs table without the post-launch columns.
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs ("
+            "id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, url TEXT NOT NULL,"
+            " content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',"
+            " created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        )
+        await conn.commit()
+        # user_version stays 0 (SQLite default)
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("PRAGMA table_info(jobs)")
+        cols = {row[1] async for row in cur}
+        cur2 = await conn.execute("PRAGMA user_version")
+        version = (await cur2.fetchone())[0]
+
+    migration_cols = {
+        "template", "template_analysis", "key_phrases",
+        "validation_warning_sent", "template_detection_method",
+        "promise_gap", "bot_message_id",
+    }
+    assert migration_cols <= cols
+    assert version == len(database._MIGRATIONS)
