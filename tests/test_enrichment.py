@@ -316,6 +316,76 @@ def test_build_prompt_contains_promise_gap_instruction() -> None:
     assert "hidden_value" in prompt
 
 
+# ---------------------------------------------------------------------------
+# Freestyle prompt substitution (issue #52 / ADR-0012)
+# ---------------------------------------------------------------------------
+
+def test_build_prompt_freestyle_overrides_template_extra_instructions() -> None:
+    """When freestyle_prompt is set it replaces the template's extra_instructions."""
+    freestyle = "Focus only on the risk factors mentioned."
+    prompt = _build_prompt("My Title", "transcript", template="method", freestyle_prompt=freestyle)
+    assert "FREESTYLE INSTRUCTIONS" in prompt
+    assert freestyle in prompt
+    # Template's own extra instructions must NOT appear
+    assert "ADDITIONAL EXTRACTION — method template" not in prompt
+
+
+def test_build_prompt_no_freestyle_uses_template_extra_instructions() -> None:
+    """Without freestyle_prompt the template's extra_instructions are used unchanged."""
+    prompt = _build_prompt("My Title", "transcript", template="method")
+    assert "ADDITIONAL EXTRACTION — method template" in prompt
+    assert "FREESTYLE INSTRUCTIONS" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_enrich_passes_freestyle_prompt_to_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+    """enrich() must include freestyle_prompt in the Gemini call when set."""
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    captured: list[str] = []
+
+    def _capture(parts, *, api_key: str, model: str, schema=None):
+        captured.append(parts)
+        return _make_response(_SAMPLE_GEMINI_JSON)
+
+    with patch("src.services.gemini._call_sync", side_effect=_capture):
+        await enrich({
+            "title": "Test",
+            "transcript": "some content",
+            "freestyle_prompt": "Summarise the key risks mentioned.",
+        })
+
+    assert captured, "Gemini was not called"
+    prompt_text = captured[0]
+    assert "FREESTYLE INSTRUCTIONS" in prompt_text
+    assert "Summarise the key risks mentioned." in prompt_text
+
+
+@pytest.mark.asyncio
+async def test_enrich_without_freestyle_prompt_uses_template(monkeypatch: pytest.MonkeyPatch) -> None:
+    """enrich() without freestyle_prompt falls back to template extra_instructions."""
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    captured: list[str] = []
+
+    def _capture(parts, *, api_key: str, model: str, schema=None):
+        captured.append(parts)
+        return _make_response(_SAMPLE_GEMINI_JSON)
+
+    with patch("src.services.gemini._call_sync", side_effect=_capture):
+        await enrich({
+            "title": "Test",
+            "transcript": "some content",
+            "template": "method",
+        })
+
+    assert captured
+    assert "ADDITIONAL EXTRACTION — method template" in captured[0]
+    assert "FREESTYLE INSTRUCTIONS" not in captured[0]
+
+
 def test_build_enrichment_message_with_promise_gap() -> None:
     """Message includes separator + gaps + hidden_value when promise_gap is present."""
     job = {"id": "20260519_120000_ABCD", "title": "Test Video", "chat_id": 1, "drive_url": ""}

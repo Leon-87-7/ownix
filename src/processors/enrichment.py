@@ -52,13 +52,17 @@ def _build_prompt(
     transcript: str,
     template: str = "summary",
     key_phrases: list[str] | None = None,
+    freestyle_prompt: str | None = None,
 ) -> str:
     truncated = (
         transcript[:MAX_TRANSCRIPT_CHARS] + "\n\n[transcript truncated]"
         if len(transcript) > MAX_TRANSCRIPT_CHARS
         else transcript
     )
-    extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
+    if freestyle_prompt:
+        extra = f"\n### FREESTYLE INSTRUCTIONS\n{freestyle_prompt}"
+    else:
+        extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
     context = ""
     if key_phrases:
         context = (
@@ -153,7 +157,8 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     transcript = job.get("transcript", "") or ""
     template = job.get("template") or "summary"
     key_phrases = json.loads(job.get("key_phrases") or "[]")
-    prompt = _build_prompt(title, transcript, template, key_phrases)
+    freestyle_prompt = job.get("freestyle_prompt")
+    prompt = _build_prompt(title, transcript, template, key_phrases, freestyle_prompt)
 
     try:
         raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
