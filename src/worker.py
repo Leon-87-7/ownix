@@ -53,6 +53,11 @@ async def _dispatch(task: dict) -> None:
             elif job["content_type"] == "long":
                 from src.processors import long_video
                 await long_video.run(job)
+                if job.get("template_detection_method") == "explicit_command":
+                    refreshed = await database.get_job(job_id)
+                    if refreshed and refreshed.get("status") == "transcript_done":
+                        await queue.enqueue({"task": "enrichment", "job_id": job_id})
+                        log.info("enrichment_auto_enqueued", job_id=job_id)
             else:
                 log.error("unknown_content_type", job_id=job_id, content_type=job["content_type"])
         except Exception:

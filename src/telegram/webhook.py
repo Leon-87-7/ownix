@@ -379,7 +379,7 @@ async def _cmd_template(ctx: SlashCtx) -> None:
         template_detection_method="explicit_command",
     )
     await queue.enqueue({"task": "video", "job_id": job_id})
-    await send_message(ctx.chat_id, f"📥 Received with **{template}** template!\njob_{job_id[-4:]}")
+    await send_message(ctx.chat_id, f"📥 Received\n✨ Kicking off Gemini analysis ({template})\njob_{job_id[-4:]}")
 
 
 async def _reply_cached_job(chat_id: int, job: dict) -> None:
@@ -729,7 +729,7 @@ async def webhook(
         )
     await queue.enqueue({"task": "video", "job_id": job_id})
     if pending_template:
-        await send_message(chat_id, f"📥 Received with **{pending_template}** template!\njob_{job_id[-4:]}")
+        await send_message(chat_id, f"📥 Received\n✨ Kicking off Gemini analysis ({pending_template})\njob_{job_id[-4:]}")
     else:
         await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
     return {"ok": True}
