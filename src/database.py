@@ -365,7 +365,7 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
     async with connection() as conn:
         cursor = await conn.execute(
             "SELECT id, title, drive_url, content_type, status, bot_message_id FROM jobs "
-            "WHERE chat_id = ? AND url = ? AND status NOT IN ('failed', 'stale') "
+            "WHERE chat_id = ? AND url = ? AND status NOT IN ('error', 'cancelled') "
             "ORDER BY created_at DESC, id DESC LIMIT 1",
             (chat_id, url),
         )
