@@ -35,6 +35,10 @@ Rules:
 - summary: always describe what is shown, even when no links are found
 """
 
+_UI_CHROME_PATTERNS = [
+    re.compile(r"\bfollowed by\b", re.IGNORECASE),
+]
+
 _HANDLE_PLATFORMS = {
     "instagram.com": "instagram",
     "tiktok.com": "tiktok",
@@ -64,6 +68,9 @@ def _filter_grounded_links(links: list[dict], summary: str) -> list[dict]:
             continue
         verbatim_raw = link.get("verbatim")
         verbatim = verbatim_raw.lower() if isinstance(verbatim_raw, str) else ""
+        if any(p.search(verbatim) for p in _UI_CHROME_PATTERNS):
+            dropped.append({"url": url, "reason": "ui_chrome", "verbatim": verbatim_raw})
+            continue
         platform = _HANDLE_PLATFORMS.get(domain)
         if platform and platform in verbatim and verbatim.lstrip().startswith("@"):
             kept.append(link)
