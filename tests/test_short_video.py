@@ -205,6 +205,7 @@ def _patch_pipeline(transcript_resp: dict):
             "extract_key_phrases": p("src.processors.short_video.extract_key_phrases", new=MagicMock(return_value=[])),
             "enrich_audio": p("src.processors.enrichment.enrich_audio", new_callable=AsyncMock),
             "enrich": p("src.processors.enrichment.enrich", new_callable=AsyncMock),
+            "get_ignored_domains": p("src.processors.short_video.database.get_ignored_domains", new_callable=AsyncMock, return_value=set()),
         }
         mocks["get_job"].return_value = {"id": "job1", "chat_id": 42, "url": "u", "template": "method", "title": "Test Reel"}
         yield short_video, mocks
