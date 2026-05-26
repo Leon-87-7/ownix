@@ -418,7 +418,7 @@ async def run_prd(
         log.warning("prd.gemini.both_keys_failed", job_id=job_id, slot=slot)
     if raw_prd is None:
         log.error("prd.gemini.both_keys_failed", job_id=job_id, slot=slot)
-        await database.update_job_status(job_id, job["status"], **{lock_col: "error"})
+        await database.set_prd_slot_status(job_id, slot, "error")
         from src.telegram.sender import send_inline_keyboard
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
@@ -434,7 +434,7 @@ async def run_prd(
     except Exception as exc:
         err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.parse_failed", job_id=job_id, slot=slot, raw_preview=raw_prd[:200])
-        await database.update_job_status(job_id, job["status"], **{lock_col: "error"})
+        await database.set_prd_slot_status(job_id, slot, "error")
         from src.telegram.sender import send_inline_keyboard
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
@@ -467,7 +467,7 @@ async def run_prd(
     except Exception as exc:
         err_msg = str(exc).splitlines()[0][:120]
         log.error("prd.drive.failed", job_id=job_id, slot=slot)
-        await database.update_job_status(job_id, job["status"], **{lock_col: "error"})
+        await database.set_prd_slot_status(job_id, slot, "error")
         from src.telegram.sender import send_inline_keyboard
         title = job.get("title", "(unknown video)")
         await send_inline_keyboard(
@@ -512,7 +512,6 @@ async def run_prd(
 
     # i. Update job DB
     db_kwargs: dict = {
-        lock_col: "done",
         drive_file_col: file_id,
         drive_url_col: drive_url,
         json_col: json.dumps(prd_data),
@@ -520,6 +519,7 @@ async def run_prd(
     if is_intent:
         db_kwargs["prd_intent_completed_at"] = datetime.now(timezone.utc).isoformat()
     await database.update_job_status(job_id, job["status"], **db_kwargs)
+    await database.set_prd_slot_status(job_id, slot, "done")
 
     # j. Brain ingest (fire-and-forget)
     tech_stack = prd_data.get("tech_stack", [])

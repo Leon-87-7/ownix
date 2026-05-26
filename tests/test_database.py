@@ -162,6 +162,26 @@ async def test_update_job_status_writes_key_phrases(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_set_prd_slot_status_auto(temp_db):
+    from src import database as db
+    job_id = await db.create_job(chat_id=1, url="https://youtube.com/watch?v=prd1", content_type="long")
+    await db.set_prd_slot_status(job_id, "auto", "generating")
+    job = await db.get_job(job_id)
+    assert job["prd_auto_status"] == "generating"
+    assert job["prd_intent_status"] is None
+
+
+@pytest.mark.asyncio
+async def test_set_prd_slot_status_intent(temp_db):
+    from src import database as db
+    job_id = await db.create_job(chat_id=1, url="https://youtube.com/watch?v=prd2", content_type="long")
+    await db.set_prd_slot_status(job_id, "intent", "done")
+    job = await db.get_job(job_id)
+    assert job["prd_intent_status"] == "done"
+    assert job["prd_auto_status"] is None
+
+
+@pytest.mark.asyncio
 async def test_promise_gap_column_exists(tmp_path, monkeypatch) -> None:
     """promise_gap column must exist after init_db()."""
     db_file = str(tmp_path / "test.db")

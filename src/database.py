@@ -11,7 +11,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 
 import aiosqlite
 
@@ -91,6 +91,23 @@ CREATE TABLE IF NOT EXISTS chat_state (
     expires_at   TEXT NOT NULL,
     CHECK(mode IN ('awaiting_intent'))
 );
+
+-- Second Brain semantic link graph (src/brain.py data-access layer).
+CREATE TABLE IF NOT EXISTS links (
+    id            TEXT PRIMARY KEY,
+    url           TEXT NOT NULL,
+    title         TEXT,
+    topic         TEXT,
+    source_job    TEXT NOT NULL,
+    embedding     BLOB,
+    drive_file_id TEXT,
+    seen_count    INTEGER NOT NULL DEFAULT 1,
+    last_seen_at  TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 """
 
 
@@ -247,6 +264,18 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
         )
         await conn.commit()
     log.info("job_status_updated", job_id=job_id, status=status)
+
+
+async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], status: str) -> None:
+    """Set prd_auto_status or prd_intent_status without leaking column names to callers."""
+    col = "prd_auto_status" if slot == "auto" else "prd_intent_status"
+    async with connection() as conn:
+        await conn.execute(
+            f"UPDATE jobs SET {col} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, job_id),
+        )
+        await conn.commit()
+    log.info("prd_slot_status_set", job_id=job_id, slot=slot, status=status)
 
 
 _REAPABLE_STATUSES = ("processing", "enriching")
