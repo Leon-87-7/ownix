@@ -101,6 +101,13 @@ CREATE TABLE IF NOT EXISTS chat_state (
     CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle'))
 );
 
+-- Jina Reader markdown cache (issue #60 / ADR-0013).
+CREATE TABLE IF NOT EXISTS markdown_cache (
+    url         TEXT PRIMARY KEY,
+    content     TEXT NOT NULL,
+    fetched_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Second Brain semantic link graph (src/brain.py data-access layer).
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
@@ -167,6 +174,14 @@ _MIGRATIONS: list[list[str]] = [
             domain      TEXT NOT NULL,
             added_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (chat_id, domain)
+        )""",
+    ],
+    # v4 → v5: Jina Reader markdown cache (issue #60)
+    [
+        """CREATE TABLE IF NOT EXISTS markdown_cache (
+            url        TEXT PRIMARY KEY,
+            content    TEXT NOT NULL,
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
     ],
 ]
@@ -488,3 +503,41 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
         )
         row = await cursor.fetchone()
         return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Markdown cache (Jina Reader — issue #60 / ADR-0013)
+# ---------------------------------------------------------------------------
+
+
+async def get_markdown_cache(url: str) -> dict | None:
+    """Return the markdown_cache row for *url*, or None if absent."""
+    async with connection() as conn:
+        cursor = await conn.execute(
+            "SELECT url, content, fetched_at FROM markdown_cache WHERE url = ?",
+            (url,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def insert_markdown_cache(url: str, content: str) -> None:
+    """Insert or replace a markdown_cache row for *url*."""
+    async with connection() as conn:
+        await conn.execute(
+            "INSERT OR REPLACE INTO markdown_cache (url, content, fetched_at) "
+            "VALUES (?, ?, CURRENT_TIMESTAMP)",
+            (url, content),
+        )
+        await conn.commit()
+    log.info("markdown_cache.inserted", url=url, content_len=len(content))
+
+
+async def delete_markdown_cache(url: str) -> bool:
+    """Delete the markdown_cache row for *url*. Returns True if a row was deleted."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM markdown_cache WHERE url = ?", (url,)
+        )
+        await conn.commit()
+        return cur.rowcount > 0

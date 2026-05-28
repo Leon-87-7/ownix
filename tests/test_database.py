@@ -425,3 +425,118 @@ async def test_migration_v1_to_v2_adds_freestyle_prompt(tmp_path, monkeypatch) -
 
     assert "freestyle_prompt" in cols
     assert version == len(database._MIGRATIONS)
+
+
+# ---------------------------------------------------------------------------
+# markdown_cache CRUD + migration tests (issue #60)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_insert_and_get_round_trip(temp_db) -> None:
+    from src import database as db
+
+    url = "https://example.com/article"
+    content = "# Hello\n\nSome content."
+    await db.insert_markdown_cache(url, content)
+    row = await db.get_markdown_cache(url)
+    assert row is not None
+    assert row["url"] == url
+    assert row["content"] == content
+    assert row["fetched_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_get_missing_returns_none(temp_db) -> None:
+    from src import database as db
+
+    assert await db.get_markdown_cache("https://example.com/not-there") is None
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_delete_existing_returns_true(temp_db) -> None:
+    from src import database as db
+
+    url = "https://example.com/del"
+    await db.insert_markdown_cache(url, "content")
+    deleted = await db.delete_markdown_cache(url)
+    assert deleted is True
+    assert await db.get_markdown_cache(url) is None
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_delete_missing_returns_false(temp_db) -> None:
+    from src import database as db
+
+    deleted = await db.delete_markdown_cache("https://example.com/gone")
+    assert deleted is False
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_insert_is_idempotent(temp_db) -> None:
+    """Second insert with same URL overwrites content (INSERT OR REPLACE)."""
+    from src import database as db
+
+    url = "https://example.com/idem"
+    await db.insert_markdown_cache(url, "first")
+    await db.insert_markdown_cache(url, "second")
+    row = await db.get_markdown_cache(url)
+    assert row is not None
+    assert row["content"] == "second"
+
+
+@pytest.mark.asyncio
+async def test_markdown_cache_table_exists_after_init(tmp_path, monkeypatch) -> None:
+    """markdown_cache table must exist on fresh init_db()."""
+    db_file = str(tmp_path / "fresh.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='markdown_cache'"
+        )
+        row = await cur.fetchone()
+    assert row is not None
+
+
+@pytest.mark.asyncio
+async def test_migration_v3_to_v4_creates_markdown_cache(tmp_path, monkeypatch) -> None:
+    """A DB at user_version=3 must gain markdown_cache after running migrations."""
+    db_file = str(tmp_path / "v3.db")
+    # Create the tables that would exist at v3 (no markdown_cache yet).
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs ("
+            "id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, url TEXT NOT NULL,"
+            " content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',"
+            " template TEXT, template_analysis TEXT, key_phrases TEXT,"
+            " validation_warning_sent INTEGER DEFAULT 0, template_detection_method TEXT,"
+            " promise_gap TEXT, bot_message_id INTEGER, freestyle_prompt TEXT,"
+            " created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        )
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS chat_state ("
+            "chat_id INTEGER PRIMARY KEY, mode TEXT NOT NULL, job_id TEXT NOT NULL,"
+            " created_at TEXT NOT NULL, expires_at TEXT NOT NULL,"
+            " CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle'))"
+            ")"
+        )
+        await conn.execute("PRAGMA user_version = 3")
+        await conn.commit()
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    from src import database
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='markdown_cache'"
+        )
+        row = await cur.fetchone()
+        cur2 = await conn.execute("PRAGMA user_version")
+        version = (await cur2.fetchone())[0]
+
+    assert row is not None, "markdown_cache table must exist after v3→v4 migration"
+    assert version == len(database._MIGRATIONS)

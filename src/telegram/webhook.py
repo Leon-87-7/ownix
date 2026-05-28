@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+import re
+
 from src import database, queue
 from src.config import settings
 from src.telegram.sender import (
@@ -18,6 +20,7 @@ from src.telegram.sender import (
     download_photo,
     edit_message_text,
     forward_message,
+    send_document,
     send_force_reply,
     send_inline_keyboard,
     send_message,
@@ -538,7 +541,30 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         await send_message(ctx.chat_id, "Usage: /force <url>")
         return
     url = ctx.parts[1]
+
+    # Check for existing video job and/or markdown cache row.
     pipeline = detect_pipeline(url)
+    existing_job = await database.find_recent_job_by_url(ctx.chat_id, url) if pipeline != "rejected" else None
+    existing_cache = await database.get_markdown_cache(url)
+
+    if existing_job:
+        # State 1: video job exists (with or without a cache row) — reset + reprocess.
+        if existing_cache:
+            await database.delete_markdown_cache(url)
+        job_id = existing_job["id"]
+        await database.reset_job(job_id)
+        await queue.enqueue({"task": "video", "job_id": job_id})
+        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
+        return
+
+    if existing_cache:
+        # State 2: cache-only — delete cache and acknowledge.
+        await database.delete_markdown_cache(url)
+        await send_message(ctx.chat_id, "🗑️ Markdown cache cleared for that URL.")
+        log.info("force.cache_only_cleared", chat_id=ctx.chat_id, url=url)
+        return
+
+    # State 3: neither — fall through to original video-only logic.
     if pipeline == "rejected":
         await send_message(
             ctx.chat_id,
@@ -546,19 +572,71 @@ async def _cmd_force(ctx: SlashCtx) -> None:
             "Instagram Reels, and TikTok videos.",
         )
         return
-    existing = await database.find_recent_job_by_url(ctx.chat_id, url)
-    if existing:
-        job_id = existing["id"]
-        await database.reset_job(job_id)
-    else:
-        job_id = await database.create_job(
-            chat_id=ctx.chat_id,
-            url=url,
-            content_type=pipeline,
-            message_id=ctx.message_id,
-        )
+    job_id = await database.create_job(
+        chat_id=ctx.chat_id,
+        url=url,
+        content_type=pipeline,
+        message_id=ctx.message_id,
+    )
     await queue.enqueue({"task": "video", "job_id": job_id})
     await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
+
+
+def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
+    """Return a safe filename stem from *title*, falling back to the URL hostname.
+
+    Keeps ``[a-zA-Z0-9 \\-_]``, truncates to *max_len* chars.
+    """
+    if title:
+        safe = re.sub(r"[^a-zA-Z0-9 \-_]", "", title)
+        safe = safe.strip()[:max_len]
+        if safe:
+            return safe
+    # Fallback: use hostname from URL
+    return urlparse(url).hostname or "document"
+
+
+async def _cmd_download_md(ctx: SlashCtx) -> None:
+    """/download_md <URL> — fetch URL as Markdown via Jina, cache, send as document."""
+    if len(ctx.parts) < 2:
+        await send_message(ctx.chat_id, "Usage: /download_md <URL>")
+        return
+    url = ctx.parts[1]
+
+    # 1. Cache lookup
+    cached = await database.get_markdown_cache(url)
+    if cached:
+        title_body = cached["content"]
+        # Re-extract title for filename: stored content is title + "\n\n" + body
+        # But we need the title separately — store it with a sentinel in content.
+        # Actually content is just raw markdown; we re-derive filename from first heading.
+        # Simpler: store as "title\n---\nbody" was not chosen. Instead derive from content.
+        # We stored body (not title); title was stored separately? No — let's re-read the design:
+        # insert_markdown_cache stores the *full* markdown content (title + "\n\n" + body)
+        # Actually looking at the handler below we store title + "\n\n" + body as content.
+        # For cache-hit, derive filename the same way.
+        first_line = title_body.split("\n", 1)[0].lstrip("# ").strip()
+        filename = _sanitize_title(first_line, url) + ".md"
+        await send_document(ctx.chat_id, title_body.encode(), filename)
+        log.info("download_md.cache_hit", chat_id=ctx.chat_id, url=url)
+        return
+
+    # 2. Cache miss — call Jina
+    from src.services.jina import JinaFetchError, fetch_markdown
+    try:
+        title, body = await fetch_markdown(url)
+    except JinaFetchError as exc:
+        await send_message(ctx.chat_id, f"❌ Failed to fetch URL (HTTP {exc.status_code}).")
+        return
+
+    # 3. Build document content and persist
+    content = (title + "\n\n" + body).strip() if title else body.strip()
+    await database.insert_markdown_cache(url, content)
+
+    # 4. Send as Telegram document
+    filename = _sanitize_title(title, url) + ".md"
+    await send_document(ctx.chat_id, content.encode(), filename)
+    log.info("download_md.fetched", chat_id=ctx.chat_id, url=url, filename=filename)
 
 
 _PROTECTED_DOMAINS = {"github.com"}
@@ -677,6 +755,7 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
     "/unallowlist":      _cmd_unallowlist,
     "/allowlist_list":   _cmd_allowlist_list,
     "/freestyle":        _cmd_freestyle,
+    "/download_md":      _cmd_download_md,
     **{f"/{t}": _cmd_template for t in PROMPT_TEMPLATES},
 }
 

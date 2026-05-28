@@ -1178,3 +1178,177 @@ async def test_allowlist_plain_text_shortcut(
     await _post_webhook("allowlist foo.com")
     domains = await db.list_allowed_domains(100)
     assert "foo.com" in domains
+
+
+# ---------------------------------------------------------------------------
+# /download_md tests (issue #60)
+# ---------------------------------------------------------------------------
+
+
+async def test_download_md_cache_miss_calls_jina_and_sends_document(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/download_md on a URL not yet cached: calls Jina once and sends document."""
+    from src import database as db
+    from src.services import jina as jina_module
+
+    url = "https://example.com/article"
+    fetch_mock = AsyncMock(return_value=("Great Article", "# Great Article\n\nBody text."))
+    monkeypatch.setattr(jina_module, "fetch_markdown", fetch_mock)
+    send_doc = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
+
+    await _post_webhook(f"/download_md {url}")
+
+    # Jina must have been called exactly once
+    fetch_mock.assert_awaited_once_with(url)
+
+    # Document was sent
+    send_doc.assert_awaited_once()
+    args = send_doc.await_args.args
+    assert args[0] == 100  # chat_id
+    assert isinstance(args[1], bytes)  # file_bytes
+    assert args[2].endswith(".md")  # filename
+
+    # Content is cached
+    cached = await db.get_markdown_cache(url)
+    assert cached is not None
+    assert "Great Article" in cached["content"]
+
+
+@pytest.mark.asyncio
+async def test_download_md_cache_hit_does_not_call_jina(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """Second /download_md for the same URL: Jina must NOT be called."""
+    from src import database as db
+    from src.services import jina as jina_module
+
+    url = "https://example.com/cached"
+    # Pre-populate cache
+    await db.insert_markdown_cache(url, "# Cached Article\n\nPre-stored body.")
+
+    fetch_mock = AsyncMock(return_value=("Cached Article", "Pre-stored body."))
+    monkeypatch.setattr(jina_module, "fetch_markdown", fetch_mock)
+    send_doc = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
+
+    await _post_webhook(f"/download_md {url}")
+
+    # Jina must NOT be called
+    assert fetch_mock.await_count == 0, "Jina must not be called on cache hit"
+    # Document was still sent
+    send_doc.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_download_md_jina_error_sends_error_message(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """/download_md with Jina returning 404 must send an error message, not crash."""
+    from src.services import jina as jina_module
+
+    url = "https://example.com/missing"
+    monkeypatch.setattr(jina_module, "fetch_markdown", AsyncMock(side_effect=jina_module.JinaFetchError(404)))
+    send_doc = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _post_webhook(f"/download_md {url}")
+
+    send_doc.assert_not_awaited()
+    sent.assert_awaited_once()
+    assert "404" in sent.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_download_md_plain_text_shortcut(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """Plain-text 'download_md <url>' must be routed the same as the slash command."""
+    from src.services import jina as jina_module
+
+    url = "https://example.com/shortcut"
+    fetch_mock = AsyncMock(return_value=("Title", "Body."))
+    monkeypatch.setattr(jina_module, "fetch_markdown", fetch_mock)
+    send_doc = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
+
+    await _post_webhook(f"download_md {url}")
+
+    fetch_mock.assert_awaited_once_with(url)
+    send_doc.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# /force with markdown_cache — three-state tests (issue #60)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_force_jobs_and_cache_clears_cache_and_reprocesses(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """State 1: job exists + cache exists → cache deleted, job reset, video enqueued."""
+    from src import database as db
+
+    url = "https://youtu.be/abc123"
+    # Create a real job with the actual URL so find_recent_job_by_url can find it.
+    await db.create_job(chat_id=100, url=url, content_type="long")
+    await db.insert_markdown_cache(url, "cached content")
+
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+
+    await _post_webhook(f"/force {url}")
+
+    # Cache must be gone
+    assert await db.get_markdown_cache(url) is None
+    # Job was enqueued
+    enq.assert_awaited_once()
+    assert enq.await_args.args[0]["task"] == "video"
+
+
+@pytest.mark.asyncio
+async def test_force_cache_only_deletes_cache_and_acks(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """State 2: no video job, cache exists → cache deleted, ack sent."""
+    from src import database as db
+
+    url = "https://example.com/article"
+    await db.insert_markdown_cache(url, "cached content")
+
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _post_webhook(f"/force {url}")
+
+    assert await db.get_markdown_cache(url) is None
+    enq.assert_not_awaited()
+    sent.assert_awaited_once()
+    # Ack message must mention cache/cleared
+    msg = sent.await_args.args[1].lower()
+    assert "cache" in msg or "cleared" in msg
+
+
+@pytest.mark.asyncio
+async def test_force_neither_job_nor_cache_rejects_unsupported_url(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """State 3: no job, no cache, unsupported URL → rejection message."""
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _post_webhook("/force https://example.com/not-a-video")
+
+    enq.assert_not_awaited()
+    sent.assert_awaited_once()
+    msg = sent.await_args.args[1]
+    assert "Unsupported" in msg or "unsupported" in msg.lower()
