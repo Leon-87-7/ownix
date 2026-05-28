@@ -1,6 +1,6 @@
 # vig — Module Map
 
-**Generated:** 2026-05-22 · **Refreshed:** 2026-05-24 (post #21/#22 GitHub enrichment, #23–#27 refactors)  
+**Generated:** 2026-05-22 · **Refreshed:** 2026-05-28 (post #59–#62 article pipeline, Jina/allowlist/sheets consolidation)  
 Code-level reference: every `src/` module, what it owns, and how modules call each other.
 
 ---
@@ -18,9 +18,9 @@ Code-level reference: every `src/` module, what it owns, and how modules call ea
 
 ```
 Telegram POST /webhook
-  └─ telegram/webhook.py  (_handle_callback | _dispatch_slash | _handle_awaiting_intent | normal URL path)
-       ├─ utils/validators.py   detect_pipeline()  → "short" | "long" | "rejected"
-       ├─ database.py           create_job(), get_job(), set_chat_state(), get_chat_state()
+  └─ telegram/webhook.py  (_handle_callback | _dispatch_slash | _handle_awaiting_intent | _handle_awaiting_freestyle | normal URL path)
+       ├─ utils/validators.py   detect_pipeline(url, extra_domains)  → "short" | "long" | "article" | "rejected"
+       ├─ database.py           create_job(), get_job(), set_chat_state(), get_chat_state(), list_allowed_domains()
        └─ queue.py              enqueue({task, job_id})
 ```
 
@@ -36,6 +36,7 @@ Telegram POST /webhook
 | `enrichment_retry:` | enqueue `enrichment` |
 | `reprocess:` | create a fresh job from the orphaned job's URL + enqueue `video` (startup-recovery retry, ADR-0010) |
 | `gemini_no:` | mark job `done` (skip enrichment) |
+| `template_freestyle:` | arm `chat_state` (mode=`awaiting_freestyle`, job_id) — used by article ✍️ Freestyle button and long-video template picker |
 
 **Dispatch tables (#25/#27):** `_handle_callback` splits on the first `:` and looks the prefix up in `_CALLBACK_TABLE`; slash commands route through `_dispatch_slash` → `_SLASH_TABLE` (template commands populated from `PROMPT_TEMPLATES` at import). Handlers receive a `CallbackCtx` / `SlashCtx` and never parse the raw string themselves.
 
@@ -49,7 +50,7 @@ queue.py  (Redis list "video_jobs")
   └─ dequeue()                 brpop (30 s blocking)
 ```
 
-**Task discriminators:** `video` | `enrichment` | `prd_auto` | `prd_auto_resend` | `prd_intent`
+**Task discriminators:** `video` | `article` | `enrichment` | `prd_auto` | `prd_auto_resend` | `prd_intent`
 
 ---
 
@@ -59,6 +60,7 @@ queue.py  (Redis list "video_jobs")
 worker.py._dispatch()
   ├─ "video"           → job.content_type == "short" → processors/short_video.py
   │                    → job.content_type == "long"  → processors/long_video.py
+  ├─ "article"         → processors/article.py
   ├─ "enrichment"      → processors/enrichment.py
   ├─ "prd_auto"        → processors/prd.py  run_auto()
   ├─ "prd_auto_resend" → processors/prd.py  run_auto_resend()
@@ -75,6 +77,7 @@ worker.py._dispatch()
 | `processors/long_video.py` | job (long) | `transcript`, `drive`, `sheets`, `analysis`, `templates`, `validators`, `brain` (ingest_links). Phase 1 only — enrichment runs as a separate `enrichment` task |
 | `processors/enrichment.py` | job after `transcript_done` | `gemini_client` (text gen), `templates`, `validation` |
 | `processors/prd.py` | job with enrichment done | `gemini_client` (text gen), `drive`, `sheets`, `brain` (ingest_links), `telegram/sender` |
+| `processors/article.py` | job (article) | `jina` (fetch_markdown), `database` (markdown_cache), `gemini_client` (text gen), `sheets` (append/update article row), `brain` (ingest_links), `telegram/sender` |
 
 ---
 
@@ -91,6 +94,7 @@ worker.py._dispatch()
 | `services/drive.py` | Google Drive file upload |
 | `services/sheets.py` | Google Sheets row write |
 | `services/brave.py` | Brave Search — link verification for short-video Vision links |
+| `services/jina.py` | Jina Reader API client — `fetch_markdown(url) → (title, body)`; optional `JINA_API_KEY` Bearer auth; raises `JinaFetchError` on HTTP errors |
 
 ---
 
@@ -114,13 +118,15 @@ api.py  (brain_router, prefix=/links)
 
 | Store | Used for |
 |---|---|
-| SQLite `jobs` table | Job lifecycle, transcript, AI enrichment fields, PRD slots |
+| SQLite `jobs` table | Job lifecycle, transcript, AI enrichment fields, PRD slots, `sheets_row_id` for article in-place row updates |
 | SQLite `links` table | Second Brain semantic link graph |
+| SQLite `allowed_domains` table | Per-chat article domain allowlist (`/allowlist` family) |
+| SQLite `markdown_cache` table | Jina Reader response cache keyed by URL; no TTL — `/force` is the invalidation path |
+| SQLite `chat_state` table | `awaiting_intent` / `awaiting_freestyle` mode per chat (10-min TTL) |
 | Redis `video_jobs` list | Task envelope queue |
 | Redis `photo_batch_*` keys | Photo batch session state per chat |
-| Redis `chat_state` | `awaiting_intent` mode per chat (10-min TTL) |
-| Google Drive | Enrichment docs, PRD docs, Brain `.md` nodes |
-| Google Sheets | Per-job summary row |
+| Google Drive | Enrichment docs, PRD docs, Brain `.md` nodes (article pipeline has **no** Drive upload) |
+| Google Sheets | Per-job summary rows: `YouTube Transcript Index`, `Short Video Analysis`, `Article Analysis`, `mini PRD` |
 
 ---
 
@@ -131,7 +137,7 @@ api.py  (brain_router, prefix=/links)
 | `config.py` | `Settings` (pydantic-settings, reads `.env`) — single source of all env vars |
 | `database.py` | aiosqlite wrapper; schema DDL; all job + chat_state CRUD |
 | `telegram/sender.py` | `send_message`, `send_inline_keyboard`, `send_force_reply`, `download_photo`, `answer_callback_query` |
-| `utils/validators.py` | `detect_pipeline()` — URL routing rules (short / long / rejected); `extract_description_links()`, `slugify()` |
+| `utils/validators.py` | `detect_pipeline(url, extra_domains)` — URL routing (short / long / article / rejected); `ARTICLE_DEFAULT_DOMAINS` frozenset; `extract_description_links()`, `slugify()` |
 | `utils/markdown.py` | `build_links_message()` + `build_enriched_links_message()` (GitHub repo metadata, `_humanize_age`) for photo pipeline results |
 | `utils/logger.py` | structlog configuration |
 | `analysis.py` | `extract_key_phrases()` — feeds the enrichment KEY CONTEXT block |

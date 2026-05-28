@@ -1,8 +1,8 @@
 # Video Intelligence Gateway — Architecture
 
-**Version:** 2.1  
-**Last Updated:** 2026-05-17  
-**Status:** Updated to match PRD v2.1 (adds Mini-PRD feature, closes enrichment→brain asymmetry)
+**Version:** 2.2  
+**Last Updated:** 2026-05-28  
+**Status:** Updated to match PRD v2.2 (adds Article pipeline, Jina/allowlist layer, Sheets consolidation)
 
 ---
 
@@ -133,7 +133,9 @@ flowchart TD
     R4 -->|yes| LONG[long pipeline]
     R4 -->|no| R5{youtu.be/ ?}
     R5 -->|yes| LONG
-    R5 -->|no| REJ[rejected\nno job created\nbot replies unsupported]
+    R5 -->|no| R6{host in ARTICLE_DEFAULT_DOMAINS\nor allowed_domains for this chat?}
+    R6 -->|yes| ART[article pipeline]
+    R6 -->|no| REJ[rejected\nno job created\nbot replies unsupported]
 ```
 
 | Pattern                         | Pipeline | Notes                 |
@@ -143,6 +145,7 @@ flowchart TD
 | `tiktok.com/@{user}/video/{id}` | short    | TikTok video          |
 | `youtube.com/watch?v={id}`      | long     | Standard YouTube      |
 | `youtu.be/{id}`                 | long     | YouTube short-link    |
+| domain in `ARTICLE_DEFAULT_DOMAINS` or per-chat `allowed_domains` | article | Substack, Medium, dev.to, etc. |
 | `instagram.com/p/{id}`          | rejected | Carousel / photo post |
 | anything else                   | rejected | No job created        |
 
@@ -447,6 +450,59 @@ Three-window sample: first 20k + middle 20k + last 20k, joined with `\n\n[...tru
 
 ---
 
+## 6a. Article Pipeline — Detail
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Bot
+    participant Worker
+    participant Jina as r.jina.ai\n(Jina Reader API)
+    participant Cache as markdown_cache\n(SQLite)
+    participant Gemini as Gemini 2.5 Flash
+    participant Sheets as Sheets\nArticle Analysis tab
+    participant Brain as brain.py
+
+    User->>Bot: article URL (ARTICLE_DEFAULT_DOMAINS or /allowlist)
+    Bot->>Worker: enqueue {"task":"article", "job_id":...}
+
+    Worker->>Cache: get_markdown_cache(url)
+    alt cache hit
+        Cache-->>Worker: content (title + body)
+    else cache miss
+        Worker->>Jina: GET r.jina.ai/{url}
+        Jina-->>Worker: markdown (title + body)
+        Worker->>Cache: insert_markdown_cache(url, content)
+    end
+
+    Worker->>Worker: _check_paywall(body) → paywall_warning flag\n(body < 500 chars OR _PAYWALL_PHRASES)
+    Worker->>User: sendDocument(<title>.md)
+
+    Worker->>Gemini: _build_article_prompt(title, body, freestyle_prompt?)\n→ {topic, objective, action_points, tools, promise_gap}
+    Gemini-->>Worker: JSON
+
+    Worker->>Worker: update_job_status("done", ai_topic=..., ...)
+    Worker-->>Sheets: append_article_row (or update_article_row if sheets_row_id set) [fire+forget]
+    Worker->>User: enrichment message (paywall warning prepended if triggered)
+    Worker->>User: inline keyboard [✍️ Freestyle]
+    Worker-->>Brain: ingest_links([article_url], topic) [fire+forget]
+```
+
+**Freestyle re-run path:**
+
+```
+[user taps ✍️ Freestyle] → template_freestyle:{job_id} callback
+  → arm chat_state(awaiting_freestyle, job_id)
+  → ForceReply: "What should Gemini focus on?"
+[user types prompt]
+  → store jobs.freestyle_prompt → clear chat_state
+  → enqueue {"task":"article", "job_id": same_job_id}
+  → article.run: markdown_cache hit (no second Jina call)
+  → update_article_row (in-place Sheets overwrite via sheets_row_id)
+```
+
+---
+
 ## 7. Description Link Extraction
 
 Runs during Long Pipeline Phase 1 on the video description field. Ported from `scripts/extract-description-links.js`.
@@ -596,12 +652,16 @@ src/
 │   │                        # builds prompt with optional enrichment scaffolding, samples transcript at 60k cap,
 │   │                        # calls Flash (auto) or Pro (intent), renders markdown, writes Drive, appends Sheet,
 │   │                        # fires brain.ingest_links(tech_stack[])
+│   ├── article.py           # Article pipeline: Jina/cache → paywall heuristic → sendDocument → Gemini Flash
+│   │                        # → Sheets append/update → Telegram enrichment + Freestyle button → brain ingest
 │   └── gemini.py            # Gemini SDK client (Vision, Text, Embedding) — exposes responseSchema mode
 ├── services/
 │   ├── frames.py            # GET /short_frames client
 │   ├── transcript.py        # GET /transcript + /metadata clients
 │   ├── drive.py             # Google Drive upload/update helpers (cached drive_file_id per slot)
-│   ├── sheets.py            # Google Sheets append (short + long + prd)
+│   ├── sheets.py            # Google Sheets append (short + long + prd + article); _append_sync returns row index;
+│   │                        # _update_sync for in-place article row overwrite
+│   ├── jina.py              # Jina Reader API client — fetch_markdown(url) → (title, body); optional Bearer auth
 │   └── brave.py             # Brave Search API client
 ├── brain.py                 # Second Brain: ingest, search, rebuild, refresh
 └── utils/

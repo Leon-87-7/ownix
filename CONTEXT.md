@@ -11,7 +11,7 @@ This document is the single source of truth for domain language and architecture
 | **Job**                          | A unit of work representing one URL submitted by a user. Lives in the `jobs` table. ID format: `YYYYMMDD_HHMMSS_XXXX`.                                                                                                                                                                                                                                                                                                                           |
 | **Short video**                  | Instagram Reel, TikTok, or YouTube Short — processed via `processors/short_video.py`. Transcript via sidecar, then Gemini text enrichment + Brave Search.                                                                                                                                                                                                                                                                                        |
 | **Long video**                   | Full-length YouTube video — processed via `processors/long_video.py`. Two-phase pipeline: Phase 1 produces a transcript markdown uploaded to Drive; Phase 2 is Gemini enrichment, triggered either by user confirmation (plain-URL jobs) or automatically (explicit-command jobs). Unlike short video, enrichment is a separate queued task, not inline.                                                                                           |
-| **Content type**                 | Enum: `short` or `long`. Detected at webhook routing time by `validators.detect_pipeline`.                                                                                                                                                                                                                                                                                                                                                       |
+| **Content type**                 | Enum: `short`, `long`, or `article`. Detected at webhook routing time by `validators.detect_pipeline`.                                                                                                                                                                                                                                                                                                                                           |
 | **Status FSM**                   | Job status lifecycle: `pending → processing → transcript_done → enriching → done` (or `error`/`cancelled`).                                                                                                                                                                                                                                                                                                                                      |
 | **Enrichment**                   | Gemini text pass that classifies the job: category, topic, objective, action points, tools, market data.                                                                                                                                                                                                                                                                                                                                         |
 | **Mini-PRD**                     | AI-generated product requirements document derived from a long-video transcript. Two slots: `auto` (no user input) and `intent` (user-supplied direction text).                                                                                                                                                                                                                                                                                  |
@@ -102,6 +102,7 @@ User (Telegram)
 │  BRPOP video_jobs  ──► _dispatch(task)                  │
 │    ├─ "video" + content_type=short  → short_video.run   │
 │    ├─ "video" + content_type=long   → long_video.run    │
+│    ├─ "article"                     → article.run       │
 │    ├─ "enrichment"                  → enrichment.run    │
 │    ├─ "prd_auto"                    → prd.run_auto      │
 │    ├─ "prd_auto_resend"             → prd.run_auto_resend│
@@ -122,10 +123,10 @@ External services used by both containers:
   │  Embeddings    │  │                  │  └───────────────┘
   └────────────────┘  └──────────────────┘
 
-  ┌──────────────────────┐
-  │  Google Sheets       │
-  │  Short / Long / PRD  │
-  └──────────────────────┘
+  ┌────────────────────────────────┐
+  │  Google Sheets                 │
+  │  Short / Long / Article / PRD  │
+  └────────────────────────────────┘
 ```
 
 ---
@@ -171,6 +172,30 @@ URL arrives → jobs row (pending) → Redis enqueue
   → status = done
 ```
 
+## Data Flow — Article URL
+
+```
+Article URL arrives → detect_pipeline returns "article" (ARTICLE_DEFAULT_DOMAINS or allowed_domains)
+→ jobs row (pending, content_type="article") → Redis enqueue {"task":"article"}
+→ worker dequeues → article.run
+  → markdown_cache lookup: on hit reuse content; on miss call jina.fetch_markdown → insert cache
+  → paywall heuristic: body < 500 chars OR _PAYWALL_PHRASES → sets paywall_warning flag
+  → send_document(<title>.md) to Telegram
+  → _build_article_prompt (+ freestyle_prompt if set)
+  → gemini_client.generate(model="gemini-2.5-flash")
+  → update_job_status("done", ai_topic=..., ai_objective=..., ai_action_points=..., ai_tools=..., promise_gap=...)
+  → fire-and-forget sheets.append_article_row (or update_article_row if sheets_row_id set)
+  → send_message(enrichment text) + send_inline_keyboard(✍️ Freestyle button)
+  → fire-and-forget brain.ingest_links([article_url], topic, source_job_id)
+  → status = done
+
+Freestyle re-run:
+[user taps ✍️ Freestyle] → arm chat_state(awaiting_freestyle, job_id)
+[user types prompt] → store jobs.freestyle_prompt → enqueue {"task":"article"} on SAME job_id
+→ article.run reuses markdown_cache → calls Gemini with freestyle_prompt
+→ update_article_row (in-place Sheets overwrite via sheets_row_id)
+```
+
 ## Data Flow — Mini-PRD (intent path)
 
 ```
@@ -203,4 +228,5 @@ User taps 📐 Build Spec → prd_build_spec callback
 4. **Free→paid Gemini key fallback.** All Gemini call paths (text, vision, photo, embed) share a single fallback loop in `src/services/gemini._call_with_fallback`; keys are read from `settings`, not passed as parameters. Anthropic keys were never in scope. See ADR-0011.
 5. **SQLite WAL mode.** The API and worker both open the same SQLite file; WAL allows concurrent readers. Only one writer at a time — the worker owns all write-heavy paths.
 6. **Verbatim-grounded photo links only.** Every link returned by `gemini_photo` must include a quoted substring from the image containing the domain. Post-filter in `_filter_grounded_links` drops anything ungrounded or matching UI chrome patterns.
-7. **Orphaned jobs are reset to error at startup, never re-queued.** A worker crash leaves a job in `processing`/`enriching`. The boot-time `reap_stale_jobs()` reaper marks it `error`, increments `attempt`, and notifies the user (enrichment → retry button; video → resend link). The video pipeline is not idempotent (re-running re-uploads Drive + re-appends Sheets), so auto re-queue is deliberately avoided (ADR-0010).
+7. **Article pipeline has no Drive upload.** Markdown is sent as a Telegram document only. No `drive_url` is written for article jobs.
+8. **Orphaned jobs are reset to error at startup, never re-queued.** A worker crash leaves a job in `processing`/`enriching`. The boot-time `reap_stale_jobs()` reaper marks it `error`, increments `attempt`, and notifies the user (enrichment → retry button; video → resend link). The video pipeline is not idempotent (re-running re-uploads Drive + re-appends Sheets), so auto re-queue is deliberately avoided (ADR-0010).

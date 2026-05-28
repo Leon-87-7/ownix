@@ -1,6 +1,6 @@
 # Video Intelligence Gateway — Tech Stack
 
-**Last Updated:** 2026-05-17  
+**Last Updated:** 2026-05-28  
 **Rule:** Every technology earns its place. This document records what's here, why it was chosen over the alternatives, and the concrete signal that should trigger a replacement.
 
 ---
@@ -19,6 +19,7 @@
 | AI — PRD (intent slot)          | Gemini 2.5 Pro          | —                         |
 | AI — Embeddings                 | text-embedding-004      | —                         |
 | AI enrichment fallback          | Gemini Paid API key     | —                         |
+| Article markdown fetch          | Jina Reader API         | —                         |
 | Link verification               | Brave Search API        | —                         |
 | File storage                    | Google Drive API v3     | —                         |
 | Reporting                       | Google Sheets API v4    | —                         |
@@ -198,6 +199,22 @@
 
 ---
 
+## 9a. Article Markdown Fetch — Jina Reader API
+
+**What:** External service at `https://r.jina.ai/<url>` that converts any URL to clean Markdown. Called by `src/services/jina.py` in the article pipeline. Responses are cached in the `markdown_cache` SQLite table so repeated calls (including freestyle re-runs) skip the network round-trip.
+
+**Why here:**
+
+- Zero-setup content extraction — no headless browser, no HTML parsing. Jina handles JS-rendered pages and paywalls gracefully (surfacing whatever is accessible).
+- Free public endpoint; optional `Authorization: Bearer <JINA_API_KEY>` header for higher quota.
+- The `markdown_cache` neutralises rate-limit risk: each article URL is fetched exactly once unless the user explicitly `/force`s it.
+
+**Why not direct HTTP scraping:** See §9 (Brave Search) for the same reasoning — scraping is brittle, has ToS risk, and breaks on JS-rendered pages.
+
+**Switch when:** Jina's free tier becomes a bottleneck (outage or sustained rate-limit). At that point, add a `Firecrawl` or `Readability`-based fallback inside `jina.py` — the `fetch_markdown(url) → (title, body)` contract doesn't change.
+
+---
+
 ## 9. Link Verification — Brave Search API
 
 **What:** REST API used in the short video pipeline to verify and enrich extracted links. Given a URL or domain, returns a title and snippet from Brave's index.
@@ -243,7 +260,7 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 - Tab `Short Video Analysis` columns: `id, chat_id, url, title, platform, drive_url, processing_time_ms, created_at`
 - Tab `YouTube Transcript Index` columns: `id, chat_id, url, title, channel, views, ai_category, ai_topic, ai_objective, ai_action_points, ai_tools, ai_market_data, drive_url, created_at`
 - Tab `mini PRD` columns: `job_id, video_url, title, slot, intent_text, drive_url, created_at` — one row per PRD generation (max 2 per job from the two-slot model). `slot` is `'auto'` or `'intent'`; `intent_text` is NULL for auto. Independent from the long tab because PRD generations happen at unpredictable times (e.g. weeks later via `/spec`) and append-only semantics require independent rows rather than retroactive updates.
-- Tab `Article Analysis` — reserved for the upcoming article pipeline (issue #62).
+- Tab `Article Analysis` columns: `job_id, url, domain, title, topic, objective, action_points, tools, promise_gap, submitted_at, status`. Written by `sheets.append_article_row`; updated in-place on freestyle re-runs via `sheets.update_article_row` (row identified by `jobs.sheets_row_id`).
 
 **Why here:**
 
