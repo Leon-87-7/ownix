@@ -63,6 +63,107 @@ def _format_bundle_message(owner: str, repo: str, bundle: dict) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Gemini schema + prompt builder (#68)
+# ---------------------------------------------------------------------------
+
+REPO_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "tagline": {"type": "string"},
+        "tech_stack": {"type": "array", "items": {"type": "string"}},
+        "for_developers": {
+            "type": "object",
+            "properties": {
+                "project_ideas": {"type": "array", "items": {"type": "string"}},
+                "when_to_use": {"type": "string"},
+                "avoid_when": {"type": "string"},
+            },
+            "required": ["project_ideas", "when_to_use", "avoid_when"],
+        },
+        "for_education": {
+            "type": "object",
+            "properties": {
+                "concepts_taught": {"type": "array", "items": {"type": "string"}},
+                "prerequisites": {"type": "array", "items": {"type": "string"}},
+                "curriculum_hooks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "concept": {"type": "string"},
+                            "file_pointer": {"type": ["string", "null"]},
+                            "why": {"type": "string"},
+                        },
+                        "required": ["concept", "file_pointer", "why"],
+                    },
+                },
+            },
+            "required": ["concepts_taught", "prerequisites", "curriculum_hooks"],
+        },
+    },
+    "required": ["title", "tagline", "tech_stack", "for_developers", "for_education"],
+}
+
+
+def _build_repo_prompt(
+    bundle: dict,
+    freestyle_prompt: str | None = None,
+    flags: dict | None = None,
+) -> str:
+    owner = bundle.get("owner", "")
+    repo = bundle.get("repo", "")
+    meta = bundle.get("metadata") or {}
+    no_readme = (flags or {}).get("no_readme", bundle.get("no_readme", False))
+    tree = bundle.get("tree", [])
+    manifests = bundle.get("manifests") or {}
+    readme = bundle.get("readme", "")
+
+    system_frame = (
+        "You are a technical analyst evaluating open-source repositories for "
+        "developer utility and educational value. Be specific, concise, and opinionated."
+    )
+
+    meta_block = (
+        f"Repository: {owner}/{repo}\n"
+        f"Stars: {meta.get('stars', 0):,} | Forks: {meta.get('forks', 0):,} | "
+        f"Language: {meta.get('language') or 'Unknown'}\n"
+        f"Description: {meta.get('description') or '(none)'}\n"
+    )
+    if meta.get("archived"):
+        meta_block += "⚠️ This repository is ARCHIVED.\n"
+
+    tree_sample = tree[:200]
+    tree_block = "File tree:\n" + "\n".join(f"  {p}" for p in tree_sample)
+
+    if manifests:
+        manifest_block = "Package manifests:\n" + "\n\n".join(
+            f"--- {p} ---\n{c[:2_000]}" for p, c in manifests.items()
+        )
+    else:
+        manifest_block = "Package manifests: (none detected)"
+
+    if no_readme:
+        readme_block = (
+            "README: (not available — no README in this repository)\n"
+            "Instruction: lean on the file tree and manifests for analysis. "
+            "Flag in the tagline that no README was found."
+        )
+    else:
+        readme_block = f"README (preprocessed):\n{readme[:10_000]}"
+
+    if freestyle_prompt:
+        focus_block = f"User instruction: {freestyle_prompt}\nAnswer using the repository context above."
+    else:
+        focus_block = (
+            "Extract a structured analysis matching the JSON schema. "
+            "Be specific about developer use-cases and educational concepts."
+        )
+
+    return "\n\n".join([system_frame, meta_block, tree_block, manifest_block, readme_block, focus_block])
+
+
 async def run(job: dict) -> None:
     job_id = job["id"]
     chat_id = job["chat_id"]

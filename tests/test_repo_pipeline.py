@@ -9,7 +9,7 @@ import pytest
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-secret")
 
-from src.processors.repo import _format_bundle_message, _days_ago, _parse_owner_repo
+from src.processors.repo import _format_bundle_message, _days_ago, _parse_owner_repo, REPO_ANALYSIS_SCHEMA, _build_repo_prompt
 
 _BUNDLE = {
     "owner": "anthropics",
@@ -114,3 +114,47 @@ async def test_run_calls_fetch_repo_bundle(monkeypatch: pytest.MonkeyPatch) -> N
     await run(job)
 
     assert ("anthropics", "claude-code") in bundle_calls
+
+
+# ---------------------------------------------------------------------------
+# REPO_ANALYSIS_SCHEMA + _build_repo_prompt (#68)
+# ---------------------------------------------------------------------------
+
+def test_repo_analysis_schema_has_all_top_level_keys() -> None:
+    props = REPO_ANALYSIS_SCHEMA.get("properties", {})
+    for key in ("title", "tagline", "tech_stack", "for_developers", "for_education"):
+        assert key in props, f"missing key: {key}"
+
+
+def test_repo_analysis_schema_curriculum_hooks_fields() -> None:
+    hooks = (
+        REPO_ANALYSIS_SCHEMA["properties"]["for_education"]["properties"]
+        ["curriculum_hooks"]["items"]["properties"]
+    )
+    assert "concept" in hooks
+    assert "file_pointer" in hooks
+    assert "why" in hooks
+
+
+def test_build_repo_prompt_contains_metadata() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "anthropics" in prompt or "claude-code" in prompt
+    assert "12,345" in prompt or "TypeScript" in prompt
+
+
+def test_build_repo_prompt_contains_tree_and_manifests() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "pyproject.toml" in prompt
+    assert "a.py" in prompt or "file tree" in prompt.lower()
+
+
+def test_build_repo_prompt_freestyle_substitutes_focus() -> None:
+    prompt = _build_repo_prompt(_BUNDLE, freestyle_prompt="explain for a Rust developer")
+    assert "Rust developer" in prompt
+
+
+def test_build_repo_prompt_no_readme_flag_adjusts_instructions() -> None:
+    bundle = {**_BUNDLE, "no_readme": True, "readme": ""}
+    prompt = _build_repo_prompt(bundle, flags={"no_readme": True})
+    lower = prompt.lower()
+    assert "no readme" in lower or "tree" in lower or "manifest" in lower
