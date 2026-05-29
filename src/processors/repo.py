@@ -9,8 +9,9 @@ from urllib.parse import urlparse
 
 from src import database
 from src.config import settings
+from src.services import gemini
 from src.services.github import fetch_repo_bundle
-from src.telegram.sender import send_message
+from src.telegram.sender import send_document, send_inline_keyboard, send_message
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -164,17 +165,78 @@ def _build_repo_prompt(
     return "\n\n".join([system_frame, meta_block, tree_block, manifest_block, readme_block, focus_block])
 
 
+def _format_summary_message(owner: str, repo: str, analysis: dict, bundle: dict) -> str:
+    meta = bundle.get("metadata") or {}
+    stars = meta.get("stars", 0)
+    forks = meta.get("forks", 0)
+    language = meta.get("language") or "Unknown"
+    days = _days_ago(meta.get("pushed_at"))
+    tagline = analysis.get("tagline", "")
+    repo_url = f"https://github.com/{owner}/{repo}"
+    project_ideas = analysis.get("for_developers", {}).get("project_ideas") or []
+    first_idea = (project_ideas[0][:80] + "…") if project_ideas else "—"
+    concepts = analysis.get("for_education", {}).get("concepts_taught") or []
+    hooks = analysis.get("for_education", {}).get("curriculum_hooks") or []
+    edu_line = (concepts[0] if concepts else "") + (f" • {hooks[0]['concept']}…" if hooks else "")
+
+    return "\n".join([
+        f"📦 {owner}/{repo}",
+        tagline,
+        "",
+        f"⭐ {stars:,} | 🔀 {forks:,} | 💻 {language} | 📅 {days} days ago",
+        "",
+        "🛠 For developers",
+        f"  {first_idea}",
+        "",
+        "🎓 For teaching",
+        f"  {edu_line}",
+        "",
+        f"🔗 {repo_url}",
+    ])
+
+
 async def run(job: dict) -> None:
     job_id = job["id"]
     chat_id = job["chat_id"]
     url = job["url"]
+    freestyle_prompt = job.get("freestyle_prompt")
 
     await database.update_job_status(job_id, "processing")
     owner, repo = _parse_owner_repo(url)
 
     bundle = await fetch_repo_bundle(owner, repo, settings.GITHUB_TOKEN)
-    msg = _format_bundle_message(owner, repo, bundle)
-    await send_message(chat_id, msg)
 
-    await database.update_job_status(job_id, "done")
-    log.info("repo_bundle_sent", job_id=job_id, repo=f"{owner}/{repo}")
+    flags = {"no_readme": bundle.get("no_readme", False)}
+    prompt = _build_repo_prompt(bundle, freestyle_prompt=freestyle_prompt, flags=flags)
+
+    raw = await gemini.generate(prompt, model="gemini-2.5-flash", schema=REPO_ANALYSIS_SCHEMA)
+    try:
+        analysis = _json.loads(raw)
+    except Exception:
+        m = _re.search(r"\{[\s\S]*\}", raw)
+        analysis = _json.loads(m.group(0)) if m else {}
+
+    await database.update_job_status(
+        job_id, "done",
+        template_analysis=_json.dumps(analysis),
+        title=f"{owner}/{repo}",
+        ai_topic=analysis.get("tagline", ""),
+        ai_objective=(analysis.get("for_developers") or {}).get("when_to_use", ""),
+        ai_action_points=_json.dumps((analysis.get("for_developers") or {}).get("project_ideas", [])),
+        ai_tools=_json.dumps(analysis.get("tech_stack", [])),
+    )
+
+    # Document delivery — placeholder (Task 8 adds render_repo_markdown)
+    try:
+        filename = f"{owner}-{repo}.md"
+        doc_content = f"# {owner}/{repo}\n\n{analysis.get('tagline', '')}\n"
+        await send_document(chat_id, doc_content.encode(), filename)
+    except Exception as exc:
+        log.warning("repo_doc_send_failed", job_id=job_id, error=str(exc)[:120])
+
+    # Summary + Freestyle button
+    summary = _format_summary_message(owner, repo, analysis, bundle)
+    freestyle_btn = [[{"text": "✍️ Freestyle", "callback_data": f"freestyle:{job_id}"}]]
+    await send_inline_keyboard(chat_id, summary, freestyle_btn)
+
+    log.info("repo_gemini_done", job_id=job_id, repo=f"{owner}/{repo}")

@@ -1,6 +1,7 @@
 """Tests for the repo pipeline processor (issue #67)."""
 from __future__ import annotations
 
+import json as _json
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -104,7 +105,9 @@ async def test_run_calls_fetch_repo_bundle(monkeypatch: pytest.MonkeyPatch) -> N
         return _BUNDLE
 
     monkeypatch.setattr("src.processors.repo.fetch_repo_bundle", fake_bundle)
-    monkeypatch.setattr("src.processors.repo.send_message", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.gemini.generate", AsyncMock(return_value=_json.dumps(_ANALYSIS)))
+    monkeypatch.setattr("src.processors.repo.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.send_inline_keyboard", AsyncMock())
     monkeypatch.setattr("src.processors.repo.database.update_job_status", AsyncMock())
     monkeypatch.setattr("src.processors.repo.settings.GITHUB_TOKEN", "tok")
 
@@ -158,3 +161,106 @@ def test_build_repo_prompt_no_readme_flag_adjusts_instructions() -> None:
     prompt = _build_repo_prompt(bundle, flags={"no_readme": True})
     lower = prompt.lower()
     assert "no readme" in lower or "tree" in lower or "manifest" in lower
+
+
+# ---------------------------------------------------------------------------
+# Task 7 — Gemini call + DB persistence + summary + Freestyle button (#68)
+# ---------------------------------------------------------------------------
+
+_ANALYSIS = {
+    "title": "anthropics/claude-code",
+    "tagline": "AI coding assistant for the terminal",
+    "tech_stack": ["TypeScript", "Node.js"],
+    "for_developers": {
+        "project_ideas": ["Build custom AI workflows", "Extend with plugins"],
+        "when_to_use": "When you need AI assistance in the terminal",
+        "avoid_when": "When you need a GUI IDE",
+    },
+    "for_education": {
+        "concepts_taught": ["LLM tool use", "CLI design"],
+        "prerequisites": ["TypeScript basics"],
+        "curriculum_hooks": [
+            {"concept": "Tool calling", "file_pointer": "src/tools/", "why": "Demonstrates LLM tool patterns"},
+        ],
+    },
+}
+
+
+@pytest.mark.asyncio
+async def test_run_calls_gemini_flash_with_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    gemini_calls: list[dict] = []
+
+    async def spy_generate(prompt, *, model, schema=None):
+        gemini_calls.append({"model": model, "schema": schema})
+        return _json.dumps(_ANALYSIS)
+
+    monkeypatch.setattr("src.processors.repo.fetch_repo_bundle", AsyncMock(return_value=_BUNDLE))
+    monkeypatch.setattr("src.processors.repo.gemini.generate", spy_generate)
+    monkeypatch.setattr("src.processors.repo.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.send_inline_keyboard", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.database.update_job_status", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.settings.GITHUB_TOKEN", "tok")
+
+    job = {"id": "abc", "chat_id": 1, "url": "https://github.com/anthropics/claude-code",
+           "freestyle_prompt": None, "template_analysis": None, "sheets_row_id": None}
+    from src.processors.repo import run
+    await run(job)
+
+    assert len(gemini_calls) == 1
+    assert gemini_calls[0]["model"] == "gemini-2.5-flash"
+    assert gemini_calls[0]["schema"] is not None
+
+
+@pytest.mark.asyncio
+async def test_run_persists_template_analysis_and_ai_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    updated_kwargs: dict = {}
+
+    async def spy_update(job_id, status, **kwargs):
+        updated_kwargs.update(kwargs)
+
+    monkeypatch.setattr("src.processors.repo.fetch_repo_bundle", AsyncMock(return_value=_BUNDLE))
+    monkeypatch.setattr("src.processors.repo.gemini.generate", AsyncMock(return_value=_json.dumps(_ANALYSIS)))
+    monkeypatch.setattr("src.processors.repo.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.send_inline_keyboard", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.database.update_job_status", spy_update)
+    monkeypatch.setattr("src.processors.repo.settings.GITHUB_TOKEN", "tok")
+
+    job = {"id": "abc", "chat_id": 1, "url": "https://github.com/anthropics/claude-code",
+           "freestyle_prompt": None, "template_analysis": None, "sheets_row_id": None}
+    from src.processors.repo import run
+    await run(job)
+
+    assert "template_analysis" in updated_kwargs
+    assert updated_kwargs.get("ai_topic") == "AI coding assistant for the terminal"
+    assert "ai_objective" in updated_kwargs
+    assert "ai_action_points" in updated_kwargs
+    assert "ai_tools" in updated_kwargs
+
+
+@pytest.mark.asyncio
+async def test_run_sends_summary_with_freestyle_button(monkeypatch: pytest.MonkeyPatch) -> None:
+    keyboard_calls: list[dict] = []
+
+    async def spy_keyboard(chat_id, text, buttons, **kwargs):
+        keyboard_calls.append({"text": text, "buttons": buttons})
+
+    monkeypatch.setattr("src.processors.repo.fetch_repo_bundle", AsyncMock(return_value=_BUNDLE))
+    monkeypatch.setattr("src.processors.repo.gemini.generate", AsyncMock(return_value=_json.dumps(_ANALYSIS)))
+    monkeypatch.setattr("src.processors.repo.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.send_inline_keyboard", spy_keyboard)
+    monkeypatch.setattr("src.processors.repo.database.update_job_status", AsyncMock())
+    monkeypatch.setattr("src.processors.repo.settings.GITHUB_TOKEN", "tok")
+
+    job = {"id": "abc", "chat_id": 1, "url": "https://github.com/anthropics/claude-code",
+           "freestyle_prompt": None, "template_analysis": None, "sheets_row_id": None}
+    from src.processors.repo import run
+    await run(job)
+
+    assert len(keyboard_calls) == 1
+    text = keyboard_calls[0]["text"]
+    assert "AI coding assistant for the terminal" in text
+    assert "🛠 For developers" in text
+    assert "🎓 For teaching" in text
+    btns = keyboard_calls[0]["buttons"]
+    flat = [btn for row in btns for btn in row]
+    assert any("Freestyle" in b.get("text", "") for b in flat)
