@@ -413,8 +413,18 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if pipeline == "repo":
         await send_message(
             ctx.chat_id,
-            "ℹ️ `/freestyle` doesn't apply to repo URLs yet — send the URL without a command to get the standard analysis.",
+            "ℹ️ `/freestyle` doesn't apply to repo URLs yet\nRuning standard analysis.",
         )
+        repo_url = normalize_repo_url(url)
+        cached = await database.find_recent_job_by_url(ctx.chat_id, repo_url)
+        if cached:
+            await _reply_cached_job(ctx.chat_id, cached)
+            return
+        job_id = await database.create_job(
+            chat_id=ctx.chat_id, url=repo_url, content_type="repo", message_id=ctx.message_id,
+        )
+        await queue.enqueue({"task": "repo", "job_id": job_id})
+        await send_message(ctx.chat_id, f"📥 Received! \njob_{job_id[-4:]}")
         return
     await _handle_freestyle_url(ctx.chat_id, url, pipeline, ctx.message_id)
 
