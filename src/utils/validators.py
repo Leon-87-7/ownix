@@ -5,9 +5,17 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
-Pipeline = Literal["short", "long", "article", "rejected"]
+Pipeline = Literal["short", "long", "article", "repo", "rejected"]
 
 _TIKTOK_VIDEO_PATH = re.compile(r"^/@[^/]+/video/\d+", re.IGNORECASE)
+
+_GITHUB_RESERVED_PATHS: frozenset[str] = frozenset({
+    "features", "pricing", "marketplace", "sponsors", "topics", "explore",
+    "settings", "notifications", "codespaces", "login", "signup", "apps",
+    "orgs", "about", "security", "trending", "readme",
+})
+
+_REPO_HINT = "If you meant a repository, the URL should look like https://github.com/<owner>/<repo>."
 
 ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset({
     "substack.com",
@@ -89,6 +97,21 @@ def detect_pipeline(
     if host == "youtu.be" and len(path) > 1:
         return "long"
 
+    # GitHub — reject gists and enterprise hosts first
+    if host == "gist.github.com":
+        return "rejected"
+    if host.startswith("github.") and host != "github.com" and host != "github.blog":
+        return "rejected"
+
+    # GitHub — repo routing
+    if host == "github.com":
+        segments = [s for s in path.split("/") if s]
+        if not segments or segments[0].lower() in _GITHUB_RESERVED_PATHS:
+            return "rejected"
+        if len(segments) < 2:
+            return "rejected"  # org-only
+        return "repo"
+
     # Article — default domains and per-chat allowlist
     all_article_domains = ARTICLE_DEFAULT_DOMAINS | extra_domains
     if any(host == d or host.endswith("." + d) for d in all_article_domains):
@@ -97,8 +120,14 @@ def detect_pipeline(
     return "rejected"
 
 
+def normalize_repo_url(url: str) -> str:
+    """Strip subpaths from a github.com URL, returning canonical https://github.com/{owner}/{repo}."""
+    segments = [s for s in urlparse(url.strip()).path.split("/") if s]
+    return f"https://github.com/{segments[0]}/{segments[1]}"
+
+
 def is_video_url(text: str) -> bool:
-    """True if the entire message text is a single URL the bot would accept."""
+    """True if text is a single video or article URL (excludes repo URLs)."""
     return detect_pipeline(text) in {"short", "long", "article"}
 
 

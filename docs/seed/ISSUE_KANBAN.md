@@ -61,9 +61,16 @@
 
 ## Needs Triage
 
-|      # | Title | Area | Depends On |
-| -----: | ----- | ---- | ---------- |
-| (none) |       |      |            |
+|                                                   # | Title                                                                                                       | Area          | Depends On  |
+| --------------------------------------------------: | ----------------------------------------------------------------------------------------------------------- | ------------- | ----------- |
+| [#66](https://github.com/Leon-87-7/vig/issues/66)  | Repo pipeline #1: URL routing + stub processor (tracer bullet)                                              | Repo Pipeline | —           |
+| [#67](https://github.com/Leon-87-7/vig/issues/67)  | Repo pipeline #2: GitHub bundle fetch + Redis cache + README preprocessing + /force                         | Repo Pipeline | #66         |
+| [#68](https://github.com/Leon-87-7/vig/issues/68)  | Repo pipeline #3: Gemini analysis + structured JSON + summary message                                       | Repo Pipeline | #67         |
+| [#69](https://github.com/Leon-87-7/vig/issues/69)  | Repo pipeline #4: Telegram document delivery (`<owner>-<repo>.md`)                                          | Repo Pipeline | #68         |
+| [#70](https://github.com/Leon-87-7/vig/issues/70)  | Repo pipeline #5: Sheets persistence (Repo Analysis tab + append/update)                                   | Repo Pipeline | #68         |
+| [#71](https://github.com/Leon-87-7/vig/issues/71)  | Repo pipeline #6: Second Brain ingest (repo URL only)                                                       | Repo Pipeline | #68         |
+| [#72](https://github.com/Leon-87-7/vig/issues/72)  | Repo pipeline #7: Edge cases (archived + no-README + distinct API errors)                                   | Repo Pipeline | #68         |
+| [#73](https://github.com/Leon-87-7/vig/issues/73)  | Repo pipeline #8: Freestyle re-run end-to-end (same job_id, cache hit, Sheets in-place update)             | Repo Pipeline | #68, #70    |
 
 ---
 
@@ -153,4 +160,14 @@ Article URL feature (postgrill: docs/features/postgrill/article-url-feature.md)
                                              │
 #61 Article allowlist CRUD ──────────────────┘
 (all four closed)
+
+Repo URL feature (postgrill: docs/features/postgrill/repo-url-feature.md + ADR-0014)
+#66 URL routing + stub
+└── #67 bundle + cache + README preprocessing + /force
+    └── #68 Gemini analysis + summary ──┬── #69 document delivery
+                                        ├── #70 Sheets persistence ──┐
+                                        ├── #71 brain ingest         │
+                                        ├── #72 edge cases           │
+                                        └── #73 freestyle re-run ◄───┘
+                                              (also depends on #70)
 ```

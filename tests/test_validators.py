@@ -194,3 +194,77 @@ def test_article_default_domains_contains_named_platforms() -> None:
 
 def test_article_hint_verbatim_in_module() -> None:
     assert "If this is an article you'd like to track, try /allowlist <domain> first." in _ARTICLE_HINT
+
+
+# ---------------------------------------------------------------------------
+# GitHub repo routing (issue #66)
+# ---------------------------------------------------------------------------
+
+from src.utils.validators import normalize_repo_url, _REPO_HINT, _GITHUB_RESERVED_PATHS
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/anthropics/claude-code",
+        "https://www.github.com/anthropics/claude-code",
+        "https://github.com/anthropics/claude-code/blob/main/README.md",
+        "https://github.com/anthropics/claude-code/tree/main/src",
+        "https://github.com/anthropics/claude-code/issues/123",
+        "https://github.com/anthropics/claude-code/pulls",
+        "https://github.com/owner/repo/wiki",
+    ],
+)
+def test_repo_pipeline(url: str) -> None:
+    assert detect_pipeline(url) == "repo"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Org-only (no repo segment)
+        "https://github.com/anthropics",
+        "https://github.com/anthropics/",
+        # Reserved first-path segments
+        "https://github.com/pricing",
+        "https://github.com/features",
+        "https://github.com/marketplace",
+        "https://github.com/login",
+        "https://github.com/trending",
+        # Gist
+        "https://gist.github.com/anyone/abc123",
+        # Enterprise GitHub
+        "https://github.mycompany.com/owner/repo",
+        # Bare github.com root
+        "https://github.com",
+        "https://github.com/",
+    ],
+)
+def test_github_rejected(url: str) -> None:
+    assert detect_pipeline(url) == "rejected"
+
+
+def test_repo_reserved_paths_case_insensitive() -> None:
+    assert detect_pipeline("https://github.com/PRICING") == "rejected"
+    assert detect_pipeline("https://github.com/Features") == "rejected"
+
+
+def test_normalize_repo_url_strips_subpath() -> None:
+    assert normalize_repo_url(
+        "https://github.com/anthropics/claude-code/blob/main/README.md"
+    ) == "https://github.com/anthropics/claude-code"
+
+
+def test_normalize_repo_url_bare() -> None:
+    assert normalize_repo_url(
+        "https://github.com/owner/repo"
+    ) == "https://github.com/owner/repo"
+
+
+def test_repo_hint_constant() -> None:
+    assert "github.com/<owner>/<repo>" in _REPO_HINT
+
+
+def test_github_reserved_paths_contains_blocklist() -> None:
+    for path in ("pricing", "features", "marketplace", "login", "trending"):
+        assert path in _GITHUB_RESERVED_PATHS

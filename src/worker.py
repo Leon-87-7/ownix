@@ -4,6 +4,7 @@ Task discriminators handled by _dispatch:
     - 'video'           → short_video.run | long_video.run (by content_type)
     - 'enrichment'      → processors.enrichment.run
     - 'article'         → processors.article.run
+    - 'repo'            → processors.repo.run
     - 'prd_auto'        → processors.prd.run_auto
     - 'prd_auto_resend' → processors.prd.run_auto_resend
     - 'prd_intent'      → processors.prd.run_intent
@@ -79,13 +80,29 @@ async def _dispatch(task: dict) -> None:
             return
         try:
             from src.processors import article
-            await article.run(job)
+            await article.run(job, skip_document=task.get("skip_document", False))
         except Exception:
             log.exception("article_processor_error", job_id=job_id)
             await database.update_job_status(job_id, "error")
             try:
                 from src.telegram.sender import send_message
                 await send_message(job["chat_id"], f"job_{job_id[-4:]}:\n❌ Article processing failed. Please try again.")
+            except Exception:
+                pass
+    elif task_type == "repo":
+        job = await database.get_job(job_id)
+        if not job:
+            log.error("job_not_found", job_id=job_id)
+            return
+        try:
+            from src.processors import repo
+            await repo.run(job)
+        except Exception:
+            log.exception("repo_processor_error", job_id=job_id)
+            await database.update_job_status(job_id, "error")
+            try:
+                from src.telegram.sender import send_message
+                await send_message(job["chat_id"], f"job_{job_id[-4:]}:\n❌ Repo processing failed. Please try again.")
             except Exception:
                 pass
     elif task_type == "prd_auto":

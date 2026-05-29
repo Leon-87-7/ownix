@@ -59,7 +59,8 @@ async def _embed(text: str) -> np.ndarray | None:
 
     try:
         return await _call_with_fallback(
-            _embed_sync, text,
+            _embed_sync,
+            text,
             log_ok="brain.embed_ok",
             log_fail="brain.embed_key_failed",
         )
@@ -86,9 +87,11 @@ async def _resolve_title(url: str, topic: str) -> str:
         bare = re.sub(r"\.[a-z]{2,}$", "", bare)
         hint = bare
 
-    prompt = f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
+    prompt = (
+        f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
+    )
     try:
-        result = await gemini_client.generate(prompt, model="gemini-2.0-flash-lite")
+        result = await gemini_client.generate(prompt, model="gemini-2.5-flash-lite")
         return result.strip()
     except GeminiUnavailableError:
         return hint
@@ -283,8 +286,17 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
                          drive_file_id, seen_count, last_seen_at, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
                     """,
-                    (link_id, url, title_str, topic, source_job_id,
-                     embedding_blob, now_iso, now_iso, now_iso),
+                    (
+                        link_id,
+                        url,
+                        title_str,
+                        topic,
+                        source_job_id,
+                        embedding_blob,
+                        now_iso,
+                        now_iso,
+                        now_iso,
+                    ),
                 )
                 await conn.commit()
 
@@ -359,18 +371,14 @@ def _compute_related(
     ]
     sims.sort(key=lambda x: x[1], reverse=True)
     return [
-        {"id": rid, "score": score}
-        for rid, score in sims[:3]
-        if score >= settings.BRAIN_MIN_SCORE
+        {"id": rid, "score": score} for rid, score in sims[:3] if score >= settings.BRAIN_MIN_SCORE
     ]
 
 
 async def _fetch_related_titles(conn: Any, related: list[dict]) -> list[str]:
     titles: list[str] = []
     for r in related:
-        cursor = await conn.execute(
-            "SELECT title FROM links WHERE id = ?", (r["id"],)
-        )
+        cursor = await conn.execute("SELECT title FROM links WHERE id = ?", (r["id"],))
         row = await cursor.fetchone()
         if row and row["title"]:
             titles.append(row["title"])
@@ -378,9 +386,7 @@ async def _fetch_related_titles(conn: Any, related: list[dict]) -> list[str]:
 
 
 async def _get_source_job_info(conn: Any, source_job_id: str) -> tuple[str, str]:
-    cursor = await conn.execute(
-        "SELECT url, drive_url FROM jobs WHERE id = ?", (source_job_id,)
-    )
+    cursor = await conn.execute("SELECT url, drive_url FROM jobs WHERE id = ?", (source_job_id,))
     row = await cursor.fetchone()
     if row:
         src_url = row["url"] or "_(unavailable)_"
@@ -446,10 +452,7 @@ async def search_links(query: str, top_k: int = 5) -> list[dict]:
     if not ids_list:
         return []
 
-    sims = [
-        (ids_list[i], _cosine_similarity(query_vec, matrix[i]))
-        for i in range(len(ids_list))
-    ]
+    sims = [(ids_list[i], _cosine_similarity(query_vec, matrix[i])) for i in range(len(ids_list))]
     sims.sort(key=lambda x: x[1], reverse=True)
 
     # Build a quick lookup from id → row
@@ -571,9 +574,7 @@ async def refresh_stale_links() -> None:
         row = await cursor.fetchone()
         corpus_size = row[0] if row else 0
 
-        effective_batch = min(
-            500, max(settings.BRAIN_REFRESH_BATCH, corpus_size // 20)
-        )
+        effective_batch = min(500, max(settings.BRAIN_REFRESH_BATCH, corpus_size // 20))
 
         # Repair rows first (NULL embedding or NULL drive_file_id)
         cursor2 = await conn.execute(
@@ -617,9 +618,7 @@ async def refresh_stale_links() -> None:
             return
 
         # Load corpus embeddings for related computation
-        cursor4 = await conn.execute(
-            "SELECT id, embedding FROM links WHERE embedding IS NOT NULL"
-        )
+        cursor4 = await conn.execute("SELECT id, embedding FROM links WHERE embedding IS NOT NULL")
         corpus_rows = [dict(r) for r in await cursor4.fetchall()]
         ids_list, matrix = _load_embeddings(corpus_rows)
 
@@ -645,7 +644,9 @@ async def refresh_stale_links() -> None:
                     # Update local corpus
                     if lnk_id not in ids_list:
                         ids_list.append(lnk_id)
-                        matrix = np.vstack([matrix, new_arr]) if matrix.size else new_arr.reshape(1, -1)
+                        matrix = (
+                            np.vstack([matrix, new_arr]) if matrix.size else new_arr.reshape(1, -1)
+                        )
                     repaired += 1
 
             # Compute related
@@ -661,9 +662,7 @@ async def refresh_stale_links() -> None:
                     if ids_list[i] != lnk_id
                 ]
                 sims.sort(key=lambda x: x[1], reverse=True)
-                top_ids = [
-                    rid for rid, score in sims[:3] if score >= settings.BRAIN_MIN_SCORE
-                ]
+                top_ids = [rid for rid, score in sims[:3] if score >= settings.BRAIN_MIN_SCORE]
                 for rid in top_ids:
                     cursor5 = await conn.execute(
                         "SELECT title, url FROM links WHERE id = ?", (rid,)

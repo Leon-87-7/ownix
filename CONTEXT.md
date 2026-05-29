@@ -17,7 +17,7 @@ This document is the single source of truth for domain language and architecture
 | **Mini-PRD**                     | AI-generated product requirements document derived from a long-video transcript. Two slots: `auto` (no user input) and `intent` (user-supplied direction text).                                                                                                                                                                                                                                                                                  |
 | **PRD auto slot**                | Worker-owned lock (`prd_auto_status='generating'`). Single acquirer — only the worker may set this.                                                                                                                                                                                                                                                                                                                                              |
 | **PRD intent slot**              | User-triggered PRD with a direction text up to 1000 chars. Arms a `chat_state` row with a 10-minute `awaiting_intent` window.                                                                                                                                                                                                                                                                                                                    |
-| **Task envelope**                | JSON dict pushed to the Redis queue: `{"task": <discriminator>, "job_id": <id>}`.                                                                                                                                                                                                                                                                                                                                                                |
+| **Task envelope**                | JSON dict pushed to the Redis queue: `{"task": <discriminator>, "job_id": <id>}`. Optional flags: `skip_document: true` (article retry — suppresses the `.md` Telegram document re-send).                                                                                                                                                                                                                                                        |
 | **Second Brain**                 | Semantic link graph: every URL extracted from any pipeline is embedded (768-dim via Gemini) and stored in `links` table + uploaded as Obsidian `.md` to Google Drive.                                                                                                                                                                                                                                                                            |
 | **Brain ingest**                 | Fire-and-forget `brain.ingest_links(links, topic, source_job_id)` — does not block the user-facing response.                                                                                                                                                                                                                                                                                                                                     |
 | **Photo pipeline**               | Inline (no DB job, no queue) path for Telegram photo messages. Gemini Vision extracts verbatim-grounded URLs; `_filter_grounded_links` drops hallucinations.                                                                                                                                                                                                                                                                                     |
@@ -71,8 +71,15 @@ This document is the single source of truth for domain language and architecture
 | **`/download_md`**                | Standalone utility slash command (`/download_md <URL>`). Works on any URL — no allowlist check, no `jobs` row created. Fetches via Jina (or markdown cache on hit), sends the markdown as a `<title>.md` Telegram document. Spam-safe because cache hits avoid the network round-trip. |
 | **Paywall heuristic**            | Run after Jina returns, before the Gemini call. Triggers when (a) the stripped markdown body is < 500 chars, or (b) the body contains any phrase from `_PAYWALL_PHRASES` (`subscribe to continue`, `member-only`, etc.). Triggering prepends a `⚠️ Article may be paywalled — analysis may be shallow` line to the Telegram delivery but does NOT abort enrichment. |
 | **Article Analysis sheet**       | Tab in the consolidated Google Spreadsheet. Columns: `job_id, url, domain, title, topic, objective, action_points, tools, promise_gap, submitted_at, status`. Written by `sheets.append_article_row`. |
-| **Consolidated spreadsheet**     | Single `GOOGLE_SHEETS_ID` Google Sheet holding four tabs — `YouTube Transcript Index`, `Short Video Analysis`, `Article Analysis`, `mini PRD`. Supersedes the three separate `GOOGLE_SHEETS_ID_SHORT` / `GOOGLE_SHEETS_ID_LONG` / `GOOGLE_SHEETS_ID_PRD` env vars. `_append_sync` takes a `tab_name` parameter and writes to `"<tab_name>!A1"`. See ADR-0013. |
-| **`/force` (extended)**          | Beyond resetting an existing `jobs` row (its original behavior), `/force <URL>` also deletes the matching `markdown_cache` row when present. If only the cache row exists (URL was seen only via `/download_md`, never via the article pipeline), `/force` deletes the cache entry and acknowledges; rejects with the original error only when neither a `jobs` row nor a cache row exists. |
+| **Consolidated spreadsheet**     | Single `GOOGLE_SHEETS_ID` Google Sheet holding four tabs today — `YouTube Transcript Index`, `Short Video Analysis`, `Article Analysis`, `mini PRD` — gaining a fifth tab `Repo Analysis` when the [[repo pipeline]] ships. Supersedes the three separate `GOOGLE_SHEETS_ID_SHORT` / `GOOGLE_SHEETS_ID_LONG` / `GOOGLE_SHEETS_ID_PRD` env vars. `_append_sync` takes a `tab_name` parameter and writes to `"<tab_name>!A1"`. See ADR-0013. |
+| **`/force` (extended)**          | Beyond resetting an existing `jobs` row (its original behavior), `/force <URL>` also deletes the matching `markdown_cache` row when present (article path) and the matching `github_repo_bundle:` + `github_meta:` Redis keys (repo path). If only the cache row exists (URL was seen only via `/download_md`, never via the article pipeline), `/force` deletes the cache entry and acknowledges; rejects with the original error only when neither a `jobs` row nor a cache row exists. |
+| **Repo pipeline**                | Fourth top-level URL pipeline alongside short video, long video, and article. Routes any `github.com/<owner>/<repo>[/...]` URL through `services/github.py` (REST API bundle fetch) → Gemini text analysis → Telegram document + summary. Single worker task (`"repo"`), single processor (`processors/repo.py`). Distinct concept from [[repo enrichment]] (the photo-pipeline post-processor) — that one decorates a list of links; this one is the primary pipeline for a single repo URL. See [[repo-url-feature]]. |
+| **Repo URL**                     | `content_type='repo'` value in the `jobs` table; fourth value alongside `short`, `long`, `article`. Detected by `validators.detect_pipeline` when the host is `github.com` AND the path has ≥ 2 non-empty segments AND the first segment is not in the GitHub reserved-path blocklist. Subpaths (`/blob/...`, `/tree/...`, `/issues/...`) normalize to `github.com/<owner>/<repo>` for storage and dedup. |
+| **GitHub reserved-path blocklist** | Hardcoded set in `validators.py` of first-path segments that look like `<owner>/<repo>` but are actually GitHub product pages: `features`, `pricing`, `marketplace`, `sponsors`, `topics`, `explore`, `settings`, `notifications`, `codespaces`, `login`, `signup`, `apps`, `orgs`, `about`, `security`, `trending`. A URL whose first segment is in this set rejects from the repo pipeline. |
+| **Repo bundle**                  | The JSON payload cached in Redis under `github_repo_bundle:{owner}/{repo}` for the repo pipeline. Contains `metadata`, preprocessed `readme`, recursive `tree`, `manifests` dict, `fetched_at`, and `no_readme` flag. Assembled by `services/github.fetch_repo_bundle` from 4–6 parallel REST calls. TTL 7 days — separate from the existing 24h [[Repo metadata cache]] used by photo enrichment and `/find`. |
+| **Repo analysis**                | The structured Gemini output for the repo pipeline. Dual-audience: `for_developers` (project_ideas, when_to_use, avoid_when) and `for_education` (concepts_taught, prerequisites, curriculum_hooks). Plus shared header fields (`title`, `tagline`, `tech_stack`). Education's `curriculum_hooks` is an array of `{concept, file_pointer?, why}` objects. Stored in `jobs.template_analysis` (JSON-blob column, see ADR-0008). `promise_gap` is deliberately skipped — repos don't pitch like videos/articles do. |
+| **README preprocessing**         | Sanitization applied to the raw README before sending to Gemini: drop badge-only lines (top-of-README badge soup), strip inline HTML blocks (`<details>`, `<picture>`, `<img>`, `<table>`, etc.), truncate at 50 KB silently. Implemented in `services/github.preprocess_readme`. Reduces tokens without losing signal — badges and embedded HTML eat budget for no analysis value. |
+| **Repo Analysis sheet**          | Fifth tab in the consolidated Google Spreadsheet ([[Consolidated spreadsheet]]). Columns: `job_id, url, owner, repo, title, tagline, tech_stack, stars, forks, language, last_pushed, archived, project_ideas, when_to_use, avoid_when, concepts_taught, prerequisites, curriculum_hooks, submitted_at, status`. Written by `sheets.append_repo_row` / `sheets.update_repo_row`. Array fields serialize newline-joined per cell (matching the article tab pattern). |
 
 ---
 
@@ -103,6 +110,7 @@ User (Telegram)
 │    ├─ "video" + content_type=short  → short_video.run   │
 │    ├─ "video" + content_type=long   → long_video.run    │
 │    ├─ "article"                     → article.run       │
+│    ├─ "repo"                        → repo.run          │
 │    ├─ "enrichment"                  → enrichment.run    │
 │    ├─ "prd_auto"                    → prd.run_auto      │
 │    ├─ "prd_auto_resend"             → prd.run_auto_resend│
@@ -183,6 +191,12 @@ Article URL arrives → detect_pipeline returns "article" (ARTICLE_DEFAULT_DOMAI
   → send_document(<title>.md) to Telegram
   → _build_article_prompt (+ freestyle_prompt if set)
   → gemini_client.generate(model="gemini-2.5-flash")
+    └─ GeminiUnavailableError → update_job_status("error")
+                               → send_inline_keyboard(⚠️ message + 🔄 Retry button)
+                                 [user taps 🔄 Retry] → article_retry callback
+                                   → update_job_status("pending")
+                                   → enqueue {"task":"article", "job_id":..., "skip_document":true}
+                                   → article.run skips send_document step, retries Gemini only
   → update_job_status("done", ai_topic=..., ai_objective=..., ai_action_points=..., ai_tools=..., promise_gap=...)
   → fire-and-forget sheets.append_article_row (or update_article_row if sheets_row_id set)
   → send_message(enrichment text) + send_inline_keyboard(✍️ Freestyle button)
@@ -194,6 +208,45 @@ Freestyle re-run:
 [user types prompt] → store jobs.freestyle_prompt → enqueue {"task":"article"} on SAME job_id
 → article.run reuses markdown_cache → calls Gemini with freestyle_prompt
 → update_article_row (in-place Sheets overwrite via sheets_row_id)
+```
+
+## Data Flow — Repo URL
+
+```
+Repo URL arrives → detect_pipeline returns "repo" (subpath normalized to github.com/<owner>/<repo>)
+→ jobs row (pending, content_type="repo") → Redis enqueue {"task":"repo"}
+→ worker dequeues → repo.run
+  → github_repo_bundle:{owner}/{repo} cache lookup (Redis, 7d TTL)
+    ├─ hit  → reuse cached bundle
+    └─ miss → asyncio.gather:
+              GET /repos/{o}/{r}                        (metadata)
+              GET /repos/{o}/{r}/readme                 (README)
+              GET /repos/{o}/{r}/git/trees/{branch}?recursive=1   (tree)
+              GET /repos/{o}/{r}/contents/<manifest>   (per detected manifest)
+          → assemble bundle → SETEX 7d
+  → preprocess README (strip badges, drop inline HTML, truncate to 50KB)
+  → flags: archived, no_readme
+  → _build_repo_prompt (+ freestyle_prompt if set)
+  → gemini_client.generate(model="gemini-2.5-flash", response_schema=REPO_ANALYSIS_SCHEMA)
+  → render <owner>-<repo>.md markdown blob → send_document to Telegram
+  → update_job_status("done", title, ai_topic=tagline, ai_objective=when_to_use,
+                              ai_action_points=project_ideas, ai_tools=tech_stack,
+                              template_analysis=<education-section blob>)
+  → fire-and-forget sheets.append_repo_row (or update_repo_row if sheets_row_id set)
+  → send_message(summary text) + send_inline_keyboard(✍️ Freestyle button)
+  → fire-and-forget brain.ingest_links([repo_url], topic=tagline, source_job_id)
+  → status = done
+
+Freestyle re-run:
+[user taps ✍️ Freestyle] → arm chat_state(awaiting_freestyle, job_id)
+[user types prompt] → store jobs.freestyle_prompt → enqueue {"task":"repo"} on SAME job_id
+→ repo.run reuses github_repo_bundle cache → calls Gemini with freestyle_prompt
+→ update_repo_row (in-place Sheets overwrite via sheets_row_id)
+
+/force <repo-url>
+→ DEL github_repo_bundle:{owner}/{repo}
+→ DEL github_meta:{owner}/{repo}
+→ existing jobs-row reset behavior
 ```
 
 ## Data Flow — Mini-PRD (intent path)
@@ -229,4 +282,8 @@ User taps 📐 Build Spec → prd_build_spec callback
 5. **SQLite WAL mode.** The API and worker both open the same SQLite file; WAL allows concurrent readers. Only one writer at a time — the worker owns all write-heavy paths.
 6. **Verbatim-grounded photo links only.** Every link returned by `gemini_photo` must include a quoted substring from the image containing the domain. Post-filter in `_filter_grounded_links` drops anything ungrounded or matching UI chrome patterns.
 7. **Article pipeline has no Drive upload.** Markdown is sent as a Telegram document only. No `drive_url` is written for article jobs.
+8. **Repo pipeline has no Drive upload either.** The `<owner>-<repo>.md` analysis is sent as a Telegram document only. README lives on GitHub; analysis lives in Sheets + Telegram. No `drive_url` is written for repo jobs.
+9. **Repo pipeline uses GitHub REST API, never Jina Reader.** See ADR-0014. Article pipeline uses Jina; repo pipeline does not. The two pipelines have different content-fetch services because the source shapes differ (arbitrary web pages vs one well-known platform with native tree/manifest endpoints).
+10. **Repo pipeline has no allowlist.** Every `github.com/<owner>/<repo>[/...]` URL routes through automatically; reserved-path blocklist guards GitHub product pages (`/pricing`, `/features`, etc.). The article allowlist exists because "is this an article?" is fuzzy across thousands of hosts — `github.com` has none of that fuzziness.
+11. **Repo bundle cache (Redis, 7d TTL) is separate from the photo-pipeline metadata cache (Redis, 24h TTL).** Both keyed by `{owner}/{repo}` but under different namespaces (`github_repo_bundle:` vs `github_meta:`). `/force <repo-url>` deletes both. Photo pipeline and `/find` continue to read only `github_meta:` for fresh star counts.
 8. **Orphaned jobs are reset to error at startup, never re-queued.** A worker crash leaves a job in `processing`/`enriching`. The boot-time `reap_stale_jobs()` reaper marks it `error`, increments `attempt`, and notifies the user (enrichment → retry button; video → resend link). The video pipeline is not idempotent (re-running re-uploads Drive + re-appends Sheets), so auto re-queue is deliberately avoided (ADR-0010).

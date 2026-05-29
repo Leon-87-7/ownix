@@ -1,5 +1,16 @@
 # Feature Request: On-the-Fly Repository Enrichment
 
+> **⚠️ Scope note (2026-05-29):** this document describes the
+> **photo-pipeline repo-enrichment post-processor** — it decorates a list of
+> github.com links extracted by Gemini Vision from an image with metadata
+> (stars/forks/lang/last-push). It is **not** about the
+> [`repo pipeline`](../../features/postgrill/repo-url-feature.md) (single-URL
+> Gemini analysis with use-case framing). Those are distinct concepts and
+> share only the GitHub REST API client. The photo post-processor has
+> already shipped (see CONTEXT.md `Repo enrichment` glossary entry); this
+> doc is preserved as background and as the source of the optional
+> filter-buttons enhancement listed at the bottom.
+
 **PROPOSED CATEGORY**: ENHANCEMENT • **PRIORITY**: HIGH • **COMPLEXITY**: MEDIUM
 
 ## Problem Statement
