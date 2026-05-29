@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from unittest.mock import AsyncMock, patch
@@ -11,7 +12,15 @@ import pytest
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-secret")
 
-from src.services.github import enrich_repo, _fetch_sync
+from src.services.github import (
+    enrich_repo,
+    _fetch_sync,
+    preprocess_readme,
+    fetch_readme,
+    fetch_tree,
+    fetch_manifest,
+    _detect_manifests,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -123,4 +132,111 @@ async def test_enrich_repo_network_error_returns_none(monkeypatch: pytest.Monkey
     with patch("src.services.github._fetch_sync", side_effect=ConnectionError("timeout")):
         result = await enrich_repo("octocat", "Hello-World", token="tok")
 
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# preprocess_readme
+# ---------------------------------------------------------------------------
+
+def test_preprocess_readme_strips_badge_line() -> None:
+    raw = "[![Build](https://img.shields.io/badge/build-ok.svg)](https://github.com/x)\nHello world"
+    result = preprocess_readme(raw)
+    assert "shields.io" not in result
+    assert "Hello world" in result
+
+def test_preprocess_readme_strips_details_html() -> None:
+    raw = "<details><summary>More</summary>Hidden text</details>\nVisible"
+    result = preprocess_readme(raw)
+    assert "<details>" not in result
+    assert "Visible" in result
+
+def test_preprocess_readme_strips_img_tag() -> None:
+    raw = "Some text\n<img src='logo.png' />\nMore text"
+    result = preprocess_readme(raw)
+    assert "<img" not in result
+    assert "Some text" in result
+
+def test_preprocess_readme_truncates_at_50000() -> None:
+    assert len(preprocess_readme("x" * 60_000)) == 50_000
+
+def test_preprocess_readme_short_text_unchanged() -> None:
+    raw = "Just a simple README.\nNo HTML here."
+    assert preprocess_readme(raw) == raw
+
+
+# ---------------------------------------------------------------------------
+# _detect_manifests
+# ---------------------------------------------------------------------------
+
+def test_detect_manifests_depth1() -> None:
+    tree = ["pyproject.toml", "src/main.py", "go.mod", "Dockerfile"]
+    detected = _detect_manifests(tree)
+    assert "pyproject.toml" in detected
+    assert "go.mod" in detected
+    assert "Dockerfile" in detected
+    assert "src/main.py" not in detected
+
+def test_detect_manifests_depth2_included() -> None:
+    assert "src/package.json" in _detect_manifests(["src/package.json", "README.md"])
+
+def test_detect_manifests_depth3_excluded() -> None:
+    assert "a/b/Cargo.toml" not in _detect_manifests(["a/b/Cargo.toml"])
+
+
+# ---------------------------------------------------------------------------
+# fetch_readme
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fetch_readme_returns_content() -> None:
+    with patch("src.services.github._readme_sync", return_value=b"# Hello World"):
+        result = await fetch_readme("owner", "repo", "tok")
+    assert result == "# Hello World"
+
+@pytest.mark.asyncio
+async def test_fetch_readme_returns_none_on_404() -> None:
+    with patch("src.services.github._readme_sync", return_value=None):
+        result = await fetch_readme("owner", "missing", "tok")
+    assert result is None
+
+@pytest.mark.asyncio
+async def test_fetch_readme_returns_none_on_error() -> None:
+    with patch("src.services.github._readme_sync", side_effect=ConnectionError("timeout")):
+        result = await fetch_readme("owner", "repo", "tok")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# fetch_tree
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fetch_tree_returns_paths() -> None:
+    paths = ["src/main.py", "README.md", "go.mod"]
+    with patch("src.services.github._tree_sync", return_value=paths):
+        result = await fetch_tree("owner", "repo", "main", "tok")
+    assert result == paths
+
+@pytest.mark.asyncio
+async def test_fetch_tree_returns_empty_on_error() -> None:
+    with patch("src.services.github._tree_sync", side_effect=RuntimeError("5xx")):
+        result = await fetch_tree("owner", "repo", "main", "tok")
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# fetch_manifest
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fetch_manifest_returns_content() -> None:
+    with patch("src.services.github._manifest_sync", return_value="[tool.poetry]"):
+        result = await fetch_manifest("owner", "repo", "pyproject.toml", "tok")
+    assert result == "[tool.poetry]"
+
+@pytest.mark.asyncio
+async def test_fetch_manifest_returns_none_on_404() -> None:
+    with patch("src.services.github._manifest_sync", return_value=None):
+        result = await fetch_manifest("owner", "repo", "Cargo.toml", "tok")
     assert result is None

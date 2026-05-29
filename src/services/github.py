@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64 as _base64
 import json
+import re as _re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -14,6 +16,93 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 _TTL = 86_400  # 24 hours
+
+_BADGE_LINE_RE = _re.compile(r"^\s*[\[!].*\]\(.*\)\s*$")
+_INLINE_HTML_TAGS = {"details", "picture", "img", "table", "sub", "sup", "kbd", "p"}
+_HTML_TAG_RE = _re.compile(
+    r"</?(" + "|".join(_INLINE_HTML_TAGS) + r")(\s[^>]*)?>",
+    _re.IGNORECASE,
+)
+_README_MAX = 50_000
+_BUNDLE_TTL = 86_400 * 7  # 7 days
+
+_MANIFEST_NAMES = frozenset([
+    "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt",
+    "package.json", "pnpm-lock.yaml", "go.mod", "Cargo.toml",
+    "Gemfile", "composer.json", "build.gradle", "build.gradle.kts",
+    "pom.xml", "Dockerfile",
+])
+
+
+def preprocess_readme(raw: str) -> str:
+    """Strip badge lines and inline HTML tags, then truncate to _README_MAX chars."""
+    lines = [line for line in raw.splitlines() if not _BADGE_LINE_RE.match(line)]
+    text = _HTML_TAG_RE.sub("", "\n".join(lines))
+    return text[:_README_MAX]
+
+
+def _detect_manifests(tree: list[str]) -> list[str]:
+    """Return paths whose filename is in _MANIFEST_NAMES and depth <= 2."""
+    return [p for p in tree if len(p.split("/")) <= 2 and p.split("/")[-1] in _MANIFEST_NAMES]
+
+
+def _readme_sync(owner: str, repo: str, token: str) -> bytes | None:
+    """Blocking HTTP call — run via asyncio.to_thread. Returns None on 404."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/readme"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    resp = requests.get(url, headers=headers, timeout=10)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return _base64.b64decode(resp.json()["content"].replace("\n", ""))
+
+
+def _tree_sync(owner: str, repo: str, branch: str, token: str) -> list[str]:
+    """Blocking HTTP call — run via asyncio.to_thread. Returns list of blob paths."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    resp = requests.get(url, headers=headers, timeout=15)
+    resp.raise_for_status()
+    return [item["path"] for item in resp.json().get("tree", []) if item.get("type") == "blob"]
+
+
+def _manifest_sync(owner: str, repo: str, path: str, token: str) -> str | None:
+    """Blocking HTTP call — run via asyncio.to_thread. Returns None on 404."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    resp = requests.get(url, headers=headers, timeout=10)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return _base64.b64decode(resp.json()["content"].replace("\n", "")).decode("utf-8", errors="replace")
+
+
+async def fetch_readme(owner: str, repo: str, token: str) -> str | None:
+    """Fetch and decode the README for owner/repo. Never raises — returns None on error."""
+    try:
+        raw = await asyncio.to_thread(_readme_sync, owner, repo, token)
+    except Exception as exc:
+        log.warning("github_readme_fetch_failed", repo=f"{owner}/{repo}", error=str(exc)[:120])
+        return None
+    return raw.decode("utf-8", errors="replace") if raw is not None else None
+
+
+async def fetch_tree(owner: str, repo: str, branch: str, token: str) -> list[str]:
+    """Fetch the recursive file tree for owner/repo@branch. Never raises — returns [] on error."""
+    try:
+        return await asyncio.to_thread(_tree_sync, owner, repo, branch, token)
+    except Exception as exc:
+        log.warning("github_tree_fetch_failed", repo=f"{owner}/{repo}", error=str(exc)[:120])
+        return []
+
+
+async def fetch_manifest(owner: str, repo: str, path: str, token: str) -> str | None:
+    """Fetch and decode a manifest file at path. Never raises — returns None on error."""
+    try:
+        return await asyncio.to_thread(_manifest_sync, owner, repo, path, token)
+    except Exception as exc:
+        log.warning("github_manifest_fetch_failed", repo=f"{owner}/{repo}", path=path, error=str(exc)[:120])
+        return None
 
 
 def _fetch_sync(owner: str, repo: str, token: str) -> dict | None:
