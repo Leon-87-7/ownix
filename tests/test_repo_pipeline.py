@@ -264,6 +264,7 @@ async def test_run_sends_summary_with_freestyle_button(monkeypatch: pytest.Monke
     btns = keyboard_calls[0]["buttons"]
     flat = [btn for row in btns for btn in row]
     assert any("Freestyle" in b.get("text", "") for b in flat)
+    assert any(b.get("callback_data", "").startswith("template_freestyle:") for b in flat)
 
 
 # ---------------------------------------------------------------------------

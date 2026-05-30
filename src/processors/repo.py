@@ -322,7 +322,10 @@ async def run(job: dict) -> None:
         analysis = _json.loads(raw)
     except Exception:
         m = _re.search(r"\{[\s\S]*\}", raw)
-        analysis = _json.loads(m.group(0)) if m else {}
+        try:
+            analysis = _json.loads(m.group(0)) if m else {}
+        except Exception:
+            analysis = {}
 
     await database.update_job_status(
         job_id, "done",
@@ -352,7 +355,7 @@ async def run(job: dict) -> None:
     # Summary + Freestyle button
     prefix = "\n".join(warning_lines) + "\n\n" if warning_lines else ""
     summary = prefix + _format_summary_message(owner, repo, analysis, bundle)
-    freestyle_btn = [[{"text": "✍️ Freestyle", "callback_data": f"freestyle:{job_id}"}]]
+    freestyle_btn = [[{"text": "✍️ Freestyle", "callback_data": f"template_freestyle:{job_id}"}]]
     await send_inline_keyboard(chat_id, summary, freestyle_btn)
 
     # Sheets — fire-and-forget

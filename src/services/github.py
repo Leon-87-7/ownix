@@ -46,10 +46,10 @@ def _detect_manifests(tree: list[str]) -> list[str]:
     return [p for p in tree if len(p.split("/")) <= 2 and p.split("/")[-1] in _MANIFEST_NAMES]
 
 
-def _readme_sync(owner: str, repo: str, token: str) -> bytes | None:
+def _readme_sync(owner: str, repo: str, token: str | None) -> bytes | None:
     """Blocking HTTP call — run via asyncio.to_thread. Returns None on 404."""
     url = f"https://api.github.com/repos/{owner}/{repo}/readme"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    headers = {"Accept": "application/vnd.github+json", **({"Authorization": f"Bearer {token}"} if token else {})}
     resp = requests.get(url, headers=headers, timeout=10)
     if resp.status_code == 404:
         return None
@@ -57,19 +57,19 @@ def _readme_sync(owner: str, repo: str, token: str) -> bytes | None:
     return _base64.b64decode(resp.json()["content"].replace("\n", ""))
 
 
-def _tree_sync(owner: str, repo: str, branch: str, token: str) -> list[str]:
+def _tree_sync(owner: str, repo: str, branch: str, token: str | None) -> list[str]:
     """Blocking HTTP call — run via asyncio.to_thread. Returns list of blob paths."""
     url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    headers = {"Accept": "application/vnd.github+json", **({"Authorization": f"Bearer {token}"} if token else {})}
     resp = requests.get(url, headers=headers, timeout=15)
     resp.raise_for_status()
     return [item["path"] for item in resp.json().get("tree", []) if item.get("type") == "blob"]
 
 
-def _manifest_sync(owner: str, repo: str, path: str, token: str) -> str | None:
+def _manifest_sync(owner: str, repo: str, path: str, token: str | None) -> str | None:
     """Blocking HTTP call — run via asyncio.to_thread. Returns None on 404."""
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    headers = {"Accept": "application/vnd.github+json", **({"Authorization": f"Bearer {token}"} if token else {})}
     resp = requests.get(url, headers=headers, timeout=10)
     if resp.status_code == 404:
         return None
@@ -105,10 +105,10 @@ async def fetch_manifest(owner: str, repo: str, path: str, token: str) -> str | 
         return None
 
 
-def _fetch_bundle_meta_sync(owner: str, repo: str, token: str) -> dict | None:
+def _fetch_bundle_meta_sync(owner: str, repo: str, token: str | None) -> dict | None:
     """Full metadata including default_branch. Returns None on 404. Raises on 403/5xx."""
     url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    headers = {"Accept": "application/vnd.github+json", **({"Authorization": f"Bearer {token}"} if token else {})}
     resp = requests.get(url, headers=headers, timeout=10)
     if resp.status_code == 404:
         return None
@@ -125,7 +125,7 @@ def _fetch_bundle_meta_sync(owner: str, repo: str, token: str) -> dict | None:
     }
 
 
-async def fetch_repo_bundle(owner: str, repo: str, token: str) -> dict:
+async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
     """Assemble the full repo bundle with README, file tree, and manifests.
 
     Cache key: github_repo_bundle:{owner}/{repo}, TTL 7 days.
