@@ -11,6 +11,7 @@ from src import database
 from src.config import settings
 from src.services import gemini
 from src.services.github import fetch_repo_bundle
+from src.services.sheets import append_repo_row, update_repo_row
 from src.telegram.sender import send_document, send_inline_keyboard, send_message
 from src.utils.logger import get_logger
 
@@ -249,6 +250,22 @@ def render_repo_markdown(analysis: dict, bundle: dict) -> str:
     return "\n".join(lines)
 
 
+async def _sheets_append_safe(job_id: str, job: dict, analysis: dict, bundle: dict) -> None:
+    try:
+        row_idx = await append_repo_row(job, analysis, bundle)
+        if row_idx is not None:
+            await database.update_job_status(job_id, "done", sheets_row_id=str(row_idx))
+    except Exception as exc:
+        log.warning("repo_sheets_append_failed", job_id=job_id, error=str(exc)[:120])
+
+
+async def _sheets_update_safe(row_idx: int, job: dict, analysis: dict, bundle: dict) -> None:
+    try:
+        await update_repo_row(row_idx, job, analysis, bundle)
+    except Exception as exc:
+        log.warning("repo_sheets_update_failed", job_id=job.get("id"), error=str(exc)[:120])
+
+
 async def run(job: dict) -> None:
     job_id = job["id"]
     chat_id = job["chat_id"]
@@ -293,3 +310,11 @@ async def run(job: dict) -> None:
     await send_inline_keyboard(chat_id, summary, freestyle_btn)
 
     log.info("repo_gemini_done", job_id=job_id, repo=f"{owner}/{repo}")
+
+    # Sheets — fire-and-forget
+    current_job = {"id": job_id, "url": url, "created_at": job.get("created_at", ""), "status": "done"}
+    sheets_row_id = job.get("sheets_row_id")
+    if sheets_row_id:
+        asyncio.create_task(_sheets_update_safe(int(sheets_row_id), current_job, analysis, bundle))
+    else:
+        asyncio.create_task(_sheets_append_safe(job_id, current_job, analysis, bundle))

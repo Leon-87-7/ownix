@@ -148,3 +148,121 @@ async def test_append_long_row_routes_to_long_tab(monkeypatch) -> None:
     assert len(captured) == 1
     tab_name, _ = captured[0]
     assert tab_name == "YouTube Transcript Index"
+
+
+# ---------------------------------------------------------------------------
+# Repo Analysis tab — TAB_REPO, append_repo_row, update_repo_row
+# ---------------------------------------------------------------------------
+
+import asyncio
+from unittest.mock import patch as _patch
+
+from src.services.sheets import TAB_REPO, append_repo_row, update_repo_row
+
+_SHEETS_JOB = {
+    "id": "20260101_120000_ABCD",
+    "url": "https://github.com/anthropics/claude-code",
+    "sheets_row_id": None,
+    "created_at": "2026-01-01T12:00:00Z",
+    "status": "done",
+}
+_SHEETS_ANALYSIS = {
+    "title": "anthropics/claude-code",
+    "tagline": "AI coding tool",
+    "tech_stack": ["TypeScript", "Node.js"],
+    "for_developers": {
+        "project_ideas": ["Build workflows", "Extend"],
+        "when_to_use": "In terminal",
+        "avoid_when": "GUI needed",
+    },
+    "for_education": {
+        "concepts_taught": ["LLM tool use"],
+        "prerequisites": ["TypeScript"],
+        "curriculum_hooks": [
+            {"concept": "Tool calling", "file_pointer": "src/", "why": "Patterns"},
+            {"concept": "Async", "file_pointer": None, "why": "Core"},
+        ],
+    },
+}
+_SHEETS_BUNDLE = {
+    "owner": "anthropics", "repo": "claude-code",
+    "metadata": {"stars": 100, "forks": 10, "language": "TypeScript",
+                 "pushed_at": "2026-01-01T00:00:00Z", "description": "AI", "archived": False},
+}
+
+
+def test_tab_repo_constant() -> None:
+    assert TAB_REPO == "Repo Analysis"
+
+
+@pytest.mark.asyncio
+async def test_append_repo_row_produces_20_columns() -> None:
+    rows: list[list] = []
+
+    async def patched_to_thread(fn, *args):
+        return fn(*args)
+
+    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+         _patch("asyncio.to_thread", patched_to_thread):
+        await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+
+    assert rows, "no row appended"
+    assert len(rows[0]) == 20
+
+
+@pytest.mark.asyncio
+async def test_append_repo_row_tech_stack_newline_joined() -> None:
+    rows: list[list] = []
+
+    async def patched_to_thread(fn, *args):
+        return fn(*args)
+
+    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+         _patch("asyncio.to_thread", patched_to_thread):
+        await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+
+    tech_col = rows[0][6]  # column index 6
+    assert "TypeScript" in tech_col
+    assert "Node.js" in tech_col
+    assert "\n" in tech_col
+
+
+@pytest.mark.asyncio
+async def test_append_repo_row_curriculum_hooks_serialization() -> None:
+    rows: list[list] = []
+
+    async def patched_to_thread(fn, *args):
+        return fn(*args)
+
+    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+         _patch("asyncio.to_thread", patched_to_thread):
+        await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+
+    hooks_col = rows[0][17]  # column index 17
+    assert "Tool calling — src/: Patterns" in hooks_col
+    assert "Async: Core" in hooks_col
+    assert "file_pointer" not in hooks_col
+
+
+@pytest.mark.asyncio
+async def test_append_repo_row_archived_is_TRUE_FALSE_string() -> None:
+    rows: list[list] = []
+    bundle = {**_SHEETS_BUNDLE, "metadata": {**_SHEETS_BUNDLE["metadata"], "archived": True}}
+
+    async def patched_to_thread(fn, *args):
+        return fn(*args)
+
+    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+         _patch("asyncio.to_thread", patched_to_thread):
+        await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, bundle)
+
+    assert rows[0][11] == "TRUE"  # archived column
+
+
+@pytest.mark.asyncio
+async def test_append_repo_row_failure_does_not_raise() -> None:
+    async def patched_to_thread(fn, *args):
+        raise RuntimeError("403 Forbidden")
+
+    with _patch("asyncio.to_thread", patched_to_thread):
+        await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)  # must not raise

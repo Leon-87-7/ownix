@@ -23,6 +23,71 @@ TAB_LONG = "YouTube Transcript Index"
 TAB_SHORT = "Short Video Analysis"
 TAB_PRD = "mini PRD"
 TAB_ARTICLE = "Article Analysis"
+TAB_REPO = "Repo Analysis"
+
+
+def _repo_row(job: dict, analysis: dict, bundle: dict) -> list:
+    owner = bundle.get("owner", "")
+    repo = bundle.get("repo", "")
+    meta = bundle.get("metadata") or {}
+    for_dev = analysis.get("for_developers") or {}
+    for_edu = analysis.get("for_education") or {}
+
+    def join_list(items: list) -> str:
+        return "\n".join(str(x) for x in items) if items else ""
+
+    def hooks_str(hooks: list) -> str:
+        parts = []
+        for h in hooks:
+            fp = h.get("file_pointer")
+            fp_part = f" — {fp}" if fp else ""
+            parts.append(f"{h.get('concept', '')}{fp_part}: {h.get('why', '')}")
+        return "\n".join(parts)
+
+    return [
+        job.get("id", ""),
+        job.get("url", ""),
+        owner,
+        repo,
+        analysis.get("title", f"{owner}/{repo}"),
+        analysis.get("tagline", ""),
+        join_list(analysis.get("tech_stack") or []),
+        meta.get("stars", ""),
+        meta.get("forks", ""),
+        meta.get("language") or "",
+        meta.get("pushed_at") or "",
+        "TRUE" if meta.get("archived") else "FALSE",
+        join_list(for_dev.get("project_ideas") or []),
+        for_dev.get("when_to_use", ""),
+        for_dev.get("avoid_when", ""),
+        join_list(for_edu.get("concepts_taught") or []),
+        join_list(for_edu.get("prerequisites") or []),
+        hooks_str(for_edu.get("curriculum_hooks") or []),
+        job.get("created_at", ""),
+        job.get("status", ""),
+    ]
+
+
+async def append_repo_row(job: dict, analysis: dict, bundle: dict) -> int | None:
+    """Append one row to 'Repo Analysis' tab and return the 1-based row index."""
+    row = _repo_row(job, analysis, bundle)
+    try:
+        row_idx = await asyncio.to_thread(_append_sync, TAB_REPO, row)
+        log.info("sheets_repo_appended", job_id=job.get("id"), row_idx=row_idx)
+        return row_idx
+    except Exception:
+        log.exception("sheets_repo_failed", job_id=job.get("id"))
+        return None
+
+
+async def update_repo_row(row_idx: int, job: dict, analysis: dict, bundle: dict) -> None:
+    """Overwrite the Repo Analysis row at row_idx (1-based) in-place."""
+    row = _repo_row(job, analysis, bundle)
+    try:
+        await asyncio.to_thread(_update_sync, TAB_REPO, row_idx, row)
+        log.info("sheets_repo_updated", job_id=job.get("id"), row_idx=row_idx)
+    except Exception:
+        log.exception("sheets_repo_update_failed", job_id=job.get("id"))
 
 
 def _build_service() -> Any:
