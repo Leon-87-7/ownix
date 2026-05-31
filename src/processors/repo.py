@@ -181,11 +181,13 @@ def _format_summary_message(owner: str, repo: str, analysis: dict, bundle: dict)
     days = _days_ago(meta.get("pushed_at"))
     tagline = analysis.get("tagline", "")
     repo_url = f"https://github.com/{owner}/{repo}"
-    project_ideas = analysis.get("for_developers", {}).get("project_ideas") or []
-    first_idea = (project_ideas[0][:80] + "…") if project_ideas else "—"
-    concepts = analysis.get("for_education", {}).get("concepts_taught") or []
-    hooks = analysis.get("for_education", {}).get("curriculum_hooks") or []
-    edu_line = (concepts[0] if concepts else "") + (f" • {hooks[0]['concept']}…" if hooks else "")
+    for_dev = analysis.get("for_developers") or {}
+    project_ideas = for_dev.get("project_ideas") or []
+    # One full paragraph each — no truncation. Developers: when_to_use prose,
+    # falling back to the first project idea. Teaching: the concepts taught.
+    dev_para = for_dev.get("when_to_use") or (project_ideas[0] if project_ideas else "—")
+    concepts = (analysis.get("for_education") or {}).get("concepts_taught") or []
+    edu_para = " • ".join(concepts) if concepts else "—"
 
     return "\n".join(
         [
@@ -195,10 +197,10 @@ def _format_summary_message(owner: str, repo: str, analysis: dict, bundle: dict)
             f"⭐ {stars:,} | 🔀 {forks:,} | 💻 {language} | 📅 {_humanize_age(days)}",
             "",
             "🛠 For developers",
-            f"  {first_idea}",
+            f"  {dev_para}",
             "",
             "🎓 For teaching",
-            f"  {edu_line}",
+            f"  {edu_para}",
             "",
             f"🔗 {repo_url}",
         ]
