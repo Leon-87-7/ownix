@@ -64,6 +64,7 @@
 | [#72](https://github.com/Leon-87-7/vig/issues/72) | Repo pipeline #7: Edge cases (archived + no-README + distinct API errors)                                  | Repo Pipeline | Merged; PR #80; closed on GH |
 | [#73](https://github.com/Leon-87-7/vig/issues/73) | Repo pipeline #8: Freestyle re-run end-to-end (same job_id, cache hit, Sheets in-place update)            | Repo Pipeline | Merged; PR #80; closed on GH |
 | [#81](https://github.com/Leon-87-7/vig/issues/81) | bug(database): add chat_id to ignored_domains — per-chat tenancy (drift fix)                              | DB / Tenancy  | Committed to main (45edd0d); closed on GH |
+| [#83](https://github.com/Leon-87-7/vig/issues/83) | web(S0): API package split + FK enforcement                                                                | Web / Infra   | Closed on GH |
 
 ---
 
@@ -72,6 +73,17 @@
 |                                                   # | Title                                                                                                       | Area          | Depends On  |
 | --------------------------------------------------: | ----------------------------------------------------------------------------------------------------------- | ------------- | ----------- |
 | [#66](https://github.com/Leon-87-7/vig/issues/66)  | Repo pipeline #1: URL routing + stub processor (tracer bullet)                                              | Repo Pipeline | —           |
+| [#85](https://github.com/Leon-87-7/vig/issues/85)  | web(S2): Feed — stats + fuse.js search + filters + polling                                                  | Web / Feed    | #84         |
+| [#86](https://github.com/Leon-87-7/vig/issues/86)  | web(S3): Job detail + per-field copy                                                                        | Web / Jobs    | #84         |
+| [#87](https://github.com/Leon-87-7/vig/issues/87)  | web(S4): Controls Tags tab                                                                                  | Web / Controls | #84        |
+| [#88](https://github.com/Leon-87-7/vig/issues/88)  | web(S5): Job annotation + tagging (Milkdown)                                                                | Web / Jobs    | #86, #87    |
+| [#89](https://github.com/Leon-87-7/vig/issues/89)  | web(S6): Spaces CRUD + URLs tab                                                                             | Web / Spaces  | #84, #85    |
+| [#90](https://github.com/Leon-87-7/vig/issues/90)  | web(S9): User templates + -name branch                                                                      | Web / Templates | #83, #84  |
+| [#91](https://github.com/Leon-87-7/vig/issues/91)  | web(S10): Controls Allowed/Ignored domains                                                                  | Web / Controls | #84, #81  |
+| [#92](https://github.com/Leon-87-7/vig/issues/92)  | web(S11): Brain search page                                                                                 | Web / Brain   | #83, #84    |
+| [#93](https://github.com/Leon-87-7/vig/issues/93)  | web(S7): Context blobs (Context tab)                                                                        | Web / Spaces  | #89, #88    |
+| [#94](https://github.com/Leon-87-7/vig/issues/94)  | web(S12): Deploy — compose web + subdomains [HITL]                                                         | Web / Ops     | #84         |
+| [#95](https://github.com/Leon-87-7/vig/issues/95)  | web(S8): Space export — composer + gdoc + modal                                                             | Web / Spaces  | #89, #93, #87, #88 |
 
 ---
 
@@ -92,9 +104,9 @@ Ordered by unblocked-first, then dependency chain.
 
 ## Ready for Human
 
-|      # | Title | Area | Notes |
-| -----: | ----- | ---- | ----- |
-| (none) |       |      |       |
+|                                                  # | Title                                                                          | Area       | Notes                                    |
+| -------------------------------------------------: | ------------------------------------------------------------------------------ | ---------- | ---------------------------------------- |
+| [#84](https://github.com/Leon-87-7/vig/issues/84) | web(S1): Auth spine — Login Widget → Redis session → shell [HITL]              | Web / Auth | Needs BotFather domain reg + real login  |
 
 ---
 
@@ -185,6 +197,23 @@ webhook.py split (CONTEXT.md: Dispatch contract module / Telegram sender seam + 
 
 Web dashboard feature (postgrill: docs/features/postgrill/web-plan.md + ADR-0016..0019)
 #81 ignored_domains per-chat migration (tenancy drift) ✓ (45edd0d; prerequisite for /controls Ignored tab)
+
+Web dashboard slices (WEB-PRD: docs/seed/WEB-PRD.md)
+Critical path: #83 → #84 → {#85, #86, #87} → #88/#89 → #93 → #95
+
+#83 S0 — API package split + FK enforcement ✓
+└── #84 S1 — Auth spine [HITL]
+    ├── #85 S2 — Feed
+    │   └── #89 S6 — Spaces CRUD + URLs tab ◄── also #84
+    │       └── #93 S7 — Context blobs ◄── also #88
+    │           └── #95 S8 — Space export ◄── also #87, #88
+    ├── #86 S3 — Job detail
+    │   └── #88 S5 — Job annotation ◄── also #87
+    ├── #87 S4 — Controls Tags tab
+    ├── #90 S9 — User templates ◄── also #83
+    ├── #91 S10 — Controls Allowed/Ignored ◄── also #81
+    ├── #92 S11 — Brain search page ◄── also #83
+    └── #94 S12 — Deploy [HITL]
 
 #82 test(long_video) under-mocked send_message → coroutine in editMessageText (standalone test-hygiene; no deps)
 ```
