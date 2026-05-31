@@ -18,6 +18,7 @@ import json
 from typing import Any
 
 import redis.asyncio as redis
+from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from src.config import settings
 from src.utils.logger import get_logger
@@ -54,8 +55,17 @@ async def enqueue(task: dict[str, Any]) -> None:
 
 
 async def dequeue() -> dict[str, Any] | None:
-    """Blocking pop (30s timeout). Returns the decoded task envelope or None on timeout."""
-    result = await _client().brpop([_QUEUE_KEY], timeout=_DEQUEUE_TIMEOUT_SECONDS)
+    """Blocking pop (30s timeout). Returns the decoded task envelope or None on timeout.
+
+    A socket read-timeout during the blocking pop means no task arrived within the
+    window — a normal idle cycle, not a failure. We swallow it and return None so the
+    worker loops quietly. A real ``ConnectionError`` (Redis down) still propagates to
+    the worker's retry/backoff path.
+    """
+    try:
+        result = await _client().brpop([_QUEUE_KEY], timeout=_DEQUEUE_TIMEOUT_SECONDS)
+    except RedisTimeoutError:
+        return None
     if not result:
         return None
     _, raw = result
