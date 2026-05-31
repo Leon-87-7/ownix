@@ -63,6 +63,7 @@
 | [#71](https://github.com/Leon-87-7/vig/issues/71) | Repo pipeline #6: Second Brain ingest (repo URL only)                                                      | Repo Pipeline | Merged; PR #80; closed on GH |
 | [#72](https://github.com/Leon-87-7/vig/issues/72) | Repo pipeline #7: Edge cases (archived + no-README + distinct API errors)                                  | Repo Pipeline | Merged; PR #80; closed on GH |
 | [#73](https://github.com/Leon-87-7/vig/issues/73) | Repo pipeline #8: Freestyle re-run end-to-end (same job_id, cache hit, Sheets in-place update)            | Repo Pipeline | Merged; PR #80; closed on GH |
+| [#81](https://github.com/Leon-87-7/vig/issues/81) | bug(database): add chat_id to ignored_domains — per-chat tenancy (drift fix)                              | DB / Tenancy  | Committed to main (45edd0d); closed on GH |
 
 ---
 
@@ -180,4 +181,7 @@ webhook.py split (CONTEXT.md: Dispatch contract module / Telegram sender seam + 
 ├── #76 extract callbacks.py (_cb_* + _CALLBACK_TABLE + handle_callback) ──┐
 ├── #77 extract domain_cmds.py (/ignore·/allowlist + DOMAIN_COMMANDS) ─────┤
 └── #78 extract photo.py (batch + handle_photo_message + PHOTO_COMMANDS) ──┴── #79 finalize sender.* seam in webhook + verify
+
+Web dashboard feature (postgrill: docs/features/postgrill/web-plan.md + ADR-0016..0019)
+#81 ignored_domains per-chat migration (tenancy drift) ✓ (45edd0d; prerequisite for /controls Ignored tab)
 ```
