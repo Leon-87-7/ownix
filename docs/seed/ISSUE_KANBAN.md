@@ -86,6 +86,7 @@ Ordered by unblocked-first, then dependency chain.
 | [#77](https://github.com/Leon-87-7/vig/issues/77) | refactor(telegram): extract domain_cmds.py — /ignore·/allowlist family + DOMAIN_COMMANDS              | Refactor / Telegram | #75           |
 | [#78](https://github.com/Leon-87-7/vig/issues/78) | refactor(telegram): extract photo.py — batch state machine + handle_photo_message() + PHOTO_COMMANDS  | Refactor / Telegram | #75           |
 | [#79](https://github.com/Leon-87-7/vig/issues/79) | refactor(telegram): finalize sender.* seam in webhook + line-count/glossary verification (ADR-0015)  | Refactor / Telegram | #76, #77, #78 |
+| [#82](https://github.com/Leon-87-7/vig/issues/82) | bug(test_long_video): under-mocked send_message → coroutine reaches editMessageText JSON encode (test-only) | Test / Long Video | — |
 
 ---
 
@@ -184,4 +185,6 @@ webhook.py split (CONTEXT.md: Dispatch contract module / Telegram sender seam + 
 
 Web dashboard feature (postgrill: docs/features/postgrill/web-plan.md + ADR-0016..0019)
 #81 ignored_domains per-chat migration (tenancy drift) ✓ (45edd0d; prerequisite for /controls Ignored tab)
+
+#82 test(long_video) under-mocked send_message → coroutine in editMessageText (standalone test-hygiene; no deps)
 ```
