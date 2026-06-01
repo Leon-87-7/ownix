@@ -148,6 +148,20 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
 );
+
+-- User-defined enrichment templates (issue #90).
+CREATE TABLE IF NOT EXISTS templates (
+    id                  TEXT PRIMARY KEY,
+    name                TEXT UNIQUE NOT NULL,
+    description         TEXT NOT NULL DEFAULT '',
+    extra_instructions  TEXT NOT NULL DEFAULT '',
+    trigger_patterns    TEXT NOT NULL DEFAULT '',
+    brave_search        INTEGER NOT NULL DEFAULT 0,
+    content_type_scope  TEXT NOT NULL DEFAULT '',
+    is_builtin          INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -422,6 +436,22 @@ _MIGRATIONS.append([
         color      TEXT NOT NULL DEFAULT '#6366f1',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(chat_id, name)
+    )""",
+])
+
+# v10 → v11: user-defined enrichment templates (issue #90)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS templates (
+        id                  TEXT PRIMARY KEY,
+        name                TEXT UNIQUE NOT NULL,
+        description         TEXT NOT NULL DEFAULT '',
+        extra_instructions  TEXT NOT NULL DEFAULT '',
+        trigger_patterns    TEXT NOT NULL DEFAULT '',
+        brave_search        INTEGER NOT NULL DEFAULT 0,
+        content_type_scope  TEXT NOT NULL DEFAULT '',
+        is_builtin          INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""",
 ])
 
@@ -861,6 +891,92 @@ async def delete_tag(*, chat_id: int, tag_id: str) -> bool:
     async with connection() as conn:
         cur = await conn.execute(
             "DELETE FROM tags WHERE id = ? AND chat_id = ?", (tag_id, chat_id)
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# User-defined templates (issue #90)
+# ---------------------------------------------------------------------------
+
+
+async def list_user_templates() -> list[dict]:
+    """Return all user-defined (non-builtin) templates ordered by name."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, name, description, extra_instructions, trigger_patterns, "
+            "brave_search, content_type_scope, created_at, updated_at "
+            "FROM templates WHERE is_builtin = 0 ORDER BY name"
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def get_user_template_by_name(name: str) -> dict | None:
+    """Return a user-defined template row by name, or None if not found."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, name, description, extra_instructions, trigger_patterns, "
+            "brave_search, content_type_scope, created_at, updated_at "
+            "FROM templates WHERE name = ? AND is_builtin = 0",
+            (name,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def create_user_template(
+    *,
+    name: str,
+    description: str = "",
+    extra_instructions: str = "",
+) -> dict:
+    """Insert a user-defined template and return the new row as a dict."""
+    tmpl_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            """INSERT INTO templates
+               (id, name, description, extra_instructions, is_builtin)
+               VALUES (?, ?, ?, ?, 0)""",
+            (tmpl_id, name, description, extra_instructions),
+        )
+        await conn.commit()
+    log.info("template_created", id=tmpl_id, name=name)
+    return {
+        "id": tmpl_id,
+        "name": name,
+        "description": description,
+        "extra_instructions": extra_instructions,
+        "trigger_patterns": "",
+        "brave_search": 0,
+        "content_type_scope": "",
+        "is_builtin": False,
+    }
+
+
+async def update_user_template(
+    *,
+    name: str,
+    description: str = "",
+    extra_instructions: str = "",
+) -> bool:
+    """Update description and extra_instructions for a user template. Returns True if updated."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            """UPDATE templates
+               SET description = ?, extra_instructions = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE name = ? AND is_builtin = 0""",
+            (description, extra_instructions, name),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def delete_user_template(name: str) -> bool:
+    """Delete a user-defined template by name. Returns True if deleted."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM templates WHERE name = ? AND is_builtin = 0", (name,)
         )
         await conn.commit()
         return cur.rowcount > 0

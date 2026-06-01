@@ -65,16 +65,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
 app.add_middleware(SessionMiddleware)
 app.include_router(webhook.router)
-
 from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router
 from src.api.jobs import jobs_router
+from src.api.templates import templates_router
 
 app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)
 app.include_router(jobs_router)
+app.include_router(templates_router)
 
 
 @app.get("/health")
