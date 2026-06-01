@@ -1061,6 +1061,58 @@ async def webhook(
         await _dispatch_slash(chat_id, "/" + text, message_id)
         return {"ok": True}
 
+    # 3b. User-template shortcut: "-mytemplate <url>"
+    if text.split()[0].startswith("-"):
+        parts = text.split()
+        tmpl_name = parts[0][1:].lower()  # strip leading '-'
+        if len(parts) < 2:
+            await send_message(chat_id, f"❌ Usage: `-{tmpl_name} <url>`")
+            return {"ok": True}
+        tmpl_row = await database.get_user_template_by_name(tmpl_name)
+        if tmpl_row is None:
+            await send_message(
+                chat_id,
+                f"❌ Unknown template `-{tmpl_name}`. Create it at /prompts or check the name.",
+            )
+            return {"ok": True}
+        url = parts[1]
+        extra_domains = await database.list_allowed_domains(chat_id)
+        pipeline = detect_pipeline(url, frozenset(extra_domains))
+        if pipeline == "rejected":
+            await send_message(
+                chat_id,
+                "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+                "Instagram Reels, TikTok videos, and allowlisted article domains.",
+            )
+            return {"ok": True}
+        job_id = await database.create_job(
+            chat_id=chat_id,
+            url=url,
+            content_type=pipeline,
+            message_id=message_id,
+            template="freestyle",
+        )
+        extra_instructions = (tmpl_row.get("extra_instructions") or "").strip()
+        if extra_instructions:
+            async with database.connection() as conn:
+                await conn.execute(
+                    "UPDATE jobs SET freestyle_prompt=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (extra_instructions, job_id),
+                )
+                await conn.commit()
+        task_type = (
+            "repo" if pipeline == "repo"
+            else "article" if pipeline == "article"
+            else "video"
+        )
+        await queue.enqueue({"task": task_type, "job_id": job_id})
+        await send_message(
+            chat_id,
+            f"📥 Received\n✨ Kicking off analysis ({tmpl_name})\njob_{job_id[-4:]}",
+        )
+        log.info("user_template_shortcut.enqueued", chat_id=chat_id, job_id=job_id, template=tmpl_name)
+        return {"ok": True}
+
     # 4. Normal URL routing
     client = queue._client()
     pending_template: str | None = await client.get(f"pending_template:{chat_id}")
