@@ -16,7 +16,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+RUN mkdir -p public
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
