@@ -178,6 +178,27 @@ CREATE TABLE IF NOT EXISTS job_tags (
     tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (job_id, tag_id)
 );
+
+-- Named collections of jobs (issue #89 / S6).
+CREATE TABLE IF NOT EXISTS spaces (
+    id         TEXT PRIMARY KEY,
+    chat_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(chat_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_spaces_chat_id ON spaces(chat_id);
+
+-- Jobs pinned into a space (issue #89 / S6).
+CREATE TABLE IF NOT EXISTS space_urls (
+    space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (space_id, job_id)
+);
 """
 
 
@@ -484,6 +505,27 @@ _MIGRATIONS.append([
         job_id  TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
         tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         PRIMARY KEY (job_id, tag_id)
+    )""",
+])
+
+# v12 → v13: spaces + space_urls tables (issue #89 / S6)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS spaces (
+        id         TEXT PRIMARY KEY,
+        chat_id    INTEGER NOT NULL,
+        name       TEXT NOT NULL,
+        color      TEXT NOT NULL DEFAULT '#6366f1',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chat_id, name)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_spaces_chat_id ON spaces(chat_id)",
+    """CREATE TABLE IF NOT EXISTS space_urls (
+        space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (space_id, job_id)
     )""",
 ])
 
@@ -1088,3 +1130,121 @@ async def detach_job_tag(job_id: str, tag_id: str) -> bool:
         )
         await conn.commit()
         return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Spaces (issue #89 / S6)
+# ---------------------------------------------------------------------------
+
+
+async def create_space(*, chat_id: int, name: str, color: str) -> dict:
+    """INSERT a new space row and return it as a dict."""
+    space_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            "INSERT INTO spaces (id, chat_id, name, color) VALUES (?, ?, ?, ?)",
+            (space_id, chat_id, name, color),
+        )
+        await conn.commit()
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+            (space_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row)
+
+
+async def list_spaces(chat_id: int) -> list[dict]:
+    """Return all spaces for chat_id ordered newest-first."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at "
+            "FROM spaces WHERE chat_id = ? ORDER BY created_at DESC",
+            (chat_id,),
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def get_space(space_id: str) -> dict | None:
+    """Return a single space by PK, or None."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+            (space_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def update_space(*, chat_id: int, space_id: str, name: str, color: str) -> bool:
+    """UPDATE name/color for a space owned by chat_id. Returns True if updated."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE spaces SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND chat_id = ?",
+            (name, color, space_id, chat_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def delete_space(*, chat_id: int, space_id: str) -> bool:
+    """DELETE a space owned by chat_id. Returns True if deleted."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM spaces WHERE id = ? AND chat_id = ?",
+            (space_id, chat_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def add_space_url(*, space_id: str, job_id: str) -> bool:
+    """Pin a job into a space. sort_order = max+1. Idempotent (INSERT OR IGNORE)."""
+    async with connection() as conn:
+        await conn.execute(
+            """INSERT OR IGNORE INTO space_urls (space_id, job_id, sort_order)
+               VALUES (?, ?, COALESCE(
+                   (SELECT MAX(sort_order) FROM space_urls WHERE space_id = ?), 0
+               ) + 1)""",
+            (space_id, job_id, space_id),
+        )
+        await conn.commit()
+        return True
+
+
+async def remove_space_url(*, space_id: str, job_id: str) -> bool:
+    """Unpin a job from a space. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM space_urls WHERE space_id = ? AND job_id = ?",
+            (space_id, job_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def reorder_space_url(*, space_id: str, job_id: str, new_sort_order: int) -> bool:
+    """Update sort_order for a pinned job. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE space_urls SET sort_order = ? WHERE space_id = ? AND job_id = ?",
+            (new_sort_order, space_id, job_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def list_space_urls(space_id: str, chat_id: int) -> list[dict]:
+    """Return jobs pinned to a space, joined with key job fields, ordered by sort_order."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            """SELECT j.id, j.title, j.url, j.content_type, j.status,
+                      su.sort_order, su.added_at
+               FROM space_urls su
+               JOIN jobs j ON j.id = su.job_id AND j.chat_id = ?
+               WHERE su.space_id = ?
+               ORDER BY su.sort_order ASC""",
+            (chat_id, space_id),
+        )
+        return [dict(row) for row in await cur.fetchall()]
