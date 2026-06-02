@@ -99,13 +99,16 @@ async def delete_space(space_id: str, request: Request) -> None:
 async def list_space_urls(space_id: str, request: Request) -> list[dict]:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
-    return await database.list_space_urls(space_id)
+    return await database.list_space_urls(space_id, chat_id)
 
 
 @spaces_router.post("/{space_id}/urls", status_code=201)
 async def add_space_url(space_id: str, body: UrlIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
+    job = await database.get_job(body.job_id)
+    if job is None or job["chat_id"] != chat_id:
+        raise HTTPException(status_code=404, detail="Job not found")
     await database.add_space_url(space_id=space_id, job_id=body.job_id)
     return {"space_id": space_id, "job_id": body.job_id}
 
