@@ -334,7 +334,7 @@ function DomainTab({
         throw new Error((data as { detail?: string }).detail ?? 'Add failed');
       }
       const created = (await res.json()) as { domain: string };
-      setDomains((prev) => [...new Set([...prev, created.domain])].sort());
+      setDomains((prev) => Array.from(new Set([...prev, created.domain])).sort());
       setInput('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@milkdown/core": "^7.21.1",
-    "@milkdown/crepe": "^7.21.1",
+    "@milkdown/crepe": "^7.21.2",
     "@milkdown/ctx": "^7.21.1",
     "@milkdown/transformer": "^7.21.1",
     "fuse.js": "^7.4.0",
