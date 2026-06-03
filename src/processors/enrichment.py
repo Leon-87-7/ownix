@@ -125,7 +125,12 @@ def _extract_json(raw: str) -> dict:
     clean = re.sub(r"^```json\s*", "", raw, flags=re.IGNORECASE)
     clean = re.sub(r"```\s*$", "", clean).strip()
     m = re.search(r"\{[\s\S]*\}", clean)
-    return json.loads(m.group(0) if m else clean)
+    text = m.group(0) if m else clean
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        from json_repair import repair_json
+        return json.loads(repair_json(text))
 
 
 def _parse_enrichment(data: dict) -> Enrichment:

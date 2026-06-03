@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     BRAIN_REFRESH_BATCH: int = 50
     BRAIN_MIN_SCORE: float = 0.5
 
+    # Web dashboard (issue #84)
+    SESSION_COOKIE_SECURE: bool = False  # set True in prod (HTTPS)
+
     # Slices #6/#7 — Mini-PRD
     GOOGLE_DRIVE_FOLDER_PRD: str = ""
     PRD_MAX_TRANSCRIPT_CHARS: int = 60_000

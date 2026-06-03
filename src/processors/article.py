@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from src import database
 from src.config import settings
-from src.telegram.sender import send_document, send_inline_keyboard, send_message
+from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -174,6 +174,8 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     tag = f"job_{job_id[-4:]}:"
 
     await database.update_job_status(job_id, "processing")
+    status_result = await send_message(chat_id, f"{tag}\n🔊 Fetching article...")
+    status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Markdown cache lookup
     cached = await database.get_markdown_cache(url)
@@ -205,6 +207,11 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
                 )
                 await conn.commit()
         log.info("article.jina_fetched", job_id=job_id, title=title[:80] if title else "")
+
+    if status_msg_id:
+        await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 Article fetched, running Gemini analysis...")
+    else:
+        await send_message(chat_id, f"{tag}\n🍪 Article fetched, running Gemini analysis...")
 
     # 2. Paywall heuristic (never aborts)
     paywall_warning = _check_paywall(body)

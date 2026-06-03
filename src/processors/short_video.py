@@ -12,7 +12,7 @@ from src.services import brave, frames, gemini, sheets
 from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.services.github import enrich_github_links
-from src.telegram.sender import send_message, send_photo
+from src.telegram.sender import edit_message_text, send_message, send_photo
 from src.utils.logger import get_logger
 from src.utils.markdown import build_enriched_links_message
 from src.utils.validators import filter_vision_links
@@ -64,7 +64,8 @@ async def run(job: dict) -> None:
     tag = _tag(job_id)
 
     await database.update_job_status(job_id, "processing")
-    await send_message(chat_id, f"{tag}\n🔊 Processing your short video...")
+    status_result = await send_message(chat_id, f"{tag}\n🔊 Processing your short video...")
+    status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Fetch frames from sidecar
     frame_resp = await frames.fetch_frames(url)
@@ -99,6 +100,11 @@ async def run(job: dict) -> None:
     # 3. Brave Search enrichment (opt-in)
     if links:
         links = await brave.verify_links(links)
+
+    if status_msg_id:
+        await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 Analysis done, uploading to Drive...")
+    else:
+        await send_message(chat_id, f"{tag}\n🍪 Analysis done, uploading to Drive...")
 
     # 4. Upload analysis markdown to Drive
     md_content = _build_analysis_markdown(job, platform, video_id, summary, links)

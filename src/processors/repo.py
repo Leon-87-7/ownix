@@ -14,7 +14,7 @@ from src.services import gemini
 from src.services.gemini import GeminiUnavailableError
 from src.services.github import fetch_repo_bundle
 from src.services.sheets import append_repo_row, update_repo_row
-from src.telegram.sender import send_document, send_inline_keyboard, send_message
+from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message
 from src.utils.logger import get_logger
 from src.utils.markdown import _humanize_age
 
@@ -321,6 +321,8 @@ async def run(job: dict) -> None:
 
     await database.update_job_status(job_id, "processing")
     owner, repo = _parse_owner_repo(url)
+    status_result = await send_message(chat_id, f"{tag}\n🔊 Fetching {owner}/{repo}...")
+    status_msg_id: int | None = status_result.get("message_id")
 
     try:
         bundle = await fetch_repo_bundle(owner, repo, settings.GITHUB_TOKEN)
@@ -329,6 +331,11 @@ async def run(job: dict) -> None:
         await database.update_job_status(job_id, "error", error_msg=str(exc)[:200])
         await send_message(chat_id, f"{tag}\n❌ {_classify_github_error(exc)}")
         return
+
+    if status_msg_id:
+        await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 Bundle ready, running Gemini analysis...")
+    else:
+        await send_message(chat_id, f"{tag}\n🍪 Bundle ready, running Gemini analysis...")
 
     flags = {"no_readme": bundle.get("no_readme", False)}
     prompt = _build_repo_prompt(bundle, freestyle_prompt=freestyle_prompt, flags=flags)

@@ -8,6 +8,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from src import database, queue
+from src.auth.middleware import SessionMiddleware
 from src.telegram import sender, webhook
 from src.utils.logger import configure_logging, get_logger
 
@@ -57,13 +58,23 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     log.info("api_shutting_down")
     await sender.close()
     await queue.close()
+    from src.auth import session as session_store
+    await session_store.close()
 
 
 app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
+app.add_middleware(SessionMiddleware)
 app.include_router(webhook.router)
-from src.api.brain import brain_router
 
+from src.api.auth import auth_router
+from src.api.brain import brain_router
+from src.api.controls import controls_router
+from src.api.jobs import jobs_router
+
+app.include_router(auth_router)
 app.include_router(brain_router)
+app.include_router(controls_router)
+app.include_router(jobs_router)
 
 
 @app.get("/health")

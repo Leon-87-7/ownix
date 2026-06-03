@@ -110,6 +110,17 @@ CREATE TABLE IF NOT EXISTS markdown_cache (
     fetched_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Web dashboard users (issue #84 / S1 auth spine).
+CREATE TABLE IF NOT EXISTS users (
+    tg_id       INTEGER PRIMARY KEY,
+    username    TEXT,
+    first_name  TEXT NOT NULL,
+    last_name   TEXT,
+    photo_url   TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Second Brain semantic link graph (src/brain.py data-access layer).
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
@@ -126,6 +137,17 @@ CREATE TABLE IF NOT EXISTS links (
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
+
+-- Tag vocabulary for job tagging (issue #87 / S4).
+CREATE TABLE IF NOT EXISTS tags (
+    id         TEXT PRIMARY KEY,
+    chat_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    meaning    TEXT NOT NULL DEFAULT '',
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(chat_id, name)
+);
 """
 
 
@@ -376,6 +398,32 @@ async def _migrate_v7_v8(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v7_v8)
+
+# v8 → v9: users table for web dashboard auth (issue #84)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS users (
+        tg_id       INTEGER PRIMARY KEY,
+        username    TEXT,
+        first_name  TEXT NOT NULL,
+        last_name   TEXT,
+        photo_url   TEXT,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+])
+
+# v9 → v10: tags table (issue #87 / S4)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS tags (
+        id         TEXT PRIMARY KEY,
+        chat_id    INTEGER NOT NULL,
+        name       TEXT NOT NULL,
+        meaning    TEXT NOT NULL DEFAULT '',
+        color      TEXT NOT NULL DEFAULT '#6366f1',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chat_id, name)
+    )""",
+])
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -737,6 +785,82 @@ async def delete_markdown_cache(url: str) -> bool:
     async with connection() as conn:
         cur = await conn.execute(
             "DELETE FROM markdown_cache WHERE url = ?", (url,)
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Users (web dashboard auth — issue #84)
+# ---------------------------------------------------------------------------
+
+
+async def upsert_user(
+    *,
+    tg_id: int,
+    first_name: str,
+    username: str | None = None,
+    last_name: str | None = None,
+    photo_url: str | None = None,
+) -> None:
+    """Insert or update a Telegram user row (keyed by tg_id)."""
+    async with connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO users (tg_id, username, first_name, last_name, photo_url, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(tg_id) DO UPDATE SET
+                username   = excluded.username,
+                first_name = excluded.first_name,
+                last_name  = excluded.last_name,
+                photo_url  = excluded.photo_url,
+                updated_at = excluded.updated_at
+            """,
+            (tg_id, username, first_name, last_name, photo_url),
+        )
+        await conn.commit()
+    log.info("user_upserted", tg_id=tg_id)
+
+
+# ---------------------------------------------------------------------------
+# Tags (web dashboard — issue #87 / S4)
+# ---------------------------------------------------------------------------
+
+
+async def list_tags(chat_id: int) -> list[dict]:
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, name, meaning, color, created_at FROM tags WHERE chat_id = ? ORDER BY name",
+            (chat_id,),
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:
+    tag_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            "INSERT INTO tags (id, chat_id, name, meaning, color) VALUES (?, ?, ?, ?, ?)",
+            (tag_id, chat_id, name, meaning, color),
+        )
+        await conn.commit()
+    return {"id": tag_id, "name": name, "meaning": meaning, "color": color}
+
+
+async def update_tag(*, chat_id: int, tag_id: str, name: str, meaning: str, color: str) -> bool:
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE tags SET name = ?, meaning = ?, color = ? WHERE id = ? AND chat_id = ?",
+            (name, meaning, color, tag_id, chat_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def delete_tag(*, chat_id: int, tag_id: str) -> bool:
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM tags WHERE id = ? AND chat_id = ?", (tag_id, chat_id)
         )
         await conn.commit()
         return cur.rowcount > 0

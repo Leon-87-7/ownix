@@ -1,9 +1,9 @@
 # Credentials & secrets
-*.json
 !package.json
 .env
 .env.*
 !.env.example
+!.env.*.example
 credentials/*
 !credentials/.gitkeep
 data/*
@@ -27,6 +27,9 @@ docker-compose.override.yml
 # Worktrees
 .worktrees/
 
+# TypeScript
+*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
@@ -38,3 +41,4 @@ Thumbs.db
 
 docs/images/*
 docs/features/*
+web/node_modules/
