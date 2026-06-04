@@ -103,12 +103,9 @@ async def update_template(name: str, body: TemplateUpdateIn, request: Request) -
     if not ok:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    return {
-        "name": name_lower,
-        "description": body.description,
-        "extra_instructions": body.extra_instructions,
-        "is_builtin": False,
-    }
+    row = await database.get_user_template_by_name(chat_id, name_lower)
+    row["is_builtin"] = False
+    return row
 
 
 @templates_router.delete("/{name}", status_code=204)

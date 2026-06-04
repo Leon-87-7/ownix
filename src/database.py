@@ -899,6 +899,16 @@ async def list_tags(chat_id: int) -> list[dict]:
         return [dict(row) for row in await cur.fetchall()]
 
 
+async def get_tag(chat_id: int, tag_id: str) -> dict | None:
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, name, meaning, color, created_at FROM tags WHERE id = ? AND chat_id = ?",
+            (tag_id, chat_id),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
 async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:
     tag_id = generate_id()
     async with connection() as conn:

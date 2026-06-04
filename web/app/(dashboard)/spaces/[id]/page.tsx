@@ -86,6 +86,22 @@ export default function SpaceDetailPage({
   // Fetch space
   // ---------------------------------------------------------------------------
 
+  const fetchSpace = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch(, { signal });
+      if (res.status === 404) { setFetchState("not_found"); return; }
+      if (res.status === 403 || res.status === 401) { setFetchState("forbidden"); return; }
+      if (!res.ok) { setFetchState("error"); return; }
+      const data: SpaceDetail = await res.json();
+      setSpace(data);
+      setEditName(data.name);
+      setEditColor(data.color);
+      setFetchState("ok");
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") setFetchState("error");
+    }
+  }, [spaceId]);
+
   // ---------------------------------------------------------------------------
   // Fetch URLs
   // ---------------------------------------------------------------------------
@@ -118,7 +134,9 @@ export default function SpaceDetailPage({
   }, []);
 
   useEffect(() => {
-    fetchSpace();
+    const controller = new AbortController();
+    fetchSpace(controller.signal);
+    return () => controller.abort();
   }, [fetchSpace]);
 
   useEffect(() => {
@@ -475,6 +493,7 @@ export default function SpaceDetailPage({
             {addingJob ? "Adding…" : "Add"}
           </button>
         </div>
+        {addJobError && <p className="text-sm text-red-400">{addJobError}</p>}
       </section>
     </div>
   );

@@ -170,9 +170,7 @@ async def attach_tag(job_id: str, tag_id: str, request: Request) -> dict:
     if job["chat_id"] != chat_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Verify tag exists and belongs to this user.
-    tags = await database.list_tags(chat_id)
-    tag = next((t for t in tags if t["id"] == tag_id), None)
+    tag = await database.get_tag(chat_id, tag_id)
     if tag is None:
         raise HTTPException(status_code=404, detail="Tag not found")
 
@@ -190,11 +188,12 @@ async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
     if job["chat_id"] != chat_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    tags = await database.list_tags(chat_id)
-    if not any(t["id"] == tag_id for t in tags):
+    tag = await database.get_tag(chat_id, tag_id)
+    if tag is None:
         raise HTTPException(status_code=404, detail="Tag not found")
-
-    await database.detach_job_tag(job_id, tag_id)
+    deleted = await database.detach_job_tag(job_id, tag_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Tag not attached to this job")
     return Response(status_code=204)
 
 

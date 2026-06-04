@@ -1062,7 +1062,7 @@ async def webhook(
         return {"ok": True}
 
     # 3b. User-template shortcut: "-mytemplate <url>"
-    if text.split()[0].startswith("-"):
+    if re.match(r"^-[a-zA-Z0-9][a-zA-Z0-9_-]*$", text.split()[0]):
         parts = text.split()
         tmpl_name = parts[0][1:].lower()  # strip leading '-'
         if len(parts) < 2:
