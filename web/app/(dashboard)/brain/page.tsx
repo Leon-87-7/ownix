@@ -63,7 +63,7 @@ function ResultRow({ result }: { result: BrainResult }) {
         </span>
       </div>
       <a
-        href={result.url}
+        href={/^https?:\/\//i.test(result.url) ? result.url : '#'}
         target="_blank"
         rel="noopener noreferrer"
         className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline"
