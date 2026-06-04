@@ -1,7 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import TagPicker from "@/components/TagPicker";
+
+// Load Milkdown (heavy) only on the client, never during SSR.
+const MarkdownEditor = dynamic(() => import("@/components/MarkdownEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-lg border border-gray-700 bg-gray-800 p-4 text-xs text-gray-500">
+      Loading editor…
+    </div>
+  ),
+});
+
+interface TagSummary {
+  id: string;
+  name: string;
+  color: string;
+  meaning: string;
+}
+
+interface Annotation {
+  notes: string;
+  updated_at: string | null;
+}
 
 interface JobDetail {
   id: string;
@@ -126,6 +150,10 @@ export default function JobDetailPage({
 }) {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>("loading");
+  const [annotation, setAnnotation] = useState<Annotation>({ notes: "", updated_at: null });
+  const [annotationLoaded, setAnnotationLoaded] = useState(false);
+  const [jobTags, setJobTags] = useState<TagSummary[]>([]);
+  const [allTags, setAllTags] = useState<TagSummary[]>([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -155,6 +183,51 @@ export default function JobDetailPage({
       });
 
     return () => controller.abort();
+  }, [params.id]);
+
+  // Fetch annotation, job tags, and full tag library once job loads.
+  useEffect(() => {
+    if (fetchState !== "ok") return;
+    const id = params.id;
+
+    fetch(`/api/jobs/${id}/annotations`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setAnnotation(data); setAnnotationLoaded(true); })
+      .catch(() => { setAnnotationLoaded(true); });
+
+    fetch(`/api/jobs/${id}/tags`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .then(setJobTags)
+      .catch(() => {});
+
+    fetch("/api/controls/tags", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .then(setAllTags)
+      .catch(() => {});
+  }, [fetchState, params.id]);
+
+  const handleSave = useCallback(async (md: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${params.id}/annotations`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: md }),
+      });
+      if (res.ok) {
+        const saved: Annotation = await res.json();
+        setAnnotation(saved);
+      }
+    } catch {
+      // silently ignore network errors during auto-save
+    }
+  }, [params.id]);
+
+  const refetchTags = useCallback(() => {
+    fetch(`/api/jobs/${params.id}/tags`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .then(setJobTags)
+      .catch(() => {});
   }, [params.id]);
 
   // --- Loading ---
@@ -267,6 +340,17 @@ export default function JobDetailPage({
           );
         })}
       </div>
+
+      {/* Notes (WYSIWYG Milkdown editor — issue #88 / S5) */}
+      {annotationLoaded && <MarkdownEditor initialMarkdown={annotation.notes} onSave={handleSave} />}
+
+      {/* Tag picker (issue #88 / S5) */}
+      <TagPicker
+        jobId={params.id}
+        jobTags={jobTags}
+        allTags={allTags}
+        onTagChange={refetchTags}
+      />
     </div>
   );
 }

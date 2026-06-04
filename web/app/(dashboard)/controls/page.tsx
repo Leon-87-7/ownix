@@ -289,7 +289,136 @@ function TagsTab() {
   );
 }
 
-const TABS = ['Tags'] as const;
+function DomainTab({
+  apiPath,
+  label,
+}: {
+  apiPath: string;
+  label: string;
+}) {
+  const [domains, setDomains] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | undefined>();
+  const [input, setInput] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | undefined>();
+
+  useEffect(() => {
+    fetch(apiPath)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Failed to load ${label.toLowerCase()}`);
+        return res.json() as Promise<string[]>;
+      })
+      .then(setDomains)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setFetchError(msg);
+      })
+      .finally(() => setLoading(false));
+  }, [apiPath, label]);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setAdding(true);
+    setAddError(undefined);
+    try {
+      const res = await fetch(apiPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: trimmed }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { detail?: string }).detail ?? 'Add failed');
+      }
+      const created = (await res.json()) as { domain: string };
+      setDomains((prev) => [...new Set([...prev, created.domain])].sort());
+      setInput('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAddError(msg);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (domain: string) => {
+    const res = await fetch(`${apiPath}/${encodeURIComponent(domain)}`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+      setDomains((prev) => prev.filter((d) => d !== domain));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert((data as { detail?: string }).detail ?? 'Remove failed');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-200">Add domain</h3>
+        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-400">Domain or URL</label>
+            <input
+              type="text"
+              required
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="example.com"
+              className="w-72 rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={adding}
+            className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {adding ? 'Adding…' : 'Add'}
+          </button>
+          {addError && (
+            <p className="w-full text-xs text-red-400">{addError}</p>
+          )}
+        </form>
+      </div>
+
+      {loading && <p className="text-sm text-gray-400">Loading {label.toLowerCase()}…</p>}
+      {fetchError && <p className="text-sm text-red-400">{fetchError}</p>}
+      {!loading && !fetchError && domains.length === 0 && (
+        <p className="text-sm text-gray-500">No {label.toLowerCase()} yet. Add one above.</p>
+      )}
+      {domains.length > 0 && (
+        <ul className="space-y-2">
+          {domains.map((domain) => (
+            <li
+              key={domain}
+              className="flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-800 px-4 py-3"
+            >
+              <span className="min-w-0 flex-1 font-mono text-sm text-white">{domain}</span>
+              <button
+                onClick={() => handleRemove(domain)}
+                className="rounded px-2 py-1 text-xs text-red-400 hover:bg-gray-700 hover:text-red-300"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function AllowedDomainsTab() {
+  return <DomainTab apiPath="/api/controls/allowed-domains" label="Allowed Domains" />;
+}
+
+function IgnoredDomainsTab() {
+  return <DomainTab apiPath="/api/controls/ignored-domains" label="Ignored Domains" />;
+}
+
+const TABS = ['Tags', 'Allowed Domains', 'Ignored Domains'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ControlsPage() {
@@ -317,6 +446,8 @@ export default function ControlsPage() {
       </div>
 
       {activeTab === 'Tags' && <TagsTab />}
+      {activeTab === 'Allowed Domains' && <AllowedDomainsTab />}
+      {activeTab === 'Ignored Domains' && <IgnoredDomainsTab />}
     </div>
   );
 }
