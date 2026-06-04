@@ -86,26 +86,6 @@ export default function SpaceDetailPage({
   // Fetch space
   // ---------------------------------------------------------------------------
 
-  const fetchSpace = useCallback(async () => {
-    const controller = new AbortController();
-    try {
-      const res = await fetch(`/api/spaces/${spaceId}`, {
-        signal: controller.signal,
-      });
-      if (res.status === 404) { setFetchState("not_found"); return; }
-      if (res.status === 403 || res.status === 401) { setFetchState("forbidden"); return; }
-      if (!res.ok) { setFetchState("error"); return; }
-      const data: SpaceDetail = await res.json();
-      setSpace(data);
-      setEditName(data.name);
-      setEditColor(data.color);
-      setFetchState("ok");
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") setFetchState("error");
-    }
-    return () => controller.abort();
-  }, [spaceId]);
-
   // ---------------------------------------------------------------------------
   // Fetch URLs
   // ---------------------------------------------------------------------------
