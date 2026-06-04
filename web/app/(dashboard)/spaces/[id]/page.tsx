@@ -195,7 +195,7 @@ export default function SpaceDetailPage({
     const a = spaceUrls[index];
     const b = spaceUrls[targetIndex];
 
-    await Promise.all([
+    const [r1, r2] = await Promise.all([
       fetch(`/api/spaces/${spaceId}/urls/${a.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -207,6 +207,11 @@ export default function SpaceDetailPage({
         body: JSON.stringify({ sort_order: a.sort_order }),
       }),
     ]);
+
+    if (!r1.ok || !r2.ok) {
+      await fetchUrls();
+      return;
+    }
 
     await fetchUrls();
   };
