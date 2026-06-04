@@ -190,6 +190,10 @@ async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
     if job["chat_id"] != chat_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    tags = await database.list_tags(chat_id)
+    if not any(t["id"] == tag_id for t in tags):
+        raise HTTPException(status_code=404, detail="Tag not found")
+
     await database.detach_job_tag(job_id, tag_id)
     return Response(status_code=204)
 

@@ -188,8 +188,8 @@ export default function BrainPage() {
             {results.length} result{results.length === 1 ? '' : 's'}
           </p>
           <ul className="space-y-2">
-            {results.map((r, i) => (
-              <ResultRow key={i} result={r} />
+            {results.map((r) => (
+              <ResultRow key={r.url} result={r} />
             ))}
           </ul>
         </section>

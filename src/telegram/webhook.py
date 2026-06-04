@@ -1085,21 +1085,24 @@ async def webhook(
                 "Instagram Reels, TikTok videos, and allowlisted article domains.",
             )
             return {"ok": True}
+        cached = await database.find_recent_job_by_url(chat_id, url)
+        if cached:
+            await _reply_cached_job(chat_id, cached)
+            return {"ok": True}
+        extra_instructions = (tmpl_row.get("extra_instructions") or "").strip()
         job_id = await database.create_job(
             chat_id=chat_id,
             url=url,
             content_type=pipeline,
             message_id=message_id,
-            template="freestyle",
+            template="freestyle" if extra_instructions else None,
         )
-        extra_instructions = (tmpl_row.get("extra_instructions") or "").strip()
-        if extra_instructions:
-            async with database.connection() as conn:
-                await conn.execute(
-                    "UPDATE jobs SET freestyle_prompt=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (extra_instructions, job_id),
-                )
-                await conn.commit()
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET freestyle_prompt=?, template_detection_method=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (extra_instructions or None, f"user_template:{tmpl_name}", job_id),
+            )
+            await conn.commit()
         task_type = (
             "repo" if pipeline == "repo"
             else "article" if pipeline == "article"
