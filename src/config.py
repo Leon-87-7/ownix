@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     BRAIN_MIN_SCORE: float = 0.5
 
     # Web dashboard (issue #84)
-    SESSION_COOKIE_SECURE: bool = False  # set True in prod (HTTPS)
+    SESSION_COOKIE_SECURE: bool = True  # set False only for local HTTP dev
 
     # Slices #6/#7 — Mini-PRD
     GOOGLE_DRIVE_FOLDER_PRD: str = ""

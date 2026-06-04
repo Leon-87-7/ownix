@@ -12,7 +12,7 @@ from src.services import brave, frames, gemini, sheets
 from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.services.github import enrich_github_links
-from src.telegram.sender import edit_message_text, send_message, send_photo
+from src.telegram.sender import edit_message_text, send_document, send_message, send_photo
 from src.utils.logger import get_logger
 from src.utils.markdown import build_enriched_links_message
 from src.utils.validators import filter_vision_links
@@ -49,6 +49,25 @@ def _build_analysis_markdown(
                 parts.append(desc)
             parts.append(f"🔗 {lnk['url']}\n")
     return "\n".join(parts)
+
+
+def _build_transcript_markdown(
+    job: dict, platform: str, video_id: str, transcript: str
+) -> str:
+    ts = datetime.now(timezone.utc).isoformat()
+    return "\n".join([
+        "# Transcript",
+        "",
+        f"**Source:** {job['url']}",
+        f"**Platform:** {platform}",
+        f"**Video ID:** {video_id}",
+        f"**Processed:** {ts}",
+        f"**Job ID:** {job['id']}",
+        "",
+        "---",
+        "",
+        transcript,
+    ])
 
 
 def _tag(job_id: str) -> str:
@@ -165,72 +184,94 @@ async def run(job: dict) -> None:
 
     log.info("short_video_complete", job_id=job_id, duration_ms=elapsed_ms)
 
-    # Template path — explicit slash command only; plain URL jobs exit above
+    # -------------------------------------------------------------------------
+    # Phase 2 (ADR-0020): Transcript acquisition — always, regardless of template
+    # -------------------------------------------------------------------------
+    from src.processors import enrichment as enrichment_proc
+
     template = job.get("template")
-    if not template:
-        return
+    transcript_text: str | None = None
+    template_analysis: dict | None = None
+    wordless = False
 
     try:
         transcript_resp = await transcript_svc.fetch_transcript(url)
-    except Exception:
-        await send_message(
-            chat_id,
-            f"{tag}\nNo transcript available — template analysis skipped.",
+        if "error" in transcript_resp:
+            err_val = transcript_resp["error"]
+            err_msg = err_val.get("message", "unknown") if isinstance(err_val, dict) else str(err_val)
+            await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {err_msg}")
+        elif transcript_resp.get("fallback") == "audio":
+            audio_b64 = transcript_resp.get("audio_b64", "")
+            mime_audio = transcript_resp.get("mime_type", "audio/mp4")
+            if audio_b64:
+                if template:
+                    # Fused call: one Gemini request produces both transcript + template_analysis.
+                    template_analysis, transcript_text = await enrichment_proc.enrich_audio(
+                        job, audio_b64, mime_audio
+                    )
+                else:
+                    transcript_text = await enrichment_proc.transcribe_audio(
+                        audio_b64, mime_audio, title
+                    )
+        else:
+            raw_text = transcript_resp.get("text", "")
+            if raw_text:
+                transcript_text = raw_text
+            else:
+                wordless = True
+    except enrichment_proc.EnrichmentUnavailableError:
+        await send_message(chat_id, f"{tag}\n⚠️ Transcription failed — Gemini unavailable")
+    except Exception as exc:
+        await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {exc}")
+
+    if wordless:
+        await send_message(chat_id, f"{tag}\n⚠️ I'm wordless")
+
+    # Persist transcript + key_phrases immediately on acquisition
+    if transcript_text:
+        key_phrases = extract_key_phrases(transcript_text, max_phrases=8)
+        await database.update_job_status(
+            job_id, "done",
+            transcript=transcript_text,
+            key_phrases=json.dumps(key_phrases),
         )
-        return
 
-    from src.processors import enrichment as enrichment_proc
+    # Template enrichment — caption path (audio path already done above via enrich_audio)
+    if template and template_analysis is None and transcript_text:
+        enriched_job = await database.get_job(job_id)
+        if enriched_job:
+            try:
+                _, template_analysis, _ = await enrichment_proc.enrich(enriched_job)
+            except enrichment_proc.EnrichmentUnavailableError as exc:
+                await send_message(
+                    chat_id, f"{tag}\n⚠️ Template analysis failed\nerror: {exc}\njob_title: {title}"
+                )
 
-    # Caption-less path (issue #32): transcript service returns audio bytes instead of
-    # text. One Gemini call transcribes + analyzes the audio; no transcript is stored.
-    if transcript_resp.get("fallback") == "audio":
-        audio_b64 = transcript_resp.get("audio_b64", "")
-        mime_type = transcript_resp.get("mime_type", "audio/mp4")
-        if not audio_b64:
-            await send_message(
-                chat_id,
-                f"{tag}\nNo transcript available — template analysis skipped.",
-            )
-            return
+    if template and template_analysis:
         try:
-            template_analysis = await enrichment_proc.enrich_audio(job, audio_b64, mime_type)
-        except enrichment_proc.EnrichmentUnavailableError:
-            await send_message(chat_id, f"{tag}\n⚠️ Template analysis failed — Gemini unavailable.")
-            return
-        if template_analysis:
             section = enrichment_proc._format_template_analysis(template, template_analysis)
             await send_message(chat_id, f"{tag}{section}")
-        return
-
-    # Caption-based path (unchanged)
-    short_transcript = transcript_resp.get("text", "")
-    if not short_transcript:
-        await send_message(
-            chat_id,
-            f"{tag}\nNo transcript available — template analysis skipped.",
-        )
-        return
-
-    key_phrases = extract_key_phrases(short_transcript, max_phrases=8)
-    await database.update_job_status(
-        job_id, "done",
-        transcript=short_transcript,
-        key_phrases=json.dumps(key_phrases),
-    )
-    enriched_job = await database.get_job(job_id)
-    if not enriched_job:
-        return
-
-    try:
-        enrichment_result, template_analysis = await enrichment_proc.enrich(enriched_job)
-    except enrichment_proc.EnrichmentUnavailableError as exc:
-        await send_message(chat_id, f"{tag}\n⚠️ Template analysis failed\nerror: {exc}\njob_title: {title}")
-        return
-
-    if template_analysis:
-        section = enrichment_proc._format_template_analysis(template, template_analysis)
-        await send_message(chat_id, f"{tag}{section}")
+        except Exception as exc:
+            log.warning("template_analysis_send_failed", error=str(exc))
         await database.update_job_status(
             job_id, "done",
             template_analysis=json.dumps(template_analysis),
         )
+
+    # TAIL: Drive upload + Telegram document — always last, always after enrichment
+    if transcript_text:
+        transcript_md = _build_transcript_markdown(job, platform, video_id, transcript_text)
+        try:
+            await upload_file(
+                transcript_md, f"{job_id}_transcript.md", settings.GOOGLE_DRIVE_FOLDER_SHORT
+            )
+        except Exception as exc:
+            log.warning("transcript_drive_upload_failed", error=str(exc))
+        try:
+            await send_document(
+                chat_id,
+                transcript_md.encode("utf-8"),
+                f"{job_id}_transcript.md",
+            )
+        except Exception as exc:
+            log.warning("transcript_send_document_failed", error=str(exc))

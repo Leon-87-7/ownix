@@ -70,6 +70,10 @@
 | [#85](https://github.com/Leon-87-7/vig/issues/85) | web(S2): Feed — hero stats + fuse.js search + filters + Scope-A polling                                 | Web / Feed              | —                                                                                         |
 | [#86](https://github.com/Leon-87-7/vig/issues/86) | web(S3): Job detail — full enrichment view + per-field copy buttons                                     | Web / Jobs              | —                                                                                         |
 | [#87](https://github.com/Leon-87-7/vig/issues/87) | web(S4): Controls Tags tab — tag CRUD with name + meaning + color                                       | Web / Controls          | —                                                                                         |
+| [#89](https://github.com/Leon-87-7/vig/issues/89) | web(S6): Spaces — CRUD + URLs tab                                                                       | Web / Spaces            | Merged to dev; commits 1bd879b + 894c43c; closed on GH                                     |
+| [#101](https://github.com/Leon-87-7/vig/issues/101) | feat(enrichment): transcribe_audio + enrich_audio returns transcript text (ADR-0020 foundation)       | Short Video / Enrichment | Committed (dbdcd40); closed on GH; 57 tests green                                          |
+| [#102](https://github.com/Leon-87-7/vig/issues/102) | feat(short-pipeline): guaranteed transcript acquisition on every short job (ADR-0020)                | Short Video             | Committed (dbdcd40); closed on GH; 57 tests green                                          |
+| [#103](https://github.com/Leon-87-7/vig/issues/103) | feat(short-pipeline): transcript Drive upload + Telegram document delivery tail (ADR-0020)           | Short Video             | Committed (dbdcd40); closed on GH; 57 tests green                                          |
 
 ---
 
@@ -77,15 +81,11 @@
 
 |   # | Title | Area | Depends On |
 | --: | ----- | ---- | ---------- |
-
 | [#88](https://github.com/Leon-87-7/vig/issues/88) | web(S5): Job annotation + tagging (Milkdown) | Web / Jobs | #86, #87 |
-| [#89](https://github.com/Leon-87-7/vig/issues/89) | web(S6): Spaces CRUD + URLs tab | Web / Spaces | #84, #85 |
 | [#90](https://github.com/Leon-87-7/vig/issues/90) | web(S9): User templates + -name branch | Web / Templates | #83, #84 |
 | [#91](https://github.com/Leon-87-7/vig/issues/91) | web(S10): Controls Allowed/Ignored domains | Web / Controls | #84, #81 |
 | [#92](https://github.com/Leon-87-7/vig/issues/92) | web(S11): Brain search page | Web / Brain | #83, #84 |
-| [#93](https://github.com/Leon-87-7/vig/issues/93) | web(S7): Context blobs (Context tab) | Web / Spaces | #89, #88 |
 | [#94](https://github.com/Leon-87-7/vig/issues/94) | web(S12): Deploy — compose web + subdomains [HITL] | Web / Ops | #84 |
-| [#95](https://github.com/Leon-87-7/vig/issues/95) | web(S8): Space export — composer + gdoc + modal | Web / Spaces | #89, #93, #87, #88 |
 
 ---
 
@@ -101,6 +101,8 @@ Ordered by unblocked-first, then dependency chain.
 | [#78](https://github.com/Leon-87-7/vig/issues/78) | refactor(telegram): extract photo.py — batch state machine + handle_photo_message() + PHOTO_COMMANDS        | Refactor / Telegram | #75           |
 | [#79](https://github.com/Leon-87-7/vig/issues/79) | refactor(telegram): finalize sender.\* seam in webhook + line-count/glossary verification (ADR-0015)        | Refactor / Telegram | #76, #77, #78 |
 | [#82](https://github.com/Leon-87-7/vig/issues/82) | bug(test_long_video): under-mocked send_message → coroutine reaches editMessageText JSON encode (test-only) | Test / Long Video   | —             |
+| [#93](https://github.com/Leon-87-7/vig/issues/93) | web(S7): Space context blobs — Context tab (Milkdown, ordered)                                              | Web / Spaces        | #89, #88      |
+| [#95](https://github.com/Leon-87-7/vig/issues/95) | web(S8): Space export — composer + gdoc + md/txt/pdf modal                                                  | Web / Spaces        | #89, #93, #87, #88 |
 
 ---
 
@@ -207,7 +209,7 @@ Critical path: #83 → #84 → {#85, #86, #87} → #88/#89 → #93 → #95
 #83 S0 — API package split + FK enforcement ✓
 └── #84 S1 — Auth spine [HITL] ✓
     ├── #85 S2 — Feed ✓
-    │   └── #89 S6 — Spaces CRUD + URLs tab ◄── also #84
+    │   └── #89 S6 — Spaces CRUD + URLs tab ✓ ◄── also #84
     │       └── #93 S7 — Context blobs ◄── also #88
     │           └── #95 S8 — Space export ◄── also #87, #88
     ├── #86 S3 — Job detail ✓
@@ -219,4 +221,11 @@ Critical path: #83 → #84 → {#85, #86, #87} → #88/#89 → #93 → #95
     └── #94 S12 — Deploy [HITL]
 
 #82 test(long_video) under-mocked send_message → coroutine in editMessageText (standalone test-hygiene; no deps)
+
+ADR-0020: Guaranteed transcript on every short job (docs/adr/0020-always-transcript-short-pipeline.md)
+#32 Audio fallback for caption-less Reels ✓ ◄── pre-existing foundation
+└── #101 transcribe_audio + enrich_audio returns transcript text ✓ (dbdcd40)
+    └── #102 guaranteed transcript acquisition on all short jobs ✓ ◄── also #32
+        └── #103 transcript Drive upload + Telegram document delivery tail ✓
+Critical path: #101 → #102 → #103 (all ✓)
 ```

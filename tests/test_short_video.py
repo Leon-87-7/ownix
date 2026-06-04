@@ -186,29 +186,40 @@ _FRAME_RESP = {
 _VISION = {"main_frame_index": 0, "summary": "a short clip", "links": []}
 
 
+_TEMPLATE_JOB = {"id": "job1", "chat_id": 42, "url": "u", "template": "method", "title": "Test Reel"}
+_PLAIN_JOB = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "title": "Test Reel"}
+
+
 @contextlib.contextmanager
-def _patch_pipeline(transcript_resp: dict):
-    """Patch the whole short-video pipeline so run() reaches the template branch."""
+def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
+    """Patch the whole short-video pipeline so run() reaches the transcript/template branches."""
     from src.processors import short_video
+    from src.processors.enrichment import Enrichment
 
     with contextlib.ExitStack() as stack:
         p = lambda target, **kw: stack.enter_context(patch(target, **kw))  # noqa: E731
         mocks = {
             "update_job_status": p("src.processors.short_video.database.update_job_status", new_callable=AsyncMock),
             "get_job": p("src.processors.short_video.database.get_job", new_callable=AsyncMock),
-            "send_message": p("src.processors.short_video.send_message", new_callable=AsyncMock),
-            "send_photo": p("src.processors.short_video.send_photo", new_callable=AsyncMock),
+            "send_message": p("src.processors.short_video.send_message", new_callable=AsyncMock,
+                              return_value={"message_id": 1}),
+            "send_photo": p("src.processors.short_video.send_photo", new_callable=AsyncMock,
+                            return_value={"message_id": 2}),
+            "send_document": p("src.processors.short_video.send_document", new_callable=AsyncMock),
+            "edit_message_text": p("src.processors.short_video.edit_message_text", new_callable=AsyncMock),
             "fetch_frames": p("src.processors.short_video.frames.fetch_frames", new_callable=AsyncMock, return_value=_FRAME_RESP),
             "vision": p("src.processors.short_video.gemini.call_gemini_vision", new_callable=AsyncMock, return_value=_VISION),
             "upload_file": p("src.processors.short_video.upload_file", new_callable=AsyncMock, return_value=("fid", "https://drive/x")),
             "append_short_row": p("src.processors.short_video.sheets.append_short_row", new_callable=AsyncMock),
             "fetch_transcript": p("src.processors.short_video.transcript_svc.fetch_transcript", new_callable=AsyncMock, return_value=transcript_resp),
-            "extract_key_phrases": p("src.processors.short_video.extract_key_phrases", new=MagicMock(return_value=[])),
+            "extract_key_phrases": p("src.processors.short_video.extract_key_phrases", new=MagicMock(return_value=["kw"])),
             "enrich_audio": p("src.processors.enrichment.enrich_audio", new_callable=AsyncMock),
+            "transcribe_audio": p("src.processors.enrichment.transcribe_audio", new_callable=AsyncMock),
             "enrich": p("src.processors.enrichment.enrich", new_callable=AsyncMock),
             "get_ignored_domains": p("src.processors.short_video.database.get_ignored_domains", new_callable=AsyncMock, return_value=set()),
         }
-        mocks["get_job"].return_value = {"id": "job1", "chat_id": 42, "url": "u", "template": "method", "title": "Test Reel"}
+        resolved_job = job if job is not None else _TEMPLATE_JOB
+        mocks["get_job"].return_value = resolved_job
         yield short_video, mocks
 
 
@@ -216,13 +227,14 @@ def _patch_pipeline(transcript_resp: dict):
 async def test_template_audio_fallback_routes_to_enrich_audio() -> None:
     """A fallback=='audio' transcript response goes through enrich_audio, not the text path."""
     transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+    template_analysis = {
+        "steps": [{"action": "Open terminal", "details": "Run CLI", "result": "ok"}],
+        "common_mistakes": "",
+        "pro_tips": "",
+    }
 
     with _patch_pipeline(transcript_resp) as (short_video, mocks):
-        mocks["enrich_audio"].return_value = {
-            "steps": [{"action": "Open terminal", "details": "Run CLI", "result": "ok"}],
-            "common_mistakes": "",
-            "pro_tips": "",
-        }
+        mocks["enrich_audio"].return_value = (template_analysis, "spoken words here")
         job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
         await short_video.run(job)
 
@@ -230,10 +242,7 @@ async def test_template_audio_fallback_routes_to_enrich_audio() -> None:
     await_args = mocks["enrich_audio"].await_args.args
     assert await_args[1] == "YXVkaW8="
     assert await_args[2] == "audio/mp4"
-    # Audio path never extracts key phrases or runs the text enrichment.
-    mocks["extract_key_phrases"].assert_not_called()
     mocks["enrich"].assert_not_awaited()
-    # The formatted template analysis was sent to the user.
     sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
     assert "Method Analysis" in sent
 
@@ -249,6 +258,7 @@ async def test_template_caption_path_unchanged() -> None:
         mocks["enrich"].return_value = (
             Enrichment("Tech", "fastapi", "obj", "ap", "ts", [], ""),
             {"steps": [{"action": "a", "details": "d", "result": "r"}], "common_mistakes": "", "pro_tips": ""},
+            None,
         )
         job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
         await short_video.run(job)
@@ -270,4 +280,116 @@ async def test_template_audio_gemini_unavailable_surfaces_message() -> None:
         await short_video.run(job)
 
     sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
-    assert "Template analysis failed — Gemini unavailable." in sent
+    assert "Transcription failed — Gemini unavailable" in sent
+
+
+# ---------------------------------------------------------------------------
+# ADR-0020 issue #102: guaranteed transcript acquisition on all short jobs
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_plain_url_job_always_fetches_transcript() -> None:
+    """A plain URL job (no template) still calls fetch_transcript after ADR-0020."""
+    transcript_resp = {"text": "some spoken content"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["fetch_transcript"].assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_plain_caption_less_job_calls_transcribe_audio() -> None:
+    """A plain URL caption-less job calls transcribe_audio (not enrich_audio)."""
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["transcribe_audio"].return_value = "spoken words"
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["transcribe_audio"].assert_awaited_once()
+    mocks["enrich_audio"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_plain_job_transcript_svc_error_sends_warning_job_stays_done() -> None:
+    """A transcript service HTTP error sends a warning but does not change job status from done."""
+    with _patch_pipeline({}, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["fetch_transcript"].side_effect = Exception("HTTP 503")
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "Transcript service error" in sent
+    # Job status was set to 'done' from Vision; never regressed to 'error'
+    status_calls = [str(c) for c in mocks["update_job_status"].call_args_list]
+    assert not any("error" in c for c in status_calls)
+
+
+@pytest.mark.asyncio
+async def test_plain_job_wordless_transcript_sends_wordless_warning() -> None:
+    """A transcript that returns empty text sends the ADR-0020 wordless warning."""
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "I'm wordless" in sent
+
+
+@pytest.mark.asyncio
+async def test_transcript_persisted_and_key_phrases_run_on_all_short_jobs() -> None:
+    """Every short job with a transcript persists it and runs key_phrases extraction."""
+    transcript_resp = {"text": "python fastapi tutorial step by step guide"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["extract_key_phrases"].assert_called_once()
+    update_calls = mocks["update_job_status"].call_args_list
+    persisted = any(
+        "transcript" in str(c) and "python fastapi" in str(c)
+        for c in update_calls
+    )
+    assert persisted, "jobs.transcript was never persisted"
+
+
+# ---------------------------------------------------------------------------
+# ADR-0020 issue #103: Drive upload + Telegram document delivery tail
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_plain_job_with_transcript_uploads_transcript_to_drive() -> None:
+    """A short job that produces a transcript uploads {job_id}_transcript.md to Drive."""
+    transcript_resp = {"text": "hello world content here"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    upload_calls = mocks["upload_file"].call_args_list
+    filenames = [str(c) for c in upload_calls]
+    assert any("_transcript.md" in f for f in filenames), "transcript.md not uploaded to Drive"
+
+
+@pytest.mark.asyncio
+async def test_plain_job_with_transcript_sends_document_to_telegram() -> None:
+    """A short job that produces a transcript sends it as a Telegram document."""
+    transcript_resp = {"text": "some spoken content for document delivery"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["send_document"].assert_awaited_once()
+    call_kwargs = mocks["send_document"].call_args
+    assert "_transcript.md" in str(call_kwargs)
+
+
+@pytest.mark.asyncio
+async def test_no_transcript_skips_document_delivery() -> None:
+    """When no transcript text is produced, send_document is never called."""
+    transcript_resp = {"text": ""}  # wordless
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["send_document"].assert_not_awaited()

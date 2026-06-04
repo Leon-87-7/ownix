@@ -26,6 +26,7 @@ docker-compose.override.yml
 
 # Worktrees
 .worktrees/
+.claude/worktrees/
 
 # TypeScript
 *.tsbuildinfo
@@ -42,3 +43,4 @@ Thumbs.db
 docs/images/*
 docs/features/*
 web/node_modules/
+web/.next/

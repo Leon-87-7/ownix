@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from json_repair import repair_json
+
 from src import database
 from src.brain import EMBEDDING_DIM
 from src.config import settings
@@ -127,10 +129,17 @@ def _extract_json(raw: str) -> dict:
     m = re.search(r"\{[\s\S]*\}", clean)
     text = m.group(0) if m else clean
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
-        from json_repair import repair_json
-        return json.loads(repair_json(text))
+        try:
+            parsed = json.loads(repair_json(text))
+        except json.JSONDecodeError as exc:
+            raise EnrichmentUnavailableError(f"Gemini returned unparseable JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise EnrichmentUnavailableError(
+            f"Gemini returned non-object JSON: {type(parsed).__name__}"
+        )
+    return parsed
 
 
 def _parse_enrichment(data: dict) -> Enrichment:
@@ -181,15 +190,25 @@ def _build_audio_prompt(title: str, template: str) -> str:
     extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
     return f"""Analyze the audio content of this video titled: "{title}".
 
-Listen to the spoken content and extract the template-specific analysis.
+Listen to the spoken content and produce:
+1. A verbatim transcript of all spoken words.
+2. The template-specific analysis.
 
 Return ONLY a valid JSON object — no markdown fences, no commentary:
 
 {{
+  "transcript": "<verbatim spoken text>",
   "template_analysis": <template-specific object per the instructions below>
 }}
 
 {extra}"""
+
+
+def _build_transcribe_prompt(title: str) -> str:
+    return f"""Transcribe the audio content of this video titled: "{title}".
+
+Return only the spoken text verbatim, with no additional commentary, timestamps, or metadata.
+If the video has no speech or is completely silent, return an empty string."""
 
 
 def _call_gemini_audio_sync(audio_b64: str, mime_type: str, prompt: str, api_key: str) -> str:
@@ -207,11 +226,12 @@ def _call_gemini_audio_sync(audio_b64: str, mime_type: str, prompt: str, api_key
     return response.text or ""
 
 
-async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> dict | None:
-    """Single Gemini call: inline audio + template prompt → template_analysis dict.
+async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> tuple[dict | None, str]:
+    """Fused Gemini call: inline audio + template prompt → (template_analysis, transcript_text).
 
     Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail.
-    Returns the template_analysis dict, or None if Gemini did not produce one.
+    The returned transcript_text is the verbatim spoken content extracted alongside
+    the template analysis — callers must not make a separate transcription call.
     """
     template = job.get("template") or "summary"
     title = job.get("title", "") or "Untitled"
@@ -226,11 +246,34 @@ async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> dict | None
             )
             data = _extract_json(raw)
             log.info("enrichment_audio_ok", template=template)
-            return data.get("template_analysis")
+            return data.get("template_analysis"), data.get("transcript", "")
         except Exception:
             log.warning("enrichment_audio_key_failed")
 
     raise EnrichmentUnavailableError("Both Gemini keys failed for audio enrichment")
+
+
+async def transcribe_audio(audio_b64: str, mime_type: str, title: str = "") -> str:
+    """Transcription-only Gemini call: inline audio → plain transcript text.
+
+    Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail.
+    Returns empty string when Gemini produces no output (silent/wordless clip).
+    """
+    prompt = _build_transcribe_prompt(title)
+
+    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
+        if not key:
+            continue
+        try:
+            raw = await asyncio.to_thread(
+                _call_gemini_audio_sync, audio_b64, mime_type, prompt, key
+            )
+            log.info("transcription_ok")
+            return raw.strip()
+        except Exception:
+            log.warning("transcription_key_failed")
+
+    raise EnrichmentUnavailableError("Both Gemini keys failed for audio transcription")
 
 
 def _escape_html(text: str) -> str:
