@@ -101,6 +101,7 @@ export default function SpaceDetailPage({
   const [blobsLoading, setBlobsLoading] = useState(false);
   const [addingBlob, setAddingBlob] = useState(false);
   const [newBlobName, setNewBlobName] = useState("");
+  const [blobError, setBlobError] = useState<string | null>(null);
 
   // Export modal
   const [showExport, setShowExport] = useState(false);
@@ -274,11 +275,13 @@ export default function SpaceDetailPage({
     const name = newBlobName.trim() || "New context";
     setAddingBlob(true);
     try {
-      await fetch(`/api/spaces/${spaceId}/blobs`, {
+      const res = await fetch(`/api/spaces/${spaceId}/blobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
+      if (!res.ok) { setBlobError("Failed to add context document. Please try again."); return; }
+      setBlobError(null);
       setNewBlobName("");
       await fetchBlobs();
     } finally {
@@ -287,15 +290,19 @@ export default function SpaceDetailPage({
   };
 
   const handleBlobSave = async (blobId: string, name: string, content: string) => {
-    await fetch(`/api/spaces/${spaceId}/blobs/${blobId}`, {
+    const res = await fetch(`/api/spaces/${spaceId}/blobs/${blobId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, content }),
     });
+    if (!res.ok) setBlobError("Failed to save. Please try again.");
+    else setBlobError(null);
   };
 
   const handleDeleteBlob = async (blobId: string) => {
-    await fetch(`/api/spaces/${spaceId}/blobs/${blobId}`, { method: "DELETE" });
+    const res = await fetch(`/api/spaces/${spaceId}/blobs/${blobId}`, { method: "DELETE" });
+    if (!res.ok) { setBlobError("Failed to remove context document. Please try again."); return; }
+    setBlobError(null);
     await fetchBlobs();
   };
 
@@ -631,7 +638,14 @@ export default function SpaceDetailPage({
                     </div>
                     <input
                       type="text"
-                      defaultValue={blob.name}
+                      value={blob.name}
+                      onChange={(e) => {
+                        setBlobs((prev) =>
+                          prev.map((b) =>
+                            b.id === blob.id ? { ...b, name: e.target.value } : b
+                          )
+                        );
+                      }}
                       onBlur={(e) =>
                         handleBlobSave(blob.id, e.target.value, blob.content)
                       }
@@ -653,6 +667,10 @@ export default function SpaceDetailPage({
                 </div>
               ))}
             </div>
+          )}
+
+          {blobError && (
+            <p className="text-sm text-red-400">{blobError}</p>
           )}
 
           {/* Add context document */}

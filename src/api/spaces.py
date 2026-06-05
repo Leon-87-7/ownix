@@ -156,12 +156,11 @@ async def reorder_space_url(
 # ---------------------------------------------------------------------------
 
 
-async def _get_owned_blob(blob_id: str, space_id: str, chat_id: int) -> dict:
-    """Fetch a blob and raise 404/403 if missing or not owned via its space."""
+async def _get_owned_blob(blob_id: str, space_id: str) -> dict:
+    """Fetch a blob and raise 404 if missing or not linked to this space."""
     blob = await database.get_context_blob(blob_id)
     if blob is None or blob["space_id"] != space_id:
         raise HTTPException(status_code=404, detail="Blob not found")
-    # Ownership already checked via _get_owned_space; just verify the link.
     return blob
 
 
@@ -185,7 +184,7 @@ async def create_blob(space_id: str, body: BlobIn, request: Request) -> dict:
 async def get_blob(space_id: str, blob_id: str, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
-    return await _get_owned_blob(blob_id, space_id, chat_id)
+    return await _get_owned_blob(blob_id, space_id)
 
 
 @spaces_router.put("/{space_id}/blobs/{blob_id}")
@@ -194,7 +193,7 @@ async def update_blob(
 ) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
-    await _get_owned_blob(blob_id, space_id, chat_id)
+    await _get_owned_blob(blob_id, space_id)
     ok = await database.update_context_blob(
         blob_id=blob_id, name=body.name.strip(), content=body.content
     )
@@ -208,7 +207,7 @@ async def update_blob(
 async def delete_blob(space_id: str, blob_id: str, request: Request) -> None:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
-    await _get_owned_blob(blob_id, space_id, chat_id)
+    await _get_owned_blob(blob_id, space_id)
     await database.delete_context_blob(blob_id)
 
 
@@ -218,7 +217,7 @@ async def reorder_blob(
 ) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
-    await _get_owned_blob(blob_id, space_id, chat_id)
+    await _get_owned_blob(blob_id, space_id)
     ok = await database.reorder_context_blob(
         blob_id=blob_id, new_sort_order=body.sort_order
     )
@@ -232,6 +231,19 @@ async def reorder_blob(
 # ---------------------------------------------------------------------------
 
 
+async def _enrich_space_jobs(space_urls: list[dict]) -> list[dict]:
+    """Fetch annotation + tags for each pinned job. Skips deleted jobs."""
+    jobs: list[dict] = []
+    for item in space_urls:
+        job = await database.get_job(item["id"])
+        if job is None:
+            continue
+        annotation = await database.get_job_annotation(item["id"])
+        job_tags = await database.list_job_tags(item["id"])
+        jobs.append({**job, "notes": (annotation or {}).get("notes", ""), "tags": job_tags})
+    return jobs
+
+
 @spaces_router.get("/{space_id}/export/markdown")
 async def get_export_markdown(space_id: str, request: Request) -> dict:
     """Return the pre-composed export markdown so the client can download it."""
@@ -243,15 +255,7 @@ async def get_export_markdown(space_id: str, request: Request) -> dict:
     space_urls = await database.list_space_urls(space_id, chat_id)
     all_tags = await database.list_tags(chat_id)
 
-    jobs: list[dict] = []
-    for item in space_urls:
-        job = await database.get_job(item["id"])
-        if job is None:
-            continue
-        annotation = await database.get_job_annotation(item["id"])
-        job_tags = await database.list_job_tags(item["id"])
-        jobs.append({**job, "notes": (annotation or {}).get("notes", ""), "tags": job_tags})
-
+    jobs = await _enrich_space_jobs(space_urls)
     markdown = compose_space_export(space=space, blobs=blobs, jobs=jobs, tags=all_tags)
     return {"markdown": markdown}
 
@@ -276,16 +280,7 @@ async def export_space(space_id: str, body: ExportIn, request: Request) -> dict:
     space_urls = await database.list_space_urls(space_id, chat_id)
     all_tags = await database.list_tags(chat_id)
 
-    # Enrich each pinned job with its notes and applied tags.
-    jobs: list[dict] = []
-    for item in space_urls:
-        job = await database.get_job(item["id"])
-        if job is None:
-            continue
-        annotation = await database.get_job_annotation(item["id"])
-        job_tags = await database.list_job_tags(item["id"])
-        jobs.append({**job, "notes": (annotation or {}).get("notes", ""), "tags": job_tags})
-
+    jobs = await _enrich_space_jobs(space_urls)
     markdown = compose_space_export(space=space, blobs=blobs, jobs=jobs, tags=all_tags)
     doc_name = f"{space['name']} — export"
     url = await export_to_gdoc(

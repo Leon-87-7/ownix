@@ -68,8 +68,8 @@ export default function ExportModal({ spaceId, spaceName, onClose }: ExportModal
       const data = await res.json();
       if (!res.ok || data.error) {
         if (data.error === "drive_not_configured") {
-          setGdocStatus("idle");
-          handlePrint();
+          setGdocError("Google Drive is not configured. Use the .md, .txt, or PDF buttons above.");
+          setGdocStatus("error");
         } else {
           throw new Error(data.detail || data.error || "Export failed");
         }
