@@ -164,13 +164,60 @@ CREATE TABLE IF NOT EXISTS templates (
     updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
 );
+
+-- Job notes (issue #88 / S5).
+CREATE TABLE IF NOT EXISTS job_annotations (
+    job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+    notes      TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Job-tag links (issue #88 / S5).
+CREATE TABLE IF NOT EXISTS job_tags (
+    job_id  TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (job_id, tag_id)
+);
+
+-- Named collections of jobs (issue #89 / S6).
+CREATE TABLE IF NOT EXISTS spaces (
+    id         TEXT PRIMARY KEY,
+    chat_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    color      TEXT NOT NULL DEFAULT '#6366f1',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(chat_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_spaces_chat_id ON spaces(chat_id);
+
+-- Jobs pinned into a space (issue #89 / S6).
+CREATE TABLE IF NOT EXISTS space_urls (
+    space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (space_id, job_id)
+);
+
+-- Per-space editorial context documents (issue #93 / S7).
+CREATE TABLE IF NOT EXISTS context_blobs (
+    id         TEXT PRIMARY KEY,
+    space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    content    TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id);
 """
 
 
 def generate_id() -> str:
-    """YYYYMMDD_HHMMSS_XXXX where XXXX is 4 hex chars (job IDs and link IDs)."""
+    """YYYYMMDD_HHMMSS_XXXXXXXX where XXXXXXXX is 8 hex chars (job IDs and link IDs)."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    suffix = secrets.token_hex(2).upper()
+    suffix = secrets.token_hex(4).upper()
     return f"{ts}_{suffix}"
 
 
@@ -459,7 +506,7 @@ _MIGRATIONS.append([
     )""",
 ])
 
-# v11 → v12: job annotations + job-tag link table (issue #88 / S5)
+# v11 → v12: job annotations + job-tag links (issue #88 / S5)
 _MIGRATIONS.append([
     """CREATE TABLE IF NOT EXISTS job_annotations (
         job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
@@ -471,6 +518,41 @@ _MIGRATIONS.append([
         tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         PRIMARY KEY (job_id, tag_id)
     )""",
+])
+
+# v12 → v13: spaces + space_urls tables (issue #89 / S6)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS spaces (
+        id         TEXT PRIMARY KEY,
+        chat_id    INTEGER NOT NULL,
+        name       TEXT NOT NULL,
+        color      TEXT NOT NULL DEFAULT '#6366f1',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chat_id, name)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_spaces_chat_id ON spaces(chat_id)",
+    """CREATE TABLE IF NOT EXISTS space_urls (
+        space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (space_id, job_id)
+    )""",
+])
+
+# v13 → v14: context_blobs table (issue #93 / S7)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS context_blobs (
+        id         TEXT PRIMARY KEY,
+        space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        name       TEXT NOT NULL,
+        content    TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id)",
 ])
 
 
@@ -534,13 +616,14 @@ async def get_ignored_domains(chat_id: int) -> set[str]:
         return {row[0] for row in await cur.fetchall()}
 
 
-async def add_ignored_domain(chat_id: int, domain: str) -> None:
+async def add_ignored_domain(chat_id: int, domain: str) -> bool:
     async with connection() as conn:
-        await conn.execute(
+        cur = await conn.execute(
             "INSERT OR IGNORE INTO ignored_domains (chat_id, domain) VALUES (?, ?)",
             (chat_id, domain),
         )
         await conn.commit()
+        return cur.rowcount > 0
 
 
 async def remove_ignored_domain(chat_id: int, domain: str) -> bool:
@@ -553,14 +636,15 @@ async def remove_ignored_domain(chat_id: int, domain: str) -> bool:
         return cur.rowcount > 0
 
 
-async def add_allowed_domain(chat_id: int, domain: str) -> None:
-    """Insert (chat_id, domain) into allowed_domains. Idempotent on duplicate."""
+async def add_allowed_domain(chat_id: int, domain: str) -> bool:
+    """Insert (chat_id, domain) into allowed_domains. Returns True if inserted, False if already present."""
     async with connection() as conn:
-        await conn.execute(
+        cur = await conn.execute(
             "INSERT OR IGNORE INTO allowed_domains (chat_id, domain) VALUES (?, ?)",
             (chat_id, domain),
         )
         await conn.commit()
+        return cur.rowcount > 0
 
 
 async def list_allowed_domains(chat_id: int) -> set[str]:
@@ -674,21 +758,6 @@ async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], stat
         )
         await conn.commit()
     log.info("prd_slot_status_set", job_id=job_id, slot=slot, status=status)
-
-
-async def set_job_template_prompt(
-    job_id: str,
-    *,
-    freestyle_prompt: str | None,
-    template_detection_method: str,
-) -> None:
-    """Write freestyle_prompt and template_detection_method on a job row."""
-    async with connection() as conn:
-        await conn.execute(
-            "UPDATE jobs SET freestyle_prompt=?, template_detection_method=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-            (freestyle_prompt, template_detection_method, job_id),
-        )
-        await conn.commit()
 
 
 _REAPABLE_STATUSES = ("processing", "enriching")
@@ -899,16 +968,6 @@ async def list_tags(chat_id: int) -> list[dict]:
         return [dict(row) for row in await cur.fetchall()]
 
 
-async def get_tag(chat_id: int, tag_id: str) -> dict | None:
-    async with connection() as conn:
-        cur = await conn.execute(
-            "SELECT id, name, meaning, color, created_at FROM tags WHERE id = ? AND chat_id = ?",
-            (tag_id, chat_id),
-        )
-        row = await cur.fetchone()
-        return dict(row) if row else None
-
-
 async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:
     tag_id = generate_id()
     async with connection() as conn:
@@ -1030,19 +1089,19 @@ async def delete_user_template(chat_id: int, name: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Job annotations (issue #88 / S5)
+# Job annotations + job-tag links (issue #88 / S5)
 # ---------------------------------------------------------------------------
 
 
 async def get_job_annotation(job_id: str) -> dict | None:
-    """Return the annotation row for *job_id*, or None if absent."""
+    """Return the job_annotations row for *job_id*, or None if absent."""
     async with connection() as conn:
         cur = await conn.execute(
-            "SELECT notes, updated_at FROM job_annotations WHERE job_id = ?",
+            "SELECT job_id, notes, updated_at FROM job_annotations WHERE job_id = ?",
             (job_id,),
         )
         row = await cur.fetchone()
-    return dict(row) if row else None
+        return dict(row) if row else None
 
 
 async def upsert_job_annotation(job_id: str, notes: str) -> dict:
@@ -1056,49 +1115,294 @@ async def upsert_job_annotation(job_id: str, notes: str) -> dict:
                    updated_at = excluded.updated_at""",
             (job_id, notes),
         )
-        await conn.commit()
         cur = await conn.execute(
-            "SELECT notes, updated_at FROM job_annotations WHERE job_id = ?",
+            "SELECT job_id, notes, updated_at FROM job_annotations WHERE job_id = ?",
             (job_id,),
         )
         row = await cur.fetchone()
-    return dict(row)  # type: ignore[arg-type]
-
-
-# ---------------------------------------------------------------------------
-# Job-tag links (issue #88 / S5)
-# ---------------------------------------------------------------------------
+        await conn.commit()
+        return dict(row)  # type: ignore[arg-type]
 
 
 async def list_job_tags(job_id: str) -> list[dict]:
-    """Return tag summaries for all tags attached to *job_id*."""
+    """Return tags attached to *job_id* ordered by name."""
     async with connection() as conn:
         cur = await conn.execute(
             """SELECT t.id, t.name, t.color, t.meaning
-               FROM tags t
-               JOIN job_tags jt ON jt.tag_id = t.id
-               WHERE jt.job_id = ?""",
+               FROM job_tags jt
+               JOIN tags t ON t.id = jt.tag_id
+               WHERE jt.job_id = ?
+               ORDER BY t.name""",
             (job_id,),
         )
-        rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+        return [dict(row) for row in await cur.fetchall()]
 
 
-async def attach_job_tag(job_id: str, tag_id: str) -> None:
-    """Attach *tag_id* to *job_id* (idempotent)."""
+async def batch_get_jobs(job_ids: list[str]) -> dict[str, dict]:
+    """Return {job_id: job_dict} for the given IDs. Missing IDs are omitted."""
+    if not job_ids:
+        return {}
+    placeholders = ",".join("?" * len(job_ids))
+    async with connection() as conn:
+        cur = await conn.execute(
+            f"SELECT * FROM jobs WHERE id IN ({placeholders})",
+            tuple(job_ids),
+        )
+        return {row["id"]: dict(row) for row in await cur.fetchall()}
+
+
+async def batch_get_job_annotations(job_ids: list[str]) -> dict[str, str]:
+    """Return {job_id: notes} for jobs that have saved annotations."""
+    if not job_ids:
+        return {}
+    placeholders = ",".join("?" * len(job_ids))
+    async with connection() as conn:
+        cur = await conn.execute(
+            f"SELECT job_id, notes FROM job_annotations WHERE job_id IN ({placeholders})",
+            tuple(job_ids),
+        )
+        return {row["job_id"]: row["notes"] for row in await cur.fetchall()}
+
+
+async def batch_list_job_tags(job_ids: list[str]) -> dict[str, list[dict]]:
+    """Return {job_id: [tag_dicts]} for all given job IDs (absent job = empty list)."""
+    if not job_ids:
+        return {}
+    placeholders = ",".join("?" * len(job_ids))
+    async with connection() as conn:
+        cur = await conn.execute(
+            f"""SELECT jt.job_id, t.id, t.name, t.color, t.meaning
+               FROM job_tags jt
+               JOIN tags t ON t.id = jt.tag_id
+               WHERE jt.job_id IN ({placeholders})
+               ORDER BY t.name""",
+            tuple(job_ids),
+        )
+        result: dict[str, list[dict]] = {jid: [] for jid in job_ids}
+        for row in await cur.fetchall():
+            row_dict = dict(row)
+            jid = row_dict.pop("job_id")
+            result[jid].append(row_dict)
+        return result
+
+
+async def attach_job_tag(job_id: str, tag_id: str) -> bool:
+    """Attach *tag_id* to *job_id*. Idempotent. Returns True."""
     async with connection() as conn:
         await conn.execute(
             "INSERT OR IGNORE INTO job_tags (job_id, tag_id) VALUES (?, ?)",
             (job_id, tag_id),
         )
         await conn.commit()
+    return True
 
 
-async def detach_job_tag(job_id: str, tag_id: str) -> None:
-    """Remove the link between *job_id* and *tag_id*."""
+async def detach_job_tag(job_id: str, tag_id: str) -> bool:
+    """Remove *tag_id* from *job_id*. Returns True if a row was deleted."""
     async with connection() as conn:
-        await conn.execute(
+        cur = await conn.execute(
             "DELETE FROM job_tags WHERE job_id = ? AND tag_id = ?",
             (job_id, tag_id),
         )
         await conn.commit()
+        return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Spaces (issue #89 / S6)
+# ---------------------------------------------------------------------------
+
+
+async def create_space(*, chat_id: int, name: str, color: str) -> dict:
+    """INSERT a new space row and return it as a dict."""
+    space_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            "INSERT INTO spaces (id, chat_id, name, color) VALUES (?, ?, ?, ?)",
+            (space_id, chat_id, name, color),
+        )
+        await conn.commit()
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+            (space_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row)
+
+
+async def list_spaces(chat_id: int) -> list[dict]:
+    """Return all spaces for chat_id ordered newest-first."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at "
+            "FROM spaces WHERE chat_id = ? ORDER BY created_at DESC",
+            (chat_id,),
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def get_space(space_id: str) -> dict | None:
+    """Return a single space by PK, or None."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+            (space_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def update_space(*, chat_id: int, space_id: str, name: str, color: str) -> bool:
+    """UPDATE name/color for a space owned by chat_id. Returns True if updated."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE spaces SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND chat_id = ?",
+            (name, color, space_id, chat_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def delete_space(*, chat_id: int, space_id: str) -> bool:
+    """DELETE a space owned by chat_id. Returns True if deleted."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM spaces WHERE id = ? AND chat_id = ?",
+            (space_id, chat_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def add_space_url(*, space_id: str, job_id: str) -> bool:
+    """Pin a job into a space. sort_order = max+1. Idempotent (INSERT OR IGNORE)."""
+    async with connection() as conn:
+        await conn.execute(
+            """INSERT OR IGNORE INTO space_urls (space_id, job_id, sort_order)
+               VALUES (?, ?, COALESCE(
+                   (SELECT MAX(sort_order) FROM space_urls WHERE space_id = ?), 0
+               ) + 1)""",
+            (space_id, job_id, space_id),
+        )
+        await conn.commit()
+        return True
+
+
+async def remove_space_url(*, space_id: str, job_id: str) -> bool:
+    """Unpin a job from a space. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM space_urls WHERE space_id = ? AND job_id = ?",
+            (space_id, job_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def reorder_space_url(*, space_id: str, job_id: str, new_sort_order: int) -> bool:
+    """Update sort_order for a pinned job. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE space_urls SET sort_order = ? WHERE space_id = ? AND job_id = ?",
+            (new_sort_order, space_id, job_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def list_space_urls(space_id: str, chat_id: int) -> list[dict]:
+    """Return jobs pinned to a space, joined with key job fields, ordered by sort_order."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            """SELECT j.id, j.title, j.url, j.content_type, j.status,
+                      su.sort_order, su.added_at
+               FROM space_urls su
+               JOIN jobs j ON j.id = su.job_id AND j.chat_id = ?
+               WHERE su.space_id = ?
+               ORDER BY su.sort_order ASC""",
+            (chat_id, space_id),
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Context blobs (issue #93 / S7)
+# ---------------------------------------------------------------------------
+
+
+async def create_context_blob(*, space_id: str, name: str, content: str = "") -> dict:
+    """INSERT a context blob; auto-assigns sort_order = max+1. Returns the row."""
+    blob_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            """INSERT INTO context_blobs (id, space_id, name, content, sort_order)
+               VALUES (?, ?, ?, ?, COALESCE(
+                   (SELECT MAX(sort_order) FROM context_blobs WHERE space_id = ?), 0
+               ) + 1)""",
+            (blob_id, space_id, name, content, space_id),
+        )
+        await conn.commit()
+        cur = await conn.execute(
+            "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+            "FROM context_blobs WHERE id = ?",
+            (blob_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row)
+
+
+async def list_context_blobs(space_id: str) -> list[dict]:
+    """Return all context blobs for a space ordered by sort_order."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+            "FROM context_blobs WHERE space_id = ? ORDER BY sort_order ASC",
+            (space_id,),
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def get_context_blob(blob_id: str) -> dict | None:
+    """Return a single context blob by PK, or None."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+            "FROM context_blobs WHERE id = ?",
+            (blob_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+
+async def update_context_blob(*, blob_id: str, name: str, content: str) -> bool:
+    """UPDATE name and content; sets updated_at. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE context_blobs SET name = ?, content = ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?",
+            (name, content, blob_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def delete_context_blob(blob_id: str) -> bool:
+    """DELETE a context blob. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "DELETE FROM context_blobs WHERE id = ?", (blob_id,)
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def reorder_context_blob(*, blob_id: str, new_sort_order: int) -> bool:
+    """UPDATE sort_order for a blob. Returns True if the row existed."""
+    async with connection() as conn:
+        cur = await conn.execute(
+            "UPDATE context_blobs SET sort_order = ? WHERE id = ?",
+            (new_sort_order, blob_id),
+        )
+        await conn.commit()
+        return cur.rowcount > 0

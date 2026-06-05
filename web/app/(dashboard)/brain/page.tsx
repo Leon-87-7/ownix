@@ -48,6 +48,15 @@ function ErrorBanner({ message }: { message: string }) {
 // Result row
 // ---------------------------------------------------------------------------
 
+function safeUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function ResultRow({ result }: { result: BrainResult }) {
   return (
     <li className="flex flex-col gap-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-3">
@@ -62,14 +71,18 @@ function ResultRow({ result }: { result: BrainResult }) {
           {result.score.toFixed(4)}
         </span>
       </div>
-      <a
-        href={/^https?:\/\//i.test(result.url) ? result.url : '#'}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline"
-      >
-        {result.url}
-      </a>
+      {safeUrl(result.url) ? (
+        <a
+          href={safeUrl(result.url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline"
+        >
+          {result.url}
+        </a>
+      ) : (
+        <span className="block max-w-full truncate text-sm text-gray-500">{result.url}</span>
+      )}
     </li>
   );
 }

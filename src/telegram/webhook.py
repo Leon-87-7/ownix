@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import html
 from collections.abc import Awaitable, Callable
+from secrets import compare_digest
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
@@ -995,7 +996,7 @@ async def webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
 ) -> dict[str, bool]:
-    if x_telegram_bot_api_secret_token != settings.TELEGRAM_WEBHOOK_SECRET:
+    if not compare_digest(x_telegram_bot_api_secret_token or "", settings.TELEGRAM_WEBHOOK_SECRET):
         log.warning("webhook_invalid_secret")
         raise HTTPException(status_code=403, detail="invalid secret")
 
