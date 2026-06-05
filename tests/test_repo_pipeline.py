@@ -29,6 +29,15 @@ _BUNDLE = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _mock_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.processors.repo.send_message",
+        AsyncMock(return_value={"message_id": 123}),
+    )
+    monkeypatch.setattr("src.processors.repo.edit_message_text", AsyncMock())
+
+
 # ---------------------------------------------------------------------------
 # _parse_owner_repo
 # ---------------------------------------------------------------------------
