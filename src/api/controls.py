@@ -88,7 +88,9 @@ async def add_allowed_domain(body: DomainIn, request: Request) -> dict:
     domain = _normalize_domain(body.domain)
     if not domain:
         raise HTTPException(status_code=422, detail="Invalid domain: normalization produced an empty string")
-    await database.add_allowed_domain(chat_id, domain)
+    inserted = await database.add_allowed_domain(chat_id, domain)
+    if not inserted:
+        raise HTTPException(status_code=409, detail="Domain already exists")
     return {"domain": domain}
 
 
@@ -118,7 +120,9 @@ async def add_ignored_domain(body: DomainIn, request: Request) -> dict:
     domain = _normalize_domain(body.domain)
     if not domain:
         raise HTTPException(status_code=422, detail="Invalid domain: normalization produced an empty string")
-    await database.add_ignored_domain(chat_id, domain)
+    inserted = await database.add_ignored_domain(chat_id, domain)
+    if not inserted:
+        raise HTTPException(status_code=409, detail="Domain already exists")
     return {"domain": domain}
 
 

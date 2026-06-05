@@ -85,3 +85,32 @@ async def update_file(
     link = await asyncio.to_thread(_update_sync, file_id, content, mime_type)
     log.info("drive_updated", file_id=file_id)
     return link
+
+
+def _gdoc_sync(markdown: str, name: str, folder_id: str) -> str:
+    """Upload *markdown* as a real Google Doc (Drive converts text/plain → Doc).
+    Returns the webViewLink of the created document.
+    """
+    service = _build_service()
+    content_bytes = markdown.encode("utf-8")
+    media = MediaInMemoryUpload(content_bytes, mimetype="text/plain", resumable=False)
+    file_meta = {
+        "name": name,
+        "parents": [folder_id],
+        "mimeType": "application/vnd.google-apps.document",
+    }
+    result = (
+        service.files()
+        .create(body=file_meta, media_body=media, fields="id,webViewLink", supportsAllDrives=True)
+        .execute()
+    )
+    return result["webViewLink"]
+
+
+async def export_to_gdoc(markdown: str, name: str, folder_id: str) -> str:
+    """Create a real, editable Google Doc in *folder_id* from *markdown*.
+    Returns the Doc's webViewLink.
+    """
+    link = await asyncio.to_thread(_gdoc_sync, markdown, name, folder_id)
+    log.info("gdoc_exported", name=name)
+    return link

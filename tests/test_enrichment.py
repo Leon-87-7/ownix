@@ -18,6 +18,7 @@ from src.processors.enrichment import (
     _split_message,
     enrich,
     enrich_audio,
+    transcribe_audio,
 )
 
 
@@ -45,6 +46,32 @@ def test_extract_json_bare_object() -> None:
     raw = '{"category": "B", "topic": "bar"}'
     result = _extract_json(raw)
     assert result == {"category": "B", "topic": "bar"}
+
+
+def test_extract_json_repairs_malformed() -> None:
+    # Missing comma — typical LLM truncation; json_repair fixes it
+    raw = '{"category": "A" "topic": "foo"}'
+    result = _extract_json(raw)
+    assert result["category"] == "A"
+    assert result["topic"] == "foo"
+
+
+def test_extract_json_unparseable_raises() -> None:
+    # Blank response — repair_json cannot produce a dict; raises
+    with pytest.raises(EnrichmentUnavailableError, match="unparseable JSON|non-object JSON"):
+        _extract_json("")
+
+
+def test_extract_json_non_dict_raises() -> None:
+    # repair_json fixes an incomplete array to a valid list — not a dict
+    with pytest.raises(EnrichmentUnavailableError, match="non-object JSON"):
+        _extract_json("[1, 2, 3")
+
+
+def test_extract_json_null_literal_raises() -> None:
+    # Valid JSON "null" parses to None — not a dict
+    with pytest.raises(EnrichmentUnavailableError, match="non-object JSON"):
+        _extract_json("null")
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +241,7 @@ def test_build_audio_prompt_unknown_template_falls_back_to_summary() -> None:
 
 
 _SAMPLE_AUDIO_JSON = json.dumps({
+    "transcript": "This is the spoken content of the video.",
     "template_analysis": {
         "steps": [{"action": "Open terminal", "details": "Run the CLI", "result": "ready"}],
         "common_mistakes": "",
@@ -223,7 +251,7 @@ _SAMPLE_AUDIO_JSON = json.dumps({
 
 
 @pytest.mark.asyncio
-async def test_enrich_audio_returns_template_analysis_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_enrich_audio_returns_tuple_of_template_analysis_and_transcript(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
@@ -231,31 +259,64 @@ async def test_enrich_audio_returns_template_analysis_on_success(monkeypatch: py
         "src.processors.enrichment._call_gemini_audio_sync",
         return_value=_SAMPLE_AUDIO_JSON,
     ):
-        result = await enrich_audio(
+        template_analysis, transcript_text = await enrich_audio(
             {"title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
         )
 
-    assert result == {
+    assert template_analysis == {
         "steps": [{"action": "Open terminal", "details": "Run the CLI", "result": "ready"}],
         "common_mistakes": "",
         "pro_tips": "",
     }
+    assert transcript_text == "This is the spoken content of the video."
 
 
 @pytest.mark.asyncio
-async def test_enrich_audio_returns_none_when_no_template_analysis(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_enrich_audio_returns_none_template_analysis_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch(
         "src.processors.enrichment._call_gemini_audio_sync",
-        return_value='{"something_else": 1}',
+        return_value='{"transcript": "some words", "something_else": 1}',
     ):
-        result = await enrich_audio(
+        template_analysis, transcript_text = await enrich_audio(
             {"title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
         )
 
-    assert result is None
+    assert template_analysis is None
+    assert transcript_text == "some words"
+
+
+# ---------------------------------------------------------------------------
+# transcribe_audio — transcription-only Gemini call (ADR-0020, issue #101)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_transcribe_audio_returns_spoken_text_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    with patch(
+        "src.processors.enrichment._call_gemini_audio_sync",
+        return_value="  Hello world, this is a test transcript.  ",
+    ):
+        result = await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video")
+
+    assert result == "Hello world, this is a test transcript."
+
+
+@pytest.mark.asyncio
+async def test_transcribe_audio_both_keys_fail_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+
+    with patch(
+        "src.processors.enrichment._call_gemini_audio_sync",
+        side_effect=RuntimeError("network error"),
+    ):
+        with pytest.raises(EnrichmentUnavailableError):
+            await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video")
 
 
 @pytest.mark.asyncio

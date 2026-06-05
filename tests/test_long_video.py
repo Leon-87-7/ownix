@@ -130,8 +130,11 @@ async def test_description_link_failure_does_not_block() -> None:
 
     with (
         patch("src.processors.long_video.database.update_job_status", new_callable=AsyncMock),
-        patch("src.processors.long_video.send_message", new_callable=AsyncMock),
-        patch("src.processors.long_video.send_document", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_message", new_callable=AsyncMock,
+              return_value={"message_id": 999}),
+        patch("src.processors.long_video.edit_message_text", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_document", new_callable=AsyncMock,
+              return_value={}),
         patch("src.processors.long_video.send_inline_keyboard", new_callable=AsyncMock),
         patch("src.processors.long_video.transcript_svc.fetch_transcript", new_callable=AsyncMock,
               return_value={"videoId": "v1", "text": "transcript text"}),
@@ -156,8 +159,11 @@ async def test_transcript_error_continues() -> None:
 
     with (
         patch("src.processors.long_video.database.update_job_status", new_callable=AsyncMock),
-        patch("src.processors.long_video.send_message", new_callable=AsyncMock),
-        patch("src.processors.long_video.send_document", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_message", new_callable=AsyncMock,
+              return_value={"message_id": 999}),
+        patch("src.processors.long_video.edit_message_text", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_document", new_callable=AsyncMock,
+              return_value={}),
         patch("src.processors.long_video.send_inline_keyboard", new_callable=AsyncMock),
         patch("src.processors.long_video.transcript_svc.fetch_transcript", new_callable=AsyncMock,
               return_value={"error": {"type": "TranscriptsDisabled", "message": "no captions"}}),
