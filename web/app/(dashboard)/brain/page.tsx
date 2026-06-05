@@ -63,7 +63,7 @@ function ResultRow({ result }: { result: BrainResult }) {
         </span>
       </div>
       <a
-        href={result.url}
+        href={/^https?:\/\//i.test(result.url) ? result.url : '#'}
         target="_blank"
         rel="noopener noreferrer"
         className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline"
@@ -155,6 +155,7 @@ export default function BrainPage() {
           onKeyDown={handleKeyDown}
           disabled={loading}
           placeholder="e.g. machine learning, startup advice…"
+          aria-label="Semantic search query"
           className="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
         />
         <button
@@ -164,7 +165,7 @@ export default function BrainPage() {
         >
           {loading ? (
             <span className="flex items-center gap-2">
-              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
               Searching…
             </span>
           ) : (
@@ -188,8 +189,8 @@ export default function BrainPage() {
             {results.length} result{results.length === 1 ? '' : 's'}
           </p>
           <ul className="space-y-2">
-            {results.map((r, i) => (
-              <ResultRow key={i} result={r} />
+            {results.map((r) => (
+              <ResultRow key={r.url} result={r} />
             ))}
           </ul>
         </section>

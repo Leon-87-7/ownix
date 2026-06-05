@@ -24,19 +24,19 @@ export default function TagPicker({ jobId, jobTags, allTags, onTagChange }: TagP
 
   async function handleAttach(tagId: string) {
     if (!tagId) return
-    await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
+    const res = await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
       method: 'POST',
       credentials: 'include',
     })
-    onTagChange()
+    if (res.ok || res.status === 201) onTagChange()
   }
 
   async function handleDetach(tagId: string) {
-    await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
+    const res = await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
       method: 'DELETE',
       credentials: 'include',
     })
-    onTagChange()
+    if (res.ok || res.status === 204) onTagChange()
   }
 
   return (

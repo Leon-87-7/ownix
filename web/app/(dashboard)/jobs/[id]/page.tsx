@@ -441,6 +441,7 @@ export default function JobDetailPage({
   const [job, setJob] = useState<JobDetail | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>("loading");
   const [annotation, setAnnotation] = useState<Annotation>({ notes: "", updated_at: null });
+  const [annotationLoaded, setAnnotationLoaded] = useState(false);
   const [jobTags, setJobTags] = useState<TagSummary[]>([]);
   const [allTags, setAllTags] = useState<TagSummary[]>([]);
 
@@ -481,8 +482,8 @@ export default function JobDetailPage({
 
     fetch(`/api/jobs/${id}/annotations`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data) setAnnotation(data); })
-      .catch(() => {});
+      .then((data) => { if (data) setAnnotation(data); setAnnotationLoaded(true); })
+      .catch(() => { setAnnotationLoaded(true); });
 
     fetch(`/api/jobs/${id}/tags`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
@@ -646,7 +647,7 @@ export default function JobDetailPage({
       </div>
 
       {/* Notes (WYSIWYG Milkdown editor — issue #88 / S5) */}
-      <MarkdownEditor initialMarkdown={annotation.notes} onSave={handleSave} />
+      {annotationLoaded && <MarkdownEditor initialMarkdown={annotation.notes} onSave={handleSave} />}
 
       {/* Tag picker (issue #88 / S5) */}
       <TagPicker
