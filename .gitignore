@@ -42,3 +42,4 @@ Thumbs.db
 docs/images/*
 docs/features/*
 web/node_modules/
+web/.next/
