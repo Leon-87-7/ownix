@@ -184,6 +184,7 @@ async def test_article_run_paywall_phrase_sets_warning(temp_db, monkeypatch) -> 
     sent_messages: list[str] = []
     async def _capture_send(chat_id, text, **kwargs):
         sent_messages.append(text)
+        return {"message_id": 123}
 
     monkeypatch.setattr("src.processors.article.database.update_job_status", AsyncMock())
     monkeypatch.setattr("src.processors.article.database.get_job", AsyncMock(return_value=job))
@@ -216,6 +217,7 @@ async def test_article_run_short_body_sets_paywall_warning(temp_db, monkeypatch)
     sent_messages: list[str] = []
     async def _capture_send(chat_id, text, **kwargs):
         sent_messages.append(text)
+        return {"message_id": 123}
 
     monkeypatch.setattr("src.processors.article.database.update_job_status", AsyncMock())
     monkeypatch.setattr("src.processors.article.database.get_job", AsyncMock(return_value=job))
