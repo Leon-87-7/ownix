@@ -393,3 +393,154 @@ async def test_no_transcript_skips_document_delivery() -> None:
         await short_video.run(_PLAIN_JOB)
 
     mocks["send_document"].assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Issue #97: caption-based skeleton — no-template path end-to-end coverage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_caption_based_no_template_gemini_budget_is_one_call() -> None:
+    """Caption-based plain job: only Vision is called (captions = free, no Gemini audio)."""
+    transcript_resp = {"text": "step by step python tutorial"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    # transcribe_audio and enrich_audio must NOT be called — budget: Vision + free captions = 1 call
+    mocks["transcribe_audio"].assert_not_awaited()
+    mocks["enrich_audio"].assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Issue #98: caption-less plain job — transcribe_audio path
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_plain_caption_less_transcript_tail_runs() -> None:
+    """Caption-less plain job: transcribe_audio result drives persist + Drive + Telegram doc."""
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["transcribe_audio"].return_value = "spoken content from audio"
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["extract_key_phrases"].assert_called_once()
+    upload_calls = [str(c) for c in mocks["upload_file"].call_args_list]
+    assert any("_transcript.md" in f for f in upload_calls), "transcript.md not uploaded to Drive"
+    mocks["send_document"].assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_plain_caption_less_transcribe_audio_unavailable_surfaces_message() -> None:
+    """EnrichmentUnavailableError from transcribe_audio (plain path) surfaces the right message."""
+    from src.processors.enrichment import EnrichmentUnavailableError
+
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["transcribe_audio"].side_effect = EnrichmentUnavailableError("both keys failed")
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "Transcription failed — Gemini unavailable" in sent
+    status_calls = [str(c) for c in mocks["update_job_status"].call_args_list]
+    assert not any("'error'" in c for c in status_calls)
+
+
+@pytest.mark.asyncio
+async def test_plain_caption_less_empty_audio_transcript_is_wordless() -> None:
+    """transcribe_audio returning empty string signals a silent/wordless clip."""
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["transcribe_audio"].return_value = ""
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "I'm wordless" in sent
+    mocks["send_document"].assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Issue #99: caption-less template path — enrich_audio tail
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
+    """caption-less + template: enrich_audio transcript is persisted, Drive-uploaded, and doc-sent."""
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+    template_analysis = {
+        "steps": [{"action": "Run", "details": "CLI", "result": "ok"}],
+        "common_mistakes": "",
+        "pro_tips": "",
+    }
+
+    with _patch_pipeline(transcript_resp) as (short_video, mocks):
+        mocks["enrich_audio"].return_value = (template_analysis, "verbatim spoken content")
+        job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
+        await short_video.run(job)
+
+    mocks["extract_key_phrases"].assert_called_once()
+    update_calls = mocks["update_job_status"].call_args_list
+    assert any("verbatim spoken content" in str(c) for c in update_calls), "transcript not persisted"
+    upload_calls = [str(c) for c in mocks["upload_file"].call_args_list]
+    assert any("_transcript.md" in f for f in upload_calls), "transcript.md not uploaded to Drive"
+    mocks["send_document"].assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Issue #100: explicit failure taxonomy
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_sidecar_error_dict_surfaces_message_text() -> None:
+    """Sidecar returning {"error": {"message": "..."}} sends the specific message text."""
+    transcript_resp = {"error": {"type": "http_error", "message": "503 Service Unavailable"}}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "Transcript service error" in sent
+    assert "503 Service Unavailable" in sent
+
+
+@pytest.mark.asyncio
+async def test_sidecar_error_dict_job_stays_done() -> None:
+    """Sidecar error dict: job status never regresses from done."""
+    transcript_resp = {"error": {"type": "timeout", "message": "request timed out"}}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    status_calls = [str(c) for c in mocks["update_job_status"].call_args_list]
+    assert not any("'error'" in c for c in status_calls)
+
+
+@pytest.mark.asyncio
+async def test_whitespace_only_transcript_is_wordless() -> None:
+    """A transcript response containing only whitespace is treated as wordless (issue #100)."""
+    transcript_resp = {"text": "   \n\t  "}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
+    assert "I'm wordless" in sent
+    mocks["send_document"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_gemini_unavailable_plain_job_stays_done() -> None:
+    """EnrichmentUnavailableError on plain caption-less path: job status stays done."""
+    from src.processors.enrichment import EnrichmentUnavailableError
+
+    transcript_resp = {"fallback": "audio", "audio_b64": "YXVkaW8=", "mime_type": "audio/mp4"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["transcribe_audio"].side_effect = EnrichmentUnavailableError("both keys failed")
+        await short_video.run(_PLAIN_JOB)
+
+    status_calls = [str(c) for c in mocks["update_job_status"].call_args_list]
+    assert not any("'error'" in c for c in status_calls)
