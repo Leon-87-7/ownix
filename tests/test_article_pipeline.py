@@ -65,6 +65,11 @@ async def temp_db():
         pass
 
 
+@pytest.fixture(autouse=True)
+def _mock_edit_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.processors.article.edit_message_text", AsyncMock())
+
+
 # ---------------------------------------------------------------------------
 # article.run — cache hit
 # ---------------------------------------------------------------------------
