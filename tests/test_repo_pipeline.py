@@ -231,6 +231,85 @@ def test_prioritize_tree_all_source_no_cut() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Task 3 — _build_repo_prompt improvements (#119)
+# ---------------------------------------------------------------------------
+
+_BUNDLE_WITH_TOPICS = {
+    **_BUNDLE,
+    "metadata": {
+        **_BUNDLE["metadata"],
+        "topics": ["pdf", "ocr", "rust"],
+    },
+}
+
+_BUNDLE_LONG_README = {
+    **_BUNDLE,
+    "readme": "x" * 25_000,
+}
+
+_BUNDLE_LONG_MANIFEST = {
+    **_BUNDLE,
+    "manifests": {"Cargo.toml": "a" * 5_000},
+}
+
+
+def test_prompt_contains_topics() -> None:
+    prompt = _build_repo_prompt(_BUNDLE_WITH_TOPICS)
+    assert "pdf" in prompt
+    assert "ocr" in prompt
+    assert "rust" in prompt
+
+
+def test_prompt_omits_topics_line_when_empty() -> None:
+    bundle = {**_BUNDLE, "metadata": {**_BUNDLE["metadata"], "topics": []}}
+    prompt = _build_repo_prompt(bundle)
+    assert "Topics:" not in prompt
+
+
+def test_prompt_has_constraints_block() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "STRICT RULES" in prompt
+    assert "tech_stack" in prompt
+    assert "file_pointer" in prompt
+
+
+def test_prompt_constraints_block_before_tree() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert prompt.index("STRICT RULES") < prompt.index("File tree:")
+
+
+def test_prompt_readme_not_double_capped() -> None:
+    prompt = _build_repo_prompt(_BUNDLE_LONG_README)
+    assert "x" * 25_000 in prompt
+
+
+def test_prompt_readme_label_is_plain() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "README (preprocessed)" not in prompt
+    assert "README:" in prompt
+
+
+def test_prompt_manifest_cap_is_4000() -> None:
+    prompt = _build_repo_prompt(_BUNDLE_LONG_MANIFEST)
+    assert "a" * 4_000 in prompt
+    assert "a" * 4_001 not in prompt
+
+
+def test_prompt_has_star_calibration() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "star" in prompt.lower()
+    assert "1k" in prompt or "1,000" in prompt or "1k+" in prompt
+
+
+def test_prompt_system_frame_has_field_guidance() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    for field in ("tagline", "tech_stack", "project_ideas", "when_to_use",
+                  "avoid_when", "concepts_taught", "prerequisites",
+                  "curriculum_hooks"):
+        assert field in prompt, f"system_frame missing guidance for: {field}"
+
+
+# ---------------------------------------------------------------------------
 # Task 7 — Gemini call + DB persistence + summary + Freestyle button (#68)
 # ---------------------------------------------------------------------------
 
