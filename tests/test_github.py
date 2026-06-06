@@ -15,6 +15,7 @@ os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-secret")
 from src.services.github import (
     enrich_repo,
     _fetch_sync,
+    _fetch_bundle_meta_sync,
     preprocess_readme,
     fetch_readme,
     fetch_tree,
@@ -277,7 +278,7 @@ _SAMPLE_BUNDLE = {
 async def test_fetch_repo_bundle_cache_hit_no_api_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cache hit: bundle returned from Redis, no GitHub API calls made."""
     fake_redis = TrackingRedis()
-    fake_redis._store["github_repo_bundle:octocat/Hello-World"] = json.dumps(_SAMPLE_BUNDLE)
+    fake_redis._store["github_repo_bundle:v2:octocat/Hello-World"] = json.dumps(_SAMPLE_BUNDLE)
 
     import src.queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
@@ -310,9 +311,9 @@ async def test_fetch_repo_bundle_cold_cache_written_with_7day_ttl(monkeypatch: p
         result = await fetch_repo_bundle("octocat", "myrepo", "tok")
 
     assert "go.mod" in result["manifests"]
-    cached_raw = fake_redis._store.get("github_repo_bundle:octocat/myrepo")
+    cached_raw = fake_redis._store.get("github_repo_bundle:v2:octocat/myrepo")
     assert cached_raw is not None
-    assert fake_redis._ttls.get("github_repo_bundle:octocat/myrepo") == 86_400 * 7
+    assert fake_redis._ttls.get("github_repo_bundle:v2:octocat/myrepo") == 86_400 * 7
 
 
 @pytest.mark.asyncio
@@ -348,3 +349,76 @@ async def test_fetch_repo_bundle_404_raises(monkeypatch: pytest.MonkeyPatch) -> 
     with patch("src.services.github._fetch_bundle_meta_sync", return_value=None):
         with pytest.raises(FileNotFoundError):
             await fetch_repo_bundle("ghost", "private-repo", "tok")
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — topics field + v2 cache key (#118)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+
+
+def test_fetch_bundle_meta_sync_includes_topics() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "stargazers_count": 100,
+        "forks_count": 10,
+        "language": "Python",
+        "pushed_at": "2026-01-01T00:00:00Z",
+        "description": "A repo",
+        "archived": False,
+        "default_branch": "main",
+        "topics": ["machine-learning", "nlp"],
+    }
+
+    with patch("src.services.github.requests.get", return_value=mock_resp):
+        result = _fetch_bundle_meta_sync("owner", "repo", token=None)
+
+    assert result is not None
+    assert result["topics"] == ["machine-learning", "nlp"]
+
+
+def test_fetch_bundle_meta_sync_topics_defaults_to_empty_list() -> None:
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "stargazers_count": 5,
+        "forks_count": 0,
+        "language": None,
+        "pushed_at": None,
+        "description": None,
+        "archived": False,
+        "default_branch": "main",
+        # no "topics" key
+    }
+
+    with patch("src.services.github.requests.get", return_value=mock_resp):
+        result = _fetch_bundle_meta_sync("owner", "repo", token=None)
+
+    assert result is not None
+    assert result["topics"] == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_repo_bundle_uses_v2_cache_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bundle pre-seeded under the v2 key must be returned as a cache hit."""
+    fake_redis = FakeRedis()
+    bundle_data = {
+        "owner": "owner", "repo": "repo",
+        "metadata": {"stars": 1, "forks": 0, "language": None,
+                     "pushed_at": None, "description": None,
+                     "archived": False, "topics": []},
+        "default_branch": "main", "readme": "", "readme_raw_bytes": 0,
+        "tree": [], "manifests": {}, "no_readme": True,
+    }
+    fake_redis._store["github_repo_bundle:v2:owner/repo"] = json.dumps(bundle_data)
+
+    import src.queue as queue_module
+    monkeypatch.setattr(queue_module, "_redis", fake_redis)
+
+    with patch("src.services.github._fetch_bundle_meta_sync") as mock_meta:
+        result = await fetch_repo_bundle("owner", "repo", token=None)
+
+    mock_meta.assert_not_called()
+    assert result["owner"] == "owner"

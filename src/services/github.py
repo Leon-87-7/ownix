@@ -122,6 +122,7 @@ def _fetch_bundle_meta_sync(owner: str, repo: str, token: str | None) -> dict | 
         "description": data.get("description"),
         "archived": data.get("archived", False),
         "default_branch": data.get("default_branch", "main"),
+        "topics": data.get("topics") or [],
     }
 
 
@@ -133,7 +134,7 @@ async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
     """
     from src import queue
 
-    cache_key = f"github_repo_bundle:{owner}/{repo}"
+    cache_key = f"github_repo_bundle:v2:{owner}/{repo}"
     client = queue._client()
 
     try:
