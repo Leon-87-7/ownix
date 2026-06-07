@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiPost, useFetchList } from '@/lib/fetch-utils';
 
 interface Tag {
   id: string;
@@ -204,44 +205,21 @@ function TagRow({
 }
 
 function TagsTab() {
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | undefined>();
+  const { data: tags, setData: setTags, loading, fetchError } = useFetchList<Tag>('/api/controls/tags', 'tags');
   const [createError, setCreateError] = useState<string | undefined>();
-
-  useEffect(() => {
-    fetch('/api/controls/tags')
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to load tags');
-        return res.json() as Promise<Tag[]>;
-      })
-      .then(setTags)
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-  }, []);
 
   const handleCreate = async (values: TagFormState) => {
     setCreateError(undefined);
-    const res = await fetch('/api/controls/tags', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      const detail = (data as { detail?: string }).detail ?? 'Create failed';
-      if (res.status === 409) {
+    const result = await apiPost<Tag>('/api/controls/tags', values);
+    if (!result.ok) {
+      if (result.status === 409) {
         setCreateError('Tag name already exists');
         throw new Error('Tag name already exists');
       }
-      setCreateError(detail);
-      throw new Error(detail);
+      setCreateError(result.detail);
+      throw new Error(result.detail);
     }
-    const created: Tag = await res.json();
-    setTags((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+    setTags((prev) => [...prev, result.data].sort((a, b) => a.name.localeCompare(b.name)));
   };
 
   const handleUpdated = (updated: Tag) => {
@@ -296,27 +274,11 @@ function DomainTab({
   apiPath: string;
   label: string;
 }) {
-  const [domains, setDomains] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | undefined>();
+  const { data: domains, setData: setDomains, loading, fetchError } = useFetchList<string>(apiPath, label.toLowerCase());
   const [input, setInput] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | undefined>();
   const [removeError, setRemoveError] = useState<string | undefined>();
-
-  useEffect(() => {
-    fetch(apiPath)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load ${label.toLowerCase()}`);
-        return res.json() as Promise<string[]>;
-      })
-      .then(setDomains)
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-  }, [apiPath, label]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();

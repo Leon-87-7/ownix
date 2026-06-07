@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { mapFetchState, swapSortOrder } from "@/lib/fetch-utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JobSummary } from "@/components/job-card";
@@ -116,9 +117,8 @@ export default function SpaceDetailPage({
       const res = await fetch(`/api/spaces/${spaceId}`, {
         signal: controller.signal,
       });
-      if (res.status === 404) { setFetchState("not_found"); return; }
-      if (res.status === 403 || res.status === 401) { setFetchState("forbidden"); return; }
-      if (!res.ok) { setFetchState("error"); return; }
+      const errState = mapFetchState(res);
+      if (errState) { setFetchState(errState); return; }
       const data: SpaceDetail = await res.json();
       setSpace(data);
       setEditName(data.name);
@@ -258,18 +258,10 @@ export default function SpaceDetailPage({
       return next;
     });
 
-    await Promise.all([
-      fetch(`/api/spaces/${spaceId}/urls/${a.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sort_order: b.sort_order }),
-      }),
-      fetch(`/api/spaces/${spaceId}/urls/${b.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sort_order: a.sort_order }),
-      }),
-    ]);
+    await swapSortOrder(
+      `/api/spaces/${spaceId}/urls/${a.id}`, b.sort_order,
+      `/api/spaces/${spaceId}/urls/${b.id}`, a.sort_order,
+    );
 
     await fetchUrls();
   };
@@ -318,18 +310,10 @@ export default function SpaceDetailPage({
     if (targetIndex < 0 || targetIndex >= blobs.length) return;
     const a = blobs[index];
     const b = blobs[targetIndex];
-    await Promise.all([
-      fetch(`/api/spaces/${spaceId}/blobs/${a.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sort_order: b.sort_order }),
-      }),
-      fetch(`/api/spaces/${spaceId}/blobs/${b.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sort_order: a.sort_order }),
-      }),
-    ]);
+    await swapSortOrder(
+      `/api/spaces/${spaceId}/blobs/${a.id}`, b.sort_order,
+      `/api/spaces/${spaceId}/blobs/${b.id}`, a.sort_order,
+    );
     await fetchBlobs();
   };
 

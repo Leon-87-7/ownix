@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { mapFetchState } from "@/lib/fetch-utils";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import TagPicker from "@/components/TagPicker";
@@ -450,18 +451,8 @@ export default function JobDetailPage({
 
     fetch(`/api/jobs/${params.id}`, { signal: controller.signal })
       .then(async (res) => {
-        if (res.status === 404) {
-          setFetchState("not_found");
-          return;
-        }
-        if (res.status === 403 || res.status === 401) {
-          setFetchState("forbidden");
-          return;
-        }
-        if (!res.ok) {
-          setFetchState("error");
-          return;
-        }
+        const errState = mapFetchState(res);
+        if (errState) { setFetchState(errState); return; }
         const data: JobDetail = await res.json();
         setJob(data);
         setFetchState("ok");

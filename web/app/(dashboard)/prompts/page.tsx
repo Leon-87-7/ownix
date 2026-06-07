@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { apiPost, useFetchList } from '@/lib/fetch-utils';
 
 interface Template {
   id: string;
@@ -43,18 +44,12 @@ function CreateForm({
     setError(undefined);
     setSubmitting(true);
     try {
-      const res = await fetch('/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const detail = (data as { detail?: string }).detail ?? 'Create failed';
-        setError(detail);
+      const result = await apiPost<Template>('/api/templates', values);
+      if (!result.ok) {
+        setError(result.detail);
         return;
       }
-      const created: Template = await res.json();
+      const created = result.data;
       onCreated(created);
       setValues({ name: '', description: '', extra_instructions: '' });
     } finally {
@@ -277,23 +272,7 @@ function UserTemplateRow({
 // ---------------------------------------------------------------------------
 
 export default function PromptsPage() {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | undefined>();
-
-  useEffect(() => {
-    fetch('/api/templates')
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to load templates');
-        return res.json() as Promise<Template[]>;
-      })
-      .then(setTemplates)
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: templates, setData: setTemplates, loading, fetchError } = useFetchList<Template>('/api/templates', 'templates');
 
   const builtins = templates.filter((t) => t.is_builtin);
   const userTemplates = templates.filter((t) => !t.is_builtin);

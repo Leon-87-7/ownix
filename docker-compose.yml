@@ -50,6 +50,12 @@ services:
     networks:
       - vig-network
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # web — local Next.js frontend.
+  # GATED FOR REMOVAL: once the Vercel deployment is live and verified
+  # (see docs/ops/vercel-deploy.md), delete this entire `web:` service so the
+  # host stops building/serving Next.js. Until then it stays so local is intact.
+  # ──────────────────────────────────────────────────────────────────────────
   web:
     build:
       context: ./web
@@ -66,6 +72,22 @@ services:
     restart: unless-stopped
     networks:
       - vig-network
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # cloudflared — Cloudflare Tunnel exposing the API at api.leondev.xyz.
+  # GATED (commented out): uncomment once the tunnel is created in the Cloudflare
+  # Zero Trust dashboard (public hostname api.leondev.xyz -> http://api:8000) and
+  # CLOUDFLARE_TUNNEL_TOKEN is set in .env. See docs/ops/vercel-deploy.md (Option A).
+  # ──────────────────────────────────────────────────────────────────────────
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: vig-cloudflared
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - vig-network
 
   redis:
     image: redis:7-alpine
