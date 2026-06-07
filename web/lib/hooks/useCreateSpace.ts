@@ -2,10 +2,12 @@
 
 import { useCallback, useState } from 'react';
 
+const DEFAULT_COLOR = '#6366f1';
+
 export function useCreateSpace(onCreated: () => Promise<void>) {
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState('#6366f1');
+  const [newColor, setNewColor] = useState(DEFAULT_COLOR);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export function useCreateSpace(onCreated: () => Promise<void>) {
       if (res.status === 409) { setFormError('A space with that name already exists.'); return; }
       if (!res.ok) throw new Error('Failed to create space');
       setNewName('');
-      setNewColor('#6366f1');
+      setNewColor(DEFAULT_COLOR);
       setShowForm(false);
       await onCreated();
     } catch (e) {
@@ -33,12 +35,14 @@ export function useCreateSpace(onCreated: () => Promise<void>) {
     }
   }, [newName, newColor, onCreated]);
 
+  const openForm = useCallback(() => setShowForm(true), []);
+
   const resetForm = useCallback(() => {
     setShowForm(false);
     setFormError(null);
     setNewName('');
-    setNewColor('#6366f1');
+    setNewColor(DEFAULT_COLOR);
   }, []);
 
-  return { showForm, setShowForm, newName, setNewName, newColor, setNewColor, submitting, formError, handleCreate, resetForm };
+  return { showForm, openForm, newName, setNewName, newColor, setNewColor, submitting, formError, handleCreate, resetForm };
 }

@@ -25,7 +25,9 @@ function safeUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? url : undefined;
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 function ResultRow({ result }: { result: BrainResult }) {
@@ -37,7 +39,14 @@ function ResultRow({ result }: { result: BrainResult }) {
         <span className="ml-auto shrink-0 text-xs text-gray-500">{result.score.toFixed(4)}</span>
       </div>
       {safeUrl(result.url) ? (
-        <a href={safeUrl(result.url)} target="_blank" rel="noopener noreferrer" className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline">{result.url}</a>
+        <a
+          href={safeUrl(result.url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block max-w-full truncate text-sm text-indigo-400 hover:text-indigo-300 hover:underline"
+        >
+          {result.url}
+        </a>
       ) : (
         <span className="block max-w-full truncate text-sm text-gray-500">{result.url}</span>
       )}
@@ -53,7 +62,7 @@ export default function BrainPage() {
   const handleRun = () => {
     if (!query.trim()) { setBlankWarning(true); inputRef.current?.focus(); return; }
     setBlankWarning(false);
-    runSearch(query);
+    runSearch();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -86,7 +95,11 @@ export default function BrainPage() {
           aria-label="Semantic search query"
           className="flex-1 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
         />
-        <button onClick={handleRun} disabled={loading} className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+        <button
+          onClick={handleRun}
+          disabled={loading}
+          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+        >
           {loading ? (
             <span className="flex items-center gap-2">
               <span aria-hidden="true" className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -104,7 +117,9 @@ export default function BrainPage() {
       {searchState === 'results' && (
         <section>
           <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">{results.length} result{results.length === 1 ? '' : 's'}</p>
-          <ul className="space-y-2">{results.map((r) => <ResultRow key={r.url} result={r} />)}</ul>
+          <ul className="space-y-2">
+            {results.map((r) => <ResultRow key={r.url} result={r} />)}
+          </ul>
         </section>
       )}
     </div>

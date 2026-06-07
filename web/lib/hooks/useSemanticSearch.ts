@@ -17,11 +17,12 @@ export function useSemanticSearch() {
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const runSearch = useCallback(async (q: string) => {
+  const runSearch = useCallback(async () => {
+    const q = query.trim();
     setSearchState('loading');
     setErrorMessage('');
     try {
-      const params = new URLSearchParams({ q: q.trim() });
+      const params = new URLSearchParams({ q });
       const res = await fetch(`/api/brain/search?${params}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -38,7 +39,7 @@ export function useSemanticSearch() {
       setErrorMessage(msg);
       setSearchState('error');
     }
-  }, []);
+  }, [query]);
 
   return { query, setQuery, results, searchState, errorMessage, runSearch };
 }

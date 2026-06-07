@@ -28,17 +28,20 @@ export function useFetchList<T>(url: string, errorLabel: string) {
   const [fetchError, setFetchError] = useState<string | undefined>();
 
   useEffect(() => {
-    fetch(url)
+    const controller = new AbortController();
+    fetch(url, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load ${errorLabel}`);
         return res.json() as Promise<T[]>;
       })
       .then(setData)
       .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
         const msg = err instanceof Error ? err.message : String(err);
         setFetchError(msg);
       })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [url, errorLabel]);
 
   return { data, setData, loading, fetchError };

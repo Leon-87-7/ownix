@@ -16,17 +16,15 @@ function TagForm({
   onSubmit,
   onCancel,
   submitLabel,
-  error,
 }: {
   initial: TagFormState;
   onSubmit: (values: TagFormState) => Promise<void>;
   onCancel?: () => void;
   submitLabel: string;
-  error?: string;
 }) {
   const [values, setValues] = useState<TagFormState>(initial);
   const [submitting, setSubmitting] = useState(false);
-  const [localError, setLocalError] = useState<string | undefined>(error);
+  const [localError, setLocalError] = useState<string | undefined>();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

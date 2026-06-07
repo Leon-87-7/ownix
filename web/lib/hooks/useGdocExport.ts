@@ -22,11 +22,10 @@ export function useGdocExport(spaceId: string) {
       if (!res.ok || data.error) {
         if (data.error === 'drive_not_configured') {
           setError('Google Drive is not configured. Use the .md, .txt, or PDF buttons above.');
-        } else {
-          throw new Error(data.detail || data.error || 'Export failed');
+          setStatus('error');
+          return;
         }
-        setStatus('error');
-        return;
+        throw new Error(data.detail || data.error || 'Export failed');
       }
       setResultUrl(data.url as string);
       setStatus('done');

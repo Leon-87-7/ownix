@@ -23,9 +23,7 @@ export function useTagList() {
   const createTag = useCallback(async (values: TagFormState): Promise<void> => {
     const result = await apiPost<Tag>('/api/controls/tags', values);
     if (!result.ok) {
-      const err = new Error(result.status === 409 ? 'Tag name already exists' : result.detail) as Error & { status: number };
-      err.status = result.status;
-      throw err;
+      throw new Error(result.status === 409 ? 'Tag name already exists' : result.detail);
     }
     setTags((prev) => [...prev, result.data].sort((a, b) => a.name.localeCompare(b.name)));
   }, [setTags]);

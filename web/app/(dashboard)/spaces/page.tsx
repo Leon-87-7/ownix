@@ -6,7 +6,7 @@ import { useCreateSpace } from "@/lib/hooks/useCreateSpace";
 
 export default function SpacesPage() {
   const { spaces, loading, error, reload } = useSpaceList();
-  const { showForm, setShowForm, newName, setNewName, newColor, setNewColor, submitting, formError, handleCreate, resetForm } = useCreateSpace(reload);
+  const { showForm, openForm, newName, setNewName, newColor, setNewColor, submitting, formError, handleCreate, resetForm } = useCreateSpace(reload);
 
   if (loading) {
     return (
@@ -26,7 +26,7 @@ export default function SpacesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white">Spaces</h1>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={showForm ? resetForm : openForm}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
         >
           {showForm ? "Cancel" : "New Space"}
