@@ -76,6 +76,9 @@
 | [#101](https://github.com/Leon-87-7/vig/issues/101) | feat(enrichment): transcribe_audio + enrich_audio returns transcript text (ADR-0020 foundation)         | Short Video / Enrichment | Committed (dbdcd40); closed on GH; 57 tests green                                         |
 | [#102](https://github.com/Leon-87-7/vig/issues/102) | feat(short-pipeline): guaranteed transcript acquisition on every short job (ADR-0020)                   | Short Video              | Committed (dbdcd40); closed on GH; 57 tests green                                         |
 | [#103](https://github.com/Leon-87-7/vig/issues/103) | feat(short-pipeline): transcript Drive upload + Telegram document delivery tail (ADR-0020)              | Short Video              | Committed (dbdcd40); closed on GH; 57 tests green                                         |
+|   [#90](https://github.com/Leon-87-7/vig/issues/90) | web(S9): User templates + -name branch (ADR-0019)                                                       | Web / Templates          | Closed on GH (completed)                                                                  |
+|   [#91](https://github.com/Leon-87-7/vig/issues/91) | web(S10): Controls — Allowed + Ignored domain tabs                                                      | Web / Controls           | Closed on GH (completed)                                                                  |
+|   [#92](https://github.com/Leon-87-7/vig/issues/92) | web(S11): Brain semantic-search page                                                                    | Web / Brain              | Closed on GH (completed)                                                                  |
 
 ---
 
@@ -83,15 +86,7 @@
 
 |                                                   # | Title                                                                                                  | Area                 | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | -------------------- | ---------- |
-|   [#88](https://github.com/Leon-87-7/vig/issues/88) | web(S5): Job annotation + tagging (Milkdown)                                                            | Web / Jobs           | #86, #87   |
-|   [#90](https://github.com/Leon-87-7/vig/issues/90) | web(S9): User templates + -name branch                                                                  | Web / Templates      | #83, #84   |
-|   [#91](https://github.com/Leon-87-7/vig/issues/91) | web(S10): Controls Allowed/Ignored domains                                                              | Web / Controls       | #84, #81   |
-|   [#92](https://github.com/Leon-87-7/vig/issues/92) | web(S11): Brain search page                                                                             | Web / Brain          | #83, #84   |
-|   [#94](https://github.com/Leon-87-7/vig/issues/94) | web(S12): Deploy — compose web + subdomains \[HITL]                                                     | Web / Ops            | #84        |
-| [#130](https://github.com/Leon-87-7/vig/issues/130) | refactor(webhook): extract URL-routing + template-shortcut helpers — cut webhook() CC 32→<12            | Refactor / Telegram  | —          |
-| [#132](https://github.com/Leon-87-7/vig/issues/132) | refactor(database): add _execute/_fetch_one/_fetch_all helpers — collapse clone Group 38 (13 clones)    | Refactor / DB        | —          |
-| [#133](https://github.com/Leon-87-7/vig/issues/133) | refactor(short_video): extract _acquire_transcript — flatten run() nesting (CC 27, depth 6)             | Refactor / Short Video | —        |
-| [#131](https://github.com/Leon-87-7/vig/issues/131) | refactor(brain): extract _select_refresh_batch + _refresh_one_link — flatten refresh_stale_links (CC 24) | Refactor / Brain    | —          |
+|                                                   — | (empty)                                                                                                |                      |            |
 
 ---
 
@@ -101,7 +96,6 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                                                                       | Area              | Depends On |
 | --------------------------------------------------: | ----------------------------------------------------------------------------------------------------------- | ----------------- | ---------- |
-|   [#82](https://github.com/Leon-87-7/vig/issues/82) | bug(test_long_video): under-mocked send_message → coroutine reaches editMessageText JSON encode (test-only) | Test / Long Video | —          |
 | [#129](https://github.com/Leon-87-7/vig/issues/129) | refactor(fetch-utils): flatten mapFetchState + shared fetchJson\<T> helper                                  | Web / Refactor    | —          |
 | [#121](https://github.com/Leon-87-7/vig/issues/121) | refactor(feed): extract useFeedData + useFuseSearch + polling hook                                          | Web / Refactor    | —          |
 | [#122](https://github.com/Leon-87-7/vig/issues/122) | refactor(spaces/detail): extract data hooks + split UrlsTab / ContextTab                                    | Web / Refactor    | —          |
@@ -111,28 +105,19 @@ Ordered by unblocked-first, then dependency chain.
 | [#126](https://github.com/Leon-87-7/vig/issues/126) | refactor(export-modal): extract useGdocExport; flatten handleGdoc branches                                  | Web / Refactor    | —          |
 | [#127](https://github.com/Leon-87-7/vig/issues/127) | refactor(prompts): extract useTemplateList; slim UserTemplateRow                                            | Web / Refactor    | —          |
 | [#128](https://github.com/Leon-87-7/vig/issues/128) | refactor(brain): extract useSemanticSearch hook                                                             | Web / Refactor    | —          |
+|   [#88](https://github.com/Leon-87-7/vig/issues/88) | web(S5): Job annotation + tagging (Milkdown)                                                                | Web / Jobs        | #86, #87 ✓ |
+| [#130](https://github.com/Leon-87-7/vig/issues/130) | refactor(webhook): extract URL-routing + template-shortcut helpers — cut webhook() CC 32→<12                | Refactor / Telegram | —        |
+| [#131](https://github.com/Leon-87-7/vig/issues/131) | refactor(short_video): extract _acquire_transcript — flatten run() nesting (CC 27, depth 6)                 | Refactor / Short Video | —     |
+| [#132](https://github.com/Leon-87-7/vig/issues/132) | refactor(database): add _execute/_fetch_one/_fetch_all helpers — collapse clone Group 38 (13 clones)        | Refactor / DB     | —          |
+| [#133](https://github.com/Leon-87-7/vig/issues/133) | refactor(brain): extract _select_refresh_batch + _refresh_one_link — flatten refresh_stale_links (CC 24)    | Refactor / Brain  | —          |
 
 ---
 
 ## Ready for Human
 
-|   # | Title   | Area | Notes |
-| --: | ------- | ---- | ----- |
-|   — | (empty) |      |       |
-
----
-
-## Parked
-
-Shelved by decision — not being pursued. Issues remain open on GitHub but are off the active board.
-
-|                                                 # | Title                                                                                               | Area                | Depends On    | Notes                                       |
-| ------------------------------------------------: | --------------------------------------------------------------------------------------------------- | ------------------- | ------------- | ------------------------------------------- |
-| [#75](https://github.com/Leon-87-7/vig/issues/75) | refactor(telegram): extract dispatch.py — CallbackCtx/SlashCtx contract module (ADR-0015)            | Refactor / Telegram | —             | Parked 2026-06-07; webhook.py split shelved |
-| [#76](https://github.com/Leon-87-7/vig/issues/76) | refactor(telegram): extract callbacks.py — _cb_\* + \_CALLBACK_TABLE + handle_callback()             | Refactor / Telegram | #75           | Parked 2026-06-07                           |
-| [#77](https://github.com/Leon-87-7/vig/issues/77) | refactor(telegram): extract domain_cmds.py — /ignore·/allowlist family + DOMAIN_COMMANDS             | Refactor / Telegram | #75           | Parked 2026-06-07                           |
-| [#78](https://github.com/Leon-87-7/vig/issues/78) | refactor(telegram): extract photo.py — batch state machine + handle_photo_message() + PHOTO_COMMANDS | Refactor / Telegram | #75           | Parked 2026-06-07                           |
-| [#79](https://github.com/Leon-87-7/vig/issues/79) | refactor(telegram): finalize sender.\* seam in webhook + line-count/glossary verification (ADR-0015) | Refactor / Telegram | #76, #77, #78 | Parked 2026-06-07                           |
+|                                                   # | Title                                                            | Area      | Notes                                                                          |
+| --------------------------------------------------: | ---------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------ |
+|   [#94](https://github.com/Leon-87-7/vig/issues/94) | web(S12): Deploy — compose web + subdomains \[HITL]              | Web / Ops | HITL: DNS, app./api. subdomains, prod deploy, BotFather domain. Unblocked (#84 ✓) |
 
 ---
 
@@ -215,11 +200,7 @@ Repo URL feature (postgrill: docs/features/postgrill/repo-url-feature.md + ADR-0
                                           └── #73 freestyle re-run ✓ ◄───┘
                                                 (also depends on #70)
 
-webhook.py split (CONTEXT.md: Dispatch contract module / Telegram sender seam + ADR-0015) — ⛔ PARKED 2026-06-07 (not being pursued; see Parked column)
-#75 extract dispatch.py (CallbackCtx/SlashCtx contract)
-├── #76 extract callbacks.py (_cb_* + _CALLBACK_TABLE + handle_callback) ──┐
-├── #77 extract domain_cmds.py (/ignore·/allowlist + DOMAIN_COMMANDS) ─────┤
-└── #78 extract photo.py (batch + handle_photo_message + PHOTO_COMMANDS) ──┴── #79 finalize sender.* seam in webhook + verify
+webhook.py split (ADR-0015) — ✗ WONTFIX 2026-06-07 (#75–#79 closed not-planned; superseded by #130 CC-reduction on single-file webhook.py)
 
 Web dashboard feature (postgrill: docs/features/postgrill/web-plan.md + ADR-0016..0019)
 #81 ignored_domains per-chat migration (tenancy drift) ✓
@@ -237,12 +218,12 @@ Critical path: #83 → #84 → {#85, #86, #87} → #88/#89 → #93 → #95
     ├── #86 S3 — Job detail ✓
     │   └── #88 S5 — Job annotation ◄── also #87
     ├── #87 S4 — Controls Tags tab ✓
-    ├── #90 S9 — User templates ◄── also #83
-    ├── #91 S10 — Controls Allowed/Ignored ◄── also #81
-    ├── #92 S11 — Brain search page ◄── also #83
+    ├── #90 S9 — User templates ✓ ◄── also #83
+    ├── #91 S10 — Controls Allowed/Ignored ✓ ◄── also #81
+    ├── #92 S11 — Brain search page ✓ ◄── also #83
     └── #94 S12 — Deploy [HITL]
 
-#82 test(long_video) under-mocked send_message → coroutine in editMessageText (standalone test-hygiene; no deps)
+#82 test(long_video) under-mocked send_message → coroutine in editMessageText — ✗ WONTFIX 2026-06-07
 
 Web complexity reduction (fallow health — CRAP scores; all independent, no blockers)
 #129 refactor(fetch-utils) — flatten mapFetchState + shared fetchJson<T>
