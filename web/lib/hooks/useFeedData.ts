@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JobSummary } from '@/components/job-card';
 
-interface Stats {
+export interface Stats {
   total: number;
   by_status: Record<string, number>;
   by_content_type: Record<string, number>;

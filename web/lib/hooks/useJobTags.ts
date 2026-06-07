@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FetchState } from '@/lib/fetch-utils';
 
-interface TagSummary {
+export interface TagSummary {
   id: string;
   name: string;
   color: string;

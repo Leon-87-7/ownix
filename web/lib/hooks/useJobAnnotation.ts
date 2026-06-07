@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FetchState } from '@/lib/fetch-utils';
 
-interface Annotation {
+export interface Annotation {
   notes: string;
   updated_at: string | null;
 }

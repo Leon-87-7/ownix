@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { swapSortOrder } from '@/lib/fetch-utils';
 import type { JobSummary } from '@/components/job-card';
 
-interface SpaceUrl {
+export interface SpaceUrl {
   id: string;
   title: string | null;
   url: string;
