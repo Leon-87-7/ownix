@@ -1,5 +1,27 @@
 import { useEffect, useState } from 'react';
 
+export type FetchState = "loading" | "ok" | "not_found" | "forbidden" | "error";
+
+const FETCH_STATE_MAP: Record<number, 'not_found' | 'forbidden' | 'error'> = {
+  404: 'not_found',
+  403: 'forbidden',
+  401: 'forbidden',
+};
+
+export function mapFetchState(res: Response): 'not_found' | 'forbidden' | 'error' | null {
+  return FETCH_STATE_MAP[res.status] ?? (res.ok ? null : 'error');
+}
+
+export async function fetchJson<T>(
+  url: string,
+  options?: RequestInit,
+): Promise<{ ok: true; data: T } | { ok: false; state: 'not_found' | 'forbidden' | 'error' }> {
+  const res = await fetch(url, options);
+  const errState = mapFetchState(res);
+  if (errState) return { ok: false, state: errState };
+  return { ok: true, data: (await res.json()) as T };
+}
+
 export function useFetchList<T>(url: string, errorLabel: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,13 +42,6 @@ export function useFetchList<T>(url: string, errorLabel: string) {
   }, [url, errorLabel]);
 
   return { data, setData, loading, fetchError };
-}
-
-export function mapFetchState(res: Response): 'not_found' | 'forbidden' | 'error' | null {
-  if (res.status === 404) return 'not_found';
-  if (res.status === 403 || res.status === 401) return 'forbidden';
-  if (!res.ok) return 'error';
-  return null;
 }
 
 export async function apiPost<T>(
