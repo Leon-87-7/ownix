@@ -9,7 +9,7 @@ export interface BrainResult {
   score: number;
 }
 
-export type SearchState = 'idle' | 'loading' | 'results' | 'empty' | 'error';
+type SearchState = 'idle' | 'loading' | 'results' | 'empty' | 'error';
 
 export function useSemanticSearch() {
   const [query, setQuery] = useState('');

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 
-export type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
+type ExportStatus = 'idle' | 'exporting' | 'done' | 'error';
 
 export function useGdocExport(spaceId: string) {
   const [status, setStatus] = useState<ExportStatus>('idle');
