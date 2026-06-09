@@ -50,8 +50,10 @@ def build_enriched_links_message(links: list[dict]) -> str:
 
     Enriched GitHub links (``_enriched=True``) are sorted first by
     stars+forks descending, then all remaining links follow in their
-    original relative order.  The Quick Links section mirrors the same
-    sorted order.
+    original relative order.
+
+    Returns a single ``🔗 Links Found:`` section — one labeled entry per
+    link with metadata inline.  No bare-URL footer is appended.
 
     Expected extra keys on enriched links: ``_enriched`` (bool),
     ``_stars`` (int), ``_forks`` (int), ``_language`` (str|None),
@@ -81,5 +83,4 @@ def build_enriched_links_message(links: list[dict]) -> str:
             labeled_parts.append(f"• {label} — {description}\n  🔗 {lnk['url']}")
 
     labeled = "\n".join(labeled_parts)
-    bare = "\n".join(lnk["url"] for lnk in sorted_links)
-    return f"🔗 Links Found:\n{labeled}\n\n---\n\n🔗 Quick Links:\n{bare}"
+    return f"🔗 Links Found:\n{labeled}"
