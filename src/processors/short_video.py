@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from src import database
 from src.analysis import extract_key_phrases
 from src.config import settings
+from src.processors import enrichment as enrichment_proc
 from src.services import brave, frames, gemini, sheets
 from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
@@ -72,6 +73,52 @@ def _build_transcript_markdown(
 
 def _tag(job_id: str) -> str:
     return f"job_{job_id[-4:]}:"
+
+
+async def _acquire_transcript(
+    job: dict,
+    url: str,
+    chat_id: int,
+    tag: str,
+    title: str,
+    template: str | None,
+) -> tuple[str | None, dict | None, bool]:
+    transcript_text: str | None = None
+    template_analysis: dict | None = None
+    wordless = False
+    try:
+        transcript_resp = await transcript_svc.fetch_transcript(url)
+        if "error" in transcript_resp:
+            err_val = transcript_resp["error"]
+            err_msg = err_val.get("message", "unknown") if isinstance(err_val, dict) else str(err_val)
+            await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {err_msg}")
+        elif transcript_resp.get("fallback") == "audio":
+            audio_b64 = transcript_resp.get("audio_b64", "")
+            mime_audio = transcript_resp.get("mime_type", "audio/mp4")
+            if audio_b64:
+                if template:
+                    template_analysis, transcript_text = await enrichment_proc.enrich_audio(
+                        job, audio_b64, mime_audio
+                    )
+                else:
+                    transcript_text = await enrichment_proc.transcribe_audio(
+                        audio_b64, mime_audio, title
+                    )
+                    if not transcript_text:
+                        wordless = True
+            else:
+                wordless = True
+        else:
+            raw_text = transcript_resp.get("text", "").strip()
+            if raw_text:
+                transcript_text = raw_text
+            else:
+                wordless = True
+    except enrichment_proc.EnrichmentUnavailableError:
+        await send_message(chat_id, f"{tag}\n⚠️ Transcription failed — Gemini unavailable")
+    except Exception as exc:
+        await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {exc}")
+    return transcript_text, template_analysis, wordless
 
 
 async def run(job: dict) -> None:
@@ -187,46 +234,10 @@ async def run(job: dict) -> None:
     # -------------------------------------------------------------------------
     # Phase 2 (ADR-0020): Transcript acquisition — always, regardless of template
     # -------------------------------------------------------------------------
-    from src.processors import enrichment as enrichment_proc
-
     template = job.get("template")
-    transcript_text: str | None = None
-    template_analysis: dict | None = None
-    wordless = False
-
-    try:
-        transcript_resp = await transcript_svc.fetch_transcript(url)
-        if "error" in transcript_resp:
-            err_val = transcript_resp["error"]
-            err_msg = err_val.get("message", "unknown") if isinstance(err_val, dict) else str(err_val)
-            await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {err_msg}")
-        elif transcript_resp.get("fallback") == "audio":
-            audio_b64 = transcript_resp.get("audio_b64", "")
-            mime_audio = transcript_resp.get("mime_type", "audio/mp4")
-            if audio_b64:
-                if template:
-                    # Fused call: one Gemini request produces both transcript + template_analysis.
-                    template_analysis, transcript_text = await enrichment_proc.enrich_audio(
-                        job, audio_b64, mime_audio
-                    )
-                else:
-                    transcript_text = await enrichment_proc.transcribe_audio(
-                        audio_b64, mime_audio, title
-                    )
-                    if not transcript_text:
-                        wordless = True
-            else:
-                wordless = True
-        else:
-            raw_text = transcript_resp.get("text", "").strip()
-            if raw_text:
-                transcript_text = raw_text
-            else:
-                wordless = True
-    except enrichment_proc.EnrichmentUnavailableError:
-        await send_message(chat_id, f"{tag}\n⚠️ Transcription failed — Gemini unavailable")
-    except Exception as exc:
-        await send_message(chat_id, f"{tag}\n⚠️ Transcript service error: {exc}")
+    transcript_text, template_analysis, wordless = await _acquire_transcript(
+        job, url, chat_id, tag, title, template
+    )
 
     if wordless:
         await send_message(chat_id, f"{tag}\n⚠️ I'm wordless")
