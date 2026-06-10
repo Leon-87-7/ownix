@@ -115,8 +115,10 @@
 
 Ordered by unblocked-first, then dependency chain.
 
-|                                                   # | Title | Area | Depends On |
-| --------------------------------------------------: | ----- | ---- | ---------- |
+|                                                   # | Title                                                                                                  | Area             | Depends On |
+| --------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ---------------- | ---------- |
+| [#136](https://github.com/Leon-87-7/vig/issues/136) | feat(photo): remove redundant Quick Links section from build_enriched_links_message                    | Photo / Webhook  | —          |
+| [#137](https://github.com/Leon-87-7/vig/issues/137) | feat(photo): replace explicit batch commands with media_group_id debounce (ADR-0024)                   | Photo / Telegram | —          |
 
 ---
 
@@ -261,6 +263,11 @@ Short pipeline transcript series (PR #113)
 #98 caption-less plain job transcribes via Gemini ✓
 #99 caption-less template job persists transcript from fused enrich_audio ✓
 #100 explicit transcript-failure taxonomy ✓
+
+Photo batch feature (ADR-0024: docs/adr/0024-photo-batch-media-group-debounce.md)
+#136 Remove Quick Links section from build_enriched_links_message (independent)
+#137 media_group_id debounce — replace /photoBatch-start /photoBatch-end (independent)
+Critical path: #136 and #137 are parallel — no dependency between them
 
 pyscn health refactors (.pyscn report 2026-06-07 — Health 47/100; Duplication 0, Complexity 45)
 All independent — no blockers, all AFK, behavior-preserving (existing suite stays green).

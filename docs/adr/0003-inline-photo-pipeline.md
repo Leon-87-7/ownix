@@ -30,3 +30,5 @@ Brain ingest (`brain.ingest_links`) is fire-and-forget inside that task.
 
 - `_handle_single_photo` and `_process_batch` live in `webhook.py` (not in `processors/`).
 - `gemini_photo.py` is a service, not a processor — it has no awareness of jobs or chat_id.
+
+**Superseded (batch trigger only):** the explicit `/photoBatch-start` / `/photoBatch-end` window mechanism is replaced by Telegram `media_group_id` debounce — see ADR-0024. `_handle_single_photo` and the inline processing model are unchanged.
