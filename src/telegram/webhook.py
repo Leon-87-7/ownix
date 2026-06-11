@@ -1037,55 +1037,54 @@ async def _enqueue_simple_job(
     await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
 
 
-async def _route_url(chat_id: int, text: str, message_id: int) -> None:
-    client = queue._client()
-    pending_template: str | None = await client.get(f"pending_template:{chat_id}")
-    if pending_template:
-        await client.delete(f"pending_template:{chat_id}")
+async def _reject_url(chat_id: int, text: str) -> None:
+    try:
+        _host = (urlparse(text).hostname or "").lower().removeprefix("www.")
+    except Exception:
+        _host = ""
+    _github_hint = f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
+    await send_message(
+        chat_id,
+        "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+        "Instagram Reels (not /p/ carousels), and TikTok videos.\n"
+        + _ARTICLE_HINT
+        + _github_hint,
+    )
+    log.info("url_rejected", chat_id=chat_id, url=text)
 
-    extra_domains = await database.list_allowed_domains(chat_id)
-    pipeline = detect_pipeline(text, frozenset(extra_domains))
-    if pipeline == "rejected":
-        try:
-            _host = (urlparse(text).hostname or "").lower().removeprefix("www.")
-        except Exception:
-            _host = ""
-        _github_hint = f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
-        await send_message(
-            chat_id,
-            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels (not /p/ carousels), and TikTok videos.\n"
-            + _ARTICLE_HINT
-            + _github_hint,
-        )
-        log.info("url_rejected", chat_id=chat_id, url=text)
-        return
 
-    if pipeline == "article":
-        if not pending_template:
-            cached = await database.find_recent_job_by_url(chat_id, text)
-            if cached:
-                await _reply_cached_job(chat_id, cached)
-                return
-        await _enqueue_simple_job(chat_id, text, "article", message_id)
-        return
-
-    if pipeline == "repo":
-        repo_url = normalize_repo_url(text)
-        if pending_template:
-            await client.set(f"pending_template:{chat_id}", pending_template, ex=120)
-            await send_message(
-                chat_id,
-                f"ℹ️ `/{pending_template}` templates don't apply to repo URLs yet — "
-                "your template is still active for the next video or article.",
-            )
-        cached = await database.find_recent_job_by_url(chat_id, repo_url)
+async def _route_article(
+    chat_id: int, text: str, message_id: int, pending_template: str | None
+) -> None:
+    if not pending_template:
+        cached = await database.find_recent_job_by_url(chat_id, text)
         if cached:
             await _reply_cached_job(chat_id, cached)
             return
-        await _enqueue_simple_job(chat_id, repo_url, "repo", message_id)
-        return
+    await _enqueue_simple_job(chat_id, text, "article", message_id)
 
+
+async def _route_repo(
+    chat_id: int, text: str, message_id: int, pending_template: str | None, client
+) -> None:
+    repo_url = normalize_repo_url(text)
+    if pending_template:
+        await client.set(f"pending_template:{chat_id}", pending_template, ex=120)
+        await send_message(
+            chat_id,
+            f"ℹ️ `/{pending_template}` templates don't apply to repo URLs yet — "
+            "your template is still active for the next video or article.",
+        )
+    cached = await database.find_recent_job_by_url(chat_id, repo_url)
+    if cached:
+        await _reply_cached_job(chat_id, cached)
+        return
+    await _enqueue_simple_job(chat_id, repo_url, "repo", message_id)
+
+
+async def _route_video(
+    chat_id: int, text: str, pipeline: str, message_id: int, pending_template: str | None
+) -> None:
     if pending_template == "freestyle":
         await _handle_freestyle_url(chat_id, text, pipeline, message_id)
         return
@@ -1110,6 +1109,26 @@ async def _route_url(chat_id: int, text: str, message_id: int) -> None:
         await send_message(chat_id, f"📥 Received\n✨ Kicking off Gemini analysis ({pending_template})\njob_{job_id[-4:]}")
     else:
         await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+
+
+async def _route_url(chat_id: int, text: str, message_id: int) -> None:
+    client = queue._client()
+    pending_template: str | None = await client.get(f"pending_template:{chat_id}")
+    if pending_template:
+        await client.delete(f"pending_template:{chat_id}")
+
+    extra_domains = await database.list_allowed_domains(chat_id)
+    pipeline = detect_pipeline(text, frozenset(extra_domains))
+    if pipeline == "rejected":
+        await _reject_url(chat_id, text)
+        return
+    if pipeline == "article":
+        await _route_article(chat_id, text, message_id, pending_template)
+        return
+    if pipeline == "repo":
+        await _route_repo(chat_id, text, message_id, pending_template, client)
+        return
+    await _route_video(chat_id, text, pipeline, message_id, pending_template)
 
 
 @router.post("/webhook")
