@@ -29,6 +29,45 @@ def detect_template(title: str, description: str) -> str:
     return best if scores[best] > 0 else "summary"
 
 
+async def _fetch_transcript_or_fail(
+    job_id: str, chat_id: int, tag: str, url: str
+) -> tuple[dict, dict] | None:
+    """Fetch transcript + metadata; mark error and notify when no transcript exists."""
+    transcript_resp, meta_resp = await asyncio.gather(
+        transcript_svc.fetch_transcript(url),
+        transcript_svc.fetch_metadata(url),
+    )
+
+    transcript = transcript_resp.get("text", "")
+    if "error" in transcript_resp:
+        log.warning("transcript_error", job_id=job_id, error=transcript_resp["error"])
+        transcript = ""
+        transcript_resp = {**transcript_resp, "text": ""}
+
+    if not transcript.strip():
+        await database.update_job_status(job_id, "error", error_msg="transcript_empty")
+        await send_message(
+            chat_id,
+            f"{tag}\n⚠️ No transcript available for this video — it may have auto-captions disabled or be too new. Try again later or use /force &lt;url&gt;.",
+            parse_mode="HTML",
+        )
+        return None
+    return transcript_resp, meta_resp
+
+
+async def _collect_description_links(description: str, job_id: str) -> list[dict]:
+    """Extract + enrich description links (failure must not block the pipeline)."""
+    try:
+        description_links = extract_description_links(description)
+    except Exception:
+        log.exception("description_link_extraction_failed", job_id=job_id)
+        description_links = []
+
+    if description_links:
+        description_links = await enrich_github_links(description_links)
+    return description_links
+
+
 async def run(job: dict) -> None:
     """End-to-end long-video Phase 1 pipeline."""
     job_id = job["id"]
@@ -42,25 +81,12 @@ async def run(job: dict) -> None:
     status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Fetch transcript + metadata in parallel
-    transcript_resp, meta_resp = await asyncio.gather(
-        transcript_svc.fetch_transcript(url),
-        transcript_svc.fetch_metadata(url),
-    )
-
+    fetched = await _fetch_transcript_or_fail(job_id, chat_id, tag, url)
+    if fetched is None:
+        return
+    transcript_resp, meta_resp = fetched
     video_id = transcript_resp.get("videoId", "")
     transcript = transcript_resp.get("text", "")
-    if "error" in transcript_resp:
-        log.warning("transcript_error", job_id=job_id, error=transcript_resp["error"])
-        transcript = ""
-
-    if not transcript.strip():
-        await database.update_job_status(job_id, "error", error_msg="transcript_empty")
-        await send_message(
-            chat_id,
-            f"{tag}\n⚠️ No transcript available for this video — it may have auto-captions disabled or be too new. Try again later or use /force &lt;url&gt;.",
-            parse_mode="HTML",
-        )
-        return
 
     title = meta_resp.get("title", "") or "Untitled"
     channel = meta_resp.get("channel", "")
@@ -83,15 +109,7 @@ async def run(job: dict) -> None:
     )
 
     # 3. Extract description links (failure must not block the pipeline)
-    try:
-        description_links = extract_description_links(description)
-    except Exception:
-        log.exception("description_link_extraction_failed", job_id=job_id)
-        description_links = []
-
-    if description_links:
-        description_links = await enrich_github_links(description_links)
-
+    description_links = await _collect_description_links(description, job_id)
     description_links_raw = "\n".join(lnk["url"] for lnk in description_links)
 
     # 4. Build transcript markdown and upload to Drive
