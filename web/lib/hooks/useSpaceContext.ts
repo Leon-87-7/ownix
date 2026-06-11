@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { swapSortOrder } from '@/lib/fetch-utils';
 
-export interface ContextBlob {
+interface ContextBlob {
   id: string;
   space_id: string;
   name: string;

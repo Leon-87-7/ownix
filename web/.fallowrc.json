@@ -1,0 +1,3 @@
+{
+  "ignoreDependencies": ["@milkdown/core", "@milkdown/ctx", "@milkdown/transformer"]
+}

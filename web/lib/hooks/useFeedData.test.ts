@@ -13,16 +13,23 @@ function stubFetch(impl: (url: string) => { ok: boolean; body?: unknown }) {
   }));
 }
 
+const stubFeedOk = () => stubFetch((url) => url.includes('/stats')
+  ? { ok: true, body: STATS }
+  : { ok: true, body: JOBS });
+
 afterEach(() => vi.unstubAllGlobals());
+
+/** Render the hook and wait for the initial load to settle. */
+async function renderLoadedFeed() {
+  const { result } = renderHook(() => useFeedData());
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  return result;
+}
 
 describe('useFeedData', () => {
   it('loads stats and jobs on mount', async () => {
-    stubFetch((url) => url.includes('/stats')
-      ? { ok: true, body: STATS }
-      : { ok: true, body: JOBS });
-
-    const { result } = renderHook(() => useFeedData());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    stubFeedOk();
+    const result = await renderLoadedFeed();
 
     expect(result.current.stats).toEqual(STATS);
     expect(result.current.jobs).toHaveLength(2);
@@ -34,20 +41,14 @@ describe('useFeedData', () => {
     stubFetch((url) => url.includes('/stats')
       ? { ok: true, body: STATS }
       : { ok: false });
-
-    const { result } = renderHook(() => useFeedData());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    const result = await renderLoadedFeed();
 
     expect(result.current.error).toBe('Failed to load jobs');
   });
 
   it('refetches with content_type param when the filter changes', async () => {
-    stubFetch((url) => url.includes('/stats')
-      ? { ok: true, body: STATS }
-      : { ok: true, body: JOBS });
-
-    const { result } = renderHook(() => useFeedData());
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    stubFeedOk();
+    const result = await renderLoadedFeed();
 
     act(() => result.current.setCtFilter('short'));
     await waitFor(() => expect(result.current.loading).toBe(false));

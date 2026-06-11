@@ -12,7 +12,7 @@ function mapFetchState(res: Response): 'not_found' | 'forbidden' | 'error' | nul
   return FETCH_STATE_MAP[res.status] ?? (res.ok ? null : 'error');
 }
 
-export async function fetchJson<T>(
+async function fetchJson<T>(
   url: string,
   options?: RequestInit,
 ): Promise<{ ok: true; data: T } | { ok: false; state: 'not_found' | 'forbidden' | 'error' }> {
