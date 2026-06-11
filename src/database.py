@@ -336,23 +336,30 @@ _V6_COLS = [
 ]
 
 
-async def _migrate_v5_v6(conn: aiosqlite.Connection) -> None:
-    """Expand content_type CHECK to include 'article' via selective column copy."""
-    await conn.execute(_V6_CREATE)
+async def _rebuild_jobs_table(
+    conn: aiosqlite.Connection, create_sql: str, tmp_name: str, cols: list[str]
+) -> None:
+    """Recreate jobs under *tmp_name* (widened CHECK), copying the shared columns."""
+    await conn.execute(create_sql)
     cur = await conn.execute("PRAGMA table_info(jobs)")
     rows = await cur.fetchall()
     existing = {row[1] for row in rows}
-    copy_cols = [c for c in _V6_COLS if c in existing]
+    copy_cols = [c for c in cols if c in existing]
     if copy_cols:
         col_str = ", ".join(copy_cols)
         await conn.execute(
-            f"INSERT OR IGNORE INTO jobs_v6 ({col_str}) SELECT {col_str} FROM jobs"
+            f"INSERT OR IGNORE INTO {tmp_name} ({col_str}) SELECT {col_str} FROM jobs"
         )
     await conn.execute("DROP TABLE jobs")
-    await conn.execute("ALTER TABLE jobs_v6 RENAME TO jobs")
+    await conn.execute(f"ALTER TABLE {tmp_name} RENAME TO jobs")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_chat_id ON jobs(chat_id)")
     await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_url ON jobs(url)")
+
+
+async def _migrate_v5_v6(conn: aiosqlite.Connection) -> None:
+    """Expand content_type CHECK to include 'article' via selective column copy."""
+    await _rebuild_jobs_table(conn, _V6_CREATE, "jobs_v6", _V6_COLS)
 
 
 _MIGRATIONS[5] = _migrate_v5_v6
@@ -419,21 +426,7 @@ _V7_COLS = [
 
 async def _migrate_v6_v7(conn: aiosqlite.Connection) -> None:
     """Expand content_type CHECK to include 'repo'."""
-    await conn.execute(_V7_CREATE)
-    cur = await conn.execute("PRAGMA table_info(jobs)")
-    rows = await cur.fetchall()
-    existing = {row[1] for row in rows}
-    copy_cols = [c for c in _V7_COLS if c in existing]
-    if copy_cols:
-        col_str = ", ".join(copy_cols)
-        await conn.execute(
-            f"INSERT OR IGNORE INTO jobs_v7 ({col_str}) SELECT {col_str} FROM jobs"
-        )
-    await conn.execute("DROP TABLE jobs")
-    await conn.execute("ALTER TABLE jobs_v7 RENAME TO jobs")
-    await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)")
-    await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_chat_id ON jobs(chat_id)")
-    await conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_url ON jobs(url)")
+    await _rebuild_jobs_table(conn, _V7_CREATE, "jobs_v7", _V7_COLS)
 
 
 _MIGRATIONS.append(_migrate_v6_v7)
@@ -631,6 +624,28 @@ async def _fetch_all(sql: str, params: tuple = ()) -> list[aiosqlite.Row]:
     async with connection() as conn:
         cur = await conn.execute(sql, params)
         return await cur.fetchall()
+
+
+async def _insert_returning(
+    insert_sql: str, insert_params: tuple, select_sql: str, select_params: tuple
+) -> dict:
+    """Run an INSERT/UPSERT, then SELECT the resulting row back, on one connection."""
+    async with connection() as conn:
+        await conn.execute(insert_sql, insert_params)
+        cur = await conn.execute(select_sql, select_params)
+        row = await cur.fetchone()
+        await conn.commit()
+        return dict(row)  # type: ignore[arg-type]
+
+
+async def _fetch_in(sql_template: str, ids: list[str]) -> list[dict]:
+    """Run *sql_template* (containing ``{placeholders}``) with an expanded IN list."""
+    if not ids:
+        return []
+    placeholders = ",".join("?" * len(ids))
+    async with connection() as conn:
+        cur = await conn.execute(sql_template.format(placeholders=placeholders), tuple(ids))
+        return [dict(r) for r in await cur.fetchall()]
 
 
 async def get_ignored_domains(chat_id: int) -> set[str]:
@@ -1076,22 +1091,16 @@ async def get_job_annotation(job_id: str) -> dict | None:
 
 async def upsert_job_annotation(job_id: str, notes: str) -> dict:
     """Insert or replace the annotation for *job_id*. Returns the saved row."""
-    async with connection() as conn:
-        await conn.execute(
-            """INSERT INTO job_annotations (job_id, notes, updated_at)
-               VALUES (?, ?, CURRENT_TIMESTAMP)
-               ON CONFLICT(job_id) DO UPDATE SET
-                   notes      = excluded.notes,
-                   updated_at = excluded.updated_at""",
-            (job_id, notes),
-        )
-        cur = await conn.execute(
-            "SELECT job_id, notes, updated_at FROM job_annotations WHERE job_id = ?",
-            (job_id,),
-        )
-        row = await cur.fetchone()
-        await conn.commit()
-        return dict(row)  # type: ignore[arg-type]
+    return await _insert_returning(
+        """INSERT INTO job_annotations (job_id, notes, updated_at)
+           VALUES (?, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(job_id) DO UPDATE SET
+               notes      = excluded.notes,
+               updated_at = excluded.updated_at""",
+        (job_id, notes),
+        "SELECT job_id, notes, updated_at FROM job_annotations WHERE job_id = ?",
+        (job_id,),
+    )
 
 
 async def list_job_tags(job_id: str) -> list[dict]:
@@ -1109,50 +1118,35 @@ async def list_job_tags(job_id: str) -> list[dict]:
 
 async def batch_get_jobs(job_ids: list[str]) -> dict[str, dict]:
     """Return {job_id: job_dict} for the given IDs. Missing IDs are omitted."""
-    if not job_ids:
-        return {}
-    placeholders = ",".join("?" * len(job_ids))
-    async with connection() as conn:
-        cur = await conn.execute(
-            f"SELECT * FROM jobs WHERE id IN ({placeholders})",
-            tuple(job_ids),
-        )
-        return {row["id"]: dict(row) for row in await cur.fetchall()}
+    rows = await _fetch_in("SELECT * FROM jobs WHERE id IN ({placeholders})", job_ids)
+    return {row["id"]: row for row in rows}
 
 
 async def batch_get_job_annotations(job_ids: list[str]) -> dict[str, str]:
     """Return {job_id: notes} for jobs that have saved annotations."""
-    if not job_ids:
-        return {}
-    placeholders = ",".join("?" * len(job_ids))
-    async with connection() as conn:
-        cur = await conn.execute(
-            f"SELECT job_id, notes FROM job_annotations WHERE job_id IN ({placeholders})",
-            tuple(job_ids),
-        )
-        return {row["job_id"]: row["notes"] for row in await cur.fetchall()}
+    rows = await _fetch_in(
+        "SELECT job_id, notes FROM job_annotations WHERE job_id IN ({placeholders})", job_ids
+    )
+    return {row["job_id"]: row["notes"] for row in rows}
 
 
 async def batch_list_job_tags(job_ids: list[str]) -> dict[str, list[dict]]:
     """Return {job_id: [tag_dicts]} for all given job IDs (absent job = empty list)."""
     if not job_ids:
         return {}
-    placeholders = ",".join("?" * len(job_ids))
-    async with connection() as conn:
-        cur = await conn.execute(
-            f"""SELECT jt.job_id, t.id, t.name, t.color, t.meaning
-               FROM job_tags jt
-               JOIN tags t ON t.id = jt.tag_id
-               WHERE jt.job_id IN ({placeholders})
-               ORDER BY t.name""",
-            tuple(job_ids),
-        )
-        result: dict[str, list[dict]] = {jid: [] for jid in job_ids}
-        for row in await cur.fetchall():
-            row_dict = dict(row)
-            jid = row_dict.pop("job_id")
-            result[jid].append(row_dict)
-        return result
+    rows = await _fetch_in(
+        """SELECT jt.job_id, t.id, t.name, t.color, t.meaning
+           FROM job_tags jt
+           JOIN tags t ON t.id = jt.tag_id
+           WHERE jt.job_id IN ({placeholders})
+           ORDER BY t.name""",
+        job_ids,
+    )
+    result: dict[str, list[dict]] = {jid: [] for jid in job_ids}
+    for row in rows:
+        jid = row.pop("job_id")
+        result[jid].append(row)
+    return result
 
 
 async def attach_job_tag(job_id: str, tag_id: str) -> bool:
@@ -1177,18 +1171,12 @@ async def detach_job_tag(job_id: str, tag_id: str) -> bool:
 async def create_space(*, chat_id: int, name: str, color: str) -> dict:
     """INSERT a new space row and return it as a dict."""
     space_id = generate_id()
-    async with connection() as conn:
-        await conn.execute(
-            "INSERT INTO spaces (id, chat_id, name, color) VALUES (?, ?, ?, ?)",
-            (space_id, chat_id, name, color),
-        )
-        await conn.commit()
-        cur = await conn.execute(
-            "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
-            (space_id,),
-        )
-        row = await cur.fetchone()
-        return dict(row)
+    return await _insert_returning(
+        "INSERT INTO spaces (id, chat_id, name, color) VALUES (?, ?, ?, ?)",
+        (space_id, chat_id, name, color),
+        "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+        (space_id,),
+    )
 
 
 async def list_spaces(chat_id: int) -> list[dict]:
@@ -1277,22 +1265,16 @@ async def list_space_urls(space_id: str, chat_id: int) -> list[dict]:
 async def create_context_blob(*, space_id: str, name: str, content: str = "") -> dict:
     """INSERT a context blob; auto-assigns sort_order = max+1. Returns the row."""
     blob_id = generate_id()
-    async with connection() as conn:
-        await conn.execute(
-            """INSERT INTO context_blobs (id, space_id, name, content, sort_order)
-               VALUES (?, ?, ?, ?, COALESCE(
-                   (SELECT MAX(sort_order) FROM context_blobs WHERE space_id = ?), 0
-               ) + 1)""",
-            (blob_id, space_id, name, content, space_id),
-        )
-        await conn.commit()
-        cur = await conn.execute(
-            "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
-            "FROM context_blobs WHERE id = ?",
-            (blob_id,),
-        )
-        row = await cur.fetchone()
-        return dict(row)
+    return await _insert_returning(
+        """INSERT INTO context_blobs (id, space_id, name, content, sort_order)
+           VALUES (?, ?, ?, ?, COALESCE(
+               (SELECT MAX(sort_order) FROM context_blobs WHERE space_id = ?), 0
+           ) + 1)""",
+        (blob_id, space_id, name, content, space_id),
+        "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+        "FROM context_blobs WHERE id = ?",
+        (blob_id,),
+    )
 
 
 async def list_context_blobs(space_id: str) -> list[dict]:
