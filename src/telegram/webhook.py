@@ -891,23 +891,63 @@ async def _handle_awaiting_freestyle(chat_id: int, text: str, state: dict) -> No
         await send_message(chat_id, f"job_{job_id[-4:]}:\n✍️ Prompt saved — Gemini will start when transcript is ready")
 
 
-async def _handle_spec(chat_id: int, parts: list[str]) -> None:
-    """Dispatch /spec <suffix> [intent...]."""
+async def _parse_spec_args(chat_id: int, parts: list[str]) -> tuple[str, str | None] | None:
+    """Validate /spec args; message the user and return None on bad input."""
     if len(parts) < 2:
         await send_message(
             chat_id,
             'Usage: /spec <suffix> [intent text...]\nExample: /spec ABCD desktop app for X',
         )
-        return
+        return None
     suffix = parts[1][-4:]
     intent_text = " ".join(parts[2:]).strip() or None
     if intent_text is not None:
         if len(intent_text) < 5:
             await send_message(chat_id, "📐 Intent too short (min 5 chars).")
-            return
+            return None
         if len(intent_text) > 1000:
             await send_message(chat_id, "📐 Intent too long (max 1000 chars).")
-            return
+            return None
+    return suffix, intent_text
+
+
+async def _report_spec_no_match(chat_id: int, suffix: str) -> None:
+    recent = await database.get_recent_jobs(chat_id, 5)
+    bullet_lines = "\n".join(
+        f"• job_{j['id'][-4:]} — {j.get('title') or '(no title)'} ({j['content_type']}/{j['status']})"
+        for j in recent
+    )
+    await send_message(
+        chat_id,
+        f"No job ending in {suffix} found.\nLast 5 jobs in this chat:\n{bullet_lines}",
+    )
+    log.info("prd.spec.no_match", chat_id=chat_id, suffix=suffix)
+
+
+async def _enqueue_spec_job(chat_id: int, job: dict, intent_text: str | None) -> None:
+    job_id = job["id"]
+    if intent_text:
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET prd_intent_text=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (intent_text, job_id),
+            )
+            await conn.commit()
+        await queue.enqueue({"task": "prd_intent", "job_id": job_id})
+        log.info("prd.intent.enqueued", chat_id=chat_id, job_id=job_id, intent_text_len=len(intent_text))
+    elif job.get("prd_auto_status") == "done" and job.get("prd_auto_json"):
+        await queue.enqueue({"task": "prd_auto_resend", "job_id": job_id})
+    else:
+        await queue.enqueue({"task": "prd_auto", "job_id": job_id})
+
+
+async def _handle_spec(chat_id: int, parts: list[str]) -> None:
+    """Dispatch /spec <suffix> [intent...]."""
+    parsed = await _parse_spec_args(chat_id, parts)
+    if parsed is None:
+        return
+    suffix, intent_text = parsed
+
     rows = await database.find_jobs_by_suffix(chat_id, suffix)
     long_matches = [
         j for j in rows
@@ -916,16 +956,7 @@ async def _handle_spec(chat_id: int, parts: list[str]) -> None:
     short_matches = [j for j in rows if j["content_type"] == "short"]
 
     if not long_matches and not short_matches:
-        recent = await database.get_recent_jobs(chat_id, 5)
-        bullet_lines = "\n".join(
-            f"• job_{j['id'][-4:]} — {j.get('title') or '(no title)'} ({j['content_type']}/{j['status']})"
-            for j in recent
-        )
-        await send_message(
-            chat_id,
-            f"No job ending in {suffix} found.\nLast 5 jobs in this chat:\n{bullet_lines}",
-        )
-        log.info("prd.spec.no_match", chat_id=chat_id, suffix=suffix)
+        await _report_spec_no_match(chat_id, suffix)
         return
 
     if not long_matches and short_matches:
@@ -937,25 +968,11 @@ async def _handle_spec(chat_id: int, parts: list[str]) -> None:
         return
 
     job = long_matches[0]
-    job_id = job["id"]
     title = job.get("title") or "(no title)"
     await send_message(chat_id, f'📐 PRD for: "{title}" — generating ...')
-    log.info("prd.spec.matched", chat_id=chat_id, suffix=suffix, job_id=job_id, intent=bool(intent_text))
+    log.info("prd.spec.matched", chat_id=chat_id, suffix=suffix, job_id=job["id"], intent=bool(intent_text))
 
-    if intent_text:
-        async with database.connection() as conn:
-            await conn.execute(
-                "UPDATE jobs SET prd_intent_text=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                (intent_text, job_id),
-            )
-            await conn.commit()
-        await queue.enqueue({"task": "prd_intent", "job_id": job_id})
-        log.info("prd.intent.enqueued", chat_id=chat_id, job_id=job_id, intent_text_len=len(intent_text))
-    else:
-        if job.get("prd_auto_status") == "done" and job.get("prd_auto_json"):
-            await queue.enqueue({"task": "prd_auto_resend", "job_id": job_id})
-        else:
-            await queue.enqueue({"task": "prd_auto", "job_id": job_id})
+    await _enqueue_spec_job(chat_id, job, intent_text)
 
 
 def _resolve_chat_state(state: dict) -> bool:
@@ -1159,22 +1176,31 @@ async def webhook(
     # Photo path
     photo = message.get("photo")
     if photo and chat_id:
-        file_id = photo[-1]["file_id"]
-        caption = message.get("caption") or None
-        media_group_id: str | None = message.get("media_group_id")
-        if media_group_id:
-            await _accumulate_media_group(chat_id, media_group_id, file_id)
-        else:
-            asyncio.create_task(_handle_single_photo(chat_id, file_id, caption))
+        await _handle_photo_update(chat_id, message, photo)
         return {"ok": True}
 
     if not chat_id or not text:
         return {"ok": True}
 
+    await _route_text(chat_id, text, message_id)
+    return {"ok": True}
+
+
+async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None:
+    file_id = photo[-1]["file_id"]
+    caption = message.get("caption") or None
+    media_group_id: str | None = message.get("media_group_id")
+    if media_group_id:
+        await _accumulate_media_group(chat_id, media_group_id, file_id)
+    else:
+        asyncio.create_task(_handle_single_photo(chat_id, file_id, caption))
+
+
+async def _route_text(chat_id: int, text: str, message_id: int | None) -> None:
     # 1. Slash command path
     if text.startswith("/"):
         await _dispatch_slash(chat_id, text, message_id)
-        return {"ok": True}
+        return
 
     # 2. Awaiting-intent path
     state = await database.get_chat_state(chat_id)
@@ -1184,21 +1210,19 @@ async def webhook(
                 await _handle_awaiting_freestyle(chat_id, text, state)
             else:
                 await _handle_awaiting_intent(chat_id, text, state)
-            return {"ok": True}
-        else:
-            log.info("prd.chat_state.expired_or_missed", chat_id=chat_id)
-            # fall through to normal URL routing
+            return
+        log.info("prd.chat_state.expired_or_missed", chat_id=chat_id)
+        # fall through to normal URL routing
 
     # 3. Plain-text command shortcut: "find code" → "/find code", "rebuild-graph" → "/rebuild-graph"
     first_word = text.split()[0].lower()
     if ("/" + first_word) in _SLASH_TABLE:
         await _dispatch_slash(chat_id, "/" + text, message_id)
-        return {"ok": True}
+        return
 
     # 3b. User-template shortcut: "-mytemplate <url>"
     if await _handle_user_template_shortcut(chat_id, text, message_id):
-        return {"ok": True}
+        return
 
     # 4. Normal URL routing
     await _route_url(chat_id, text, message_id)
-    return {"ok": True}
