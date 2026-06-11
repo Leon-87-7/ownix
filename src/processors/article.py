@@ -112,6 +112,43 @@ def _extract_json(raw: str) -> dict:
     return json.loads(m.group(0) if m else clean)
 
 
+def _action_points_section(action_points_raw: str) -> list[str]:
+    ap_list = [ap.strip() for ap in action_points_raw.split(" | ") if ap.strip()]
+    if not ap_list:
+        return []
+    return ["", "✅ Action Points"] + [f"• {html.escape(ap)}" for ap in ap_list]
+
+
+def _tools_section(tools: list[dict]) -> list[str]:
+    if not tools:
+        return []
+    parts = ["", "🛠 Tools"]
+    for t in tools:
+        prefix = f"[{html.escape(t.get('type', 'tool'))}]"
+        name = html.escape(t["name"])
+        if t.get("url"):
+            url_attr = html.escape(t["url"], quote=True)
+            name = f'<a href="{url_attr}">{name}</a>'
+        desc = html.escape(t.get("description", ""))
+        parts.append(f"• {prefix} {name}: {desc}")
+    return parts
+
+
+def _promise_gap_section(promise_gap: dict | None) -> list[str]:
+    gaps = promise_gap.get("gaps", []) if promise_gap else []
+    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
+    if not gaps and not hidden:
+        return []
+    parts = ["\n=====PROMISE=GAP====="]
+    if gaps:
+        parts.append("❌ Unfulfilled:")
+        parts += [f"• {html.escape(g)}" for g in gaps]
+    if hidden:
+        parts.append("💎 Hidden value:")
+        parts += [f"• {html.escape(h)}" for h in hidden]
+    return parts
+
+
 def _build_enrichment_message(
     job: dict,
     tools: list[dict],
@@ -122,7 +159,6 @@ def _build_enrichment_message(
     title = html.escape(job.get("title") or "Untitled")
     topic = html.escape(job.get("ai_topic") or "")
     objective = html.escape(job.get("ai_objective") or "")
-    action_points_raw = job.get("ai_action_points") or ""
 
     parts = []
     if paywall_warning:
@@ -135,33 +171,9 @@ def _build_enrichment_message(
         "🎯 Objective",
         objective,
     ]
-
-    ap_list = [ap.strip() for ap in action_points_raw.split(" | ") if ap.strip()]
-    if ap_list:
-        parts += ["", "✅ Action Points"]
-        parts += [f"• {html.escape(ap)}" for ap in ap_list]
-
-    if tools:
-        parts += ["", "🛠 Tools"]
-        for t in tools:
-            prefix = f"[{html.escape(t.get('type', 'tool'))}]"
-            name = html.escape(t["name"])
-            if t.get("url"):
-                url_attr = html.escape(t["url"], quote=True)
-                name = f'<a href="{url_attr}">{name}</a>'
-            desc = html.escape(t.get("description", ""))
-            parts.append(f"• {prefix} {name}: {desc}")
-
-    gaps = promise_gap.get("gaps", []) if promise_gap else []
-    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
-    if gaps or hidden:
-        parts.append("\n=====PROMISE=GAP=====")
-        if gaps:
-            parts.append("❌ Unfulfilled:")
-            parts += [f"• {html.escape(g)}" for g in gaps]
-        if hidden:
-            parts.append("💎 Hidden value:")
-            parts += [f"• {html.escape(h)}" for h in hidden]
+    parts += _action_points_section(job.get("ai_action_points") or "")
+    parts += _tools_section(tools)
+    parts += _promise_gap_section(promise_gap)
 
     return "\n".join(p for p in parts if p is not None)
 
