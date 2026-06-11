@@ -1,0 +1,75 @@
+# pyscn configuration — vig
+# Gates target production code; tests/ and scripts/ are excluded by design
+# (test clone groups are idiomatic arrange-act-assert repetition; scripts are
+# one-off operational tools, not production surface).
+
+[output]
+format = "text"
+directory = ".pyscn/reports"
+
+[complexity]
+enabled = true
+low_threshold = 9
+medium_threshold = 19
+
+[dead_code]
+enabled = true
+min_severity = "warning"
+
+[clones]
+min_lines = 10
+min_nodes = 20
+similarity_threshold = 0.65
+grouping_threshold = 0.65
+
+[analysis]
+recursive = true
+include_patterns = ["**/*.py"]
+exclude_patterns = [
+    "**/test_*.py",
+    "**/*_test.py",
+    "tests/**",
+    "scripts/**",
+    "**/__pycache__/*",
+    "**/*.pyc",
+    "**/.pytest_cache/",
+    ".venv/",
+    "venv/",
+]
+
+# Layer map matches vig's actual architecture:
+#   presentation   — HTTP surfaces (FastAPI routers, composition root, Flask sidecar)
+#   application    — pipeline logic (processors, brain, worker, templates, analysis)
+#   infrastructure — adapters/clients/persistence (telegram sender+webhook adapter,
+#                    Google/Gemini services, database, queue, config, utils, auth)
+# Default-style rules allow infrastructure -> application, which covers
+# webhook.py importing brain/processors.
+
+[architecture]
+enabled = true
+validate_layers = true
+strict_mode = true
+
+[[architecture.layers]]
+name = "presentation"
+packages = ["api", "main", "transcript_server"]
+
+[[architecture.layers]]
+name = "application"
+packages = ["processors", "brain", "worker", "templates", "analysis"]
+
+[[architecture.layers]]
+name = "infrastructure"
+packages = ["telegram", "services", "database", "queue", "config", "utils", "auth"]
+
+[[architecture.rules]]
+from = "presentation"
+allow = ["presentation", "application", "infrastructure"]
+
+[[architecture.rules]]
+from = "application"
+allow = ["application", "infrastructure"]
+
+[[architecture.rules]]
+from = "infrastructure"
+allow = ["infrastructure", "application"]
