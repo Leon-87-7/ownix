@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { fetchJson } from '@/lib/fetch-utils';
-import type { FetchState } from '@/lib/fetch-utils';
+import { useFetchDetail } from '@/lib/fetch-utils';
 
 export interface JobDetail {
   id: string;
@@ -26,24 +24,6 @@ export interface JobDetail {
 }
 
 export function useJobDetail(jobId: string) {
-  const [job, setJob] = useState<JobDetail | null>(null);
-  const [fetchState, setFetchState] = useState<FetchState>('loading');
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    fetchJson<JobDetail>(`/api/jobs/${jobId}`, { signal: controller.signal })
-      .then((result) => {
-        if (!result.ok) { setFetchState(result.state); return; }
-        setJob(result.data);
-        setFetchState('ok');
-      })
-      .catch((err) => {
-        if ((err as Error).name !== 'AbortError') setFetchState('error');
-      });
-
-    return () => controller.abort();
-  }, [jobId]);
-
+  const { data: job, fetchState } = useFetchDetail<JobDetail>(`/api/jobs/${jobId}`);
   return { job, fetchState };
 }
