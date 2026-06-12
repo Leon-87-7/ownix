@@ -117,6 +117,8 @@ async def _handle_repo(task: dict) -> None:
 
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
     """Roll a crashed PRD slot back to 'error' and offer retry buttons. Never raises."""
+    # status_col is interpolated into SQL — keep it pinned to known columns.
+    assert status_col in {"prd_auto_status", "prd_intent_status"}
     try:
         job = await database.get_job(job_id)
         if job and job.get(status_col) == "generating":

@@ -119,10 +119,10 @@ export async function apiPut<T>(url: string, body: unknown, fallback = 'Save fai
   return (await res.json()) as T;
 }
 
-/** DELETE; throw the server's detail message unless 2xx/204. */
+/** DELETE; throw the server's detail message unless 2xx. */
 export async function apiDelete(url: string, fallback = 'Delete failed'): Promise<void> {
   const res = await fetch(url, { method: 'DELETE' });
-  if (res.ok || res.status === 204) return;
+  if (res.ok) return;
   const data = await res.json().catch(() => ({}));
   throw new Error((data as { detail?: string }).detail ?? fallback);
 }
