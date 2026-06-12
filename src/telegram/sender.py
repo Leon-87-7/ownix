@@ -66,6 +66,37 @@ def _raise_for_status(
     response.raise_for_status()
 
 
+async def _post_and_parse(
+    method: str,
+    *,
+    json_payload: dict[str, Any] | None = None,
+    data: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
+    error_event: str,
+    success_event: str,
+    error_label: str | None = None,
+    chat_id: int | None = None,
+    parse_mode: str | None = None,
+    **log_fields: Any,
+) -> dict[str, Any]:
+    """POST to the Bot API, validate the response, log, and return the parsed ``result``."""
+    kwargs: dict[str, Any] = {}
+    if json_payload is not None:
+        kwargs["json"] = json_payload
+    if data is not None:
+        kwargs["data"] = data
+    if files is not None:
+        kwargs["files"] = files
+    response = await _http().post(_endpoint(method), **kwargs)
+    _raise_for_status(response, method=method, chat_id=chat_id, parse_mode=parse_mode)
+    body = response.json()
+    if not body.get("ok"):
+        log.error(error_event, chat_id=chat_id, response=body, **log_fields)
+        raise RuntimeError(f"Telegram {error_label or method} failed: {body!r}")
+    log.info(success_event, chat_id=chat_id, **log_fields)
+    return body.get("result", {})
+
+
 async def send_message(
     chat_id: int,
     text: str,
@@ -79,15 +110,10 @@ async def send_message(
         payload["reply_to_message_id"] = reply_to_message_id
     if parse_mode is not None:
         payload["parse_mode"] = parse_mode
-
-    response = await _http().post(_endpoint("sendMessage"), json=payload)
-    _raise_for_status(response, method="sendMessage", chat_id=chat_id, parse_mode=parse_mode)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_send_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram sendMessage failed: {body!r}")
-    log.info("telegram_message_sent", chat_id=chat_id)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "sendMessage", json_payload=payload, chat_id=chat_id, parse_mode=parse_mode,
+        error_event="telegram_send_failed", success_event="telegram_message_sent",
+    )
 
 
 async def send_photo(
@@ -101,14 +127,10 @@ async def send_photo(
     if caption:
         data["caption"] = caption
     files = {"photo": ("photo.jpg", photo_bytes, "image/jpeg")}
-    response = await _http().post(_endpoint("sendPhoto"), data=data, files=files)
-    _raise_for_status(response, method="sendPhoto", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_photo_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram sendPhoto failed: {body!r}")
-    log.info("telegram_photo_sent", chat_id=chat_id)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "sendPhoto", data=data, files=files, chat_id=chat_id,
+        error_event="telegram_photo_failed", success_event="telegram_photo_sent",
+    )
 
 
 async def send_document(
@@ -126,14 +148,11 @@ async def send_document(
     if parse_mode:
         data["parse_mode"] = parse_mode
     files = {"document": (filename, file_bytes, "text/markdown")}
-    response = await _http().post(_endpoint("sendDocument"), data=data, files=files)
-    _raise_for_status(response, method="sendDocument", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_document_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram sendDocument failed: {body!r}")
-    log.info("telegram_document_sent", chat_id=chat_id, filename=filename)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "sendDocument", data=data, files=files, chat_id=chat_id,
+        error_event="telegram_document_failed", success_event="telegram_document_sent",
+        filename=filename,
+    )
 
 
 async def send_inline_keyboard(
@@ -151,14 +170,11 @@ async def send_inline_keyboard(
     }
     if parse_mode:
         payload["parse_mode"] = parse_mode
-    response = await _http().post(_endpoint("sendMessage"), json=payload)
-    _raise_for_status(response, method="sendMessage", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_keyboard_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram sendMessage (keyboard) failed: {body!r}")
-    log.info("telegram_keyboard_sent", chat_id=chat_id)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "sendMessage", json_payload=payload, chat_id=chat_id,
+        error_event="telegram_keyboard_failed", success_event="telegram_keyboard_sent",
+        error_label="sendMessage (keyboard)",
+    )
 
 
 async def send_force_reply(
@@ -176,14 +192,11 @@ async def send_force_reply(
             "input_field_placeholder": input_field_placeholder,
         },
     }
-    response = await _http().post(_endpoint("sendMessage"), json=payload)
-    _raise_for_status(response, method="sendMessage", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_force_reply_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram sendMessage (ForceReply) failed: {body!r}")
-    log.info("telegram_force_reply_sent", chat_id=chat_id)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "sendMessage", json_payload=payload, chat_id=chat_id,
+        error_event="telegram_force_reply_failed", success_event="telegram_force_reply_sent",
+        error_label="sendMessage (ForceReply)",
+    )
 
 
 async def forward_message(chat_id: int, from_chat_id: int, message_id: int) -> dict[str, Any]:
@@ -193,14 +206,11 @@ async def forward_message(chat_id: int, from_chat_id: int, message_id: int) -> d
         "from_chat_id": from_chat_id,
         "message_id": message_id,
     }
-    response = await _http().post(_endpoint("forwardMessage"), json=payload)
-    _raise_for_status(response, method="forwardMessage", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_forward_failed", chat_id=chat_id, response=body)
-        raise RuntimeError(f"Telegram forwardMessage failed: {body!r}")
-    log.info("telegram_message_forwarded", chat_id=chat_id, message_id=message_id)
-    return body.get("result", {})
+    return await _post_and_parse(
+        "forwardMessage", json_payload=payload, chat_id=chat_id,
+        error_event="telegram_forward_failed", success_event="telegram_message_forwarded",
+        message_id=message_id,
+    )
 
 
 async def edit_message_text(chat_id: int, message_id: int, text: str) -> None:
@@ -211,13 +221,11 @@ async def edit_message_text(chat_id: int, message_id: int, text: str) -> None:
         "text": text,
         "reply_markup": {"inline_keyboard": []},
     }
-    response = await _http().post(_endpoint("editMessageText"), json=payload)
-    _raise_for_status(response, method="editMessageText", chat_id=chat_id)
-    body = response.json()
-    if not body.get("ok"):
-        log.error("telegram_edit_failed", chat_id=chat_id, message_id=message_id, response=body)
-        raise RuntimeError(f"Telegram editMessageText failed: {body!r}")
-    log.info("telegram_message_edited", chat_id=chat_id, message_id=message_id)
+    await _post_and_parse(
+        "editMessageText", json_payload=payload, chat_id=chat_id,
+        error_event="telegram_edit_failed", success_event="telegram_message_edited",
+        message_id=message_id,
+    )
 
 
 async def answer_callback_query(callback_query_id: str, text: str | None = None) -> None:

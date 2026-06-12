@@ -75,49 +75,54 @@ def detect_pipeline(
     if not host:
         return "rejected"
 
-    # Short — YouTube Shorts
-    if host.endswith("youtube.com") and path.startswith("/shorts/") and len(path) > len("/shorts/"):
+    if _match_short(host, path):
         return "short"
-
-    # Short — Instagram Reels (NOT /p/ carousels)
-    if host.endswith("instagram.com") and path.startswith("/reel/"):
-        return "short"
-
-    # Short — TikTok user video paths
-    if host.endswith("tiktok.com") and _TIKTOK_VIDEO_PATH.match(path):
-        return "short"
-
-    # Long — standard YouTube watch (must include ?v=<id>)
-    if host.endswith("youtube.com") and path == "/watch":
-        v = parse_qs(parsed.query).get("v", [""])[0]
-        if v:
-            return "long"
-
-    # Long — youtu.be short links
-    if host == "youtu.be" and len(path) > 1:
+    if _match_long(host, path, parsed.query):
         return "long"
+    github = _match_github(host, path)
+    if github is not None:
+        return github
+    if _match_article(host, extra_domains):
+        return "article"
+    return "rejected"
 
-    # GitHub — reject gists and enterprise hosts first
+
+def _match_short(host: str, path: str) -> bool:
+    """YouTube Shorts, Instagram Reels (NOT /p/ carousels), TikTok user videos."""
+    if host.endswith("youtube.com") and path.startswith("/shorts/") and len(path) > len("/shorts/"):
+        return True
+    if host.endswith("instagram.com") and path.startswith("/reel/"):
+        return True
+    return bool(host.endswith("tiktok.com") and _TIKTOK_VIDEO_PATH.match(path))
+
+
+def _match_long(host: str, path: str, query: str) -> bool:
+    """Standard YouTube watch (must include ?v=<id>) or youtu.be short links."""
+    if host.endswith("youtube.com") and path == "/watch":
+        return bool(parse_qs(query).get("v", [""])[0])
+    return host == "youtu.be" and len(path) > 1
+
+
+def _match_github(host: str, path: str) -> Pipeline | None:
+    """'repo', 'rejected' (gists / enterprise hosts / org-only), or None when not GitHub."""
     if host == "gist.github.com":
         return "rejected"
     if host.startswith("github.") and host != "github.com" and host != "github.blog":
         return "rejected"
+    if host != "github.com":
+        return None
+    segments = [s for s in path.split("/") if s]
+    if not segments or segments[0].lower() in _GITHUB_RESERVED_PATHS:
+        return "rejected"
+    if len(segments) < 2:
+        return "rejected"  # org-only
+    return "repo"
 
-    # GitHub — repo routing
-    if host == "github.com":
-        segments = [s for s in path.split("/") if s]
-        if not segments or segments[0].lower() in _GITHUB_RESERVED_PATHS:
-            return "rejected"
-        if len(segments) < 2:
-            return "rejected"  # org-only
-        return "repo"
 
-    # Article — default domains and per-chat allowlist
+def _match_article(host: str, extra_domains: frozenset[str]) -> bool:
+    """Default article domains plus the per-chat allowlist (subdomains included)."""
     all_article_domains = ARTICLE_DEFAULT_DOMAINS | extra_domains
-    if any(host == d or host.endswith("." + d) for d in all_article_domains):
-        return "article"
-
-    return "rejected"
+    return any(host == d or host.endswith("." + d) for d in all_article_domains)
 
 
 def normalize_repo_url(url: str) -> str:

@@ -160,6 +160,45 @@ function FieldCard({ label, value, render }: { label: string; value: string; ren
   );
 }
 
+function JobHeader({ job }: { job: JobDetail }) {
+  const displayTitle = job.title ?? job.url;
+  const statusStyle = STATUS_STYLES[job.status] ?? "bg-gray-700 text-gray-300";
+  const contentTypeStyle = CONTENT_TYPE_STYLES[job.content_type] ?? "bg-gray-700 text-gray-300";
+  return (
+    <div>
+      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
+        <span aria-hidden="true">&#8592;</span> Back to feed
+      </Link>
+      <div className="flex flex-wrap items-start gap-3">
+        <h1 className="flex-1 text-xl font-semibold leading-snug break-all">{displayTitle}</h1>
+        <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          <Badge label={job.content_type} styleClass={contentTypeStyle} />
+          <Badge label={job.status} styleClass={statusStyle} />
+        </div>
+      </div>
+      {/^https?:\/\//i.test(job.url) ? (
+        <a href={job.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs text-gray-500 break-all hover:text-blue-400 hover:underline">{job.url}</a>
+      ) : (
+        <p className="mt-1 text-xs text-gray-500 break-all">{job.url}</p>
+      )}
+    </div>
+  );
+}
+
+function JobActionsBar({ job, hasFields }: { job: JobDetail; hasFields: boolean }) {
+  if (!job.drive_url && !hasFields) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      {job.drive_url && /^https?:\/\//i.test(job.drive_url) ? (
+        <a href={job.drive_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-gray-600 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:border-gray-400 hover:text-white">
+          Open in Drive &#8599;
+        </a>
+      ) : <span />}
+      {hasFields && <CopyButton value={buildMarkdown(job)} ariaLabel="Copy all fields as Markdown" label="Copy all" />}
+    </div>
+  );
+}
+
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const { job, fetchState } = useJobDetail(params.id);
   const { annotation, loaded, handleSave } = useJobAnnotation(params.id, fetchState);
@@ -177,9 +216,6 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
   if (fetchState === "forbidden") return <div className="text-sm text-gray-400">Access denied. <Link href="/" className="text-blue-400 hover:underline">Back to feed</Link></div>;
   if (fetchState === "error" || !job) return <div className="text-sm text-gray-400">Failed to load job. <Link href="/" className="text-blue-400 hover:underline">Back to feed</Link></div>;
 
-  const displayTitle = job.title ?? job.url;
-  const statusStyle = STATUS_STYLES[job.status] ?? "bg-gray-700 text-gray-300";
-  const contentTypeStyle = CONTENT_TYPE_STYLES[job.content_type] ?? "bg-gray-700 text-gray-300";
   const presentFields = ENRICHMENT_FIELDS.filter(({ key }) => {
     const value = job[key];
     return value !== null && value !== undefined && String(value).trim() !== "";
@@ -187,23 +223,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300">
-          <span aria-hidden="true">&#8592;</span> Back to feed
-        </Link>
-        <div className="flex flex-wrap items-start gap-3">
-          <h1 className="flex-1 text-xl font-semibold leading-snug break-all">{displayTitle}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-0.5">
-            <Badge label={job.content_type} styleClass={contentTypeStyle} />
-            <Badge label={job.status} styleClass={statusStyle} />
-          </div>
-        </div>
-        {/^https?:\/\//i.test(job.url) ? (
-          <a href={job.url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs text-gray-500 break-all hover:text-blue-400 hover:underline">{job.url}</a>
-        ) : (
-          <p className="mt-1 text-xs text-gray-500 break-all">{job.url}</p>
-        )}
-      </div>
+      <JobHeader job={job} />
 
       {job.status === "error" && job.error_msg && (
         <div className="rounded-lg border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-300">
@@ -211,16 +231,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {(job.drive_url || presentFields.length > 0) && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {job.drive_url && /^https?:\/\//i.test(job.drive_url) ? (
-            <a href={job.drive_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-gray-600 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:border-gray-400 hover:text-white">
-              Open in Drive &#8599;
-            </a>
-          ) : <span />}
-          {presentFields.length > 0 && <CopyButton value={buildMarkdown(job)} ariaLabel="Copy all fields as Markdown" label="Copy all" />}
-        </div>
-      )}
+      <JobActionsBar job={job} hasFields={presentFields.length > 0} />
 
       <div className="space-y-3">
         {presentFields.map(({ key, label, render }) => (

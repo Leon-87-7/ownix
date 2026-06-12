@@ -121,6 +121,43 @@ async def _acquire_transcript(
     return transcript_text, template_analysis, wordless
 
 
+async def _fetch_validated_frames(url: str, chat_id: int, tag: str) -> dict:
+    """Fetch frames from the sidecar; message the user and raise on failure."""
+    frame_resp = await frames.fetch_frames(url)
+    if "error" in frame_resp:
+        err = frame_resp["error"]
+        if err.get("type") == "too_long":
+            await send_message(
+                chat_id, f"{tag}\n❌ Video too long for short pipeline (max 3 minutes)."
+            )
+        else:
+            await send_message(
+                chat_id, f"{tag}\n❌ Frame extraction failed: {err.get('message', 'unknown error')}"
+            )
+        raise RuntimeError(f"frame_service_error: {err}")
+    if not frame_resp.get("frames"):
+        await send_message(chat_id, f"{tag}\n❌ No frames extracted from video.")
+        raise RuntimeError("no_frames_extracted")
+    return frame_resp
+
+
+async def _deliver_media(
+    chat_id: int, tag: str, raw_frames: list, main_idx: int, summary: str, links: list[dict]
+) -> tuple[int | None, list[dict]]:
+    """Send best frame + links message; return (anchor message_id, enriched links)."""
+    import base64
+
+    best_frame_bytes = base64.b64decode(raw_frames[main_idx]["base64"])
+    photo_result = await send_photo(chat_id, best_frame_bytes, caption=f"{tag}\n🖼️ Main frame: {summary}")
+    bot_message_id: int | None = photo_result.get("message_id")
+
+    if links:
+        links = await enrich_github_links(links)
+        links_result = await send_message(chat_id, f"{tag}\n{build_enriched_links_message(links)}")
+        bot_message_id = links_result.get("message_id", bot_message_id)
+    return bot_message_id, links
+
+
 async def run(job: dict) -> None:
     """End-to-end short-video pipeline."""
     job_id = job["id"]
@@ -134,27 +171,11 @@ async def run(job: dict) -> None:
     status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Fetch frames from sidecar
-    frame_resp = await frames.fetch_frames(url)
-    if "error" in frame_resp:
-        err = frame_resp["error"]
-        if err.get("type") == "too_long":
-            await send_message(
-                chat_id, f"{tag}\n❌ Video too long for short pipeline (max 3 minutes)."
-            )
-        else:
-            await send_message(
-                chat_id, f"{tag}\n❌ Frame extraction failed: {err.get('message', 'unknown error')}"
-            )
-        raise RuntimeError(f"frame_service_error: {err}")
-
+    frame_resp = await _fetch_validated_frames(url, chat_id, tag)
     raw_frames = frame_resp.get("frames", [])
     platform = frame_resp.get("platform", "unknown")
     video_id = frame_resp.get("video_id", "")
     title = frame_resp.get("title", "")
-
-    if not raw_frames:
-        await send_message(chat_id, f"{tag}\n❌ No frames extracted from video.")
-        raise RuntimeError("no_frames_extracted")
 
     # 2. Gemini Vision analysis
     vision = await gemini.call_gemini_vision(raw_frames)
@@ -188,19 +209,8 @@ async def run(job: dict) -> None:
         processing_time_ms=elapsed_ms,
     )
 
-    # 6. Send best frame photo
-    import base64
-
-    best_frame_b64 = raw_frames[main_idx]["base64"]
-    best_frame_bytes = base64.b64decode(best_frame_b64)
-    photo_result = await send_photo(chat_id, best_frame_bytes, caption=f"{tag}\n🖼️ Main frame: {summary}")
-    bot_message_id: int = photo_result.get("message_id")
-
-    # 7. Send links message (if any); prefer its message_id as the forwarding anchor
-    if links:
-        links = await enrich_github_links(links)
-        links_result = await send_message(chat_id, f"{tag}\n{build_enriched_links_message(links)}")
-        bot_message_id = links_result.get("message_id", bot_message_id)
+    # 6+7. Send best frame photo, then links message (its message_id wins as anchor)
+    bot_message_id, links = await _deliver_media(chat_id, tag, raw_frames, main_idx, summary, links)
 
     if bot_message_id:
         await database.update_job_status(job_id, "done", bot_message_id=bot_message_id)
@@ -234,24 +244,14 @@ async def run(job: dict) -> None:
     # -------------------------------------------------------------------------
     # Phase 2 (ADR-0020): Transcript acquisition — always, regardless of template
     # -------------------------------------------------------------------------
-    template = job.get("template")
-    transcript_text, template_analysis, wordless = await _acquire_transcript(
-        job, url, chat_id, tag, title, template
-    )
+    await _transcript_phase(job, url, chat_id, tag, title, platform, video_id)
 
-    if wordless:
-        await send_message(chat_id, f"{tag}\n⚠️ I'm wordless")
 
-    # Persist transcript + key_phrases immediately on acquisition
-    if transcript_text:
-        key_phrases = extract_key_phrases(transcript_text, max_phrases=8)
-        await database.update_job_status(
-            job_id, "done",
-            transcript=transcript_text,
-            key_phrases=json.dumps(key_phrases),
-        )
-
-    # Template enrichment — caption path (audio path already done above via enrich_audio)
+async def _run_template_enrichment(
+    job_id: str, chat_id: int, tag: str, title: str,
+    template: str | None, template_analysis, transcript_text: str | None,
+) -> object:
+    """Caption-path template enrichment + delivery (audio path enriched earlier)."""
     if template and template_analysis is None and transcript_text:
         enriched_job = await database.get_job(job_id)
         if enriched_job:
@@ -272,21 +272,55 @@ async def run(job: dict) -> None:
             job_id, "done",
             template_analysis=json.dumps(template_analysis),
         )
+    return template_analysis
 
-    # TAIL: Drive upload + Telegram document — always last, always after enrichment
+
+async def _deliver_transcript_doc(
+    job: dict, job_id: str, chat_id: int, platform: str, video_id: str, transcript_text: str
+) -> None:
+    """Drive upload + Telegram document — always last, always after enrichment."""
+    transcript_md = _build_transcript_markdown(job, platform, video_id, transcript_text)
+    try:
+        await upload_file(
+            transcript_md, f"{job_id}_transcript.md", settings.GOOGLE_DRIVE_FOLDER_SHORT
+        )
+    except Exception as exc:
+        log.warning("transcript_drive_upload_failed", error=str(exc))
+    try:
+        await send_document(
+            chat_id,
+            transcript_md.encode("utf-8"),
+            f"{job_id}_transcript.md",
+        )
+    except Exception as exc:
+        log.warning("transcript_send_document_failed", error=str(exc))
+
+
+async def _transcript_phase(
+    job: dict, url: str, chat_id: int, tag: str, title: str, platform: str, video_id: str
+) -> None:
+    """Acquire transcript, persist it, run template enrichment, deliver the .md doc."""
+    job_id = job["id"]
+    template = job.get("template")
+    transcript_text, template_analysis, wordless = await _acquire_transcript(
+        job, url, chat_id, tag, title, template
+    )
+
+    if wordless:
+        await send_message(chat_id, f"{tag}\n⚠️ I'm wordless")
+
+    # Persist transcript + key_phrases immediately on acquisition
     if transcript_text:
-        transcript_md = _build_transcript_markdown(job, platform, video_id, transcript_text)
-        try:
-            await upload_file(
-                transcript_md, f"{job_id}_transcript.md", settings.GOOGLE_DRIVE_FOLDER_SHORT
-            )
-        except Exception as exc:
-            log.warning("transcript_drive_upload_failed", error=str(exc))
-        try:
-            await send_document(
-                chat_id,
-                transcript_md.encode("utf-8"),
-                f"{job_id}_transcript.md",
-            )
-        except Exception as exc:
-            log.warning("transcript_send_document_failed", error=str(exc))
+        key_phrases = extract_key_phrases(transcript_text, max_phrases=8)
+        await database.update_job_status(
+            job_id, "done",
+            transcript=transcript_text,
+            key_phrases=json.dumps(key_phrases),
+        )
+
+    await _run_template_enrichment(
+        job_id, chat_id, tag, title, template, template_analysis, transcript_text
+    )
+
+    if transcript_text:
+        await _deliver_transcript_doc(job, job_id, chat_id, platform, video_id, transcript_text)

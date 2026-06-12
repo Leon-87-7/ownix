@@ -291,57 +291,80 @@ def _escape_attr(url: str) -> str:
     return html.escape(str(url), quote=True)
 
 
+def _text_section(analysis: dict, key: str, label: str) -> list[str]:
+    """['', label, value] when *key* is present, else []."""
+    if not analysis.get(key):
+        return []
+    return ["", label, _escape_html(analysis[key])]
+
+
+def _bullet_section(analysis: dict, key: str, label: str, fmt: str = "• {}") -> list[str]:
+    """['', label, '• v1', …] when *key* holds a list, else []."""
+    if not analysis.get(key):
+        return []
+    return ["", label] + [fmt.format(_escape_html(v)) for v in analysis[key]]
+
+
+def _format_method(analysis: dict) -> list[str]:
+    lines = []
+    for i, step in enumerate(analysis.get("steps", []), 1):
+        action = _escape_html(step.get("action", ""))
+        details = _escape_html(step.get("details", ""))
+        lines.append(f"{i}. {action}: {details}")
+    lines += _text_section(analysis, "common_mistakes", "⚠️ Common Mistakes")
+    lines += _text_section(analysis, "pro_tips", "💡 Pro Tips")
+    return lines
+
+
+def _format_technical(analysis: dict) -> list[str]:
+    lines = []
+    if analysis.get("tech_stack"):
+        lines += [
+            "",
+            "🔧 Tech Stack",
+            ", ".join(_escape_html(t) for t in analysis["tech_stack"]),
+        ]
+    lines += _text_section(analysis, "architecture", "🏗 Architecture")
+    lines += _text_section(analysis, "config_notes", "⚙️ Config")
+    lines += _text_section(analysis, "debugging", "🐛 Debugging")
+    return lines
+
+
+def _format_review(analysis: dict) -> list[str]:
+    lines = []
+    for f in analysis.get("features", []):
+        rating = f" ({_escape_html(f['rating'])})" if f.get("rating") else ""
+        feature = _escape_html(f.get("feature", ""))
+        desc = _escape_html(f.get("description", ""))
+        lines.append(f"• {feature}{rating}: {desc}")
+    lines += _bullet_section(analysis, "pros", "✅ Pros")
+    lines += _bullet_section(analysis, "cons", "❌ Cons")
+    lines += _text_section(analysis, "verdict", "🏆 Verdict")
+    lines += _text_section(analysis, "price_value", "💰 Price/Value")
+    return lines
+
+
+def _format_narrative(analysis: dict) -> list[str]:
+    lines = _text_section(analysis, "thesis", "💡 Thesis")
+    lines += _bullet_section(analysis, "supporting_points", "📌 Supporting Points")
+    lines += _bullet_section(analysis, "key_quotes", "💬 Key Quotes", fmt='"{}"')
+    lines += _text_section(analysis, "conclusion", "🎯 Conclusion")
+    return lines
+
+
+_TEMPLATE_FORMATTERS = {
+    "method": _format_method,
+    "technical": _format_technical,
+    "review": _format_review,
+    "narrative": _format_narrative,
+}
+
+
 def _format_template_analysis(template: str, analysis: dict) -> str:
     lines = [f"\n📋 {template.capitalize()} Analysis"]
-    if template == "method":
-        for i, step in enumerate(analysis.get("steps", []), 1):
-            action = _escape_html(step.get("action", ""))
-            details = _escape_html(step.get("details", ""))
-            lines.append(f"{i}. {action}: {details}")
-        if analysis.get("common_mistakes"):
-            lines += ["", "⚠️ Common Mistakes", _escape_html(analysis["common_mistakes"])]
-        if analysis.get("pro_tips"):
-            lines += ["", "💡 Pro Tips", _escape_html(analysis["pro_tips"])]
-    elif template == "technical":
-        if analysis.get("tech_stack"):
-            lines += [
-                "",
-                "🔧 Tech Stack",
-                ", ".join(_escape_html(t) for t in analysis["tech_stack"]),
-            ]
-        if analysis.get("architecture"):
-            lines += ["", "🏗 Architecture", _escape_html(analysis["architecture"])]
-        if analysis.get("config_notes"):
-            lines += ["", "⚙️ Config", _escape_html(analysis["config_notes"])]
-        if analysis.get("debugging"):
-            lines += ["", "🐛 Debugging", _escape_html(analysis["debugging"])]
-    elif template == "review":
-        for f in analysis.get("features", []):
-            rating = f" ({_escape_html(f['rating'])})" if f.get("rating") else ""
-            feature = _escape_html(f.get("feature", ""))
-            desc = _escape_html(f.get("description", ""))
-            lines.append(f"• {feature}{rating}: {desc}")
-        if analysis.get("pros"):
-            lines += ["", "✅ Pros"] + [f"• {_escape_html(p)}" for p in analysis["pros"]]
-        if analysis.get("cons"):
-            lines += ["", "❌ Cons"] + [f"• {_escape_html(c)}" for c in analysis["cons"]]
-        if analysis.get("verdict"):
-            lines += ["", "🏆 Verdict", _escape_html(analysis["verdict"])]
-        if analysis.get("price_value"):
-            lines += ["", "💰 Price/Value", _escape_html(analysis["price_value"])]
-    elif template == "narrative":
-        if analysis.get("thesis"):
-            lines += ["", "💡 Thesis", _escape_html(analysis["thesis"])]
-        if analysis.get("supporting_points"):
-            lines += ["", "📌 Supporting Points"] + [
-                f"• {_escape_html(p)}" for p in analysis["supporting_points"]
-            ]
-        if analysis.get("key_quotes"):
-            lines += ["", "💬 Key Quotes"] + [
-                f'"{_escape_html(q)}"' for q in analysis["key_quotes"]
-            ]
-        if analysis.get("conclusion"):
-            lines += ["", "🎯 Conclusion", _escape_html(analysis["conclusion"])]
+    formatter = _TEMPLATE_FORMATTERS.get(template)
+    if formatter:
+        lines += formatter(analysis)
     return "\n".join(lines)
 
 

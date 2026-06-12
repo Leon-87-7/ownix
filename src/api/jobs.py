@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from src import database
+from src.api.deps import get_owned_job
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -115,12 +116,7 @@ class AnnotationIn(BaseModel):
 @jobs_router.get("/{job_id}/annotations")
 async def get_annotation(job_id: str, request: Request) -> dict:
     """Return the annotation for *job_id*. Returns {notes: '', updated_at: null} when absent."""
-    chat_id: int = request.state.user["id"]
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await get_owned_job(job_id, request)
 
     row = await database.get_job_annotation(job_id)
     if row is None:
@@ -131,12 +127,7 @@ async def get_annotation(job_id: str, request: Request) -> dict:
 @jobs_router.put("/{job_id}/annotations")
 async def upsert_annotation(job_id: str, body: AnnotationIn, request: Request) -> dict:
     """Create or update the annotation for *job_id*."""
-    chat_id: int = request.state.user["id"]
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await get_owned_job(job_id, request)
 
     row = await database.upsert_job_annotation(job_id, body.notes)
     return {"notes": row["notes"], "updated_at": row["updated_at"]}
@@ -150,12 +141,7 @@ async def upsert_annotation(job_id: str, body: AnnotationIn, request: Request) -
 @jobs_router.get("/{job_id}/tags")
 async def get_job_tags(job_id: str, request: Request) -> list[dict]:
     """Return tags attached to *job_id*."""
-    chat_id: int = request.state.user["id"]
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await get_owned_job(job_id, request)
 
     return await database.list_job_tags(job_id)
 
@@ -164,11 +150,7 @@ async def get_job_tags(job_id: str, request: Request) -> list[dict]:
 async def attach_tag(job_id: str, tag_id: str, request: Request) -> dict:
     """Attach *tag_id* to *job_id*. Returns the tag summary."""
     chat_id: int = request.state.user["id"]
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await get_owned_job(job_id, request)
 
     tag = await database.get_tag(chat_id, tag_id)
     if tag is None:
@@ -182,11 +164,7 @@ async def attach_tag(job_id: str, tag_id: str, request: Request) -> dict:
 async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
     """Detach *tag_id* from *job_id*."""
     chat_id: int = request.state.user["id"]
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await get_owned_job(job_id, request)
 
     tag = await database.get_tag(chat_id, tag_id)
     if tag is None:
@@ -213,12 +191,6 @@ _DETAIL_FIELDS = (
 @jobs_router.get("/{job_id}")
 async def get_job(job_id: str, request: Request) -> dict:
     """Return full job detail for a job the caller owns."""
-    chat_id: int = request.state.user["id"]
-
-    job = await database.get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if job["chat_id"] != chat_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    job = await get_owned_job(job_id, request)
 
     return {k: job.get(k) for k in _DETAIL_FIELDS}

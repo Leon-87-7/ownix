@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JobSummary } from '@/components/job-card';
 
-export interface Stats {
+interface Stats {
   total: number;
   by_status: Record<string, number>;
   by_content_type: Record<string, number>;
@@ -12,6 +12,24 @@ export interface Stats {
 interface JobsResponse {
   items: JobSummary[];
   total: number;
+}
+
+async function fetchFeed(ct: string, st: string): Promise<{ stats: Stats; jobs: JobSummary[]; total: number }> {
+  const params = new URLSearchParams();
+  if (ct) params.set('content_type', ct);
+  if (st) params.set('status', st);
+  params.set('limit', '50');
+  const [statsRes, jobsRes] = await Promise.all([
+    fetch('/api/jobs/stats'),
+    fetch(`/api/jobs?${params}`),
+  ]);
+  if (!statsRes.ok) throw new Error('Failed to load stats');
+  if (!jobsRes.ok) throw new Error('Failed to load jobs');
+  const [stats, jobsData] = await Promise.all([
+    statsRes.json() as Promise<Stats>,
+    jobsRes.json() as Promise<JobsResponse>,
+  ]);
+  return { stats, jobs: jobsData.items, total: jobsData.total };
 }
 
 export function useFeedData() {
@@ -27,23 +45,10 @@ export function useFeedData() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (ct) params.set('content_type', ct);
-      if (st) params.set('status', st);
-      params.set('limit', '50');
-      const [statsRes, jobsRes] = await Promise.all([
-        fetch('/api/jobs/stats'),
-        fetch(`/api/jobs?${params}`),
-      ]);
-      if (!statsRes.ok) throw new Error('Failed to load stats');
-      if (!jobsRes.ok) throw new Error('Failed to load jobs');
-      const [statsData, jobsData] = await Promise.all([
-        statsRes.json() as Promise<Stats>,
-        jobsRes.json() as Promise<JobsResponse>,
-      ]);
-      setStats(statsData);
-      setJobs(jobsData.items);
-      setTotal(jobsData.total);
+      const { stats, jobs, total } = await fetchFeed(ct, st);
+      setStats(stats);
+      setJobs(jobs);
+      setTotal(total);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
@@ -58,22 +63,10 @@ export function useFeedData() {
 
   const reload = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (ctRef.current) params.set('content_type', ctRef.current);
-      if (stRef.current) params.set('status', stRef.current);
-      params.set('limit', '50');
-      const [statsRes, jobsRes] = await Promise.all([
-        fetch('/api/jobs/stats'),
-        fetch(`/api/jobs?${params}`),
-      ]);
-      if (!statsRes.ok || !jobsRes.ok) return;
-      const [statsData, jobsData] = await Promise.all([
-        statsRes.json() as Promise<Stats>,
-        jobsRes.json() as Promise<JobsResponse>,
-      ]);
-      setStats(statsData);
-      setJobs(jobsData.items);
-      setTotal(jobsData.total);
+      const { stats, jobs, total } = await fetchFeed(ctRef.current, stRef.current);
+      setStats(stats);
+      setJobs(jobs);
+      setTotal(total);
     } catch {
       // swallow during background polling
     }

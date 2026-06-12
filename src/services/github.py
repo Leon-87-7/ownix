@@ -300,17 +300,22 @@ async def enrich_github_links(links: list[dict]) -> list[dict]:
         if data is None:
             lnk["_enriched"] = False
         else:
-            pushed_at_raw = data.get("pushed_at") or ""
-            try:
-                pushed = datetime.fromisoformat(pushed_at_raw.replace("Z", "+00:00"))
-                days_ago = (now - pushed).days
-            except Exception:
-                days_ago = 0
-            lnk["_enriched"] = True
-            lnk["_stars"] = data.get("stars", 0)
-            lnk["_forks"] = data.get("forks", 0)
-            lnk["_language"] = data.get("language")
-            lnk["_days_ago"] = days_ago
-            lnk["_gh_description"] = data.get("description")
+            _apply_repo_metadata(lnk, data, now)
 
     return links
+
+
+def _apply_repo_metadata(lnk: dict, data: dict, now: datetime) -> None:
+    """Attach the underscore-prefixed enrichment fields from an API result."""
+    pushed_at_raw = data.get("pushed_at") or ""
+    try:
+        pushed = datetime.fromisoformat(pushed_at_raw.replace("Z", "+00:00"))
+        days_ago = (now - pushed).days
+    except Exception:
+        days_ago = 0
+    lnk["_enriched"] = True
+    lnk["_stars"] = data.get("stars", 0)
+    lnk["_forks"] = data.get("forks", 0)
+    lnk["_language"] = data.get("language")
+    lnk["_days_ago"] = days_ago
+    lnk["_gh_description"] = data.get("description")

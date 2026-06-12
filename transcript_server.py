@@ -117,72 +117,60 @@ def _download_audio_b64(url: str, tmp_dir: str) -> tuple[str, str]:
     return audio_b64, mime_type
 
 
-@app.route("/transcript", methods=["GET"])
-def get_transcript():
-    url = request.args.get("url")
-    if not url:
-        return jsonify([{"error": {"type": "missing_url", "message": "No URL provided"}}]), 400
+def _fetch_vtt_text(url: str, tmp_dir: str) -> tuple[str | None, dict]:
+    """Run yt-dlp subtitle extraction; return (parsed VTT text or None, info dict)."""
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "writeautomaticsub": True,
+        "writesubtitles": True,
+        "subtitleslangs": ["en", "en-orig"],
+        "subtitlesformat": "vtt",
+        "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
+        info = ydl.extract_info(url, download=True) or {}
+    vtt_files = [f for f in os.listdir(tmp_dir) if f.endswith(".vtt")]
+    if vtt_files:
+        return _parse_vtt(os.path.join(tmp_dir, vtt_files[0])), info
+    return None, info
 
-    # YouTube path: try YouTubeTranscriptApi first, fall back to yt-dlp subtitles
-    video_id = extract_video_id(url)
-    if video_id:
-        try:
-            ytt = YouTubeTranscriptApi()
-            transcript = ytt.fetch(video_id)
-            text = " ".join([snippet.text for snippet in transcript])
+
+def _youtube_transcript(video_id: str, url: str):
+    """YouTubeTranscriptApi first, yt-dlp subtitles as fallback."""
+    try:
+        ytt = YouTubeTranscriptApi()
+        transcript = ytt.fetch(video_id)
+        text = " ".join([snippet.text for snippet in transcript])
+        return jsonify([{"videoId": video_id, "text": text}])
+    except Exception:
+        pass  # IP blocked or no captions — fall through to yt-dlp
+
+    tmp_dir = tempfile.mkdtemp()
+    try:
+        text, _ = _fetch_vtt_text(url, tmp_dir)
+        if text:
             return jsonify([{"videoId": video_id, "text": text}])
-        except Exception:
-            pass  # IP blocked or no captions — fall through to yt-dlp
+    except Exception:
+        pass
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        tmp_dir = tempfile.mkdtemp()
-        try:
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "skip_download": True,
-                "writeautomaticsub": True,
-                "writesubtitles": True,
-                "subtitleslangs": ["en", "en-orig"],
-                "subtitlesformat": "vtt",
-                "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(url, download=True)
-            vtt_files = [f for f in os.listdir(tmp_dir) if f.endswith(".vtt")]
-            if vtt_files:
-                text = _parse_vtt(os.path.join(tmp_dir, vtt_files[0]))
-                if text:
-                    return jsonify([{"videoId": video_id, "text": text}])
-        except Exception:
-            pass
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+    return jsonify([{"error": {"type": "IpBlocked", "message": "Could not retrieve transcript via YouTubeTranscriptApi or yt-dlp"}}])
 
-        return jsonify([{"error": {"type": "IpBlocked", "message": "Could not retrieve transcript via YouTubeTranscriptApi or yt-dlp"}}])
 
-    # Non-YouTube fallback: yt-dlp subtitle extraction (TikTok, Instagram Reels, etc.)
+def _generic_transcript(url: str):
+    """Non-YouTube (TikTok, Instagram Reels, …): yt-dlp captions, then audio fallback."""
     tmp_dir = tempfile.mkdtemp()
     try:
         # Try caption extraction first; if it throws, fall through to audio.
         caption_text: str | None = None
+        vid = "unknown"
         try:
-            ydl_opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "skip_download": True,
-                "writeautomaticsub": True,
-                "writesubtitles": True,
-                "subtitleslangs": ["en", "en-orig"],
-                "subtitlesformat": "vtt",
-                "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore
-                info = ydl.extract_info(url, download=True)
+            caption_text, info = _fetch_vtt_text(url, tmp_dir)
             info = get_primary_media_info(info)
             vid = info.get("id", "unknown")
-            vtt_files = [f for f in os.listdir(tmp_dir) if f.endswith(".vtt")]
-            if vtt_files:
-                caption_text = _parse_vtt(os.path.join(tmp_dir, vtt_files[0]))
         except Exception:
             pass  # caption extraction failed → try audio fallback below
 
@@ -198,6 +186,19 @@ def get_transcript():
             return jsonify([{"error": {"type": "transcription_failed", "message": str(e)}}])
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.route("/transcript", methods=["GET"])
+def get_transcript():
+    url = request.args.get("url")
+    if not url:
+        return jsonify([{"error": {"type": "missing_url", "message": "No URL provided"}}]), 400
+
+    # YouTube path: try YouTubeTranscriptApi first, fall back to yt-dlp subtitles
+    video_id = extract_video_id(url)
+    if video_id:
+        return _youtube_transcript(video_id, url)
+    return _generic_transcript(url)
 
 
 @app.route("/metadata", methods=["GET"])
@@ -246,6 +247,39 @@ def get_metadata():
                 "description": "",  # Keep the schema consistent on error
             }
         ), 200
+
+
+def _detect_platform(extractor: str, url: str) -> str:
+    if extractor == "Youtube" and "/shorts/" in url:
+        return "youtube_shorts"
+    if extractor == "TikTok":
+        return "tiktok"
+    if extractor == "Instagram":
+        return "instagram_reels"
+    return "unknown"
+
+
+def _encode_frames(tmp_frame_dir: str, interval: float) -> list[dict]:
+    """Re-encode the ffmpeg frame dumps as base64 JPEG descriptors."""
+    frame_files = sorted(
+        f for f in os.listdir(tmp_frame_dir) if f.startswith("frame_") and f.endswith(".jpg")
+    )
+    frames = []
+    for i, fname in enumerate(frame_files):
+        fpath = os.path.join(tmp_frame_dir, fname)
+        with Image.open(fpath) as img:
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        frames.append(
+            {
+                "index": i,
+                "timestamp_s": round(i * interval, 2),
+                "base64": b64,
+                "mime_type": "image/jpeg",
+            }
+        )
+    return frames
 
 
 @app.route("/short_frames", methods=["GET"])
@@ -319,17 +353,7 @@ def get_short_frames():
                 }
             )
 
-        # Platform detection
-        extractor = info.get("extractor_key", "")
-        if extractor == "Youtube" and "/shorts/" in url:
-            platform = "youtube_shorts"
-        elif extractor == "TikTok":
-            platform = "tiktok"
-        elif extractor == "Instagram":
-            platform = "instagram_reels"
-        else:
-            platform = "unknown"
-
+        platform = _detect_platform(info.get("extractor_key", ""), url)
         title = info.get("title", "")
         video_id = info.get("id", "")
 
@@ -357,25 +381,7 @@ def get_short_frames():
                 }
             )
 
-        # Collect and encode frames
-        frame_files = sorted(
-            f for f in os.listdir(tmp_frame_dir) if f.startswith("frame_") and f.endswith(".jpg")
-        )
-        frames = []
-        for i, fname in enumerate(frame_files):
-            fpath = os.path.join(tmp_frame_dir, fname)
-            with Image.open(fpath) as img:
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=85)
-                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-            frames.append(
-                {
-                    "index": i,
-                    "timestamp_s": round(i * interval, 2),
-                    "base64": b64,
-                    "mime_type": "image/jpeg",
-                }
-            )
+        frames = _encode_frames(tmp_frame_dir, interval)
 
         return jsonify(
             {

@@ -72,17 +72,13 @@ async def _accumulate_media_group(chat_id: int, media_group_id: str, file_id: st
     _BATCH_TASKS[media_group_id] = asyncio.create_task(_debounce())
 
 
-async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) -> None:
-    from src.services.gemini_photo import call_gemini_photo_links
+async def _report_photo_links(
+    chat_id: int, result: dict, source_job_id: str, *, plural: bool
+) -> None:
+    """Send enriched links (and kick off brain ingest) or a no-links notice."""
     from src.services.github import enrich_github_links
     from src.utils.markdown import build_enriched_links_message
 
-    await send_message(chat_id, "🔍 Scanning image for links...")
-    photo_bytes, mime_type = await download_photo(file_id)
-    result = await call_gemini_photo_links(
-        [{"bytes": photo_bytes, "mime_type": mime_type}],
-        caption=caption,
-    )
     links = result.get("links", [])
     summary = result.get("summary", "")
     if links:
@@ -91,20 +87,31 @@ async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) 
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
             asyncio.create_task(
-                brain.ingest_links(links, topic=summary, source_job_id=f"photo_{chat_id}")
+                brain.ingest_links(links, topic=summary, source_job_id=source_job_id)
             )
     else:
+        noun = "these images" if plural else "this image"
         await send_message(
             chat_id,
-            f"🔍 No links found in this image.\nThat is what I did see:\n{summary}",
+            f"🔍 No links found in {noun}.\nThat is what I did see:\n{summary}",
         )
+
+
+async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) -> None:
+    from src.services.gemini_photo import call_gemini_photo_links
+
+    await send_message(chat_id, "🔍 Scanning image for links...")
+    photo_bytes, mime_type = await download_photo(file_id)
+    result = await call_gemini_photo_links(
+        [{"bytes": photo_bytes, "mime_type": mime_type}],
+        caption=caption,
+    )
+    await _report_photo_links(chat_id, result, f"photo_{chat_id}", plural=False)
 
 
 async def _process_media_group(chat_id: int, media_group_id: str) -> None:
     """Read all accumulated file IDs for a media group, download them, and run Gemini."""
     from src.services.gemini_photo import call_gemini_photo_links
-    from src.services.github import enrich_github_links
-    from src.utils.markdown import build_enriched_links_message
 
     client = queue._client()
     file_ids: list[str] = await client.lrange(f"photo_group_files:{media_group_id}", 0, -1)  # pyright: ignore[reportGeneralTypeIssues]
@@ -117,25 +124,7 @@ async def _process_media_group(chat_id: int, media_group_id: str) -> None:
         b, mt = await download_photo(fid)
         images.append({"bytes": b, "mime_type": mt})
     result = await call_gemini_photo_links(images, caption=None)
-    links = result.get("links", [])
-    summary = result.get("summary", "")
-    if links:
-        links = await enrich_github_links(links)
-        await send_message(chat_id, build_enriched_links_message(links))
-        if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
-            from src import brain
-            asyncio.create_task(
-                brain.ingest_links(
-                    links,
-                    topic=summary,
-                    source_job_id=f"photo_group_{media_group_id}",
-                )
-            )
-    else:
-        await send_message(
-            chat_id,
-            f"🔍 No links found in these images.\nThat is what I did see:\n{summary}",
-        )
+    await _report_photo_links(chat_id, result, f"photo_group_{media_group_id}", plural=True)
 
 
 async def _cb_gemini_no(ctx: CallbackCtx) -> None:
@@ -688,47 +677,52 @@ async def _cmd_download_md(ctx: SlashCtx) -> None:
 
 _PROTECTED_DOMAINS = {"github.com"}
 
+
+def _normalize_domain(raw: str) -> str:
+    """Strip to bare hostname, lowercase, drop 'www.' prefix."""
+    from urllib.parse import urlparse as _urlparse
+    host = _urlparse(raw).hostname or raw
+    return host.lower().removeprefix("www.")
+
+
+def _format_domain_report(*sections: tuple[str, list[str]]) -> str:
+    """Join non-empty '<label> `d1`, `d2`' lines for a domain-command reply."""
+    return "\n".join(
+        f"{label} " + ", ".join(f"`{d}`" for d in domains)
+        for label, domains in sections
+        if domains
+    )
+
+
 async def _cmd_ignore(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /ignore <domain or URL> [more...]")
         return
-    from urllib.parse import urlparse as _urlparse
     added, protected = [], []
     for raw in ctx.parts[1:]:
-        host = _urlparse(raw).hostname or raw
-        domain = host.lower().removeprefix("www.")
+        domain = _normalize_domain(raw)
         if domain in _PROTECTED_DOMAINS:
             protected.append(domain)
             continue
         await database.add_ignored_domain(ctx.chat_id, domain)
         added.append(domain)
-    parts = []
-    if added:
-        parts.append("🚫 Ignored: " + ", ".join(f"`{d}`" for d in added))
-    if protected:
-        parts.append("⛔ Cannot ignore: " + ", ".join(f"`{d}`" for d in protected))
-    await send_message(ctx.chat_id, "\n".join(parts))
+    await send_message(ctx.chat_id, _format_domain_report(
+        ("🚫 Ignored:", added), ("⛔ Cannot ignore:", protected)))
 
 
 async def _cmd_unignore(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /unignore <domain or URL> [more...]")
         return
-    from urllib.parse import urlparse as _urlparse
     removed, missing = [], []
     for raw in ctx.parts[1:]:
-        host = _urlparse(raw).hostname or raw
-        domain = host.lower().removeprefix("www.")
+        domain = _normalize_domain(raw)
         if await database.remove_ignored_domain(ctx.chat_id, domain):
             removed.append(domain)
         else:
             missing.append(domain)
-    parts = []
-    if removed:
-        parts.append("✅ Removed: " + ", ".join(f"`{d}`" for d in removed))
-    if missing:
-        parts.append("⚠️ Not found: " + ", ".join(f"`{d}`" for d in missing))
-    await send_message(ctx.chat_id, "\n".join(parts))
+    await send_message(ctx.chat_id, _format_domain_report(
+        ("✅ Removed:", removed), ("⚠️ Not found:", missing)))
 
 
 async def _cmd_ignore_list(ctx: SlashCtx) -> None:
@@ -738,13 +732,6 @@ async def _cmd_ignore_list(ctx: SlashCtx) -> None:
         return
     lines = "\n".join(f"• `{d}`" for d in domains)
     await send_message(ctx.chat_id, f"🚫 Ignored domains ({len(domains)}):\n{lines}")
-
-
-def _normalize_domain(raw: str) -> str:
-    """Strip to bare hostname, lowercase, drop 'www.' prefix."""
-    from urllib.parse import urlparse as _urlparse
-    host = _urlparse(raw).hostname or raw
-    return host.lower().removeprefix("www.")
 
 
 async def _cmd_allowlist(ctx: SlashCtx) -> None:
@@ -770,12 +757,8 @@ async def _cmd_unallowlist(ctx: SlashCtx) -> None:
             removed.append(domain)
         else:
             missing.append(domain)
-    parts = []
-    if removed:
-        parts.append("✅ Removed: " + ", ".join(f"`{d}`" for d in removed))
-    if missing:
-        parts.append("⚠️ Not in your allowlist: " + ", ".join(f"`{d}`" for d in missing))
-    await send_message(ctx.chat_id, "\n".join(parts))
+    await send_message(ctx.chat_id, _format_domain_report(
+        ("✅ Removed:", removed), ("⚠️ Not in your allowlist:", missing)))
 
 
 async def _cmd_allowlist_list(ctx: SlashCtx) -> None:
@@ -908,23 +891,63 @@ async def _handle_awaiting_freestyle(chat_id: int, text: str, state: dict) -> No
         await send_message(chat_id, f"job_{job_id[-4:]}:\n✍️ Prompt saved — Gemini will start when transcript is ready")
 
 
-async def _handle_spec(chat_id: int, parts: list[str]) -> None:
-    """Dispatch /spec <suffix> [intent...]."""
+async def _parse_spec_args(chat_id: int, parts: list[str]) -> tuple[str, str | None] | None:
+    """Validate /spec args; message the user and return None on bad input."""
     if len(parts) < 2:
         await send_message(
             chat_id,
             'Usage: /spec <suffix> [intent text...]\nExample: /spec ABCD desktop app for X',
         )
-        return
+        return None
     suffix = parts[1][-4:]
     intent_text = " ".join(parts[2:]).strip() or None
     if intent_text is not None:
         if len(intent_text) < 5:
             await send_message(chat_id, "📐 Intent too short (min 5 chars).")
-            return
+            return None
         if len(intent_text) > 1000:
             await send_message(chat_id, "📐 Intent too long (max 1000 chars).")
-            return
+            return None
+    return suffix, intent_text
+
+
+async def _report_spec_no_match(chat_id: int, suffix: str) -> None:
+    recent = await database.get_recent_jobs(chat_id, 5)
+    bullet_lines = "\n".join(
+        f"• job_{j['id'][-4:]} — {j.get('title') or '(no title)'} ({j['content_type']}/{j['status']})"
+        for j in recent
+    )
+    await send_message(
+        chat_id,
+        f"No job ending in {suffix} found.\nLast 5 jobs in this chat:\n{bullet_lines}",
+    )
+    log.info("prd.spec.no_match", chat_id=chat_id, suffix=suffix)
+
+
+async def _enqueue_spec_job(chat_id: int, job: dict, intent_text: str | None) -> None:
+    job_id = job["id"]
+    if intent_text:
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET prd_intent_text=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (intent_text, job_id),
+            )
+            await conn.commit()
+        await queue.enqueue({"task": "prd_intent", "job_id": job_id})
+        log.info("prd.intent.enqueued", chat_id=chat_id, job_id=job_id, intent_text_len=len(intent_text))
+    elif job.get("prd_auto_status") == "done" and job.get("prd_auto_json"):
+        await queue.enqueue({"task": "prd_auto_resend", "job_id": job_id})
+    else:
+        await queue.enqueue({"task": "prd_auto", "job_id": job_id})
+
+
+async def _handle_spec(chat_id: int, parts: list[str]) -> None:
+    """Dispatch /spec <suffix> [intent...]."""
+    parsed = await _parse_spec_args(chat_id, parts)
+    if parsed is None:
+        return
+    suffix, intent_text = parsed
+
     rows = await database.find_jobs_by_suffix(chat_id, suffix)
     long_matches = [
         j for j in rows
@@ -933,16 +956,7 @@ async def _handle_spec(chat_id: int, parts: list[str]) -> None:
     short_matches = [j for j in rows if j["content_type"] == "short"]
 
     if not long_matches and not short_matches:
-        recent = await database.get_recent_jobs(chat_id, 5)
-        bullet_lines = "\n".join(
-            f"• job_{j['id'][-4:]} — {j.get('title') or '(no title)'} ({j['content_type']}/{j['status']})"
-            for j in recent
-        )
-        await send_message(
-            chat_id,
-            f"No job ending in {suffix} found.\nLast 5 jobs in this chat:\n{bullet_lines}",
-        )
-        log.info("prd.spec.no_match", chat_id=chat_id, suffix=suffix)
+        await _report_spec_no_match(chat_id, suffix)
         return
 
     if not long_matches and short_matches:
@@ -954,25 +968,11 @@ async def _handle_spec(chat_id: int, parts: list[str]) -> None:
         return
 
     job = long_matches[0]
-    job_id = job["id"]
     title = job.get("title") or "(no title)"
     await send_message(chat_id, f'📐 PRD for: "{title}" — generating ...')
-    log.info("prd.spec.matched", chat_id=chat_id, suffix=suffix, job_id=job_id, intent=bool(intent_text))
+    log.info("prd.spec.matched", chat_id=chat_id, suffix=suffix, job_id=job["id"], intent=bool(intent_text))
 
-    if intent_text:
-        async with database.connection() as conn:
-            await conn.execute(
-                "UPDATE jobs SET prd_intent_text=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                (intent_text, job_id),
-            )
-            await conn.commit()
-        await queue.enqueue({"task": "prd_intent", "job_id": job_id})
-        log.info("prd.intent.enqueued", chat_id=chat_id, job_id=job_id, intent_text_len=len(intent_text))
-    else:
-        if job.get("prd_auto_status") == "done" and job.get("prd_auto_json"):
-            await queue.enqueue({"task": "prd_auto_resend", "job_id": job_id})
-        else:
-            await queue.enqueue({"task": "prd_auto", "job_id": job_id})
+    await _enqueue_spec_job(chat_id, job, intent_text)
 
 
 def _resolve_chat_state(state: dict) -> bool:
@@ -1043,63 +1043,65 @@ async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: in
     return True
 
 
-async def _route_url(chat_id: int, text: str, message_id: int) -> None:
-    client = queue._client()
-    pending_template: str | None = await client.get(f"pending_template:{chat_id}")
-    if pending_template:
-        await client.delete(f"pending_template:{chat_id}")
+async def _enqueue_simple_job(
+    chat_id: int, url: str, content_type: str, message_id: int
+) -> None:
+    """Create + enqueue an article/repo job and ack the user."""
+    job_id = await database.create_job(
+        chat_id=chat_id, url=url, content_type=content_type, message_id=message_id,
+    )
+    await queue.enqueue({"task": content_type, "job_id": job_id})
+    await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
 
-    extra_domains = await database.list_allowed_domains(chat_id)
-    pipeline = detect_pipeline(text, frozenset(extra_domains))
-    if pipeline == "rejected":
-        try:
-            _host = (urlparse(text).hostname or "").lower().removeprefix("www.")
-        except Exception:
-            _host = ""
-        _github_hint = f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
-        await send_message(
-            chat_id,
-            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels (not /p/ carousels), and TikTok videos.\n"
-            + _ARTICLE_HINT
-            + _github_hint,
-        )
-        log.info("url_rejected", chat_id=chat_id, url=text)
-        return
 
-    if pipeline == "article":
-        if not pending_template:
-            cached = await database.find_recent_job_by_url(chat_id, text)
-            if cached:
-                await _reply_cached_job(chat_id, cached)
-                return
-        job_id = await database.create_job(
-            chat_id=chat_id, url=text, content_type="article", message_id=message_id,
-        )
-        await queue.enqueue({"task": "article", "job_id": job_id})
-        await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
-        return
+async def _reject_url(chat_id: int, text: str) -> None:
+    try:
+        _host = (urlparse(text).hostname or "").lower().removeprefix("www.")
+    except Exception:
+        _host = ""
+    _github_hint = f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
+    await send_message(
+        chat_id,
+        "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+        "Instagram Reels (not /p/ carousels), and TikTok videos.\n"
+        + _ARTICLE_HINT
+        + _github_hint,
+    )
+    log.info("url_rejected", chat_id=chat_id, url=text)
 
-    if pipeline == "repo":
-        repo_url = normalize_repo_url(text)
-        if pending_template:
-            await client.set(f"pending_template:{chat_id}", pending_template, ex=120)
-            await send_message(
-                chat_id,
-                f"ℹ️ `/{pending_template}` templates don't apply to repo URLs yet — "
-                "your template is still active for the next video or article.",
-            )
-        cached = await database.find_recent_job_by_url(chat_id, repo_url)
+
+async def _route_article(
+    chat_id: int, text: str, message_id: int, pending_template: str | None
+) -> None:
+    if not pending_template:
+        cached = await database.find_recent_job_by_url(chat_id, text)
         if cached:
             await _reply_cached_job(chat_id, cached)
             return
-        job_id = await database.create_job(
-            chat_id=chat_id, url=repo_url, content_type="repo", message_id=message_id,
-        )
-        await queue.enqueue({"task": "repo", "job_id": job_id})
-        await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
-        return
+    await _enqueue_simple_job(chat_id, text, "article", message_id)
 
+
+async def _route_repo(
+    chat_id: int, text: str, message_id: int, pending_template: str | None, client
+) -> None:
+    repo_url = normalize_repo_url(text)
+    if pending_template:
+        await client.set(f"pending_template:{chat_id}", pending_template, ex=120)
+        await send_message(
+            chat_id,
+            f"ℹ️ `/{pending_template}` templates don't apply to repo URLs yet — "
+            "your template is still active for the next video or article.",
+        )
+    cached = await database.find_recent_job_by_url(chat_id, repo_url)
+    if cached:
+        await _reply_cached_job(chat_id, cached)
+        return
+    await _enqueue_simple_job(chat_id, repo_url, "repo", message_id)
+
+
+async def _route_video(
+    chat_id: int, text: str, pipeline: str, message_id: int, pending_template: str | None
+) -> None:
     if pending_template == "freestyle":
         await _handle_freestyle_url(chat_id, text, pipeline, message_id)
         return
@@ -1124,6 +1126,26 @@ async def _route_url(chat_id: int, text: str, message_id: int) -> None:
         await send_message(chat_id, f"📥 Received\n✨ Kicking off Gemini analysis ({pending_template})\njob_{job_id[-4:]}")
     else:
         await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+
+
+async def _route_url(chat_id: int, text: str, message_id: int) -> None:
+    client = queue._client()
+    pending_template: str | None = await client.get(f"pending_template:{chat_id}")
+    if pending_template:
+        await client.delete(f"pending_template:{chat_id}")
+
+    extra_domains = await database.list_allowed_domains(chat_id)
+    pipeline = detect_pipeline(text, frozenset(extra_domains))
+    if pipeline == "rejected":
+        await _reject_url(chat_id, text)
+        return
+    if pipeline == "article":
+        await _route_article(chat_id, text, message_id, pending_template)
+        return
+    if pipeline == "repo":
+        await _route_repo(chat_id, text, message_id, pending_template, client)
+        return
+    await _route_video(chat_id, text, pipeline, message_id, pending_template)
 
 
 @router.post("/webhook")
@@ -1154,22 +1176,31 @@ async def webhook(
     # Photo path
     photo = message.get("photo")
     if photo and chat_id:
-        file_id = photo[-1]["file_id"]
-        caption = message.get("caption") or None
-        media_group_id: str | None = message.get("media_group_id")
-        if media_group_id:
-            await _accumulate_media_group(chat_id, media_group_id, file_id)
-        else:
-            asyncio.create_task(_handle_single_photo(chat_id, file_id, caption))
+        await _handle_photo_update(chat_id, message, photo)
         return {"ok": True}
 
     if not chat_id or not text:
         return {"ok": True}
 
+    await _route_text(chat_id, text, message_id)
+    return {"ok": True}
+
+
+async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None:
+    file_id = photo[-1]["file_id"]
+    caption = message.get("caption") or None
+    media_group_id: str | None = message.get("media_group_id")
+    if media_group_id:
+        await _accumulate_media_group(chat_id, media_group_id, file_id)
+    else:
+        asyncio.create_task(_handle_single_photo(chat_id, file_id, caption))
+
+
+async def _route_text(chat_id: int, text: str, message_id: int | None) -> None:
     # 1. Slash command path
     if text.startswith("/"):
         await _dispatch_slash(chat_id, text, message_id)
-        return {"ok": True}
+        return
 
     # 2. Awaiting-intent path
     state = await database.get_chat_state(chat_id)
@@ -1179,21 +1210,19 @@ async def webhook(
                 await _handle_awaiting_freestyle(chat_id, text, state)
             else:
                 await _handle_awaiting_intent(chat_id, text, state)
-            return {"ok": True}
-        else:
-            log.info("prd.chat_state.expired_or_missed", chat_id=chat_id)
-            # fall through to normal URL routing
+            return
+        log.info("prd.chat_state.expired_or_missed", chat_id=chat_id)
+        # fall through to normal URL routing
 
     # 3. Plain-text command shortcut: "find code" → "/find code", "rebuild-graph" → "/rebuild-graph"
     first_word = text.split()[0].lower()
     if ("/" + first_word) in _SLASH_TABLE:
         await _dispatch_slash(chat_id, "/" + text, message_id)
-        return {"ok": True}
+        return
 
     # 3b. User-template shortcut: "-mytemplate <url>"
     if await _handle_user_template_shortcut(chat_id, text, message_id):
-        return {"ok": True}
+        return
 
     # 4. Normal URL routing
     await _route_url(chat_id, text, message_id)
-    return {"ok": True}

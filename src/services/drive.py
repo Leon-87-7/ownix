@@ -3,13 +3,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from google.oauth2 import service_account
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
 from googleapiclient.http import MediaInMemoryUpload
 
 from src.config import settings
+from src.services.google_auth import build_google_service
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -18,23 +15,7 @@ _SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 
 
 def _build_service() -> Any:
-    # Prefer OAuth refresh token (required for personal Google accounts).
-    # Fall back to service account (works with Shared Drives / Workspace).
-    if settings.GOOGLE_OAUTH_REFRESH_TOKEN:
-        creds = Credentials(
-            token=None,
-            refresh_token=settings.GOOGLE_OAUTH_REFRESH_TOKEN,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
-            client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET,
-            scopes=_SCOPES,
-        )
-        creds.refresh(Request())
-    else:
-        creds = service_account.Credentials.from_service_account_file(
-            settings.GOOGLE_SERVICE_ACCOUNT_JSON, scopes=_SCOPES
-        )
-    return build("drive", "v3", credentials=creds, cache_discovery=False)
+    return build_google_service("drive", "v3", _SCOPES)
 
 
 def _upload_sync(content: str | bytes, filename: str, folder_id: str, mime_type: str) -> tuple[str, str]:

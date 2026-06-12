@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useFetchList, apiPost } from '@/lib/fetch-utils';
+import { useFetchList, apiPost, apiPut, apiDelete } from '@/lib/fetch-utils';
 
 export interface Tag {
   id: string;
@@ -29,23 +29,12 @@ export function useTagList() {
   }, [setTags]);
 
   const deleteTag = useCallback(async (id: string): Promise<void> => {
-    const res = await fetch(`/api/controls/tags/${id}`, { method: 'DELETE' });
-    if (res.ok || res.status === 204) { setTags((prev) => prev.filter((t) => t.id !== id)); return; }
-    const data = await res.json().catch(() => ({}));
-    throw new Error((data as { detail?: string }).detail ?? 'Delete failed');
+    await apiDelete(`/api/controls/tags/${id}`);
+    setTags((prev) => prev.filter((t) => t.id !== id));
   }, [setTags]);
 
   const updateTag = useCallback(async (id: string, values: TagFormState): Promise<void> => {
-    const res = await fetch(`/api/controls/tags/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error((data as { detail?: string }).detail ?? 'Update failed');
-    }
-    const updated: Tag = await res.json();
+    const updated = await apiPut<Tag>(`/api/controls/tags/${id}`, values, 'Update failed');
     setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)).sort((a, b) => a.name.localeCompare(b.name)));
   }, [setTags]);
 

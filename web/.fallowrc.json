@@ -1,0 +1,6 @@
+{
+  "ignoreDependencies": ["@milkdown/core", "@milkdown/ctx", "@milkdown/transformer"],
+  "duplicates": {
+    "ignore": ["**/*.test.ts", "**/*.test.tsx"]
+  }
+}

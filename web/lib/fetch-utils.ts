@@ -8,11 +8,11 @@ const FETCH_STATE_MAP: Record<number, 'not_found' | 'forbidden' | 'error'> = {
   401: 'forbidden',
 };
 
-export function mapFetchState(res: Response): 'not_found' | 'forbidden' | 'error' | null {
+function mapFetchState(res: Response): 'not_found' | 'forbidden' | 'error' | null {
   return FETCH_STATE_MAP[res.status] ?? (res.ok ? null : 'error');
 }
 
-export async function fetchJson<T>(
+async function fetchJson<T>(
   url: string,
   options?: RequestInit,
 ): Promise<{ ok: true; data: T } | { ok: false; state: 'not_found' | 'forbidden' | 'error' }> {
@@ -81,4 +81,48 @@ export async function swapSortOrder(
       body: JSON.stringify({ sort_order: newOrderB }),
     }),
   ]);
+}
+
+/** Fetch a single resource, mapping HTTP status to a FetchState. */
+export function useFetchDetail<T>(url: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [fetchState, setFetchState] = useState<FetchState>('loading');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchJson<T>(url, { signal: controller.signal })
+      .then((result) => {
+        if (!result.ok) { setFetchState(result.state); return; }
+        setData(result.data);
+        setFetchState('ok');
+      })
+      .catch((err) => {
+        if ((err as Error).name !== 'AbortError') setFetchState('error');
+      });
+    return () => controller.abort();
+  }, [url]);
+
+  return { data, setData, fetchState };
+}
+
+/** PUT JSON; resolve with the parsed row or throw the server's detail message. */
+export async function apiPut<T>(url: string, body: unknown, fallback = 'Save failed'): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? fallback);
+  }
+  return (await res.json()) as T;
+}
+
+/** DELETE; throw the server's detail message unless 2xx. */
+export async function apiDelete(url: string, fallback = 'Delete failed'): Promise<void> {
+  const res = await fetch(url, { method: 'DELETE' });
+  if (res.ok) return;
+  const data = await res.json().catch(() => ({}));
+  throw new Error((data as { detail?: string }).detail ?? fallback);
 }
