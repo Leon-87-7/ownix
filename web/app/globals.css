@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* One focus treatment everywhere: the 2px signal ring (DESIGN.md §5). */
+  :focus-visible {
+    outline: 2px solid theme("colors.signal.DEFAULT");
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: theme("colors.signal.DEFAULT");
+    color: theme("colors.onsignal");
+  }
+}
+
+/* Reduced motion is not optional (PRODUCT.md / DESIGN.md). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
