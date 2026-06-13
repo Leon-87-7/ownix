@@ -8,7 +8,7 @@ running in Docker on the host — Vercel hosts **only** the frontend.
 
 The browser only ever talks to **one origin** (`app.leondev.xyz`). Next.js rewrites
 `/api/*` server-side to the FastAPI backend (`web/next.config.js`), so the
-`vig_session` cookie — set with `httponly; secure; samesite=lax` and **no `domain`**
+`vig_session` cookie — set with `httponly; secure; samesite=lax` and **no** **`domain`**
 (`src/api/auth.py`) — is bound to the frontend's own host. Keeping the rewrite proxy
 on Vercel preserves this: single origin, no CORS, cookie unchanged.
 
@@ -38,7 +38,7 @@ Recommended: **Cloudflare Tunnel** mapping `api.leondev.xyz → http://localhost
 ### 1. Create the Vercel project
 
 - Import the `Leon-87-7/vig` repo.
-- **Root Directory = `web`** (repo root is the Python project; Next.js lives in `web/`).
+- **Root Directory =** **`web`** (repo root is the Python project; Next.js lives in `web/`).
 - Framework auto-detects as Next.js (pinned in `web/vercel.json`).
 
 ### 2. Environment variables (Vercel → Project → Settings → Environment Variables)
@@ -67,7 +67,7 @@ Stop running the frontend container locally — see the marked block in
 `docker-compose.yml` (the `web` service). Remove that service and the now-unused
 `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` build arg, then:
 
-```sh
+```Shell
 docker compose up -d --remove-orphans   # drops vig-web
 ```
 
@@ -91,7 +91,7 @@ then run the connector as a container joined to `vig-network` so it reaches the 
    CLOUDFLARE_TUNNEL_TOKEN=eyJ... # from the dashboard
    ```
 4. Add this service to `docker-compose.yml` (gated — add when you're ready to expose):
-   ```yaml
+   ```YAML
    cloudflared:
      image: cloudflare/cloudflared:latest
      container_name: vig-cloudflared
@@ -108,7 +108,7 @@ then run the connector as a container joined to `vig-network` so it reaches the 
 
 Run `cloudflared` on the host pointing at the published API port (`localhost:8000`).
 
-```sh
+```Shell
 cloudflared tunnel login                       # browser auth, writes cert.pem
 cloudflared tunnel create vig-api              # writes <TUNNEL_ID>.json credentials
 cloudflared tunnel route dns vig-api api.leondev.xyz
@@ -118,7 +118,7 @@ cloudflared tunnel run vig-api                 # uses the config.yml below
 `config.yml` (default location: `~/.cloudflared/config.yml`, or
 `%USERPROFILE%\.cloudflared\config.yml` on Windows):
 
-```yaml
+```YAML
 tunnel: vig-api
 credentials-file: <path-to>/<TUNNEL_ID>.json
 
@@ -140,7 +140,7 @@ Leave Access off this hostname, or use an Access **service token** wired into th
 
 ## Things to watch
 
-- **Vercel proxy timeout** — external rewrites proxy through Vercel with a ~30s
+- **Vercel proxy timeout** — external rewrites proxy through Vercel with a \~30s
   ceiling. Fine for polling/CRUD; verify the longest `/api/*` call (e.g. any
   streaming/SSE or long enrichment) stays under it, or route that one differently.
 - **The host must stay on** — Vercel removes only the frontend load. The
@@ -151,8 +151,8 @@ Leave Access off this hostname, or use an Access **service token** wired into th
 # Your flip-the-switch sequence, when ready
 
 1. Cloudflare Zero Trust → Networks → Tunnels → create vig-api → copy token.
-2. Add public hostname api.leondev.xyz → http://api:8000.
+2. Add public hostname api.leondev.xyz → <http://api:8000>.
 3. Put the token in .env (CLOUDFLARE_TUNNEL_TOKEN=…).
 4. Uncomment the cloudflared block in docker-compose.yml.
-5. docker compose up -d cloudflared → DNS self-registers; verify https://api.leondev.xyz/health.
+5. docker compose up -d cloudflared → DNS self-registers; verify <https://api.leondev.xyz/health>.
 6. Then do the Vercel project + env vars + app.leondev.xyz DNS, verify, and finally remove the gated web service.

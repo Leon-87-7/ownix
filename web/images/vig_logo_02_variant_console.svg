@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 32 32" role="img" aria-label="VIG logo console variant">
+  <defs>
+    <linearGradient id="plate" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#171717"/>
+      <stop offset="0.55" stop-color="#0b0d0f"/>
+      <stop offset="1" stop-color="#050607"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd18a"/>
+      <stop offset="0.42" stop-color="#f6921e"/>
+      <stop offset="1" stop-color="#ff4f1f"/>
+    </linearGradient>
+    <radialGradient id="hotspot" cx="24" cy="7" r="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f6921e" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#f6921e" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.2" stdDeviation="0.9" flood-color="#000000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="1.2" flood-color="#f6921e" flood-opacity="0.34"/>
+    </filter>
+    <mask id="logo-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32" mask-type="alpha">
+      <path fill="#ffffff" d="M3 2h2v1h-2zM10 2h2v1h-2zM17 2h8v1h-8zM27 2h2v1h-2zM2 3h4v1h-4zM9 3h4v1h-4zM16 3h7v1h-7zM26 3h4v1h-4zM2 4h4v1h-4zM9 4h4v1h-4zM16 4h7v1h-7zM24 4h6v1h-6zM2 5h4v1h-4zM9 5h4v1h-4zM16 5h3v1h-3zM24 5h5v1h-5zM2 6h4v1h-4zM9 6h4v1h-4zM16 6h3v1h-3zM22 6h6v1h-6zM2 7h4v1h-4zM9 7h4v1h-4zM16 7h3v1h-3zM22 7h5v1h-5zM2 8h4v1h-4zM9 8h4v1h-4zM16 8h3v1h-3zM20 8h6v1h-6zM2 9h4v1h-4zM9 9h4v1h-4zM16 9h1v1h-1zM20 9h5v1h-5zM2 10h4v1h-4zM9 10h4v1h-4zM16 10h1v1h-1zM18 10h6v1h-6zM2 11h4v1h-4zM9 11h4v1h-4zM18 11h5v1h-5zM2 12h4v1h-4zM9 12h4v1h-4zM16 12h6v1h-6zM2 13h4v1h-4zM9 13h4v1h-4zM16 13h5v1h-5zM2 14h4v1h-4zM9 14h4v1h-4zM14 14h6v1h-6zM2 15h4v1h-4zM9 15h2v1h-2zM14 15h5v1h-5zM2 16h4v1h-4zM9 16h2v1h-2zM12 16h6v1h-6zM2 17h4v1h-4zM12 17h5v1h-5zM2 18h4v1h-4zM10 18h6v1h-6zM18 18h1v1h-1zM2 19h4v1h-4zM10 19h5v1h-5zM17 19h2v1h-2zM23 19h7v1h-7zM2 20h4v1h-4zM8 20h6v1h-6zM16 20h3v1h-3zM23 20h7v1h-7zM2 21h4v1h-4zM8 21h5v1h-5zM16 21h3v1h-3zM23 21h2v1h-2zM26 21h4v1h-4zM2 22h10v1h-10zM16 22h3v1h-3zM25 22h5v1h-5zM2 23h9v1h-9zM16 23h3v1h-3zM24 23h3v1h-3zM28 23h2v1h-2zM2 24h8v1h-8zM12 24h1v1h-1zM16 24h3v1h-3zM23 24h3v1h-3zM27 24h3v1h-3zM2 25h7v1h-7zM11 25h2v1h-2zM16 25h3v1h-3zM22 25h3v1h-3zM27 25h3v1h-3zM2 26h6v1h-6zM10 26h3v1h-3zM16 26h3v1h-3zM21 26h3v1h-3zM2 27h5v1h-5zM9 27h4v1h-4zM16 27h3v1h-3zM20 27h3v1h-3zM2 28h4v1h-4zM9 28h4v1h-4zM16 28h6v1h-6zM3 29h2v1h-2zM10 29h2v1h-2zM17 29h4v1h-4z"/>
+    </mask>
+  </defs>
+  <rect width="32" height="32" rx="6" fill="url(#plate)"/>
+  <rect width="32" height="32" rx="6" fill="url(#hotspot)"/>
+  <path d="M5.5 3.5h21a2 2 0 0 1 2 2v21a2 2 0 0 1-2 2h-21a2 2 0 0 1-2-2v-21a2 2 0 0 1 2-2Z" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <rect x="2" y="2" width="28" height="28" fill="url(#signal)" mask="url(#logo-mask)" filter="url(#lift)" shape-rendering="crispEdges"/>
+  <rect x="2" y="2" width="28" height="1" fill="#ffffff" opacity="0.1" mask="url(#logo-mask)" shape-rendering="crispEdges"/>
+</svg>

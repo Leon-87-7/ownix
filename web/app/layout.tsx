@@ -18,6 +18,9 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "vig — Video Intelligence Gateway",
+  icons: {
+    icon: "/icon0.svg",
+  },
 };
 
 export default function RootLayout({

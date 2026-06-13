@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">VIG locked-play app icon</title>
+  <desc id="desc">A dark console app icon with an orange play triangle locked into a tilted cyan V-shaped gateway.</desc>
+  <defs>
+    <linearGradient id="plate" x1="28" y1="18" x2="228" y2="238" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1c1f25"/>
+      <stop offset="0.58" stop-color="#0b0c0f"/>
+      <stop offset="1" stop-color="#050607"/>
+    </linearGradient>
+    <filter id="signalLift" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#f6921e" flood-opacity="0.28"/>
+    </filter>
+    <linearGradient id="aqua" x1="76" y1="44" x2="214" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e3fdff"/>
+      <stop offset="1" stop-color="#7deaf7"/>
+    </linearGradient>
+    <style>
+      .frame { fill: none; stroke: url(#aqua); stroke-width: 30; stroke-linecap: round; stroke-linejoin: round; }
+      .line { fill: none; stroke: #050607; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.72; }
+      .signal { fill: #f6921e; }
+      .signal-shadow { fill: #b96a06; opacity: 0.35; }
+    </style>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="42" fill="url(#plate)"/>
+  <rect x="16.5" y="16.5" width="223" height="223" rx="41.5" fill="none" stroke="#343a44"/>
+  <g filter="url(#signalLift)">
+    <path class="frame" d="M80 50 76 208 214 128"/>
+    <path class="line" d="M72 52 68 218"/>
+    <path class="line" d="M82 210 222 130"/>
+    <path class="signal-shadow" d="M100 80 100 178 189 128Z"/>
+    <path class="signal" d="M106 72 106 184 202 128Z"/>
+  </g>
+</svg>

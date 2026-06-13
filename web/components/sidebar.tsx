@@ -28,6 +28,134 @@ const NAV: NavItem[] = [
   { href: '/controls', label: 'Controls', icon: SlidersHorizontal },
 ];
 
+function LogoMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 256 256"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient
+          id="vig-logo-plate"
+          x1="28"
+          y1="18"
+          x2="228"
+          y2="238"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop
+            offset="0"
+            stopColor="#1c1f25"
+          />
+          <stop
+            offset="0.58"
+            stopColor="#0b0c0f"
+          />
+          <stop
+            offset="1"
+            stopColor="#050607"
+          />
+        </linearGradient>
+        <linearGradient
+          id="vig-logo-aqua"
+          x1="76"
+          y1="44"
+          x2="214"
+          y2="208"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop
+            offset="0"
+            stopColor="#e3fdff"
+          />
+          <stop
+            offset="1"
+            stopColor="#7deaf7"
+          />
+        </linearGradient>
+        <filter
+          id="vig-logo-lift"
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+        >
+          <feDropShadow
+            dx="0"
+            dy="5"
+            stdDeviation="5"
+            floodColor="#000000"
+            floodOpacity="0.55"
+          />
+          <feDropShadow
+            dx="0"
+            dy="0"
+            stdDeviation="7"
+            floodColor="#f6921e"
+            floodOpacity="0.28"
+          />
+        </filter>
+      </defs>
+      <rect
+        x="16"
+        y="16"
+        width="224"
+        height="224"
+        rx="42"
+        fill="url(#vig-logo-plate)"
+      />
+      <rect
+        x="16.5"
+        y="16.5"
+        width="223"
+        height="223"
+        rx="41.5"
+        fill="none"
+        stroke="#343a44"
+      />
+      <g filter="url(#vig-logo-lift)">
+        <path
+          d="M80 50 76 208 214 128"
+          fill="none"
+          stroke="url(#vig-logo-aqua)"
+          strokeWidth="30"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M72 52 68 218"
+          fill="none"
+          stroke="#050607"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.72"
+        />
+        <path
+          d="M82 210 222 130"
+          fill="none"
+          stroke="#050607"
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.72"
+        />
+        <path
+          d="M100 80 100 178 189 128Z"
+          fill="#b96a06"
+          opacity="0.35"
+        />
+        <path
+          d="M106 72 106 184 202 128Z"
+          fill="#f6921e"
+        />
+      </g>
+    </svg>
+  );
+}
+
 function isActive(pathname: string, href: string): boolean {
   if (href === '/')
     return pathname === '/' || pathname.startsWith('/jobs');
@@ -133,16 +261,9 @@ export function Sidebar() {
           aria-label="Open navigation"
           aria-expanded={open}
           aria-controls="vig-nav-panel"
-          className="mb-6 flex h-9 w-9 items-center justify-center rounded-md transition-ui hover:bg-signal-bright"
+          className="mb-6 flex h-9 w-9 items-center justify-center rounded-md transition-ui hover:bg-raised"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icon0.svg"
-            alt="vig"
-            width={28}
-            height={28}
-            className="h-7 w-7"
-          />
+          <LogoMark className="h-8 w-8" />
         </button>
 
         <nav
@@ -196,14 +317,7 @@ export function Sidebar() {
       >
         <div className="mb-6 flex items-center justify-between px-1">
           <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/icon0.svg"
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7"
-            />
+            <LogoMark className="h-8 w-8" />
             vig
           </span>
           <button

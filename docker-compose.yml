@@ -5,7 +5,7 @@ services:
     container_name: vig-api
     env_file: .env
     ports:
-      - "8000:8000"
+      - '8000:8000'
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -51,27 +51,25 @@ services:
       - vig-network
 
   # ──────────────────────────────────────────────────────────────────────────
-  # web — local Next.js frontend.
-  # GATED FOR REMOVAL: once the Vercel deployment is live and verified
-  # (see docs/ops/vercel-deploy.md), delete this entire `web:` service so the
-  # host stops building/serving Next.js. Until then it stays so local is intact.
+  # web — local Next.js frontend. DISABLED: Vercel is now serving the frontend.
+  # Uncomment to restore local dev (see docs/ops/vercel-deploy.md).
   # ──────────────────────────────────────────────────────────────────────────
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=photo2urlbot
-    container_name: vig-web
-    environment:
-      - API_INTERNAL_URL=http://api:8000
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api
-    restart: unless-stopped
-    networks:
-      - vig-network
+  # web:
+  #   build:
+  #     context: ./web
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=photo2urlbot
+  #   container_name: vig-web
+  #   environment:
+  #     - API_INTERNAL_URL=http://api:8000
+  #   ports:
+  #     - '3000:3000'
+  #   depends_on:
+  #     - api
+  #   restart: unless-stopped
+  #   networks:
+  #     - vig-network
 
   # ──────────────────────────────────────────────────────────────────────────
   # cloudflared — Cloudflare Tunnel exposing the API at api.leondev.xyz.
@@ -79,21 +77,21 @@ services:
   # Zero Trust dashboard (public hostname api.leondev.xyz -> http://api:8000) and
   # CLOUDFLARE_TUNNEL_TOKEN is set in .env. See docs/ops/vercel-deploy.md (Option A).
   # ──────────────────────────────────────────────────────────────────────────
-  # cloudflared:
-  #   image: cloudflare/cloudflared:latest
-  #   container_name: vig-cloudflared
-  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - api
-  #   networks:
-  #     - vig-network
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vig-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - vig-network
 
   redis:
     image: redis:7-alpine
     container_name: vig-redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     restart: unless-stopped
