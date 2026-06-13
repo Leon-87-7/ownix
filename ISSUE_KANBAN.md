@@ -100,6 +100,8 @@
 | [#131](https://github.com/Leon-87-7/vig/issues/131) | refactor(short_video): extract _acquire_transcript — flatten run() nesting (CC 27, depth 6)             | Refactor / Short Video   | Committed to main; closed on GH                                                           |
 | [#132](https://github.com/Leon-87-7/vig/issues/132) | refactor(database): add _execute/_fetch_one/_fetch_all helpers — collapse clone Group 38 (13 clones)   | Refactor / DB            | Committed to main (7038a5d); closed on GH                                                 |
 | [#133](https://github.com/Leon-87-7/vig/issues/133) | refactor(brain): extract _select_refresh_batch + _refresh_one_link — flatten refresh_stale_links (CC 24) | Refactor / Brain       | Committed to main; closed on GH                                                           |
+| [#136](https://github.com/Leon-87-7/vig/issues/136) | feat(photo): remove redundant Quick Links section from build_enriched_links_message                       | Photo / Webhook        | Merged; PR #138; closed on GH                                                             |
+| [#137](https://github.com/Leon-87-7/vig/issues/137) | feat(photo): replace explicit batch commands with media_group_id debounce (ADR-0024)                      | Photo / Telegram       | Merged; PR #138; closed on GH                                                             |
 
 ---
 
@@ -117,8 +119,13 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                                                                  | Area             | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ---------------- | ---------- |
-| [#136](https://github.com/Leon-87-7/vig/issues/136) | feat(photo): remove redundant Quick Links section from build_enriched_links_message                    | Photo / Webhook  | —          |
-| [#137](https://github.com/Leon-87-7/vig/issues/137) | feat(photo): replace explicit batch commands with media_group_id debounce (ADR-0024)                   | Photo / Telegram | —          |
+| [#142](https://github.com/Leon-87-7/vig/issues/142) | feat(web): content-type tabs replace feed filter bar                                                   | Web / Feed       | —          |
+| [#143](https://github.com/Leon-87-7/vig/issues/143) | feat(api): server-resolved thumbnail_url on /api/jobs                                                  | API / Jobs       | —          |
+| [#145](https://github.com/Leon-87-7/vig/issues/145) | feat(web): brand-icon badges in All-tab feed rows                                                      | Web / Feed       | #142       |
+| [#144](https://github.com/Leon-87-7/vig/issues/144) | feat(web): preview-card grid for typed feed tabs                                                       | Web / Feed       | #142, #143 |
+| [#146](https://github.com/Leon-87-7/vig/issues/146) | feat(short): persist best frame as job thumbnail (Phase 2)                                             | Pipeline / Short | #144       |
+| [#147](https://github.com/Leon-87-7/vig/issues/147) | feat(article): scrape og:image as job thumbnail (Phase 2)                                             | Pipeline / Article | #144     |
+| [#148](https://github.com/Leon-87-7/vig/issues/148) | chore(article): one-shot og:image backfill script                                                      | Pipeline / Article | #147    |
 
 ---
 
@@ -265,8 +272,8 @@ Short pipeline transcript series (PR #113)
 #100 explicit transcript-failure taxonomy ✓
 
 Photo batch feature (ADR-0024: docs/adr/0024-photo-batch-media-group-debounce.md)
-#136 Remove Quick Links section from build_enriched_links_message (independent)
-#137 media_group_id debounce — replace /photoBatch-start /photoBatch-end (independent)
+#136 Remove Quick Links section from build_enriched_links_message (independent) ✓
+#137 media_group_id debounce — replace /photoBatch-start /photoBatch-end (independent) ✓
 Critical path: #136 and #137 are parallel — no dependency between them
 
 pyscn health refactors (.pyscn report 2026-06-07 — Health 47/100; Duplication 0, Complexity 45)
@@ -276,6 +283,17 @@ All independent — no blockers, all AFK, behavior-preserving (existing suite st
 #132 refactor(database) — _execute/_execute_rowcount/_fetch_one/_fetch_all; collapse clone Group 38 (13 clones) ✓
 #131 refactor(short_video) — extract _acquire_transcript; flatten run() (CC 27, depth 6) ✓
 #133 refactor(brain) — extract _select_refresh_batch + _refresh_one_link; flatten refresh_stale_links (CC 24) ✓
+
+Feed tab redesign + server-resolved thumbnails (ADR-0025 — grill session 2026-06-13)
+Phase 1 (frontend + thin backend resolver, no migration):
+#142 content-type tabs replace feed filter bar (root — unblocked)
+#143 server-resolved thumbnail_url on /api/jobs (root — unblocked)
+└── #144 preview-card grid for typed feed tabs ◄── #142, #143
+    ├── #146 persist short best frame as job thumbnail (Phase 2)
+    └── #147 scrape article og:image as job thumbnail (Phase 2)
+        └── #148 one-shot og:image backfill script
+#145 brand-icon badges in All-tab feed rows ◄── #142 (independent of #143–#144)
+Critical path: #142/#143 → #144 → #146/#147 → #148
 ```
 
 ---
@@ -290,6 +308,10 @@ All independent — no blockers, all AFK, behavior-preserving (existing suite st
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#141](https://github.com/Leon-87-7/vig/pull/141) | feat(web): Operator's Console design system — spec, tokens, drawer nav, full migration | feat/operators-console-design→main | — | ✅ Merged |
+| [#140](https://github.com/Leon-87-7/vig/pull/140) | refactor: drive pyscn + fallow static-analysis gates to green | refactor/static-analysis-green→main | — | ✅ Merged |
+| [#139](https://github.com/Leon-87-7/vig/pull/139) | feat(photo): media_group_id debounce replaces photoBatch commands (#137) | worktree-agent-ab8d0c4a71e30b5f7→main | #137 | ❌ Closed |
+| [#138](https://github.com/Leon-87-7/vig/pull/138) | feat(photo): remove Quick Links footer + media_group_id debounce (#136 #137) | worktree-agent-aab29c4329161fb60→main | #136, #137 | ✅ Merged |
 | [#135](https://github.com/Leon-87-7/vig/pull/135) | refactor(hooks): extract custom hooks + add vitest test infrastructure | refactor/hooks-121-129→main | — | ✅ Merged |
 | [#134](https://github.com/Leon-87-7/vig/pull/134) | refactor(frontend): extract custom hooks across all dashboard pages (#121-129) | refactor/hooks-121-129→main | #121 | ✅ Merged |
 | [#120](https://github.com/Leon-87-7/vig/pull/120) | feat(github+repo): topics field, v2 cache key, _prioritize_tree, and _build_repo_prompt improvements | feat/118-119-repo-prompt-improvements→main | #118, #119 | ✅ Merged |
