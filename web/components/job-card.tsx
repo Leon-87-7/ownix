@@ -30,8 +30,8 @@ export function JobCard({ job }: JobCardProps) {
           {display}
         </p>
         <div className="flex shrink-0 gap-1.5">
-          <PlatformBadge url={job.url} contentType={job.content_type} />
           <StatusBadge label={job.status} />
+          <PlatformBadge url={job.url} contentType={job.content_type} />
         </div>
       </div>
       <p className="mt-1 font-mono text-xs text-muted">

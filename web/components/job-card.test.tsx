@@ -21,11 +21,14 @@ const baseJob: JobSummary = {
 };
 
 describe("JobCard", () => {
-  it("shows a platform badge before the existing type and status badges", () => {
+  it("shows the status badge before the platform icon", () => {
     render(<JobCard job={baseJob} />);
 
-    expect(screen.getByLabelText("TikTok source")).toHaveTextContent("TikTok");
-    expect(screen.getByText("short")).toBeInTheDocument();
-    expect(screen.getByText("done")).toBeInTheDocument();
+    const status = screen.getByText("done");
+    const platform = screen.getByLabelText("TikTok source");
+    const badgeRow = status.parentElement;
+
+    expect(badgeRow).toBe(platform.parentElement);
+    expect(Array.from(badgeRow?.children ?? [])).toEqual([status, platform]);
   });
 });
