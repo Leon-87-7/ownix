@@ -220,8 +220,6 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Markdown cache lookup
-    og_image_url = job.get("og_image_url") or await _fetch_og_image_url(url)
-
     cached = await database.get_markdown_cache(url)
     if cached:
         content = cached["content"]
@@ -251,6 +249,10 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
                 )
                 await conn.commit()
         log.info("article.jina_fetched", job_id=job_id, title=title[:80] if title else "")
+
+    # og:image is resolved only after the content fetch succeeds, so a Jina
+    # failure (which returns early above) never pays for a discarded round-trip.
+    og_image_url = job.get("og_image_url") or await _fetch_og_image_url(url)
 
     if status_msg_id:
         await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 Article fetched, running Gemini analysis...")

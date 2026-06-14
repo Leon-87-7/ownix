@@ -282,7 +282,14 @@ async def get_job_thumbnail(job_id: str, request: Request) -> Response:
     thumbnail = await database.get_thumbnail(job_id)
     if thumbnail is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return Response(content=thumbnail["bytes"], media_type=thumbnail["mime"])
+    # Never echo back a non-image content type, even for rows stored before the
+    # save-time allowlist existed — keeps the browser from sniffing active content.
+    mime = (
+        thumbnail["mime"]
+        if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES
+        else "image/jpeg"
+    )
+    return Response(content=thumbnail["bytes"], media_type=mime)
 
 
 @jobs_router.get("/{job_id}")

@@ -808,6 +808,14 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
     log.info("job_status_updated", job_id=job_id, status=status)
 
 
+# Image MIME types we are willing to persist and later serve to browsers.
+# Anything else (e.g. a stray ``text/html`` from the vision model) is coerced
+# to ``image/jpeg`` so stored bytes can never be interpreted as active content.
+ALLOWED_THUMBNAIL_MIMES = frozenset(
+    {"image/jpeg", "image/png", "image/webp", "image/gif"}
+)
+
+
 async def save_thumbnail(
     job_id: str,
     thumbnail_bytes: bytes,
@@ -817,6 +825,7 @@ async def save_thumbnail(
     height: int | None = None,
 ) -> str:
     """Persist a job thumbnail and return its API URL."""
+    safe_mime = mime if mime in ALLOWED_THUMBNAIL_MIMES else "image/jpeg"
     async with connection() as conn:
         await conn.execute(
             """
@@ -826,13 +835,12 @@ async def save_thumbnail(
                 bytes = excluded.bytes,
                 mime = excluded.mime,
                 width = excluded.width,
-                height = excluded.height,
-                created_at = excluded.created_at
+                height = excluded.height
             """,
-            (job_id, thumbnail_bytes, mime, width, height),
+            (job_id, thumbnail_bytes, safe_mime, width, height),
         )
         await conn.commit()
-    log.info("job_thumbnail_saved", job_id=job_id, mime=mime, bytes=len(thumbnail_bytes))
+    log.info("job_thumbnail_saved", job_id=job_id, mime=safe_mime, bytes=len(thumbnail_bytes))
     return f"/api/jobs/{job_id}/thumbnail"
 
 
