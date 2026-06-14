@@ -88,3 +88,18 @@ script.
 - **Persist the Gemini summary as the short card title** — Rejected by the
   operator: the platform title (already stored in `jobs.title`) is sufficient, so
   no `ai_summary` column is added.
+
+## Follow-up Notes
+
+### 2026-06-14: Historical short thumbnails are re-derivable
+
+ADR-0025 originally treated existing IG/TikTok short jobs as not backfillable
+because their original frame bytes were not stored. That remains true: the
+pipeline discarded the selected frame bytes after processing, so there is no
+stored original frame artifact to copy into thumbnail storage.
+
+However, historical short thumbnails can still be best-effort re-derived for
+source URLs that remain public. The backfill path is to re-fetch frames through
+the frame sidecar (`frames.fetch_frames` / `short_frames`) and persist a selected
+frame via the same thumbnail storage seam introduced here. See
+[`scripts/backfill_short_thumbnails.py`](../../scripts/backfill_short_thumbnails.py).
