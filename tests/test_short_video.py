@@ -201,6 +201,7 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
         mocks = {
             "update_job_status": p("src.processors.short_video.database.update_job_status", new_callable=AsyncMock),
             "get_job": p("src.processors.short_video.database.get_job", new_callable=AsyncMock),
+            "save_thumbnail": p("src.processors.short_video.database.save_thumbnail", new_callable=AsyncMock),
             "send_message": p("src.processors.short_video.send_message", new_callable=AsyncMock,
                               return_value={"message_id": 1}),
             "send_photo": p("src.processors.short_video.send_photo", new_callable=AsyncMock,
@@ -221,6 +222,25 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
         resolved_job = job if job is not None else _TEMPLATE_JOB
         mocks["get_job"].return_value = resolved_job
         yield short_video, mocks
+
+
+@pytest.mark.asyncio
+async def test_instagram_best_frame_thumbnail_is_persisted() -> None:
+    """Instagram/TikTok short jobs store the selected frame for dashboard thumbnails."""
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["save_thumbnail"].assert_awaited_once()
+    args = mocks["save_thumbnail"].await_args.args
+    kwargs = mocks["save_thumbnail"].await_args.kwargs
+    assert args[0] == "job1"
+    assert args[1] == b"x"
+    assert kwargs["mime"] == "image/jpeg"
+
+    done_calls = [str(call) for call in mocks["update_job_status"].call_args_list]
+    assert any("best_frame_index" in call and "instagram_reels" in call for call in done_calls)
 
 
 @pytest.mark.asyncio

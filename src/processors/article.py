@@ -7,7 +7,9 @@ import html
 import json
 import re
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+
+import httpx
 
 from src import database
 from src.config import settings
@@ -28,6 +30,8 @@ _PAYWALL_PHRASES = (
 )
 
 _PAYWALL_MIN_CHARS = 500
+_META_TAG_RE = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
+_ATTR_RE = re.compile(r"""([:\w-]+)\s*=\s*(['"])(.*?)\2""", re.IGNORECASE | re.DOTALL)
 
 _PROMISE_GAP_SUFFIX = """
 
@@ -63,6 +67,32 @@ def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
 
 def _get_domain(url: str) -> str:
     return (urlparse(url).hostname or "").lower().removeprefix("www.")
+
+
+def _extract_og_image_url(markup: str, base_url: str | None = None) -> str | None:
+    """Extract og:image from an HTML document."""
+    for tag in _META_TAG_RE.findall(markup):
+        attrs = {name.lower(): html.unescape(value.strip()) for name, _quote, value in _ATTR_RE.findall(tag)}
+        key = (attrs.get("property") or attrs.get("name") or "").lower()
+        content = attrs.get("content", "").strip()
+        if key == "og:image" and content:
+            return urljoin(base_url, content) if base_url else content
+    return None
+
+
+async def _fetch_og_image_url(url: str) -> str | None:
+    try:
+        async with httpx.AsyncClient(
+            timeout=10,
+            follow_redirects=True,
+            headers={"User-Agent": "vig/1.0 (+https://github.com/Leon-87-7/vig)"},
+        ) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+    except Exception as exc:
+        log.info("article.og_image_fetch_failed", url=url, error=str(exc)[:120])
+        return None
+    return _extract_og_image_url(response.text, str(response.url))
 
 
 def _build_article_prompt(title: str, body: str, freestyle_prompt: str | None = None) -> str:
@@ -190,6 +220,8 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     status_msg_id: int | None = status_result.get("message_id")
 
     # 1. Markdown cache lookup
+    og_image_url = await _fetch_og_image_url(url)
+
     cached = await database.get_markdown_cache(url)
     if cached:
         content = cached["content"]
@@ -273,6 +305,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         ai_objective=ai_objective,
         ai_action_points=ai_action_points,
         ai_tools=tools_str,
+        og_image_url=og_image_url,
         promise_gap=json.dumps(promise_gap) if promise_gap else None,
         completed_at=now,
     )

@@ -56,4 +56,13 @@ describe('useFeedData', () => {
     const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
     expect(calls.some((u) => u.includes('content_type=short'))).toBe(true);
   });
+
+  it('uses the initial content type on first load', async () => {
+    stubFeedOk();
+    const { result } = renderHook(() => useFeedData('long'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes('content_type=long'))).toBe(true);
+  });
 });

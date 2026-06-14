@@ -32,8 +32,8 @@ async function fetchFeed(ct: string, st: string): Promise<{ stats: FeedStats; jo
   return { stats, jobs: jobsData.items, total: jobsData.total };
 }
 
-export function useFeedData() {
-  const [ctFilter, setCtFilter] = useState('');
+export function useFeedData(initialContentType = '') {
+  const [ctFilter, setCtFilter] = useState(initialContentType);
   const [stFilter, setStFilter] = useState('');
   const [stats, setStats] = useState<FeedStats | null>(null);
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -73,7 +73,7 @@ export function useFeedData() {
   }, []);
 
   useEffect(() => {
-    load('', '');
+    load(initialContentType, '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     bot_message_id              INTEGER,
     -- Freestyle Gemini prompt (issue #51 / ADR-0012)
     freestyle_prompt            TEXT,
+    best_frame_index            INTEGER,
+    platform                    TEXT,
+    video_id                    TEXT,
+    og_image_url                TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -83,6 +87,15 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_chat_id ON jobs(chat_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_url ON jobs(url);
+
+CREATE TABLE IF NOT EXISTS job_thumbnails (
+    job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+    bytes      BLOB NOT NULL,
+    mime       TEXT NOT NULL,
+    width      INTEGER,
+    height     INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- User-managed per-chat domain ignore list for Gemini Vision link filtering (/ignore command).
 CREATE TABLE IF NOT EXISTS ignored_domains (
@@ -548,6 +561,22 @@ _MIGRATIONS.append([
     "CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id)",
 ])
 
+# v14 -> v15: job media metadata and persisted thumbnails (issues #146/#147)
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN best_frame_index INTEGER",
+    "ALTER TABLE jobs ADD COLUMN platform TEXT",
+    "ALTER TABLE jobs ADD COLUMN video_id TEXT",
+    "ALTER TABLE jobs ADD COLUMN og_image_url TEXT",
+    """CREATE TABLE IF NOT EXISTS job_thumbnails (
+        job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+        bytes      BLOB NOT NULL,
+        mime       TEXT NOT NULL,
+        width      INTEGER,
+        height     INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -741,6 +770,10 @@ async def reset_job(job_id: str) -> None:
                 ai_tools = NULL,
                 ai_market_data = NULL,
                 processing_time_ms = NULL,
+                best_frame_index = NULL,
+                platform = NULL,
+                video_id = NULL,
+                og_image_url = NULL,
                 promise_gap = NULL,
                 completed_at = NULL,
                 updated_at = CURRENT_TIMESTAMP
@@ -772,6 +805,47 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
         )
         await conn.commit()
     log.info("job_status_updated", job_id=job_id, status=status)
+
+
+async def save_thumbnail(
+    job_id: str,
+    thumbnail_bytes: bytes,
+    *,
+    mime: str = "image/jpeg",
+    width: int | None = None,
+    height: int | None = None,
+) -> str:
+    """Persist a job thumbnail and return its API URL."""
+    async with connection() as conn:
+        await conn.execute(
+            """
+            INSERT INTO job_thumbnails (job_id, bytes, mime, width, height, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(job_id) DO UPDATE SET
+                bytes = excluded.bytes,
+                mime = excluded.mime,
+                width = excluded.width,
+                height = excluded.height,
+                created_at = excluded.created_at
+            """,
+            (job_id, thumbnail_bytes, mime, width, height),
+        )
+        await conn.commit()
+    log.info("job_thumbnail_saved", job_id=job_id, mime=mime, bytes=len(thumbnail_bytes))
+    return f"/api/jobs/{job_id}/thumbnail"
+
+
+async def get_thumbnail(job_id: str) -> dict[str, Any] | None:
+    row = await _fetch_one(
+        "SELECT job_id, bytes, mime, width, height, created_at FROM job_thumbnails WHERE job_id = ?",
+        (job_id,),
+    )
+    return dict(row) if row else None
+
+
+async def has_thumbnail(job_id: str) -> bool:
+    row = await _fetch_one("SELECT 1 FROM job_thumbnails WHERE job_id = ?", (job_id,))
+    return row is not None
 
 
 async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], status: str) -> None:

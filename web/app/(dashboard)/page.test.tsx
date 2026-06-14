@@ -1,19 +1,34 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { JobSummary } from '@/components/job-card';
 import FeedPage from './page';
+
+const navigationMock = vi.hoisted(() => ({
+  replace: vi.fn(),
+  searchParams: new URLSearchParams(),
+}));
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: navigationMock.replace, back: vi.fn() }),
   usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => navigationMock.searchParams,
 }));
 
 const STATS = { total: 5, by_status: { done: 3, error: 1 }, by_content_type: { short: 3, long: 2 } };
-const JOBS = [
-  { id: 'j1', url: 'https://example.com/1', title: 'Job One', content_type: 'short', status: 'done', created_at: '2024-01-01T00:00:00Z' },
+const JOBS: JobSummary[] = [
+  {
+    id: 'j1',
+    url: 'https://example.com/1',
+    title: 'Job One',
+    content_type: 'short',
+    status: 'done',
+    created_at: '2024-01-01T00:00:00Z',
+    thumbnail_url: 'https://example.com/thumb.jpg',
+    thumbnail_kind: 'landscape',
+  },
 ];
 
 // Mock all hooks used by FeedPage
@@ -59,6 +74,10 @@ function setupMocks(overrides: Partial<ReturnType<typeof useFeedData>> = {}) {
 }
 
 beforeEach(() => {
+  navigationMock.replace.mockClear();
+  navigationMock.searchParams = new URLSearchParams();
+  mockUseFeedData.mockReset();
+  mockUseFuseSearch.mockReset();
   setupMocks();
 });
 
@@ -122,5 +141,50 @@ describe('FeedPage', () => {
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: multiJobs } as ReturnType<typeof useFuseSearch>);
     render(<FeedPage />);
     expect(screen.getByText('2 jobs')).toBeTruthy();
+  });
+
+  it('initializes content type from the URL type param', () => {
+    navigationMock.searchParams = new URLSearchParams('type=short');
+    render(<FeedPage />);
+    expect(mockUseFeedData).toHaveBeenCalledWith('short');
+  });
+
+  it('renders content-type tabs with counts', () => {
+    render(<FeedPage />);
+    expect(screen.getByRole('tab', { name: /all 5/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /short 3/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /long 2/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /article 0/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /repo 0/i })).toBeTruthy();
+  });
+
+  it('updates the type query param when a content tab is clicked', () => {
+    const setCtFilter = vi.fn();
+    setupMocks({ setCtFilter });
+
+    render(<FeedPage />);
+    fireEvent.click(screen.getByRole('tab', { name: /long 2/i }));
+
+    expect(navigationMock.replace).toHaveBeenCalledWith('/?type=long', { scroll: false });
+    expect(setCtFilter).toHaveBeenCalledWith('long');
+  });
+
+  it('renders the all tab as the existing job list', () => {
+    render(<FeedPage />);
+    const card = screen.getByRole('link', { name: /job one/i });
+
+    expect(card.className).toContain('px-4');
+    expect(card.className).toContain('py-3');
+  });
+
+  it('renders typed tabs as preview cards', () => {
+    setupMocks({ ctFilter: 'short' });
+
+    render(<FeedPage />);
+    const card = screen.getByRole('link', { name: /job one/i });
+
+    expect(card.className).toContain('flex');
+    expect(card.className).toContain('p-3');
+    expect(card.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
   });
 });
