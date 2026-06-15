@@ -79,7 +79,7 @@ def _extract_og_image_url(markup: str, base_url: str | None = None) -> str | Non
             resolved = urljoin(base_url, content) if base_url else content
             if urlparse(resolved).scheme in ("http", "https"):
                 return resolved
-            return None
+            continue
     return None
 
 

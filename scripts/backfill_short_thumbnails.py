@@ -64,7 +64,7 @@ def _frame_index(job: dict, frame_count: int) -> int | None:
     return index
 
 
-async def _load_candidates(chat_id: int | None) -> list[dict]:
+async def _load_candidates(chat_id: int | None, limit: int | None = None) -> list[dict]:
     query = """
         SELECT id, chat_id, url, best_frame_index
         FROM jobs
@@ -80,6 +80,9 @@ async def _load_candidates(chat_id: int | None) -> list[dict]:
         query += " AND chat_id = ?"
         params.append(chat_id)
     query += " ORDER BY created_at DESC"
+    if limit is not None:
+        query += " LIMIT ?"
+        params.append(limit)
 
     async with database.connection() as conn:
         cursor = await conn.execute(query, params)
@@ -98,7 +101,7 @@ async def backfill(
     if overwrite_existing:
         print(OVERWRITE_EXISTING_WARNING)
 
-    jobs = await _load_candidates(chat_id)
+    jobs = await _load_candidates(chat_id, limit=limit)
     summary = Summary(scanned=len(jobs))
 
     eligible_jobs = []

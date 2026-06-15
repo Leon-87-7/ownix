@@ -106,6 +106,11 @@ def test_extract_og_image_url_rejects_non_http_schemes() -> None:
     assert (
         _extract_og_image_url('<meta property="og:image" content="javascript:void(0)">') is None
     )
+    # invalid-scheme tag followed by a valid one must not abort the scan
+    assert _extract_og_image_url(
+        '<meta property="og:image" content="data:image/png;base64,AAAA">'
+        '<meta property="og:image" content="https://cdn.example.com/og.jpg">'
+    ) == "https://cdn.example.com/og.jpg"
 
 
 @pytest.mark.asyncio
