@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-14
+
+The dashboard release: VIG gains a browsable web operator console alongside the
+Telegram bot, the article-URL pipeline lands end-to-end, and photo batching
+moves to automatic `media_group_id` grouping.
+
 ### Added
 
+- **Web dashboard — "The Operator's Console" (#141)** — a new Next.js 14 (App Router) operator UI under `web/`, replacing ad-hoc inspection of the bot's state with a browsable surface. Pages: a **feed** (home) of processed jobs, **brain** (semantic link graph), **spaces** (and `spaces/[id]`), **prompts**, **controls**, a per-job **jobs/[id]** detail view, and a **login** gate. Ships a normative design system (`PRODUCT.md` + `DESIGN.md`): a dark "plate ladder" palette, one rationed signal-orange (`#f6921e`) that always means _act here_, Inter + JetBrains Mono (mono for machine facts — URLs, IDs, scores), two-dialect badges (status filled, type outlined), a global 2px signal focus ring, and a reduced-motion kill-switch (WCAG AA bar). Navigation is a collapsible 64px rail that expands into a slide-in drawer (logo + per-page lucide icons, `aria-expanded`/`aria-current` wiring, closes on Esc/backdrop/navigation).
+- **Server-resolved feed thumbnails + content-type tabs (#142–#148, ADR-0025)** — the feed gains per-type tabs (`All` / `short` / `long` / `article` / `repo`); each typed tab renders jobs as a grid of preview cards with images. `/api/jobs` now returns a `thumbnail_url` (+ `thumbnail_kind`: `landscape`/`portrait`/`null`) for every job, computed server-side by a `_resolve_thumbnail(url, content_type)` helper — YouTube long/Shorts and GitHub repos derive a free OG image from the URL, articles scrape `og:image` at ingest, and IG/TikTok shorts persist the pipeline's best frame. The frontend stays dumb: it renders `<img>` or a typed placeholder. A `simple-icons`-backed `PlatformIcon` component classifies each job by URL (YouTube / YouTube Short / Instagram / TikTok / GitHub / article) for card and row chrome. Backfill script `scripts/backfill_article_og_images.py` populates thumbnails for historical article jobs.
+- **Frontend test infrastructure** — Vitest + React Testing Library + MSW wired into `web/` (`npm test` / `test:run` / `test:coverage`), with the first suites covering the feed page, job cards, platform-icon classification, the `useFeedData` hook, and extracted job-detail utilities.
+- **VIG branding** — logo components and SVG/PNG assets (favicon, app icons, manifest), plus subtle per-page dashboard backgrounds.
 - **End-to-end article URL pipeline** (#62) — article URLs (hosts matching `ARTICLE_DEFAULT_DOMAINS` or per-chat `/allowlist`) are now fully processed: `detect_pipeline` returns `"article"` for allowlisted hosts; a new `src/processors/article.py` processor fetches the page via Jina (or reads the `markdown_cache` on repeat), runs a paywall heuristic (`_PAYWALL_PHRASES` + body < 500 chars), delivers a `<title>.md` Telegram document, calls Gemini 2.5 Flash for structured analysis (topic, objective, action points, tools, promise-gap), writes to the new `Article Analysis` Sheets tab, and fire-and-forgets a brain ingest for the article URL. Freestyle re-runs (`✍️ Freestyle` button) reuse the cached markdown, update the Sheets row in-place via the stored `sheets_row_id`, and never call Jina again. `/freestyle <article-url>` and `/force <article-url>` work through existing handlers. Migration v5→v6 expands the `jobs.content_type` CHECK to include `'article'`.
 
 - **`/allowlist` family** (#61) — per-chat article domain allowlist. `/allowlist <domain> [more...]` adds domains (idempotent, multi-arg); `/unallowlist <domain>` removes with a friendly message on miss; `/allowlist_list` shows custom rows only (defaults not surfaced). Plain-text shortcuts supported. `ARTICLE_DEFAULT_DOMAINS` frozenset (15 dev-reading platforms) added to `validators.py`. URL rejection message now includes the hint: "If this is an article you'd like to track, try /allowlist <domain> first." Migration v3→v4 adds `allowed_domains(chat_id, domain, added_at, PRIMARY KEY(chat_id, domain))`.
@@ -20,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Photo batches use `media_group_id` debounce, not explicit commands (#137, ADR-0024)** — removed `/photoBatch-start` / `/photoBatch-end` and all supporting helpers. The webhook now branches on Telegram's `message.media_group_id`: `_accumulate_media_group` rpushes each photo to Redis behind a 1-second asyncio debounce, then `_process_media_group` downloads the whole group, runs it through `call_gemini_photo_links`, and sends one unified result. A `_BATCH_TASKS` registry is popped under `try/finally` so a failed group can't leak its debounce task.
+- **Photo replies drop the redundant Quick Links footer (#136)** — `build_enriched_links_message` no longer appends a separate Quick Links section.
 - **Sheets workbook consolidated into one ID with named tabs (#59)** — replaced `GOOGLE_SHEETS_ID_SHORT` / `_LONG` / `_PRD` env vars with a single `GOOGLE_SHEETS_ID`. `_append_sync` now takes a `tab_name` argument and writes to `"<tab>!A1"` (tab-qualified A1 notation). Tab routing is enforced in code (`src/services/sheets.py`): long → `YouTube Transcript Index`, short → `Short Video Analysis`, PRD → `mini PRD`. The `Article Analysis` tab is reserved for the upcoming article pipeline (#62). See ADR-0013.
 - **Long-video status message collapses to one** — the initial "🔊 Analyzing your video..." message now edits in-place to "🍪 Transcript done, now sent to Drive" via `editMessageText` instead of sending a second message, reducing chat noise during processing.
 - **Template command reception message** — replaced `"📥 Received with **{template}** template!"` with `"📥 Received\n✨ Kicking off Gemini analysis ({template})"` in both the one-shot (`/method <url>`) and two-step (`/method` → URL) paths to reflect the intent-first UX.
@@ -93,5 +105,6 @@ The pre-release baseline: bot accepts Telegram URLs, classifies short vs long, r
 
 - `.dockerignore` added to keep `.env`, local `data/`, and `docs/` out of built images.
 
-[Unreleased]: https://github.com/Leon-87-7/vig/compare/main...feat/issue-7-intent-slot
+[Unreleased]: https://github.com/Leon-87-7/vig/compare/v0.2.0...main
+[0.2.0]: https://github.com/Leon-87-7/vig/compare/v0.1.0-pre...v0.2.0
 [0.1.0-pre]: https://github.com/Leon-87-7/vig/commits/main
