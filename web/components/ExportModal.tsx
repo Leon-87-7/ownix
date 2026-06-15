@@ -37,7 +37,7 @@ function printMarkdown(spaceName: string, markdown: string) {
 export default function ExportModal({ spaceId, spaceName, onClose }: ExportModalProps) {
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const { trigger, status: gdocStatus, error: gdocError, resultUrl: gdocUrl } = useGdocExport(spaceId);
+  const { trigger, status: gdocStatus, error: gdocError, errorCode: gdocErrorCode, resultUrl: gdocUrl } = useGdocExport(spaceId);
 
   const safeName = spaceName.replace(/[/\\:*?"<>|]/g, "_");
 
@@ -98,7 +98,15 @@ export default function ExportModal({ spaceId, spaceName, onClose }: ExportModal
                 <a href={gdocUrl} target="_blank" rel="noopener noreferrer" className="underline transition-ui hover:text-signal">Open</a>
               </p>
             )}
-            {gdocStatus === "error" && gdocError && (
+            {gdocStatus === "error" && gdocError && gdocErrorCode === "drive_not_configured" && (
+              <div className="mt-4 rounded-lg border border-line bg-canvas p-3">
+                <p className="text-sm text-status-error">{gdocError}</p>
+                <button onClick={handlePrint} className="mt-3 rounded-md border border-line-strong bg-raised px-3 py-2 text-sm font-medium text-ink transition-ui hover:border-signal">
+                  Save as PDF instead
+                </button>
+              </div>
+            )}
+            {gdocStatus === "error" && gdocError && gdocErrorCode !== "drive_not_configured" && (
               <p className="mt-4 text-sm text-status-error">{gdocError}</p>
             )}
           </>

@@ -118,18 +118,8 @@
 
 ## Needs Triage
 
-|                                                   # | Title                                                                 | Area         | Depends On |
-| --------------------------------------------------: | --------------------------------------------------------------------- | ------------ | ---------- |
-| [#117](https://github.com/Leon-87-7/vig/issues/117) | ExportModal: restore PDF fallback when Google Drive is not configured | Web / Spaces | —          |
-| [#150](https://github.com/Leon-87-7/vig/issues/150) | feat(storage): add GCS-backed content-addressed storage seam          | Platform / Storage | — |
-| [#151](https://github.com/Leon-87-7/vig/issues/151) | feat(document): ingest Telegram file uploads into document jobs       | Telegram / Document | #150 |
-| [#152](https://github.com/Leon-87-7/vig/issues/152) | feat(document): route direct document URLs before article allowlist   | Routing / Document | #150 |
-| [#153](https://github.com/Leon-87-7/vig/issues/153) | feat(document): add vig-document liteparse sidecar                    | Document / Sidecar | #150 |
-| [#154](https://github.com/Leon-87-7/vig/issues/154) | feat(document): parse cache and automatic Gemini enrichment           | Document Pipeline | #151, #152, #153 |
-| [#155](https://github.com/Leon-87-7/vig/issues/155) | feat(document): deliver plain text and enrichment summary in Telegram | Telegram / Document | #154 |
-| [#156](https://github.com/Leon-87-7/vig/issues/156) | feat(document): render Markdown on demand from cached plain text      | Document / Markdown | #154, #155 |
-| [#157](https://github.com/Leon-87-7/vig/issues/157) | feat(document): support Freestyle re-runs from cached parse           | Document / Templates | #154, #155 |
-| [#158](https://github.com/Leon-87-7/vig/issues/158) | feat(exports): add opt-in Document Analysis export hook               | Exports / Sheets | #154 |
+|                                                   # | Title | Area | Depends On |
+| --------------------------------------------------: | ----- | ---- | ---------- |
 
 ---
 
@@ -139,7 +129,15 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                      | Area               | Depends On |
 | --------------------------------------------------: | ---------------------------------------------------------- | ------------------ | ---------- |
-| — | *(no open issues — all shipped)* | — | — |
+| [#150](https://github.com/Leon-87-7/vig/issues/150) | feat(storage): add GCS-backed content-addressed storage seam | Platform / Storage | — |
+| [#151](https://github.com/Leon-87-7/vig/issues/151) | feat(document): ingest Telegram file uploads into document jobs | Telegram / Document | #150 |
+| [#152](https://github.com/Leon-87-7/vig/issues/152) | feat(document): route direct document URLs before article allowlist | Routing / Document | #150 |
+| [#153](https://github.com/Leon-87-7/vig/issues/153) | feat(document): add vig-document liteparse sidecar | Document / Sidecar | #150 |
+| [#154](https://github.com/Leon-87-7/vig/issues/154) | feat(document): parse cache and automatic Gemini enrichment | Document Pipeline | #151, #152, #153 |
+| [#155](https://github.com/Leon-87-7/vig/issues/155) | feat(document): deliver plain text and enrichment summary in Telegram | Telegram / Document | #154 |
+| [#158](https://github.com/Leon-87-7/vig/issues/158) | feat(exports): add opt-in Document Analysis export hook | Exports / Sheets | #154 |
+| [#156](https://github.com/Leon-87-7/vig/issues/156) | feat(document): render Markdown on demand from cached plain text | Document / Markdown | #154, #155 |
+| [#157](https://github.com/Leon-87-7/vig/issues/157) | feat(document): support Freestyle re-runs from cached parse | Document / Templates | #154, #155 |
 
 ---
 

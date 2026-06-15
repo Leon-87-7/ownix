@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   ChevronRight,
   ChevronLeft,
+  Github,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -281,20 +282,37 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Expand navigation"
-          aria-expanded={open}
-          aria-controls="vig-nav-panel"
-          className="mt-auto flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
-        >
-          <ChevronRight
-            className="h-[18px] w-[18px]"
-            strokeWidth={2}
-            aria-hidden="true"
-          />
-        </button>
+        <div className="mt-auto flex flex-col items-center gap-1">
+          <a
+            href="https://github.com/Leon-87-7/vig"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub repository"
+            title="GitHub repository"
+            tabIndex={open ? -1 : undefined}
+            className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
+          >
+            <Github
+              className="h-[18px] w-[18px]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          </a>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="Expand navigation"
+            aria-expanded={open}
+            aria-controls="vig-nav-panel"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
+          >
+            <ChevronRight
+              className="h-[18px] w-[18px]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          </button>
+        </div>
       </div>
 
       {/* Backdrop */}
@@ -350,7 +368,21 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-1">
+          <a
+            href="https://github.com/Leon-87-7/vig"
+            target="_blank"
+            rel="noopener noreferrer"
+            tabIndex={open ? undefined : -1}
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+          >
+            <Github
+              className="h-[18px] w-[18px] shrink-0"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            GitHub
+          </a>
           <form
             action="/api/auth/logout"
             method="POST"

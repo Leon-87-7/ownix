@@ -24,6 +24,7 @@ describe('useGdocExport', () => {
     act(() => { void result.current.trigger(); });
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.error).toContain('Google Drive is not configured');
+    expect(result.current.errorCode).toBe('drive_not_configured');
   });
 
   it('surfaces the server detail on other failures', async () => {
@@ -34,5 +35,6 @@ describe('useGdocExport', () => {
     act(() => { void result.current.trigger(); });
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.error).toBe('boom');
+    expect(result.current.errorCode).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 # vig — Video Intelligence Gateway
 
-Telegram bot that processes short videos, long videos, and dev articles into structured AI analysis, stores everything in Google Drive + Sheets, and builds a searchable semantic Second Brain.
+Telegram bot that processes short videos, long videos, and dev articles into structured AI analysis, stores everything in Google Drive + Sheets, and builds a searchable semantic Second Brain — with a Next.js web dashboard ("The Operator's Console") for browsing the results.
 
 Replaced a 60-node n8n workflow.
 
@@ -11,9 +11,10 @@ Replaced a 60-node n8n workflow.
 - **Short video pipeline** — YouTube Shorts, Instagram Reels, TikTok: frame extraction → Gemini Vision analysis → Brave Search link verification → Drive upload
 - **Long video pipeline** — YouTube: transcript extraction → Drive upload → Gemini enrichment (topic, objective, action points, tools, promise-gap) → optional Mini-PRD spec generation
 - **Article pipeline** — Substack, Medium, dev.to, Ghost, Hashnode + per-chat allowlist: Jina Reader fetch → markdown cache → paywall heuristic → Gemini analysis → Sheets → Brain
-- **Photo OCR** — Screenshot link extraction with verbatim-grounded anti-hallucination filter
+- **Photo OCR** — Screenshot link extraction with verbatim-grounded anti-hallucination filter; multi-image sends are auto-batched via Telegram's `media_group_id` (no command needed) into one unified result
 - **Second Brain** — Semantic link graph (Gemini embeddings + NumPy cosine similarity) searchable via `/find`
 - **Mini-PRD** — AI-generated product specs from long-video transcripts; two slots: auto (Flash) and intent (Pro, user-directed)
+- **Web dashboard** — "The Operator's Console": a Next.js 14 (App Router) operator UI under `web/` for browsing processed jobs (feed with per-type tabs + server-resolved thumbnails), the brain link graph, spaces, prompts, and per-job detail views
 
 ---
 
@@ -106,9 +107,8 @@ curl https://your-domain.com/health    # → {"status":"ok"}
 | `/download_md <url>` | Fetch any URL as clean Markdown via Jina (no job created) |
 | `/ignore <domain>` | Block domain from short-video link extraction |
 | `/rebuild-graph` | Recompute all Second Brain Obsidian `.md` nodes |
-| `/photoBatch-start` `/photoBatch-end` | Batch-process screenshots in a 5-min window |
 
-Plain-text shortcuts work for most commands — `find <query>` is equivalent to `/find <query>`.
+Plain-text shortcuts work for most commands — `find <query>` is equivalent to `/find <query>`. Screenshots no longer need batch commands — send several at once and they're grouped automatically.
 
 ---
 
@@ -174,6 +174,15 @@ RUN_INTEGRATION=1 pytest tests/ -v
 
 # Lint
 ruff check src/
+```
+
+### Web dashboard (`web/`)
+
+```bash
+cd web
+npm install
+npm run dev                  # Next.js dev server
+npm test                     # Vitest (watch) — or test:run / test:coverage
 ```
 
 ### Database migrations
@@ -312,6 +321,12 @@ tests/                   # pytest + pytest-asyncio (159 tests)
 transcript_server.py     # Flask+Waitress sidecar :5151 (yt-dlp + ffmpeg + youtube-transcript-api)
 docker-compose.yml
 .env.example
+
+web/                     # Next.js 14 dashboard — "The Operator's Console"
+├── app/                 # feed (home), brain, spaces, prompts, controls, jobs/[id], login
+├── components/          # PlatformIcon, job cards, sidebar rail/drawer, VIG branding
+├── lib/                 # useFeedData + job-detail utilities
+└── *.test.tsx           # Vitest + React Testing Library + MSW
 ```
 
 ---
