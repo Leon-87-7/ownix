@@ -266,13 +266,33 @@ async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
 # GET /api/jobs/{job_id}
 # ---------------------------------------------------------------------------
 
-_DETAIL_FIELDS = (
+# Fields common to all content types
+_DETAIL_FIELDS_COMMON = (
     "id", "url", "content_type", "status", "title",
     "created_at", "updated_at", "completed_at",
-    "ai_topic", "ai_objective", "ai_action_points", "ai_tools",
-    "ai_market_data", "promise_gap", "template_analysis", "template",
     "error_msg", "drive_url",
 )
+
+# Extra fields for long/article/repo jobs (AI enrichment schema)
+_DETAIL_FIELDS_LONG = (
+    "ai_topic", "ai_objective", "ai_action_points", "ai_tools",
+    "ai_market_data", "promise_gap", "template_analysis", "template",
+)
+
+# Extra fields for short jobs
+_DETAIL_FIELDS_SHORT = (
+    "summary", "transcript", "key_phrases",
+)
+
+# Legacy flat tuple kept for callers that import it directly (e.g. tests)
+_DETAIL_FIELDS = _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
+
+
+def _detail_fields_for(content_type: str) -> tuple[str, ...]:
+    """Return the full set of detail field names for a given content_type."""
+    if content_type == "short":
+        return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
+    return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
 
 
 @jobs_router.get("/{job_id}/thumbnail")
@@ -297,4 +317,5 @@ async def get_job(job_id: str, request: Request) -> dict:
     """Return full job detail for a job the caller owns."""
     job = await get_owned_job(job_id, request)
 
-    return {k: job.get(k) for k in _DETAIL_FIELDS}
+    fields = _detail_fields_for(job.get("content_type", ""))
+    return {k: job.get(k) for k in fields}

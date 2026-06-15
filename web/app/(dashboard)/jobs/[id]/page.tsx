@@ -13,6 +13,7 @@ import type { JobDetail } from "@/lib/hooks/useJobDetail";
 import {
   type RenderType,
   ENRICHMENT_FIELDS,
+  SHORT_FIELDS,
   splitPipes,
   humanizeKey,
   isEmpty,
@@ -200,7 +201,8 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
   if (fetchState === "forbidden") return <div className="text-sm text-body">Access denied. <Link href="/" className="text-signal hover:underline">Back to feed</Link></div>;
   if (fetchState === "error" || !job) return <div className="text-sm text-body">Failed to load job. <Link href="/" className="text-signal hover:underline">Back to feed</Link></div>;
 
-  const presentFields = ENRICHMENT_FIELDS.filter(({ key }) => {
+  const fieldSet = job.content_type === "short" ? SHORT_FIELDS : ENRICHMENT_FIELDS;
+  const presentFields = fieldSet.filter(({ key }) => {
     const value = job[key];
     return value !== null && value !== undefined && String(value).trim() !== "";
   });

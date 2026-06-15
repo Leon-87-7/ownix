@@ -13,6 +13,7 @@ export interface JobDetail {
   completed_at: string | null;
   error_msg: string | null;
   drive_url: string | null;
+  // Long/article/repo enrichment fields
   ai_topic: string | null;
   ai_objective: string | null;
   ai_action_points: string | null;
@@ -21,6 +22,10 @@ export interface JobDetail {
   promise_gap: string | null;
   template: string | null;
   template_analysis: string | null;
+  // Short pipeline fields
+  summary: string | null;
+  transcript: string | null;
+  key_phrases: string | null;
 }
 
 export function useJobDetail(jobId: string) {
