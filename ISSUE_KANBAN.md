@@ -102,6 +102,17 @@
 | [#133](https://github.com/Leon-87-7/vig/issues/133) | refactor(brain): extract \_select_refresh_batch + \_refresh_one_link — flatten refresh_stale_links (CC 24) | Refactor / Brain         | Committed to main; closed on GH                                                           |
 | [#136](https://github.com/Leon-87-7/vig/issues/136) | feat(photo): remove redundant Quick Links section from build_enriched_links_message                        | Photo / Webhook          | Merged; PR #138; closed on GH                                                             |
 | [#137](https://github.com/Leon-87-7/vig/issues/137) | feat(photo): replace explicit batch commands with media_group_id debounce (ADR-0024)                       | Photo / Telegram         | Merged; PR #138; closed on GH                                                             |
+| [#159](https://github.com/Leon-87-7/vig/issues/159) | Backfill short thumbnails: core script (happy path)                                                        | Pipeline / Short         | Merged; PR #149; closed on GH                                                             |
+| [#142](https://github.com/Leon-87-7/vig/issues/142) | feat(web): content-type tabs replace feed filter bar                                                       | Web / Feed               | Merged; PR #149; closed on GH                                                             |
+| [#143](https://github.com/Leon-87-7/vig/issues/143) | feat(api): server-resolved thumbnail_url on /api/jobs                                                      | API / Jobs               | Merged; PR #149; closed on GH                                                             |
+| [#144](https://github.com/Leon-87-7/vig/issues/144) | feat(web): preview-card grid for typed feed tabs                                                           | Web / Feed               | Merged; PR #149; closed on GH                                                             |
+| [#145](https://github.com/Leon-87-7/vig/issues/145) | feat(web): brand-icon badges in All-tab feed rows                                                          | Web / Feed               | Merged; PR #149; closed on GH                                                             |
+| [#146](https://github.com/Leon-87-7/vig/issues/146) | feat(short): persist best frame as job thumbnail (Phase 2)                                                 | Pipeline / Short         | Merged; PR #149; closed on GH                                                             |
+| [#147](https://github.com/Leon-87-7/vig/issues/147) | feat(article): scrape og:image as job thumbnail (Phase 2)                                                  | Pipeline / Article       | Merged; PR #149; closed on GH                                                             |
+| [#148](https://github.com/Leon-87-7/vig/issues/148) | chore(article): one-shot og:image backfill script                                                          | Pipeline / Article       | Merged; PR #149; closed on GH                                                             |
+| [#160](https://github.com/Leon-87-7/vig/issues/160) | ADR-0025 follow-up note: historical short thumbnails are re-derivable                                      | Docs / ADR               | Closed on GH                                                                              |
+| [#161](https://github.com/Leon-87-7/vig/issues/161) | Backfill short thumbnails: frame-selection strategies (rerun-vision, fallbacks)                            | Pipeline / Short         | Closed on GH                                                                              |
+| [#162](https://github.com/Leon-87-7/vig/issues/162) | Backfill short thumbnails: --overwrite-existing clobber-safety flag                                        | Pipeline / Short         | Closed on GH                                                                              |
 
 ---
 
@@ -128,17 +139,7 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                      | Area               | Depends On |
 | --------------------------------------------------: | ---------------------------------------------------------- | ------------------ | ---------- |
-| [#142](https://github.com/Leon-87-7/vig/issues/142) | feat(web): content-type tabs replace feed filter bar       | Web / Feed         | —          |
-| [#143](https://github.com/Leon-87-7/vig/issues/143) | feat(api): server-resolved thumbnail_url on /api/jobs      | API / Jobs         | —          |
-| [#145](https://github.com/Leon-87-7/vig/issues/145) | feat(web): brand-icon badges in All-tab feed rows          | Web / Feed         | #142       |
-| [#144](https://github.com/Leon-87-7/vig/issues/144) | feat(web): preview-card grid for typed feed tabs           | Web / Feed         | #142, #143 |
-| [#146](https://github.com/Leon-87-7/vig/issues/146) | feat(short): persist best frame as job thumbnail (Phase 2) | Pipeline / Short   | #144       |
-| [#147](https://github.com/Leon-87-7/vig/issues/147) | feat(article): scrape og:image as job thumbnail (Phase 2)  | Pipeline / Article | #144       |
-| [#148](https://github.com/Leon-87-7/vig/issues/148) | chore(article): one-shot og:image backfill script          | Pipeline / Article | #147       |
-| [#159](https://github.com/Leon-87-7/vig/issues/159) | Backfill short thumbnails: core script (happy path)        | Pipeline / Short   | —          |
-| [#160](https://github.com/Leon-87-7/vig/issues/160) | ADR-0025 follow-up note: historical short thumbs re-derivable | Docs / ADR      | —          |
-| [#161](https://github.com/Leon-87-7/vig/issues/161) | Backfill short thumbnails: frame-selection strategies      | Pipeline / Short   | #159       |
-| [#162](https://github.com/Leon-87-7/vig/issues/162) | Backfill short thumbnails: --overwrite-existing flag       | Pipeline / Short   | #159       |
+| — | *(no open issues — all shipped)* | — | — |
 
 ---
 
@@ -299,14 +300,14 @@ All independent — no blockers, all AFK, behavior-preserving (existing suite st
 
 Feed tab redesign + server-resolved thumbnails (ADR-0025 — grill session 2026-06-13)
 Phase 1 (frontend + thin backend resolver, no migration):
-#142 content-type tabs replace feed filter bar (root — unblocked)
-#143 server-resolved thumbnail_url on /api/jobs (root — unblocked)
-└── #144 preview-card grid for typed feed tabs ◄── #142, #143
-    ├── #146 persist short best frame as job thumbnail (Phase 2)
-    └── #147 scrape article og:image as job thumbnail (Phase 2)
-        └── #148 one-shot og:image backfill script
-#145 brand-icon badges in All-tab feed rows ◄── #142 (independent of #143–#144)
-Critical path: #142/#143 → #144 → #146/#147 → #148
+#142 content-type tabs replace feed filter bar ✅-Done (PR #149)
+#143 server-resolved thumbnail_url on /api/jobs ✅-Done (PR #149)
+└── #144 preview-card grid for typed feed tabs ✅-Done (PR #149) ◄── #142, #143
+    ├── #146 persist short best frame as job thumbnail (Phase 2) ✅-Done (PR #149)
+    └── #147 scrape article og:image as job thumbnail (Phase 2) ✅-Done (PR #149)
+        └── #148 one-shot og:image backfill script ✅-Done (PR #149)
+#145 brand-icon badges in All-tab feed rows ✅-Done (PR #149) ◄── #142
+Critical path: #142/#143 → #144 → #146/#147 → #148 (all ✅-Done)
 
 Document pipeline (ADR-0023: docs/adr/0023-liteparse-document-pipeline.md + docs/roadmap.md)
 #150 GCS content-addressed storage seam (root — unblocked)
@@ -321,11 +322,11 @@ Document pipeline (ADR-0023: docs/adr/0023-liteparse-document-pipeline.md + docs
 Critical path: #150 → {#151, #152, #153} → #154 → #155 → {#156, #157}; #158 can follow #154 in parallel
 
 Short-thumbnail backfill (docs/backfill_agreed_plan.md — ADR-0025 Phase-2 follow-up)
-#159 core script (happy path) (root — unblocked)
-├── #161 frame-selection strategies (rerun-vision, fallbacks)
-└── #162 --overwrite-existing clobber-safety flag
-#160 ADR-0025 follow-up note (independent — doc only)
-Critical path: #159 → {#161, #162}; #160 parallel
+#159 core script (happy path) ✅-Done (PR #149)
+├── #161 frame-selection strategies (rerun-vision, fallbacks) ✅-Done
+└── #162 --overwrite-existing clobber-safety flag ✅-Done
+#160 ADR-0025 follow-up note (independent — doc only) ✅-Done
+Critical path: #159 → {#161, #162}; #160 parallel (all ✅-Done)
 ```
 
 ---
@@ -340,6 +341,8 @@ Critical path: #159 → {#161, #162}; #160 parallel
 
 |                                                 # | Title                                                                                                  | Branch→Base                                | Linked Issue        | Status    |
 | ------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------- | --------- |
+| [#163](https://github.com/Leon-87-7/vig/pull/163) | fix(article/backfill): continue og:image scan on bad scheme; SQL LIMIT on short backfill               | fix/greptile-149-followup→main             | —                   | ✅ Merged |
+| [#149](https://github.com/Leon-87-7/vig/pull/149) | Resolve feed thumbnail issues #142-#148                                                                | codex-issues-142-148-feed-thumbnails→main  | —                   | ✅ Merged |
 | [#141](https://github.com/Leon-87-7/vig/pull/141) | feat(web): Operator's Console design system — spec, tokens, drawer nav, full migration                 | feat/operators-console-design→main         | —                   | ✅ Merged |
 | [#140](https://github.com/Leon-87-7/vig/pull/140) | refactor: drive pyscn + fallow static-analysis gates to green                                          | refactor/static-analysis-green→main        | —                   | ✅ Merged |
 | [#139](https://github.com/Leon-87-7/vig/pull/139) | feat(photo): media_group_id debounce replaces photoBatch commands (#137)                               | worktree-agent-ab8d0c4a71e30b5f7→main      | #137                | ❌ Closed |
