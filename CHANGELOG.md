@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **og:image scan no longer aborts on invalid-scheme tags** — `_extract_og_image_url` now `continue`s past `data:`/`javascript:` og:image meta tags instead of returning `None` immediately, so a valid `https://` URL that follows an invalid one is no longer silently dropped (PR #163).
+- **og:image scheme validation** — non-http(s) URLs (e.g. `data:` base64 blobs) are now rejected before being stored in `og_image_url`, preventing oversized values from being echoed in every `/api/jobs` response (PR #163).
+- **Short-thumbnail backfill memory bound** — `backfill_short_thumbnails._load_candidates` now applies `--limit` at the SQL level (`LIMIT ?`) rather than loading the full table and slicing in Python, matching the article backfill pattern (PR #163).
+
 ## [0.2.0] - 2026-06-14
 
 The dashboard release: VIG gains a browsable web operator console alongside the
