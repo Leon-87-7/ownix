@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import time
 from datetime import datetime, timezone
@@ -145,8 +146,6 @@ async def _deliver_media(
     chat_id: int, tag: str, raw_frames: list, main_idx: int, summary: str, links: list[dict]
 ) -> tuple[int | None, list[dict]]:
     """Send best frame + links message; return (anchor message_id, enriched links)."""
-    import base64
-
     best_frame_bytes = base64.b64decode(raw_frames[main_idx]["base64"])
     photo_result = await send_photo(chat_id, best_frame_bytes, caption=f"{tag}\n🖼️ Main frame: {summary}")
     bot_message_id: int | None = photo_result.get("message_id")
@@ -156,6 +155,36 @@ async def _deliver_media(
         links_result = await send_message(chat_id, f"{tag}\n{build_enriched_links_message(links)}")
         bot_message_id = links_result.get("message_id", bot_message_id)
     return bot_message_id, links
+
+
+def _should_persist_thumbnail(platform: str) -> bool:
+    normalized = platform.lower()
+    return "instagram" in normalized or "tiktok" in normalized
+
+
+async def _persist_best_frame_thumbnail(
+    job_id: str, platform: str, raw_frames: list, main_idx: int
+) -> None:
+    if not _should_persist_thumbnail(platform) or not raw_frames:
+        return
+
+    frame = raw_frames[main_idx]
+    try:
+        best_frame_bytes = base64.b64decode(frame["base64"])
+    except Exception as exc:
+        log.warning("short_thumbnail_decode_failed", job_id=job_id, error=str(exc)[:120])
+        return
+
+    try:
+        await database.save_thumbnail(
+            job_id,
+            best_frame_bytes,
+            mime=frame.get("mime_type", "image/jpeg"),
+            width=frame.get("width"),
+            height=frame.get("height"),
+        )
+    except Exception as exc:
+        log.warning("short_thumbnail_save_failed", job_id=job_id, error=str(exc)[:120])
 
 
 async def run(job: dict) -> None:
@@ -180,6 +209,7 @@ async def run(job: dict) -> None:
     # 2. Gemini Vision analysis
     vision = await gemini.call_gemini_vision(raw_frames)
     main_idx = max(0, min(vision.get("main_frame_index", 0), len(raw_frames) - 1))
+    await _persist_best_frame_thumbnail(job_id, platform, raw_frames, main_idx)
     summary = vision.get("summary", "")
     ignored = await database.get_ignored_domains(chat_id)
     links: list[dict] = filter_vision_links(vision.get("links", []), extra_ignored=ignored)
@@ -207,6 +237,9 @@ async def run(job: dict) -> None:
         drive_url=drive_url,
         title=title,
         processing_time_ms=elapsed_ms,
+        best_frame_index=main_idx,
+        platform=platform,
+        video_id=video_id,
     )
 
     # 6+7. Send best frame photo, then links message (its message_id wins as anchor)

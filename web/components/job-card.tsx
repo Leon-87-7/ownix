@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { StatusBadge, TypeBadge } from "@/components/badges";
+import { StatusBadge } from "@/components/badges";
+import { PlatformBadge } from "@/components/platform-icon";
 
 export interface JobSummary {
   id: string;
@@ -8,6 +9,8 @@ export interface JobSummary {
   content_type: string;
   status: string;
   created_at: string;
+  thumbnail_url?: string | null;
+  thumbnail_kind?: "landscape" | "portrait" | null;
 }
 
 interface JobCardProps {
@@ -27,8 +30,8 @@ export function JobCard({ job }: JobCardProps) {
           {display}
         </p>
         <div className="flex shrink-0 gap-1.5">
-          <TypeBadge label={job.content_type} />
           <StatusBadge label={job.status} />
+          <PlatformBadge url={job.url} contentType={job.content_type} />
         </div>
       </div>
       <p className="mt-1 font-mono text-xs text-muted">

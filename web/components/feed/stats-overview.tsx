@@ -16,12 +16,6 @@ export function StatsOverview({ stats }: { stats: FeedStats }) {
           valueClass="text-status-processing"
         />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Short" value={stats.by_content_type.short ?? 0} />
-        <StatCard label="Long" value={stats.by_content_type.long ?? 0} />
-        <StatCard label="Article" value={stats.by_content_type.article ?? 0} />
-        <StatCard label="Repo" value={stats.by_content_type.repo ?? 0} />
-      </div>
     </section>
   );
 }

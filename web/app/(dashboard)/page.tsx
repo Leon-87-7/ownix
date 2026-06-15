@@ -1,12 +1,17 @@
 "use client";
 
+import { Suspense, useCallback, useEffect, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useFeedData } from "@/lib/hooks/useFeedData";
 import { useFuseSearch } from "@/lib/hooks/useFuseSearch";
 import { useInFlightPolling } from "@/lib/hooks/useInFlightPolling";
 import { JobCard } from "@/components/job-card";
 import { StatsOverview } from "@/components/feed/stats-overview";
 import { FilterBar } from "@/components/feed/filter-bar";
-import { SkeletonList, ErrorBanner, EmptyState } from "@/components/feed/feed-states";
+import { SkeletonGrid, SkeletonList, ErrorBanner, EmptyState } from "@/components/feed/feed-states";
+import { PreviewGrid } from "@/components/feed/preview-grid";
+
+const CONTENT_TYPES = new Set(["short", "long", "article", "repo"]);
 
 function jobCountLabel(firstLoad: boolean, loading: boolean, query: string, shown: number, total: number): string {
   if (firstLoad) return "loading…";
@@ -15,19 +20,45 @@ function jobCountLabel(firstLoad: boolean, loading: boolean, query: string, show
   return `${total} job${total === 1 ? "" : "s"}`;
 }
 
-export default function FeedPage() {
-  const { ctFilter, setCtFilter, stFilter, setStFilter, stats, jobs, total, loading, error, reload } = useFeedData();
+function normalizeContentType(value: string | null): string {
+  return value && CONTENT_TYPES.has(value) ? value : "";
+}
+
+function FeedPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlContentType = normalizeContentType(searchParams.get("type"));
+  const { ctFilter, setCtFilter, stFilter, setStFilter, stats, jobs, total, loading, error, reload } = useFeedData(urlContentType);
   const { query, setQuery, displayedJobs } = useFuseSearch(jobs);
   useInFlightPolling(jobs, reload);
 
+  useEffect(() => {
+    setCtFilter(urlContentType);
+  }, [urlContentType, setCtFilter]);
+
+  const setContentType = useCallback((value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set("type", value);
+    } else {
+      params.delete("type");
+    }
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    setCtFilter(value);
+  }, [pathname, router, searchParams, setCtFilter]);
+
+  const contentTypeCounts = useMemo(() => stats?.by_content_type ?? {}, [stats]);
   const firstLoad = loading && jobs.length === 0 && !error;
+  const showPreviewGrid = Boolean(ctFilter);
   const hasFilters = Boolean(ctFilter || stFilter || query.trim());
   const empty = !loading && !error && displayedJobs.length === 0;
 
   const countLabel = jobCountLabel(firstLoad, loading, query, displayedJobs.length, total);
 
   const clearAll = () => {
-    setCtFilter("");
+    setContentType("");
     setStFilter("");
     setQuery("");
   };
@@ -40,7 +71,8 @@ export default function FeedPage() {
 
       <FilterBar
         query={query} setQuery={setQuery}
-        ctFilter={ctFilter} setCtFilter={setCtFilter}
+        ctFilter={ctFilter} setCtFilter={setContentType}
+        contentTypeCounts={contentTypeCounts} totalCount={stats?.total ?? 0}
         stFilter={stFilter} setStFilter={setStFilter}
       />
 
@@ -56,17 +88,29 @@ export default function FeedPage() {
         </div>
 
         {error && <ErrorBanner message={error} onRetry={() => reload()} />}
-        {firstLoad && <SkeletonList />}
+        {firstLoad && (showPreviewGrid ? <SkeletonGrid /> : <SkeletonList />)}
         {empty && <EmptyState hasFilters={hasFilters} onClear={clearAll} />}
 
         {!firstLoad && (
-          <div className="space-y-2">
-            {displayedJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
+          showPreviewGrid ? (
+            <PreviewGrid jobs={displayedJobs} />
+          ) : (
+            <div className="space-y-2">
+              {displayedJobs.map((job) => (
+                <JobCard key={job.id} job={job} />
+              ))}
+            </div>
+          )
         )}
       </section>
     </div>
+  );
+}
+
+export default function FeedPage() {
+  return (
+    <Suspense fallback={null}>
+      <FeedPageContent />
+    </Suspense>
   );
 }

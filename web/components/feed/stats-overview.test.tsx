@@ -27,14 +27,6 @@ describe('StatsOverview', () => {
     expect(screen.getByText('13')).toBeTruthy();
   });
 
-  it('renders content type counts', () => {
-    render(<StatsOverview stats={makeStats()} />);
-    expect(screen.getByText('15')).toBeTruthy(); // short
-    expect(screen.getByText('10')).toBeTruthy(); // long
-    expect(screen.getByText('8')).toBeTruthy();  // article
-    expect(screen.getByText('9')).toBeTruthy();  // repo
-  });
-
   it('renders zero when by_status keys are missing', () => {
     render(<StatsOverview stats={makeStats({ by_status: {}, by_content_type: {} })} />);
     // All counts should be 0 except total
@@ -49,10 +41,6 @@ describe('StatsOverview', () => {
     expect(screen.getByText('Pending')).toBeTruthy();
     expect(screen.getByText('Error')).toBeTruthy();
     expect(screen.getByText('Processing')).toBeTruthy();
-    expect(screen.getByText('Short')).toBeTruthy();
-    expect(screen.getByText('Long')).toBeTruthy();
-    expect(screen.getByText('Article')).toBeTruthy();
-    expect(screen.getByText('Repo')).toBeTruthy();
   });
 
   it('renders overview section heading', () => {

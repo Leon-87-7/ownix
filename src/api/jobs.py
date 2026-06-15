@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Literal
+from urllib.parse import parse_qs, urlparse
+
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from src import database
 from src.api.deps import get_owned_job
 from src.utils.logger import get_logger
+from src.utils.validators import detect_pipeline, normalize_repo_url
 
 log = get_logger(__name__)
 
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+ThumbnailKind = Literal["landscape", "portrait"]
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +58,76 @@ async def get_job_stats(request: Request) -> dict:
 # GET /api/jobs
 # ---------------------------------------------------------------------------
 
+def _youtube_video_id(url: str) -> str | None:
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    path = parsed.path or ""
+
+    if host.endswith("youtube.com") and path == "/watch":
+        return parse_qs(parsed.query).get("v", [""])[0] or None
+    if host == "youtu.be" and len(path) > 1:
+        return path.strip("/").split("/", 1)[0] or None
+    if host.endswith("youtube.com") and path.startswith("/shorts/"):
+        return path.removeprefix("/shorts/").split("/", 1)[0] or None
+    return None
+
+
+def _github_repo_path(url: str) -> str | None:
+    if detect_pipeline(url) != "repo":
+        return None
+
+    normalized = normalize_repo_url(url)
+    segments = [segment for segment in urlparse(normalized).path.split("/") if segment]
+    if len(segments) < 2:
+        return None
+    return f"{segments[0]}/{segments[1]}"
+
+
+def _stored_thumbnail_url(job_id: str) -> str:
+    return f"/api/jobs/{job_id}/thumbnail"
+
+
+def _is_persistable_short_platform(url: str) -> bool:
+    host = (urlparse(url.strip()).hostname or "").lower().removeprefix("www.")
+    return host.endswith("instagram.com") or host.endswith("tiktok.com")
+
+
+async def _resolve_thumbnail(
+    job: dict, stored_ids: set[str] | None = None
+) -> tuple[str | None, ThumbnailKind | None]:
+    """Return the server-resolved thumbnail URL and aspect hint for a list item."""
+    url = job["url"]
+    content_type = job["content_type"]
+
+    if content_type == "article" and job.get("og_image_url"):
+        return job["og_image_url"], "landscape"
+
+    if content_type == "long" and detect_pipeline(url) == "long":
+        video_id = _youtube_video_id(url)
+        if video_id:
+            return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "landscape"
+
+    if content_type == "repo":
+        repo_path = _github_repo_path(url)
+        if repo_path:
+            return f"https://opengraph.githubassets.com/0/{repo_path}", "landscape"
+
+    if content_type == "short" and detect_pipeline(url) == "short":
+        video_id = _youtube_video_id(url)
+        if video_id:
+            return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "portrait"
+        if _is_persistable_short_platform(url):
+            has_stored = (
+                job["id"] in stored_ids
+                if stored_ids is not None
+                else await database.has_thumbnail(job["id"])
+            )
+            if has_stored:
+                return _stored_thumbnail_url(job["id"]), "portrait"
+
+    return None, None
+
+
 @jobs_router.get("")
 async def list_jobs(
     request: Request,
@@ -85,7 +161,7 @@ async def list_jobs(
 
         cur_items = await conn.execute(
             f"""
-            SELECT id, title, content_type, status, url, created_at
+            SELECT id, title, content_type, status, url, created_at, og_image_url
             FROM jobs
             WHERE {where}
             ORDER BY created_at DESC
@@ -94,7 +170,18 @@ async def list_jobs(
             [*params, limit, offset],
         )
         rows = await cur_items.fetchall()
-        items = [dict(row) for row in rows]
+
+    # First connection released; resolve thumbnails with a single follow-up query.
+    short_ids = [
+        r["id"] for r in rows
+        if r["content_type"] == "short" and _is_persistable_short_platform(r["url"])
+    ]
+    stored_ids = await database.get_thumbnail_job_ids(short_ids)
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["thumbnail_url"], item["thumbnail_kind"] = await _resolve_thumbnail(item, stored_ids)
+        items.append(item)
 
     return {
         "items": items,
@@ -186,6 +273,23 @@ _DETAIL_FIELDS = (
     "ai_market_data", "promise_gap", "template_analysis", "template",
     "error_msg", "drive_url",
 )
+
+
+@jobs_router.get("/{job_id}/thumbnail")
+async def get_job_thumbnail(job_id: str, request: Request) -> Response:
+    """Return a persisted thumbnail for an owned job."""
+    await get_owned_job(job_id, request)
+    thumbnail = await database.get_thumbnail(job_id)
+    if thumbnail is None:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    # Never echo back a non-image content type, even for rows stored before the
+    # save-time allowlist existed — keeps the browser from sniffing active content.
+    mime = (
+        thumbnail["mime"]
+        if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES
+        else "image/jpeg"
+    )
+    return Response(content=thumbnail["bytes"], media_type=mime)
 
 
 @jobs_router.get("/{job_id}")

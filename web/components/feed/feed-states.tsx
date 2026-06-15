@@ -13,6 +13,22 @@ function SkeletonRow() {
   );
 }
 
+function SkeletonPreviewCard() {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-3">
+      <div className="aspect-video animate-pulse rounded-md border border-line bg-raised" />
+      <div className="mt-3 space-y-2">
+        <div className="h-4 w-5/6 animate-pulse rounded bg-raised" />
+        <div className="h-4 w-2/3 animate-pulse rounded bg-raised" />
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="h-3 w-24 animate-pulse rounded bg-raised" />
+          <div className="h-4 w-14 animate-pulse rounded bg-raised" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SkeletonList() {
   return (
     <div className="space-y-2" aria-hidden="true">
@@ -21,6 +37,19 @@ export function SkeletonList() {
       <SkeletonRow />
       <SkeletonRow />
       <SkeletonRow />
+    </div>
+  );
+}
+
+export function SkeletonGrid() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      <SkeletonPreviewCard />
+      <SkeletonPreviewCard />
+      <SkeletonPreviewCard />
+      <SkeletonPreviewCard />
+      <SkeletonPreviewCard />
+      <SkeletonPreviewCard />
     </div>
   );
 }

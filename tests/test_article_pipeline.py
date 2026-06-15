@@ -68,6 +68,7 @@ async def temp_db():
 @pytest.fixture(autouse=True)
 def _mock_edit_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.processors.article.edit_message_text", AsyncMock())
+    monkeypatch.setattr("src.processors.article._fetch_og_image_url", AsyncMock(return_value=None))
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,30 @@ _GEMINI_RESPONSE = json.dumps({
     "tools": [{"name": "asyncio", "type": "library", "url": "https://docs.python.org/asyncio", "description": "Python async lib"}],
     "promise_gap": {"gaps": [], "hidden_value": ["Real perf gains"]},
 })
+
+
+def test_extract_og_image_url_absolute_and_relative() -> None:
+    from src.processors.article import _extract_og_image_url
+
+    assert _extract_og_image_url(
+        '<html><head><meta property="og:image" content="https://cdn.example.com/og.jpg"></head></html>'
+    ) == "https://cdn.example.com/og.jpg"
+    assert _extract_og_image_url(
+        '<meta content="/images/og.jpg" property="og:image">',
+        "https://example.com/posts/1",
+    ) == "https://example.com/images/og.jpg"
+
+
+def test_extract_og_image_url_rejects_non_http_schemes() -> None:
+    from src.processors.article import _extract_og_image_url
+
+    assert (
+        _extract_og_image_url('<meta property="og:image" content="data:image/png;base64,AAAA">')
+        is None
+    )
+    assert (
+        _extract_og_image_url('<meta property="og:image" content="javascript:void(0)">') is None
+    )
 
 
 @pytest.mark.asyncio
@@ -162,6 +187,37 @@ async def test_article_run_cache_miss_calls_jina_and_caches(temp_db, monkeypatch
     args = insert_cache.await_args.args
     assert title in args[1]
     send_doc.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_article_run_persists_og_image_url(temp_db, monkeypatch) -> None:
+    from src import database as db
+    from src.processors import article
+
+    url = "https://substack.com/p/og-post"
+    await db.insert_markdown_cache(url, "OG Article\n\nBody content here " * 50)
+    job = await db.get_job(
+        await db.create_job(chat_id=1, url=url, content_type="article")
+    )
+
+    update_status = AsyncMock()
+    monkeypatch.setattr("src.processors.article._fetch_og_image_url", AsyncMock(return_value="https://cdn.example.com/og.jpg"))
+    monkeypatch.setattr("src.processors.article.database.update_job_status", update_status)
+    monkeypatch.setattr("src.processors.article.database.get_job", AsyncMock(return_value=job))
+    monkeypatch.setattr("src.processors.article.database.insert_markdown_cache", AsyncMock())
+    monkeypatch.setattr("src.processors.article.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.article.send_message", AsyncMock(return_value={"message_id": 123}))
+    monkeypatch.setattr("src.processors.article.send_inline_keyboard", AsyncMock())
+
+    from src.services import gemini_client as gc_module
+    monkeypatch.setattr(gc_module.gemini_client, "generate", AsyncMock(return_value=_GEMINI_RESPONSE))
+
+    await article.run(job)
+
+    assert any(
+        call.kwargs.get("og_image_url") == "https://cdn.example.com/og.jpg"
+        for call in update_status.await_args_list
+    )
 
 
 # ---------------------------------------------------------------------------
