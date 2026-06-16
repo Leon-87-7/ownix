@@ -245,13 +245,13 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
         for row in rows:
             row_content_type = row["content_type"]
             if row_content_type == "article":
-                await database.update_job_status(row["id"], "pending")
+                await database.update_job_status(row["id"], "pending", error_msg=None)
                 await queue.enqueue({"task": "article", "job_id": row["id"], "skip_document": True})
                 retried_same += 1
                 del unprocessed[row["id"]]
                 continue
             if row_content_type == "long" and row.get("transcript"):
-                await database.update_job_status(row["id"], "enriching")
+                await database.update_job_status(row["id"], "enriching", error_msg=None)
                 await queue.enqueue({"task": "enrichment", "job_id": row["id"]})
                 retried_same += 1
                 del unprocessed[row["id"]]
