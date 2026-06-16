@@ -63,7 +63,7 @@ export function RecoveryPanel({
           {acting === 'pending' ? 'Retrying...' : `Retry pending (${summary.stale_pending})`}
         </RecoveryButton>
         <RecoveryButton disabled={disabled || failedActionCount === 0} onClick={() => void retryError()}>
-          {acting === 'error' ? 'Retrying...' : `Retry failed (${summary.error_jobs})`}
+          {acting === 'error' ? 'Retrying...' : `Retry failed (${failedActionCount})`}
         </RecoveryButton>
         <RecoveryButton disabled={disabled || summary.error_jobs === 0} onClick={onClear}>
           {acting === 'clear' ? 'Clearing...' : `Clear failed (${summary.error_jobs})`}

@@ -121,28 +121,28 @@ async def clear_failed(chat_id: int, content_type: str | None = None) -> dict[st
 
 
 async def _notify_reaped_jobs(rows: list[dict[str, Any]], chat_id: int) -> int:
+    """Inform the user that dashboard recovery reaped these stale in-flight jobs.
+
+    Unlike the startup reaper (``worker.reap_stale_jobs``), ``retry_error`` re-queues
+    every reaped row automatically within the same call, so these notifications carry
+    no Retry button — a button here would point at a row this same request then
+    cancels, leaving the user a dead control.
+    """
     if not rows or not await database.get_recovery_telegram_notifications_enabled(chat_id):
         return 0
 
-    from src.telegram.sender import send_inline_keyboard
+    from src.telegram.sender import send_message
 
     sent = 0
     for row in rows:
         job_id = row["id"]
         tag = f"job_{job_id[-4:]}:"
+        stage = "Enrichment" if row["status"] == "enriching" else "Processing"
         try:
-            if row["status"] == "enriching":
-                await send_inline_keyboard(
-                    chat_id,
-                    f"{tag}\n⚠️ Enrichment was interrupted by a restart.",
-                    buttons=[[{"text": "🔄 Retry", "callback_data": f"enrichment_retry:{job_id}"}]],
-                )
-            else:
-                await send_inline_keyboard(
-                    chat_id,
-                    f"{tag}\n⚠️ Processing was interrupted by a restart.",
-                    buttons=[[{"text": "🔄 Retry", "callback_data": f"reprocess:{job_id}"}]],
-                )
+            await send_message(
+                chat_id,
+                f"{tag}\n⚠️ {stage} was interrupted by a restart — re-queued automatically.",
+            )
             sent += 1
         except Exception:
             log.exception("dashboard_recovery.notify_failed", job_id=job_id)

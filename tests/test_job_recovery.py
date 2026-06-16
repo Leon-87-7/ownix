@@ -111,11 +111,11 @@ async def test_retry_error_reaps_filters_retries_and_cancels_replacements(
     async def fake_enqueue(task: dict) -> None:
         enqueued.append(task)
 
-    async def fake_send_inline_keyboard(chat_id: int, text: str, buttons: list) -> None:
-        notified.append((chat_id, text, buttons))
+    async def fake_send_message(chat_id: int, text: str, **_kwargs) -> None:
+        notified.append((chat_id, text, []))
 
     monkeypatch.setattr(job_recovery.queue, "enqueue", fake_enqueue)
-    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", fake_send_inline_keyboard)
+    monkeypatch.setattr("src.telegram.sender.send_message", fake_send_message)
 
     result = await job_recovery.retry_error(1, "short")
 
@@ -155,11 +155,11 @@ async def test_retry_error_respects_notification_preference(
     async def fake_enqueue(task: dict) -> None:
         enqueued.append(task)
 
-    async def fake_send_inline_keyboard(*_args) -> None:
+    async def fake_send_message(*_args, **_kwargs) -> None:
         notified.append("sent")
 
     monkeypatch.setattr(job_recovery.queue, "enqueue", fake_enqueue)
-    monkeypatch.setattr("src.telegram.sender.send_inline_keyboard", fake_send_inline_keyboard)
+    monkeypatch.setattr("src.telegram.sender.send_message", fake_send_message)
 
     result = await job_recovery.retry_error(1, "short")
 

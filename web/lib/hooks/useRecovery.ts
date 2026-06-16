@@ -14,11 +14,11 @@ const EMPTY_SUMMARY: RecoverySummary = {
   stale_in_flight: 0,
 };
 
-async function fetchSummary(contentType: string): Promise<RecoverySummary> {
+async function fetchSummary(contentType: string, signal?: AbortSignal): Promise<RecoverySummary> {
   const params = new URLSearchParams();
   if (contentType) params.set('content_type', contentType);
   const qs = params.toString();
-  const res = await fetch(`/api/jobs/recovery/summary${qs ? `?${qs}` : ''}`);
+  const res = await fetch(`/api/jobs/recovery/summary${qs ? `?${qs}` : ''}`, { signal });
   if (!res.ok) throw new Error('Failed to load recovery summary');
   return (await res.json()) as RecoverySummary;
 }
@@ -41,21 +41,26 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
   const [acting, setActing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      setSummary(await fetchSummary(contentType));
+      const next = await fetchSummary(contentType, signal);
+      if (signal?.aborted) return;
+      setSummary(next);
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return;
       setError(err instanceof Error ? err.message : 'Failed to load recovery summary');
       setSummary(EMPTY_SUMMARY);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [contentType]);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const act = useCallback(async (key: string, path: string) => {

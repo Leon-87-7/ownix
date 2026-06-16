@@ -205,9 +205,12 @@ describe('FeedPage', () => {
 
     expect(await screen.findByText('Recovery')).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry pending \(2\)/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /retry failed \(1\)/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /retry failed \(2\)/i })).toBeTruthy();
     expect(screen.getByText('1 stale in-flight')).toBeTruthy();
-    expect(fetch).toHaveBeenCalledWith('/api/jobs/recovery/summary?content_type=short');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/recovery/summary?content_type=short',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('refreshes recovery summary and feed data after retrying pending jobs', async () => {
