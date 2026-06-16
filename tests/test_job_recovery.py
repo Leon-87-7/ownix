@@ -188,6 +188,32 @@ async def test_retry_error_reaps_filters_retries_and_cancels_replacements(
 
 
 @pytest.mark.asyncio
+async def test_retry_error_claims_rows_so_repeat_calls_do_not_double_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _init_tmp_db(tmp_path, monkeypatch)
+    await _insert_job("short_error", content_type="short", status="error")
+
+    enqueued: list[dict] = []
+
+    async def fake_enqueue(task: dict) -> None:
+        enqueued.append(task)
+
+    monkeypatch.setattr(job_recovery.queue, "enqueue", fake_enqueue)
+
+    first = await job_recovery.retry_error(1, "short")
+    assert first["replaced"] == 1
+    assert (await database.get_job("short_error"))["status"] == "cancelled"
+
+    # The atomic claim cancelled the original, so a second call finds no error rows
+    # and must not create a second replacement for the same URL.
+    second = await job_recovery.retry_error(1, "short")
+    assert second["replaced"] == 0
+    assert second["retried_same"] == 0
+    assert len(enqueued) == 1
+
+
+@pytest.mark.asyncio
 async def test_retry_error_respects_notification_preference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

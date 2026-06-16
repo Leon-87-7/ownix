@@ -60,17 +60,20 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
-    const isStale = () => signal?.aborted || !mountedRef.current || contentTypeRef.current !== contentType;
+    // `gone` = the request can no longer touch any state (aborted or unmounted).
+    // `superseded` additionally covers a tab switch: stale data must not overwrite
+    // the new tab, but loading MUST still be cleared or the panel locks up.
+    const gone = () => signal?.aborted === true || !mountedRef.current;
+    const superseded = () => gone() || contentTypeRef.current !== contentType;
     try {
       const next = await fetchSummary(contentType, signal);
-      if (isStale()) return;
-      setSummary(next);
+      if (!superseded()) setSummary(next);
     } catch (err) {
-      if (isStale() || (err instanceof DOMException && err.name === 'AbortError')) return;
+      if (superseded() || (err instanceof DOMException && err.name === 'AbortError')) return;
       setError(err instanceof Error ? err.message : 'Failed to load recovery summary');
       setSummary(EMPTY_SUMMARY);
     } finally {
-      if (!isStale()) setLoading(false);
+      if (!gone()) setLoading(false);
     }
   }, [contentType]);
 

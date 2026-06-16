@@ -189,19 +189,29 @@ async def _notify_reaped_jobs(rows: list[dict[str, Any]], chat_id: int) -> int:
     return sent
 
 
-async def _error_rows(chat_id: int, content_type: str | None) -> list[dict[str, Any]]:
+async def _claim_error_rows(chat_id: int, content_type: str | None) -> list[dict[str, Any]]:
+    """Atomically claim scoped error rows by cancelling them, returning their data.
+
+    Cancelling up front (rather than a plain SELECT the caller then mutates row by
+    row) means a concurrent ``retry_error`` call sees zero error rows and can't
+    reprocess the same jobs into duplicate workers. Same-job retries (article,
+    long-with-transcript) move the row back to pending/enriching below; replacements
+    leave the original cancelled; non-retryable rows are restored to 'error'.
+    """
     where, params = _scope_where(chat_id, content_type)
     async with database.connection() as conn:
         cur = await conn.execute(
             f"""
-            SELECT id, chat_id, message_id, url, content_type, template, freestyle_prompt, transcript
-            FROM jobs
+            UPDATE jobs
+            SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
             WHERE {where} AND status = 'error'
-            ORDER BY updated_at DESC
+            RETURNING id, chat_id, message_id, url, content_type, template, freestyle_prompt, transcript
             """,
             tuple(params),
         )
-        return [dict(row) for row in await cur.fetchall()]
+        rows = [dict(row) for row in await cur.fetchall()]
+        await conn.commit()
+    return rows
 
 
 async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str, int]:
@@ -210,7 +220,7 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
         STALE_MINUTES, chat_id=chat_id, content_type=content_type
     )
     notifications_sent = await _notify_reaped_jobs(reaped, chat_id)
-    rows = await _error_rows(chat_id, content_type)
+    rows = await _claim_error_rows(chat_id, content_type)
 
     retried_same = 0
     replaced = 0
@@ -240,6 +250,8 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
 
         task = _task_for(row_content_type)
         if task is None:
+            # Nothing to retry — undo the claim so the row isn't silently cancelled.
+            await database.update_job_status(row["id"], "error")
             skipped += 1
             continue
         new_job_id = await database.create_job(
@@ -253,17 +265,11 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
         try:
             await queue.enqueue({"task": task, "job_id": new_job_id})
         except Exception:
-            # Cancel the orphan replacement and leave the original in 'error' so the
-            # user can retry again; never cancel the original before the new job is queued.
+            # Roll back: cancel the orphan replacement and restore the original to
+            # 'error' so the user can retry cleanly. The original was already cancelled
+            # by the atomic claim, so there is no separate post-enqueue cancel to guard.
             await database.update_job_status(new_job_id, "cancelled")
-            raise
-        try:
-            await database.update_job_status(row["id"], "cancelled")
-        except Exception:
-            # The replacement is already queued. Cancel it to avoid a duplicate
-            # in-flight job for the same URL; leave the original in 'error' so the
-            # user can retry cleanly on the next attempt.
-            await database.update_job_status(new_job_id, "cancelled")
+            await database.update_job_status(row["id"], "error")
             raise
         replaced += 1
 
