@@ -66,6 +66,36 @@ describe('useFeedData', () => {
     expect(calls.some((u) => u.includes('content_type=long'))).toBe(true);
   });
 
+  it('scopes the stats request to content_type (but not status) for the active tab', async () => {
+    stubFeedOk();
+    const result = await renderLoadedFeed();
+
+    act(() => result.current.setStFilter('done'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.setCtFilter('article'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const statsCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('/api/jobs/stats'));
+
+    // The latest stats request carries the active content_type…
+    expect(statsCalls.at(-1)!).toContain('content_type=article');
+    // …but never the status filter — cards show the full status split for the type.
+    expect(statsCalls.every((u) => !u.includes('status='))).toBe(true);
+  });
+
+  it('omits content_type from the stats request for global totals when no tab is active', async () => {
+    stubFeedOk();
+    await renderLoadedFeed();
+
+    const statsCalls = (fetch as ReturnType<typeof vi.fn>).mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('/api/jobs/stats'));
+
+    expect(statsCalls.every((u) => !u.includes('content_type='))).toBe(true);
+  });
+
   // --------------------------------------------------------------------------
   // Race-guard tests (criteria 1, 2, 3, 4, 5)
   // --------------------------------------------------------------------------

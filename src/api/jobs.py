@@ -25,21 +25,38 @@ ThumbnailKind = Literal["landscape", "portrait"]
 # ---------------------------------------------------------------------------
 
 @jobs_router.get("/stats")
-async def get_job_stats(request: Request) -> dict:
-    """Return hero counts for the authenticated user's jobs."""
+async def get_job_stats(
+    request: Request,
+    content_type: str | None = Query(default=None),
+) -> dict:
+    """Return hero counts for the authenticated user's jobs.
+
+    The status breakdown is scoped to *content_type* when provided so the
+    Overview cards reflect the active content-type tab; filtering is by
+    content type only (never status), so the cards always show the full
+    status split for the selected type. ``by_content_type`` stays unfiltered
+    so the per-tab count chips are unaffected.
+    """
     chat_id: int = request.state.user["id"]
 
     async with database.connection() as conn:
-        # Status breakdown
+        # Status breakdown — scoped to content_type when a tab is active.
+        status_conditions = ["chat_id = ?"]
+        status_params: list = [chat_id]
+        if content_type is not None:
+            status_conditions.append("content_type = ?")
+            status_params.append(content_type)
+        status_where = " AND ".join(status_conditions)
+
         cur = await conn.execute(
-            "SELECT status, COUNT(*) AS cnt FROM jobs WHERE chat_id = ? GROUP BY status",
-            (chat_id,),
+            f"SELECT status, COUNT(*) AS cnt FROM jobs WHERE {status_where} GROUP BY status",
+            status_params,
         )
         rows = await cur.fetchall()
         by_status: dict[str, int] = {row["status"]: row["cnt"] for row in rows}
         total = sum(by_status.values())
 
-        # Content-type breakdown
+        # Content-type breakdown — always global so the tab count chips stay correct.
         cur2 = await conn.execute(
             "SELECT content_type, COUNT(*) AS cnt FROM jobs WHERE chat_id = ? GROUP BY content_type",
             (chat_id,),

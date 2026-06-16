@@ -22,8 +22,15 @@ async function fetchFeed(
   if (ct) params.set('content_type', ct);
   if (st) params.set('status', st);
   params.set('limit', '50');
+
+  // Stats are scoped by content_type only (never status) so the Overview cards
+  // show the full status split for the active tab. Omit it for global totals.
+  const statsParams = new URLSearchParams();
+  if (ct) statsParams.set('content_type', ct);
+  const statsQuery = statsParams.toString();
+
   const [statsRes, jobsRes] = await Promise.all([
-    fetch('/api/jobs/stats'),
+    fetch(statsQuery ? `/api/jobs/stats?${statsQuery}` : '/api/jobs/stats'),
     fetch(`/api/jobs?${params}`),
   ]);
   if (!statsRes.ok) throw new Error('Failed to load stats');
