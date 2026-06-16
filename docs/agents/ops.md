@@ -107,6 +107,20 @@ Commands work without this step; registration only adds the autocomplete UI.
 
 ---
 
+## 8. Keep-warm — eliminating cold-start latency
+
+See **[`docs/ops/keep-warm.md`](../ops/keep-warm.md)** for the full runbook.
+
+**Summary:** the first request after a long idle period (~5.9 s) is caused
+by the Cloudflare tunnel / container sleeping — not query latency. A
+`GET /health` ping every 3 minutes keeps it warm. The committed mechanism
+is `.github/workflows/keep-warm.yml` (GitHub Actions cron, best-effort).
+The **recommended** reliable mechanism is an external uptime monitor
+(cron-job.org or UptimeRobot) hitting `https://api.leondev.xyz/health`
+every 3 minutes.
+
+---
+
 ## 7. GEMINI_BRAIN_API_KEY provisioning
 
 The Second Brain uses a **separate** Gemini API key (`GEMINI_BRAIN_API_KEY`) to isolate its embedding and generation quota from the pipeline keys (`GEMINI_FREE_API_KEY`, `GEMINI_PAID_API_KEY`).

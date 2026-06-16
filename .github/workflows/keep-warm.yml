@@ -1,0 +1,36 @@
+name: keep-warm
+
+# Best-effort warmer for the vig-api Cloudflare tunnel.
+# GitHub Actions scheduled workflows have a 5-minute MINIMUM interval and
+# are frequently delayed 5-15+ minutes under GitHub load — this is NOT a
+# guaranteed <5-min keep-warm. For a reliable 3-min ping use an external
+# uptime monitor (see docs/ops/keep-warm.md).
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 min (GitHub Actions minimum)
+  workflow_dispatch:         # allow manual trigger
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true  # skip queued runs if a new one fires before the last finishes
+
+permissions: {}  # no token needed
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /health
+        run: |
+          echo "Pinging https://api.leondev.xyz/health ..."
+          HTTP_CODE=$(curl -sS --fail \
+            --max-time 15 \
+            --retry 2 \
+            --retry-delay 3 \
+            --retry-connrefused \
+            -w "%{http_code}  time_total=%{time_total}s  time_connect=%{time_connect}s" \
+            -o /dev/null \
+            https://api.leondev.xyz/health)
+          echo "Response: $HTTP_CODE"
