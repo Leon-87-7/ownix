@@ -12,6 +12,17 @@ export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; ren
   { key: 'template_analysis', label: 'Template Analysis', render: 'json' },
 ]
 
+/** Field set for short-pipeline jobs (vision summary, transcript, key phrases).
+ *
+ * key_phrases is stored as a JSON array (json.dumps(list[str])) so we render
+ * it via 'json' which goes through TemplateAnalysis → JsonValue → scalar list.
+ */
+export const SHORT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
+  { key: 'summary', label: 'Summary', render: 'text' },
+  { key: 'transcript', label: 'Transcript', render: 'text' },
+  { key: 'key_phrases', label: 'Key Phrases', render: 'json' },
+]
+
 export function splitPipes(value: string): string[] {
   return value.split(' | ').map((s) => s.trim()).filter(Boolean)
 }
@@ -78,7 +89,8 @@ export function fieldCopyText(value: string, render: RenderType): string {
 
 export function buildMarkdown(job: JobDetail): string {
   const parts: string[] = [`# ${job.title ?? job.url}`, job.url]
-  for (const { key, label, render } of ENRICHMENT_FIELDS) {
+  const fields = job.content_type === 'short' ? SHORT_FIELDS : ENRICHMENT_FIELDS
+  for (const { key, label, render } of fields) {
     const value = job[key]
     if (value === null || value === undefined || String(value).trim() === '') continue
     const body = fieldCopyText(String(value), render)

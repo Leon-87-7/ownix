@@ -240,6 +240,7 @@ async def run(job: dict) -> None:
         best_frame_index=main_idx,
         platform=platform,
         video_id=video_id,
+        summary=summary,
     )
 
     # 6+7. Send best frame photo, then links message (its message_id wins as anchor)

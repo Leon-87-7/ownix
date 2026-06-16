@@ -208,7 +208,7 @@ describe('buildMarkdown', () => {
   const baseJob: JobDetail = {
     id: '1',
     url: 'https://example.com/video',
-    content_type: 'short',
+    content_type: 'long',
     status: 'done',
     title: 'My Video',
     created_at: '2024-01-01',
@@ -224,6 +224,9 @@ describe('buildMarkdown', () => {
     promise_gap: null,
     template: null,
     template_analysis: null,
+    summary: null,
+    transcript: null,
+    key_phrases: null,
   }
 
   it('starts with a h1 title', () => {

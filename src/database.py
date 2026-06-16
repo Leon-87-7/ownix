@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     platform                    TEXT,
     video_id                    TEXT,
     og_image_url                TEXT,
+    summary                     TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -578,6 +579,12 @@ _MIGRATIONS.append([
 ])
 
 
+# v15 → v16: vision summary column for short jobs (issue #164)
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN summary TEXT",
+])
+
+
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
     row = await cur.fetchone()
@@ -774,6 +781,7 @@ async def reset_job(job_id: str) -> None:
                 platform = NULL,
                 video_id = NULL,
                 og_image_url = NULL,
+                summary = NULL,
                 promise_gap = NULL,
                 completed_at = NULL,
                 updated_at = CURRENT_TIMESTAMP
