@@ -107,6 +107,14 @@ Commands work without this step; registration only adds the autocomplete UI.
 
 ---
 
+## 7. GEMINI_BRAIN_API_KEY provisioning
+
+The Second Brain uses a **separate** Gemini API key (`GEMINI_BRAIN_API_KEY`) to isolate its embedding and generation quota from the pipeline keys (`GEMINI_FREE_API_KEY`, `GEMINI_PAID_API_KEY`).
+
+Obtain a dedicated key from [aistudio.google.com](https://aistudio.google.com) → API keys → Create API key, then set it in `.env`. If left empty, the brain module falls back to `GEMINI_FREE_API_KEY` (not recommended in production).
+
+---
+
 ## 8. Keep-warm — eliminating cold-start latency
 
 See **[`docs/ops/keep-warm.md`](../ops/keep-warm.md)** for the full runbook.
@@ -118,11 +126,3 @@ an **external uptime monitor** (cron-job.org, every 2 min) hitting
 `https://api.leondev.xyz/health` — an in-repo GitHub Actions cron was
 considered and rejected (5-min floor, unreliable timing, auto-disables
 after 60 days idle). See the runbook for the exact cron-job.org config.
-
----
-
-## 7. GEMINI_BRAIN_API_KEY provisioning
-
-The Second Brain uses a **separate** Gemini API key (`GEMINI_BRAIN_API_KEY`) to isolate its embedding and generation quota from the pipeline keys (`GEMINI_FREE_API_KEY`, `GEMINI_PAID_API_KEY`).
-
-Obtain a dedicated key from [aistudio.google.com](https://aistudio.google.com) → API keys → Create API key, then set it in `.env`. If left empty, the brain module falls back to `GEMINI_FREE_API_KEY` (not recommended in production).

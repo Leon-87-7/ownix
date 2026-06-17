@@ -251,10 +251,23 @@ export function useFeedData(initialContentType = '') {
     mountLoad();
   }, [mountLoad]);
 
+  // Tracks whether the server-mode effect has already consumed its first run.
+  // mountLoad populates serverJobs/serverStats/serverFilteredTotal directly when
+  // it flips serverMode on, so the run triggered by that flip must NOT call
+  // serverLoad — doing so would double-fetch, re-flip loading=true (skeleton
+  // re-flash), and overwrite the mount data with a paginated 50-item page.
+  const serverEffectPrimedRef = useRef(false);
+
   // Server-mode filter change: re-fetch from server when filters change.
   // In client mode this effect does nothing (no API call on filter change).
   useEffect(() => {
     if (!serverMode) return;
+    // Skip the run caused by the mount-time mode flip; only genuine user-driven
+    // filter changes (after the mode is established) should re-fetch.
+    if (!serverEffectPrimedRef.current) {
+      serverEffectPrimedRef.current = true;
+      return;
+    }
     serverLoad(ctFilter, stFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverMode, ctFilter, stFilter, serverLoad]);

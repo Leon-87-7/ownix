@@ -30,6 +30,11 @@ export function useBackgroundFreshness(reload: () => Promise<void>) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
 
+    // Guards against the unmount-racing-the-async-callback case: if the effect
+    // is cleaned up while the awaited reload() is in flight, this flag stops the
+    // callback from rescheduling an orphaned timer that would never be cleared.
+    let cancelled = false;
+
     // -------------------------------------------------------------------------
     // 1. Backstop interval — only ticks while the tab is visible.
     // -------------------------------------------------------------------------
@@ -37,11 +42,13 @@ export function useBackgroundFreshness(reload: () => Promise<void>) {
 
     const scheduleBackstop = () => {
       backstopTimer = setTimeout(async () => {
+        if (cancelled) return;
         if (document.visibilityState === 'visible') {
           await reloadRef.current();
         }
-        // Reschedule regardless so we keep a consistent cadence.
-        scheduleBackstop();
+        // Reschedule regardless so we keep a consistent cadence — unless the
+        // effect was torn down while the await above was pending.
+        if (!cancelled) scheduleBackstop();
       }, BACKSTOP_INTERVAL_MS);
     };
 
@@ -51,6 +58,7 @@ export function useBackgroundFreshness(reload: () => Promise<void>) {
     // 2. visibilitychange — fire one immediate reload on becoming visible.
     // -------------------------------------------------------------------------
     const onVisibilityChange = () => {
+      if (cancelled) return;
       if (document.visibilityState === 'visible') {
         void reloadRef.current();
       }
@@ -59,6 +67,7 @@ export function useBackgroundFreshness(reload: () => Promise<void>) {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
+      cancelled = true;
       document.removeEventListener('visibilitychange', onVisibilityChange);
       if (backstopTimer !== null) clearTimeout(backstopTimer);
     };

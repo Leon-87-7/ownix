@@ -373,6 +373,31 @@ describe('useFeedData — server mode (total > 1000)', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('does not double-fetch on mount when entering server mode (no skeleton re-flash)', async () => {
+    const bigJobs = {
+      items: Array.from({ length: 50 }, (_, i) => ({
+        id: `j${i}`,
+        content_type: 'short',
+        status: 'done',
+      })),
+      total: 1001,
+    };
+    const bigStats = { total: 1001, by_status: { done: 1001 }, by_content_type: { short: 1001 } };
+
+    stubFetch((url) => url.includes('/stats')
+      ? { ok: true, body: bigStats }
+      : { ok: true, body: bigJobs });
+
+    const result = await renderLoadedFeed();
+
+    // Mount performs exactly two requests: the limit=1000 jobs probe + stats.
+    // The mode-transition effect must NOT fire an extra serverLoad — that would
+    // re-flip loading=true (skeleton re-flash) and overwrite the mount data.
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    expect(calls).toHaveLength(2);
+    expect(result.current.loading).toBe(false);
+  });
+
   it('in server mode, changing the filter triggers a new fetch', async () => {
     const bigJobs = {
       items: Array.from({ length: 50 }, (_, i) => ({
