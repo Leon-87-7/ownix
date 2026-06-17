@@ -72,7 +72,7 @@ async def _embed(text: str) -> np.ndarray | None:
 async def _resolve_title(url: str, topic: str) -> str:
     """Resolve a short human title for a URL via GeminiClient; fall back to URL hint on any error."""
     from urllib.parse import urlparse
-    from src.services.gemini_client import gemini_client, GeminiUnavailableError
+    from src.services.gemini import gemini_client, GeminiUnavailableError
 
     parsed = urlparse(url)
     hostname = parsed.hostname or url

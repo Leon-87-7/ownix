@@ -508,7 +508,7 @@ async def run_prd(
     prompt = build_prompt(job)
 
     # d. Call Gemini (free → paid fallback)
-    from src.services.gemini_client import gemini_client, GeminiUnavailableError
+    from src.services.gemini import gemini_client, GeminiUnavailableError
     raw_prd: str | None = None
     last_error: str | None = None
     try:

@@ -64,7 +64,6 @@ class Settings(BaseSettings):
     GOOGLE_DRIVE_FOLDER_PRD: str = ""
     PRD_MAX_TRANSCRIPT_CHARS: int = 60_000
     PRD_INTENT_COOLDOWN_SECONDS: int = 15
-    PRD_INCLUDE_FRAMES: bool = False
     PRD_AUTO_MODEL: str = "gemini-2.5-flash"
     PRD_INTENT_MODEL: str = "gemini-2.5-pro"
 

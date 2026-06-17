@@ -37,6 +37,9 @@ Thumbs.db
 # pytest
 .pytest_cache/
 
+# pyscn — generated analysis snapshots
+.pyscn/
+
 # folders
 
 docs/images/*

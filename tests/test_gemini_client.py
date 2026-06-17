@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.gemini_client import GeminiClient, GeminiUnavailableError, gemini_client
+from src.services.gemini import GeminiClient, GeminiUnavailableError, gemini_client
 
 
 def _make_response(text: str) -> MagicMock:

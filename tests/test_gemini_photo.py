@@ -1,10 +1,10 @@
-"""Unit tests for src/services/gemini_photo.py — no network calls."""
+"""Unit tests for photo-link extraction in src/services/gemini.py — no network calls."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.services.gemini_photo import _domain_for_match, _filter_grounded_links
+from src.services.gemini import _domain_for_match, _filter_grounded_links
 
 
 # ---------------------------------------------------------------------------

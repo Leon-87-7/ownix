@@ -165,7 +165,7 @@ def _parse_enrichment(data: dict) -> Enrichment:
 
 async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
-    from src.services.gemini_client import gemini_client, GeminiUnavailableError
+    from src.services.gemini import gemini_client, GeminiUnavailableError
 
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""

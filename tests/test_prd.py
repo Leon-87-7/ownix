@@ -439,7 +439,7 @@ async def test_intent_cooldown_allows_after_15s(temp_db_for_prd, monkeypatch):
         await conn.commit()
 
     monkeypatch.setattr(
-        "src.services.gemini_client.gemini_client.generate",
+        "src.services.gemini.gemini_client.generate",
         AsyncMock(return_value='{"project":"X","category":"Other","overview":"","phases":[],"open_questions":[]}'),
     )
     monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FID","URL")))
@@ -484,7 +484,7 @@ async def test_run_prd_auto_completes_full_pipeline(temp_db_for_prd, monkeypatch
         await conn.commit()
 
     monkeypatch.setattr(
-        "src.services.gemini_client.gemini_client.generate",
+        "src.services.gemini.gemini_client.generate",
         AsyncMock(return_value=_CANNED_PRD_JSON),
     )
     monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FILE_ID", "http://drive/auto")))
@@ -526,7 +526,7 @@ async def test_run_prd_intent_sets_completed_at(temp_db_for_prd, monkeypatch):
         await conn.commit()
 
     monkeypatch.setattr(
-        "src.services.gemini_client.gemini_client.generate",
+        "src.services.gemini.gemini_client.generate",
         AsyncMock(return_value=_CANNED_PRD_JSON),
     )
     monkeypatch.setattr("src.services.drive.upload_file", AsyncMock(return_value=("FID2", "http://drive/intent")))
@@ -565,9 +565,9 @@ async def test_run_prd_auto_gemini_fail_sends_retry_keyboard(temp_db_for_prd, mo
         )
         await conn.commit()
 
-    from src.services.gemini_client import GeminiUnavailableError
+    from src.services.gemini import GeminiUnavailableError
     monkeypatch.setattr(
-        "src.services.gemini_client.gemini_client.generate",
+        "src.services.gemini.gemini_client.generate",
         AsyncMock(side_effect=GeminiUnavailableError("Gemini down")),
     )
     send_keyboard = AsyncMock()

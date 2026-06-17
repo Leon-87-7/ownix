@@ -277,7 +277,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     prompt = _build_article_prompt(title, body, freestyle_prompt)
 
     # 5. Gemini call
-    from src.services.gemini_client import GeminiUnavailableError, gemini_client
+    from src.services.gemini import GeminiUnavailableError, gemini_client
     try:
         raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
     except GeminiUnavailableError:

@@ -105,7 +105,7 @@ async def test_resolve_title_github():
     url = "https://github.com/vercel/next.js"
     topic = "web dev"
 
-    with patch("src.services.gemini_client.gemini_client") as mock_client:
+    with patch("src.services.gemini.gemini_client") as mock_client:
         mock_client.generate = AsyncMock(return_value="vercel/next.js")
         result = await _resolve_title(url, topic)
 
@@ -115,12 +115,12 @@ async def test_resolve_title_github():
 @pytest.mark.asyncio
 async def test_resolve_title_strip_tld():
     """Non-GitHub URL falls back to hint when GeminiUnavailableError is raised."""
-    from src.services.gemini_client import GeminiUnavailableError
+    from src.services.gemini import GeminiUnavailableError
 
     url = "https://docs.tailwindcss.com/getting-started"
     topic = "css"
 
-    with patch("src.services.gemini_client.gemini_client") as mock_client:
+    with patch("src.services.gemini.gemini_client") as mock_client:
         mock_client.generate = AsyncMock(side_effect=GeminiUnavailableError("both failed"))
         result = await _resolve_title(url, topic)
 
