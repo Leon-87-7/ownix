@@ -41,67 +41,40 @@ traverses the tunnel every few minutes.
 
 ---
 
-## Mechanisms
+## Mechanism: external uptime monitor (cron-job.org)
 
-### (a) GitHub Actions cron — committed, best-effort
+The keep-warm ping is an **external uptime monitor**, not an in-repo job.
+A purpose-built pinger delivers a reliable sub-5-min cadence; an in-repo
+GitHub Actions `schedule` does **not** (5-min floor, runs routinely delayed
+5–15+ min or dropped under load, and GitHub auto-disables scheduled
+workflows after 60 days of repo inactivity — the opposite of what an
+always-on warmer needs). So this lives outside the repo, by design.
 
-`.github/workflows/keep-warm.yml` runs every 5 minutes:
+### Live setup — [cron-job.org](https://cron-job.org)
 
-```yaml
-on:
-  schedule:
-    - cron: "*/5 * * * *"
-```
+Free, 1-min minimum interval, with failure/recovery email alerts.
 
-Curl command used:
-
-```bash
-curl -sS --fail \
-  --max-time 15 \
-  --retry 2 \
-  --retry-delay 3 \
-  --retry-connrefused \
-  -w "%{http_code}  time_total=%{time_total}s  time_connect=%{time_connect}s" \
-  -o /dev/null \
-  https://api.leondev.xyz/health
-```
-
-**Reliability caveat — read this:** GitHub Actions scheduled workflows have
-a **5-minute minimum interval** and are **frequently delayed 5–15+ minutes**
-under load. GitHub can also skip a run entirely if the queue is congested.
-This means the Actions cron is a **best-effort backup warmer**, not a
-guaranteed <5-min keep-warm. Use it as a belt to the external monitor's
-suspenders, not as a primary mechanism.
-
----
-
-### (b) External uptime monitor — RECOMMENDED
-
-An external service pings the endpoint independently of GitHub's scheduler
-queue and is far more reliable. Either of these works (both free tiers are
-sufficient):
-
-**cron-job.org** (recommended — free, 1-min minimum, no account required for
-basic use):
-
-1. Go to <https://cron-job.org> and create a free account.
-2. Create a new cron job:
+1. Create a free account and add a cron job:
+   - **Title:** `vig-api keep-warm`
    - **URL:** `https://api.leondev.xyz/health`
-   - **Interval:** every **3 minutes**
-   - **HTTP method:** GET
-   - **Expected HTTP status:** 200
-3. Enable notifications on failure (optional but useful).
+   - **HTTP method:** GET · **Expected status:** 200
+   - **Interval:** every **2 minutes** (`*/2 * * * *`)
+   - **Schedule expires:** off · **Save responses in job history:** on
+     (handy for eyeballing per-ping latency)
+2. Under **Notify me when…** enable:
+   - **execution fails** — *Notify after **3** subsequent failures* (a single
+     failed ping is usually a transient blip; 3 in a row means real downtime).
+   - **succeeds after it failed before** — the "recovered" alert.
+   - **the cronjob will be disabled because of too many failures** — **the
+     important one**: it warns you before cron-job.org auto-disables the job,
+     so a dead warmer can't silently let cold starts creep back.
+   - *(TLS-expiry alert can stay off — the `api.leondev.xyz` cert is
+     auto-renewed by Cloudflare.)*
 
-**UptimeRobot** (alternative — free tier, 5-min minimum on free plan):
+This doubles as a free downtime monitor for `api.leondev.xyz`.
 
-1. Go to <https://uptimerobot.com> and sign in.
-2. Add a monitor:
-   - **Monitor type:** HTTP(s)
-   - **URL:** `https://api.leondev.xyz/health`
-   - **Monitoring interval:** 5 minutes (free tier limit)
-
-Either service gives you a public status page and email/Telegram alerts if
-the health check starts failing — free observability on top of the warm-up.
+**Alternative:** UptimeRobot also works (HTTP(s) monitor, same URL) but its
+free tier floors at a 5-min interval.
 
 ---
 
