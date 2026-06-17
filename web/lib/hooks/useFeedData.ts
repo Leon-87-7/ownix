@@ -262,11 +262,14 @@ export function useFeedData(initialContentType = '') {
   // In client mode this effect does nothing (no API call on filter change).
   useEffect(() => {
     if (!serverMode) return;
-    // Skip the run caused by the mount-time mode flip; only genuine user-driven
-    // filter changes (after the mode is established) should re-fetch.
     if (!serverEffectPrimedRef.current) {
       serverEffectPrimedRef.current = true;
-      return;
+      // mountLoad populated server state from an *unfiltered* probe. Skip the
+      // redundant serverLoad on the mount-time mode flip ONLY when no filter is
+      // active — otherwise (e.g. a deep link carrying ?type=short) the mount
+      // data is unscoped, so we must fetch the filtered view rather than show
+      // the wrong list.
+      if (!ctFilter && !stFilter) return;
     }
     serverLoad(ctFilter, stFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -398,6 +398,42 @@ describe('useFeedData — server mode (total > 1000)', () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it('in server mode with an initial content_type, fetches the scoped view on mount', async () => {
+    // Deep link (?type=long) while >1000 jobs: the unfiltered mount probe is the
+    // wrong list, so the mode-flip effect must fetch the content_type-scoped view
+    // rather than skip and leave the unfiltered data showing.
+    const bigJobs = {
+      items: Array.from({ length: 50 }, (_, i) => ({
+        id: `j${i}`,
+        content_type: 'short',
+        status: 'done',
+      })),
+      total: 1001,
+    };
+    const bigStats = { total: 1001, by_status: { done: 1001 }, by_content_type: { short: 1001 } };
+    const longJobs = { items: [{ id: 'l1', content_type: 'long', status: 'done' }], total: 3 };
+    const longStats = { total: 3, by_status: { done: 3 }, by_content_type: { long: 3 } };
+
+    stubFetch((url) => {
+      if (url.includes('/stats')) {
+        return url.includes('content_type=long')
+          ? { ok: true, body: longStats }
+          : { ok: true, body: bigStats };
+      }
+      return url.includes('content_type=long')
+        ? { ok: true, body: longJobs }
+        : { ok: true, body: bigJobs };
+    });
+
+    const result = await renderLoadedFeed('long');
+
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes('content_type=long'))).toBe(true);
+    // The displayed list is the scoped server response, not the unfiltered probe.
+    expect(result.current.jobs).toHaveLength(1);
+    expect(result.current.jobs[0].content_type).toBe('long');
+  });
+
   it('in server mode, changing the filter triggers a new fetch', async () => {
     const bigJobs = {
       items: Array.from({ length: 50 }, (_, i) => ({
