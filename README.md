@@ -1,8 +1,6 @@
 # vig — Video Intelligence Gateway
 
-Telegram bot that processes short videos, long videos, and dev articles into structured AI analysis, stores everything in Google Drive + Sheets, and builds a searchable semantic Second Brain — with a Next.js web dashboard ("The Operator's Console") for browsing the results.
-
-Replaced a 60-node n8n workflow.
+Telegram bot that processes short videos, long videos, Github URLs and dev articles into structured AI analysis, stores everything in Google Drive + Sheets, and builds a searchable semantic Second Brain — with a Next.js web dashboard ("The Operator's Console") for browsing the results.
 
 ---
 
@@ -11,6 +9,7 @@ Replaced a 60-node n8n workflow.
 - **Short video pipeline** — YouTube Shorts, Instagram Reels, TikTok: frame extraction → Gemini Vision analysis → Brave Search link verification → Drive upload
 - **Long video pipeline** — YouTube: transcript extraction → Drive upload → Gemini enrichment (topic, objective, action points, tools, promise-gap) → optional Mini-PRD spec generation
 - **Article pipeline** — Substack, Medium, dev.to, Ghost, Hashnode + per-chat allowlist: Jina Reader fetch → markdown cache → paywall heuristic → Gemini analysis → Sheets → Brain
+- **Repo pipeline** — `github.com/<owner>/<repo>` URLs: GitHub API bundle (README + prioritized file tree + package manifests + stars/forks/language) → Gemini 2.5 Flash structured analysis (tagline, tech stack, developer use-cases, educational concepts + file-pointed curriculum hooks) → `.md` document → Sheets → Brain. Handles archived repos and missing-README repos; gists and enterprise hosts are rejected
 - **Photo OCR** — Screenshot link extraction with verbatim-grounded anti-hallucination filter; multi-image sends are auto-batched via Telegram's `media_group_id` (no command needed) into one unified result
 - **Second Brain** — Semantic link graph (Gemini embeddings + NumPy cosine similarity) searchable via `/find`
 - **Mini-PRD** — AI-generated product specs from long-video transcripts; two slots: auto (Flash) and intent (Pro, user-directed)
@@ -26,7 +25,7 @@ Replaced a 60-node n8n workflow.
 - Google Cloud project with Drive + Sheets APIs enabled (OAuth credentials)
 - Gemini API key (free tier sufficient for personal use)
 
-Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo enrichment), `JINA_API_KEY` (Jina quota), `GEMINI_PAID_API_KEY` (fallback).
+Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo pipeline + higher GitHub rate limit), `JINA_API_KEY` (Jina quota), `GEMINI_PAID_API_KEY` (fallback).
 
 ---
 
@@ -34,7 +33,7 @@ Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo enrichment),
 
 ### 1. Clone and configure
 
-```bash
+```Shell
 git clone https://github.com/Leon-87-7/vig
 cd vig
 cp .env.example .env
@@ -57,27 +56,27 @@ GOOGLE_OAUTH_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_SHORT=
 GOOGLE_DRIVE_FOLDER_LONG=
 GOOGLE_DRIVE_FOLDER_BRAIN=
-GOOGLE_SHEETS_ID=                   # single workbook with 4 tabs
+GOOGLE_SHEETS_ID=                   # single workbook with 5 tabs
 ```
 
 See `.env.example` for the full list.
 
 ### 2. Start the transcript sidecar (host machine)
 
-```bash
+```Shell
 pip install flask waitress yt-dlp youtube-transcript-api Pillow
 python transcript_server.py          # listens on :5151
 ```
 
 ### 3. Start the main services
 
-```bash
+```Shell
 docker-compose up -d
 ```
 
 ### 4. Register the Telegram webhook
 
-```bash
+```Shell
 curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
      -d "url=<WEBHOOK_URL>/webhook" \
      -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
@@ -85,7 +84,7 @@ curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
 
 ### 5. Verify
 
-```bash
+```Shell
 curl https://your-domain.com/health    # → {"status":"ok"}
 ```
 
@@ -93,20 +92,20 @@ curl https://your-domain.com/health    # → {"status":"ok"}
 
 ## Bot Commands
 
-| Command | Description |
-|---|---|
-| `<url>` | Auto-detected pipeline: short video / long video / article |
-| `/find <query>` | Semantic search across Second Brain |
-| `/freestyle <url>` | Process URL with a custom Gemini prompt |
-| `/force <url>` | Bypass dedup + invalidate markdown cache, reprocess |
-| `/spec <suffix> [intent]` | Generate Mini-PRD for a job (last 4 chars of job ID) |
-| `/cancel` | Clear armed chat state (awaiting_freestyle / awaiting_intent) |
-| `/allowlist <domain>` | Add domain to article pipeline for this chat |
-| `/unallowlist <domain>` | Remove domain from allowlist |
-| `/allowlist_list` | Show this chat's custom domains |
-| `/download_md <url>` | Fetch any URL as clean Markdown via Jina (no job created) |
-| `/ignore <domain>` | Block domain from short-video link extraction |
-| `/rebuild-graph` | Recompute all Second Brain Obsidian `.md` nodes |
+| Command                   | Description                                                   |
+| ------------------------- | ------------------------------------------------------------- |
+| `<url>`                   | Auto-detected pipeline: short video / long video / article    |
+| `/find <query>`           | Semantic search across Second Brain                           |
+| `/freestyle <url>`        | Process URL with a custom Gemini prompt                       |
+| `/force <url>`            | Bypass dedup + invalidate markdown cache, reprocess           |
+| `/spec <suffix> [intent]` | Generate Mini-PRD for a job (last 4 chars of job ID)          |
+| `/cancel`                 | Clear armed chat state (awaiting_freestyle / awaiting_intent) |
+| `/allowlist <domain>`     | Add domain to article pipeline for this chat                  |
+| `/unallowlist <domain>`   | Remove domain from allowlist                                  |
+| `/allowlist_list`         | Show this chat's custom domains                               |
+| `/download_md <url>`      | Fetch any URL as clean Markdown via Jina (no job created)     |
+| `/ignore <domain>`        | Block domain from short-video link extraction                 |
+| `/rebuild-graph`          | Recompute all Second Brain Obsidian `.md` nodes               |
 
 Plain-text shortcuts work for most commands — `find <query>` is equivalent to `/find <query>`. Screenshots no longer need batch commands — send several at once and they're grouped automatically.
 
@@ -126,25 +125,27 @@ FastAPI :8000  ─── detect_pipeline ──► create_job ──► Redis LP
       │                                              ├─ "video" short → frames → Gemini Vision
       │                                              ├─ "video" long  → transcript → Drive
       │                                              ├─ "article"     → Jina → Gemini
+      │                                              ├─ "repo"        → GitHub bundle → Gemini
       │                                              ├─ "enrichment"  → Gemini text
       │                                              └─ "prd_*"       → Gemini PRD
 
 State:   SQLite WAL  ─── jobs, links, chat_state, markdown_cache, allowed_domains
 Queue:   Redis FIFO  ─── survives restarts, supports multiple workers
 Brain:   text-embedding-004 → NumPy similarity → Drive Obsidian vault
-Sheets:  4 tabs: YouTube Transcript Index | Short Video Analysis | Article Analysis | mini PRD
+Sheets:  5 tabs: YouTube Transcript Index | Short Video Analysis | Article Analysis | Repo Analysis | mini PRD
 ```
 
 ### URL routing
 
 `detect_pipeline(url, extra_domains)` in `src/utils/validators.py`:
 
-| Pattern | Pipeline |
-|---|---|
-| `youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@*/video/` | short |
-| `youtube.com/watch`, `youtu.be/` | long |
-| host in `ARTICLE_DEFAULT_DOMAINS` or per-chat `allowed_domains` | article |
-| anything else | rejected |
+| Pattern                                                              | Pipeline |
+| -------------------------------------------------------------------- | -------- |
+| `youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@*/video/` | short    |
+| `youtube.com/watch`, `youtu.be/`                                     | long     |
+| `github.com/<owner>/<repo>` (gists / enterprise hosts rejected)      | repo     |
+| host in `ARTICLE_DEFAULT_DOMAINS` or per-chat `allowed_domains`      | article  |
+| anything else                                                        | rejected |
 
 ### Job status FSM
 
@@ -159,7 +160,7 @@ pending → processing → transcript_done → enriching → done
 
 ## Development
 
-```bash
+```Shell
 # Install dependencies
 pip install -r requirements.txt
 
@@ -178,7 +179,7 @@ ruff check src/
 
 ### Web dashboard (`web/`)
 
-```bash
+```Shell
 cd web
 npm install
 npm run dev                  # Next.js dev server
@@ -191,7 +192,7 @@ Migrations run automatically at startup via `PRAGMA user_version`. The migration
 
 To inspect the current schema version:
 
-```bash
+```Shell
 sqlite3 data/jobs.db "PRAGMA user_version;"
 ```
 
@@ -209,25 +210,25 @@ sqlite3 data/jobs.db "PRAGMA user_version;"
 
 All env vars are validated at startup by `src/config.py` (pydantic-settings). Missing required vars crash the process before the first request.
 
-| Variable | Required | Description |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Bot token from @BotFather |
-| `TELEGRAM_WEBHOOK_SECRET` | ✅ | Random secret for webhook validation |
-| `WEBHOOK_URL` | ✅ | Public HTTPS base URL |
-| `REDIS_URL` | ✅ | Redis connection string |
-| `DB_PATH` | ✅ | SQLite file path (default: `/app/data/jobs.db`) |
-| `GEMINI_FREE_API_KEY` | ✅ | Primary Gemini key |
-| `GEMINI_PAID_API_KEY` | — | Fallback Gemini key on rate limit |
-| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | ✅ | Drive + Sheets OAuth |
-| `GOOGLE_SHEETS_ID` | ✅ | Single consolidated workbook (4 tabs) |
-| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN` | ✅ | Drive folder IDs |
-| `GOOGLE_DRIVE_FOLDER_PRD` | — | PRD output folder (Mini-PRD disabled if absent) |
-| `BRAVE_API_KEY` | — | Brave Search (link verification disabled if absent) |
-| `GITHUB_TOKEN` | — | GitHub repo enrichment in `/find` results |
-| `JINA_API_KEY` | — | Jina Reader (works without key, higher quota with) |
-| `BRAIN_MIN_SCORE` | — | Cosine similarity floor for `/find` (default: 0.5) |
-| `PRD_MAX_TRANSCRIPT_CHARS` | — | PRD transcript cap (default: 60000) |
-| `PRD_INTENT_COOLDOWN_SECONDS` | — | Cooldown between intent PRD re-runs (default: 15) |
+| Variable                                      | Required | Description                                         |
+| --------------------------------------------- | -------- | --------------------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`                          | ✅       | Bot token from @BotFather                           |
+| `TELEGRAM_WEBHOOK_SECRET`                     | ✅       | Random secret for webhook validation                |
+| `WEBHOOK_URL`                                 | ✅       | Public HTTPS base URL                               |
+| `REDIS_URL`                                   | ✅       | Redis connection string                             |
+| `DB_PATH`                                     | ✅       | SQLite file path (default: `/app/data/jobs.db`)     |
+| `GEMINI_FREE_API_KEY`                         | ✅       | Primary Gemini key                                  |
+| `GEMINI_PAID_API_KEY`                         | —        | Fallback Gemini key on rate limit                   |
+| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | ✅       | Drive + Sheets OAuth                                |
+| `GOOGLE_SHEETS_ID`                            | ✅       | Single consolidated workbook (5 tabs)               |
+| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN`        | ✅       | Drive folder IDs                                    |
+| `GOOGLE_DRIVE_FOLDER_PRD`                     | —        | PRD output folder (Mini-PRD disabled if absent)     |
+| `BRAVE_API_KEY`                               | —        | Brave Search (link verification disabled if absent) |
+| `GITHUB_TOKEN`                                | —        | GitHub API for the repo pipeline + `/find` enrichment (higher rate limit) |
+| `JINA_API_KEY`                                | —        | Jina Reader (works without key, higher quota with)  |
+| `BRAIN_MIN_SCORE`                             | —        | Cosine similarity floor for `/find` (default: 0.5)  |
+| `PRD_MAX_TRANSCRIPT_CHARS`                    | —        | PRD transcript cap (default: 60000)                 |
+| `PRD_INTENT_COOLDOWN_SECONDS`                 | —        | Cooldown between intent PRD re-runs (default: 15)   |
 
 ---
 
@@ -245,10 +246,12 @@ The bot uses OAuth with a refresh token — no service account needed for person
 
 ### Sheets workbook
 
-Create one Google Sheet with four tabs named exactly:
+Create one Google Sheet with five tabs named exactly:
+
 - `YouTube Transcript Index`
 - `Short Video Analysis`
 - `Article Analysis`
+- `Repo Analysis`
 - `mini PRD`
 
 Set `GOOGLE_SHEETS_ID` to the spreadsheet ID from the URL.
@@ -259,7 +262,7 @@ Set `GOOGLE_SHEETS_ID` to the spreadsheet ID from the URL.
 
 ### Docker Compose (production)
 
-```bash
+```Shell
 docker-compose up -d --scale worker=2   # 2 workers, 1 API container
 ```
 
@@ -267,7 +270,7 @@ The transcript sidecar (`transcript_server.py`) runs on the host. Set `TRANSCRIP
 
 ### Logs
 
-```bash
+```Shell
 docker-compose logs -f worker   # structured JSON via structlog
 
 # Query errors
@@ -294,7 +297,8 @@ src/
 │   ├── long_video.py    # Transcript + metadata → Drive → Phase 1
 │   ├── enrichment.py    # Gemini text enrichment, Phase 2
 │   ├── prd.py           # Mini-PRD: run_auto / run_intent / run_auto_resend
-│   └── article.py       # Jina → cache → paywall → Gemini → Sheets → Brain
+│   ├── article.py       # Jina → cache → paywall → Gemini → Sheets → Brain
+│   └── repo.py          # GitHub bundle → Gemini structured analysis → Sheets → Brain
 ├── services/
 │   ├── gemini_client.py # free→paid fallback, GeminiUnavailableError
 │   ├── gemini.py        # Vision + resolve_tool_urls

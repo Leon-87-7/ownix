@@ -24,6 +24,10 @@ class DomainIn(BaseModel):
     domain: str = Field(..., min_length=1, max_length=253)
 
 
+class RecoverySettingsIn(BaseModel):
+    telegram_notifications: bool
+
+
 def _normalize_domain(raw: str) -> str:
     """Strip to hostname, lowercase, drop www. prefix."""
     s = raw.strip()
@@ -133,3 +137,19 @@ async def remove_ignored_domain(domain: str, request: Request) -> None:
     ok = await database.remove_ignored_domain(chat_id, normalized)
     if not ok:
         raise HTTPException(status_code=404, detail="Domain not found")
+
+
+@controls_router.get("/recovery-settings")
+async def get_recovery_settings(request: Request) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    enabled = await database.get_recovery_telegram_notifications_enabled(chat_id)
+    return {"telegram_notifications": enabled}
+
+
+@controls_router.put("/recovery-settings")
+async def update_recovery_settings(body: RecoverySettingsIn, request: Request) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    await database.set_recovery_telegram_notifications_enabled(
+        chat_id, body.telegram_notifications
+    )
+    return {"telegram_notifications": body.telegram_notifications}

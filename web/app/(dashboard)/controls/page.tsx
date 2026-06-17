@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
+import { apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
 import { TabBar } from '@/components/ui';
 
@@ -203,7 +204,70 @@ function DomainTab({ apiPath, label }: { apiPath: string; label: string }) {
   );
 }
 
-const TABS = ['Tags', 'Allowed Domains', 'Ignored Domains'] as const;
+function RecoveryTab() {
+  const [enabled, setEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/controls/recovery-settings', { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load recovery settings');
+        return res.json() as Promise<{ telegram_notifications: boolean }>;
+      })
+      .then((data) => {
+        if (!controller.signal.aborted) setEnabled(data.telegram_notifications);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return;
+        setError(err instanceof Error ? err.message : 'Failed to load recovery settings');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const toggle = async (checked: boolean) => {
+    const previous = enabled;
+    setEnabled(checked);
+    setSaving(true);
+    setError(undefined);
+    try {
+      const result = await apiPut<{ telegram_notifications: boolean }>(
+        '/api/controls/recovery-settings',
+        { telegram_notifications: checked },
+        'Failed to save recovery settings',
+      );
+      setEnabled(result.telegram_notifications);
+    } catch (err) {
+      setEnabled(previous);
+      setError(err instanceof Error ? err.message : 'Failed to save recovery settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="flex max-w-xl items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-ink">
+        <input
+          type="checkbox"
+          checked={enabled}
+          disabled={loading || saving}
+          onChange={(e) => void toggle(e.target.checked)}
+          className="h-4 w-4 accent-signal"
+        />
+        <span className="font-medium">Dashboard recovery Telegram notifications</span>
+      </label>
+      {error && <p className="text-sm text-status-error">{error}</p>}
+    </div>
+  );
+}
+
+const TABS = ['Tags', 'Allowed Domains', 'Ignored Domains', 'Recovery'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function ControlsPage() {
@@ -218,6 +282,7 @@ export default function ControlsPage() {
       {activeTab === 'Tags' && <TagsTab />}
       {activeTab === 'Allowed Domains' && <DomainTab apiPath="/api/controls/allowed-domains" label="Allowed Domains" />}
       {activeTab === 'Ignored Domains' && <DomainTab apiPath="/api/controls/ignored-domains" label="Ignored Domains" />}
+      {activeTab === 'Recovery' && <RecoveryTab />}
     </div>
   );
 }

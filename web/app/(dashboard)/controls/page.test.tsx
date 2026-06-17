@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import ControlsPage from './page';
 
@@ -55,6 +55,12 @@ function setupDomainsMock(overrides: Partial<ReturnType<typeof useDomainList>> =
 beforeEach(() => {
   setupTagsMock();
   setupDomainsMock();
+  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      return new Response(JSON.stringify({ telegram_notifications: false }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ telegram_notifications: true }), { status: 200 });
+  }));
 });
 
 describe('ControlsPage', () => {
@@ -68,6 +74,7 @@ describe('ControlsPage', () => {
     expect(screen.getByRole('button', { name: 'Tags' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Allowed Domains' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ignored Domains' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Recovery' })).toBeTruthy();
   });
 
   it('shows Tags tab content by default', () => {
@@ -199,5 +206,35 @@ describe('ControlsPage', () => {
     fireEvent.click(removeBtns[0]);
     const { waitFor: wf } = await import('@testing-library/react');
     await wf(() => expect(screen.getByText('Remove failed')).toBeTruthy());
+  });
+
+  it('shows the recovery Telegram notification preference', async () => {
+    render(<ControlsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: /dashboard recovery telegram notifications/i,
+    });
+    expect(checkbox).toBeChecked();
+  });
+
+  it('persists the recovery Telegram notification preference', async () => {
+    render(<ControlsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: /dashboard recovery telegram notifications/i,
+    });
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/controls/recovery-settings',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ telegram_notifications: false }),
+        }),
+      );
+    });
   });
 });

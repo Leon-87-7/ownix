@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobSummary } from '@/components/job-card';
 import FeedPage from './page';
@@ -78,6 +78,16 @@ beforeEach(() => {
   navigationMock.searchParams = new URLSearchParams();
   mockUseFeedData.mockReset();
   mockUseFuseSearch.mockReset();
+  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      return new Response(JSON.stringify({ enqueued: 1 }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      stale_pending: 2,
+      error_jobs: 1,
+      stale_in_flight: 1,
+    }), { status: 200 });
+  }));
   setupMocks();
 });
 
@@ -186,5 +196,51 @@ describe('FeedPage', () => {
     expect(card.className).toContain('flex');
     expect(card.className).toContain('p-3');
     expect(card.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
+  });
+
+  it('renders the recovery panel from the active tab summary', async () => {
+    setupMocks({ ctFilter: 'short' });
+
+    render(<FeedPage />);
+
+    expect(await screen.findByText('Recovery')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /retry pending \(2\)/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /retry failed \(2\)/i })).toBeTruthy();
+    expect(screen.getByText('1 stale in-flight')).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/recovery/summary?content_type=short',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('refreshes recovery summary and feed data after retrying pending jobs', async () => {
+    const reload = vi.fn();
+    setupMocks({ ctFilter: 'short', reload });
+
+    render(<FeedPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /retry pending \(2\)/i }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/jobs/recovery/retry-pending',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ content_type: 'short' }),
+        }),
+      );
+      expect(reload).toHaveBeenCalled();
+    });
+  });
+
+  it('requires the exact confirmation copy before clearing failed jobs', async () => {
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmMock);
+
+    render(<FeedPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /clear failed \(1\)/i }));
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.',
+    );
   });
 });

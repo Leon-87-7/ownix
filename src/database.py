@@ -135,6 +135,14 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_settings (
+    chat_id    INTEGER NOT NULL,
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (chat_id, key)
+);
+
 -- Second Brain semantic link graph (src/brain.py data-access layer).
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
@@ -578,6 +586,17 @@ _MIGRATIONS.append([
     )""",
 ])
 
+# v15 -> v16: per-chat web dashboard settings (issue #171)
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS user_settings (
+        chat_id    INTEGER NOT NULL,
+        key        TEXT NOT NULL,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (chat_id, key)
+    )""",
+])
+
 
 # v15 → v16: vision summary column for short jobs (issue #164)
 _MIGRATIONS.append([
@@ -707,6 +726,39 @@ async def remove_ignored_domain(chat_id: int, domain: str) -> bool:
         "DELETE FROM ignored_domains WHERE chat_id = ? AND domain = ?",
         (chat_id, domain),
     ) > 0
+
+
+async def get_user_setting(chat_id: int, key: str) -> str | None:
+    row = await _fetch_one(
+        "SELECT value FROM user_settings WHERE chat_id = ? AND key = ?",
+        (chat_id, key),
+    )
+    return str(row["value"]) if row else None
+
+
+async def set_user_setting(chat_id: int, key: str, value: str) -> None:
+    await _execute(
+        """
+        INSERT INTO user_settings (chat_id, key, value, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(chat_id, key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (chat_id, key, value),
+    )
+
+
+_RECOVERY_TELEGRAM_NOTIFICATIONS_KEY = "dashboard_recovery_telegram_notifications"
+
+
+async def get_recovery_telegram_notifications_enabled(chat_id: int) -> bool:
+    value = await get_user_setting(chat_id, _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY)
+    return value != "0"
+
+
+async def set_recovery_telegram_notifications_enabled(chat_id: int, enabled: bool) -> None:
+    await set_user_setting(chat_id, _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY, "1" if enabled else "0")
 
 
 async def add_allowed_domain(chat_id: int, domain: str) -> bool:
@@ -906,7 +958,12 @@ async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], stat
 _REAPABLE_STATUSES = ("processing", "enriching")
 
 
-async def fetch_and_mark_stale_jobs(stale_minutes: int = 10) -> list[dict[str, Any]]:
+async def fetch_and_mark_stale_jobs(
+    stale_minutes: int = 10,
+    *,
+    chat_id: int | None = None,
+    content_type: str | None = None,
+) -> list[dict[str, Any]]:
     """Recover jobs orphaned by a worker crash and return the affected rows.
 
     Selects jobs stuck in ``processing``/``enriching`` whose ``updated_at`` is older
@@ -918,18 +975,25 @@ async def fetch_and_mark_stale_jobs(stale_minutes: int = 10) -> list[dict[str, A
     """
     modifier = f"-{stale_minutes} minutes"
     placeholders = ",".join("?" for _ in _REAPABLE_STATUSES)
-    where = f"status IN ({placeholders}) AND updated_at < datetime('now', ?)"
-    params = (*_REAPABLE_STATUSES, modifier)
+    conditions = [f"status IN ({placeholders})", "updated_at < datetime('now', ?)"]
+    params: list[Any] = [*_REAPABLE_STATUSES, modifier]
+    if chat_id is not None:
+        conditions.append("chat_id = ?")
+        params.append(chat_id)
+    if content_type is not None:
+        conditions.append("content_type = ?")
+        params.append(content_type)
+    where = " AND ".join(conditions)
     async with connection() as conn:
         cursor = await conn.execute(
-            f"SELECT id, chat_id, status FROM jobs WHERE {where}", params
+            f"SELECT id, chat_id, status FROM jobs WHERE {where}", tuple(params)
         )
         rows = [dict(row) for row in await cursor.fetchall()]
         if rows:
             await conn.execute(
                 f"UPDATE jobs SET status='error', attempt = attempt + 1, "
                 f"updated_at=CURRENT_TIMESTAMP WHERE {where}",
-                params,
+                tuple(params),
             )
             await conn.commit()
     if rows:

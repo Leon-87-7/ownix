@@ -1,3 +1,5 @@
+import type React from 'react';
+
 const CONTENT_TYPE_FILTERS = [
   { label: "All", value: "" },
   { label: "Short", value: "short" },
@@ -67,7 +69,7 @@ function FilterButton({ label, active, onClick }: { label: string; active: boole
   );
 }
 
-export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeCounts, totalCount, stFilter, setStFilter }: {
+export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeCounts, totalCount, stFilter, setStFilter, recoveryPanel }: {
   query: string;
   setQuery: (q: string) => void;
   ctFilter: string;
@@ -76,6 +78,7 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
   totalCount: number;
   stFilter: string;
   setStFilter: (v: string) => void;
+  recoveryPanel?: React.ReactNode;
 }) {
   const tabs = CONTENT_TYPE_FILTERS.map(({ label, value }) => ({
     label,
@@ -104,10 +107,13 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
         placeholder="Search by title or URL…"
         className="h-10 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
       />
-      <div className="flex flex-wrap items-center gap-1">
-        {STATUS_FILTERS.map(({ label, value }) => (
-          <FilterButton key={value} label={label} active={stFilter === value} onClick={() => setStFilter(value)} />
-        ))}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="flex flex-wrap items-center gap-1">
+          {STATUS_FILTERS.map(({ label, value }) => (
+            <FilterButton key={value} label={label} active={stFilter === value} onClick={() => setStFilter(value)} />
+          ))}
+        </div>
+        {recoveryPanel}
       </div>
     </section>
   );

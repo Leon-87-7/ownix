@@ -113,6 +113,11 @@
 | [#160](https://github.com/Leon-87-7/vig/issues/160) | ADR-0025 follow-up note: historical short thumbnails are re-derivable                                      | Docs / ADR               | Closed on GH                                                                              |
 | [#161](https://github.com/Leon-87-7/vig/issues/161) | Backfill short thumbnails: frame-selection strategies (rerun-vision, fallbacks)                            | Pipeline / Short         | Closed on GH                                                                              |
 | [#162](https://github.com/Leon-87-7/vig/issues/162) | Backfill short thumbnails: --overwrite-existing clobber-safety flag                                        | Pipeline / Short         | Closed on GH                                                                              |
+| [#117](https://github.com/Leon-87-7/vig/issues/117) | ExportModal: restore PDF fallback when Google Drive is not configured                                      | Web / Exports            | Committed to main (e3dcdd2); closed on GH                                                  |
+| [#164](https://github.com/Leon-87-7/vig/issues/164) | fix(web/jobs): populate short-pipeline job detail pages                                                    | Web / Jobs Detail        | Merged; PR #172; closed on GH                                                              |
+| [#165](https://github.com/Leon-87-7/vig/issues/165) | fix(web/feed): guard feed fetch race so tabs only show their content type                                  | Web / Feed               | Merged; PR #173; closed on GH                                                              |
+| [#166](https://github.com/Leon-87-7/vig/issues/166) | fix(web/feed): scope Overview stat cards to the active content-type tab                                    | Web / Feed               | Merged; PR #173; closed on GH                                                              |
+| [#94](https://github.com/Leon-87-7/vig/issues/94)   | web(S12): Deploy — docker-compose 'web' service + Dockerfile + app./api. subdomains \[HITL]                | Web / Ops                | HITL deploy; closed on GH                                                                  |
 
 ---
 
@@ -120,6 +125,11 @@
 
 |                                                   # | Title | Area | Depends On |
 | --------------------------------------------------: | ----- | ---- | ---------- |
+| [#167](https://github.com/Leon-87-7/vig/issues/167) | web(jobs): recovery panel summary by active feed tab | Web / Jobs | — |
+| [#168](https://github.com/Leon-87-7/vig/issues/168) | web(jobs): retry stale pending jobs from recovery panel | Web / Jobs | #167 |
+| [#169](https://github.com/Leon-87-7/vig/issues/169) | web(jobs): retry failed jobs with tenant-scoped stale reaping | Web / Jobs | #167 |
+| [#170](https://github.com/Leon-87-7/vig/issues/170) | web(jobs): clear failed jobs as cancelled from recovery panel | Web / Jobs | #167 |
+| [#171](https://github.com/Leon-87-7/vig/issues/171) | web(controls): opt out of dashboard recovery Telegram notifications | Web / Controls | #169 |
 
 ---
 
@@ -145,7 +155,6 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                 # | Title                                                                                       | Area      | Notes                                                                                   |
 | ------------------------------------------------: | ------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------- |
-| [#94](https://github.com/Leon-87-7/vig/issues/94) | web(S12): Deploy — docker-compose 'web' service + Dockerfile + app./api. subdomains \[HITL] | Web / Ops | HITL: DNS, app./api. subdomains, prod deploy, BotFather domain. Unblocked (#84 ✅-Done) |
 
 ---
 
@@ -252,7 +261,7 @@ Critical path: #83 → #84 → {#85, #86, #87} → #88/#89 → #93 → #95
     ├── #90 S9 — User templates ✅-Done ◄── also #83
     ├── #91 S10 — Controls Allowed/Ignored ✅-Done ◄── also #81
     ├── #92 S11 — Brain search page ✅-Done ◄── also #83
-    └── #94 S12 — Deploy [HITL]
+    └── #94 S12 — Deploy [HITL] ✅-Done
 
 #96 Templates IDOR fix (tenant-scope templates table) ✅-Done (commit 93ad9f0)
 
@@ -325,20 +334,36 @@ Short-thumbnail backfill (docs/backfill_agreed_plan.md — ADR-0025 Phase-2 foll
 └── #162 --overwrite-existing clobber-safety flag ✅-Done
 #160 ADR-0025 follow-up note (independent — doc only) ✅-Done
 Critical path: #159 → {#161, #162}; #160 parallel (all ✅-Done)
+
+Feed/detail bug fixes (docs/bugs/2026-06-15-*.md)
+#164 short-pipeline detail pages populate (independent) ✅-Done (PR #172)
+#165 feed fetch-race guard (independent) ✅-Done (PR #173)
+└── #166 tab-scoped Overview stat cards ◄── #165 ✅-Done (PR #173)
+Critical path: #165 → #166; #164 parallel (all ✅-Done)
+
+Dashboard recovery panel (ADR-0026)
+#167 recovery summary + panel shell
+├── #168 retry stale pending jobs
+├── #169 retry failed jobs + tenant-scoped stale reaping
+│   └── #171 Controls opt-out for recovery Telegram notifications
+└── #170 clear failed jobs as cancelled
+Critical path: #167 → {#168, #169, #170}; #171 follows #169
 ```
 
 ---
 
 ## Open PRs
 
-|                                                 # | Title                                                                            | Branch→Base        | Linked Issue | Status |
-| ------------------------------------------------: | -------------------------------------------------------------------------------- | ------------------ | ------------ | ------ |
-| [#116](https://github.com/Leon-87-7/vig/pull/116) | fix(queue/api/db): brpop idle handling, OpenAPI schema, per-chat ignored domains | repo-pipeline→main | —            | Open   |
+|                                                 # | Title                                  | Branch→Base                       | Linked Issue                 | Status |
+| ------------------------------------------------: | -------------------------------------- | --------------------------------- | ---------------------------- | ------ |
+| [#174](https://github.com/Leon-87-7/vig/pull/174) | feat(web): add dashboard job recovery panel | codex-dashboard-recovery-panel→main | #167, #168, #169, #170, #171 | Open   |
 
 ## Closed PRs
 
 |                                                 # | Title                                                                                                  | Branch→Base                                | Linked Issue        | Status    |
 | ------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------- | --------- |
+| [#173](https://github.com/Leon-87-7/vig/pull/173) | fix(web/feed): guard feed fetch race so tabs only show their content type                              | fix/165-feed-race-guard→main               | #165, #166          | ✅ Merged |
+| [#172](https://github.com/Leon-87-7/vig/pull/172) | fix(web/jobs): populate short-pipeline job detail pages                                                 | fix/164-short-job-detail→main              | #164                | ✅ Merged |
 | [#163](https://github.com/Leon-87-7/vig/pull/163) | fix(article/backfill): continue og:image scan on bad scheme; SQL LIMIT on short backfill               | fix/greptile-149-followup→main             | —                   | ✅ Merged |
 | [#149](https://github.com/Leon-87-7/vig/pull/149) | Resolve feed thumbnail issues #142-#148                                                                | codex-issues-142-148-feed-thumbnails→main  | —                   | ✅ Merged |
 | [#141](https://github.com/Leon-87-7/vig/pull/141) | feat(web): Operator's Console design system — spec, tokens, drawer nav, full migration                 | feat/operators-console-design→main         | —                   | ✅ Merged |
@@ -348,6 +373,7 @@ Critical path: #159 → {#161, #162}; #160 parallel (all ✅-Done)
 | [#135](https://github.com/Leon-87-7/vig/pull/135) | refactor(hooks): extract custom hooks + add vitest test infrastructure                                 | refactor/hooks-121-129→main                | —                   | ✅ Merged |
 | [#134](https://github.com/Leon-87-7/vig/pull/134) | refactor(frontend): extract custom hooks across all dashboard pages (#121-129)                         | refactor/hooks-121-129→main                | #121                | ✅ Merged |
 | [#120](https://github.com/Leon-87-7/vig/pull/120) | feat(github+repo): topics field, v2 cache key, \_prioritize_tree, and \_build_repo_prompt improvements | feat/118-119-repo-prompt-improvements→main | #118, #119          | ✅ Merged |
+| [#116](https://github.com/Leon-87-7/vig/pull/116) | fix(queue/api/db): brpop idle handling, OpenAPI schema, per-chat ignored domains                       | repo-pipeline→main                         | —                   | ❌ Closed |
 | [#115](https://github.com/Leon-87-7/vig/pull/115) | fix(spaces): ExportModal popup-block, controlled input, N+1 DB loop                                    | pr/spaces-s7-s8→main                       | —                   | ✅ Merged |
 | [#114](https://github.com/Leon-87-7/vig/pull/114) | feat(web): S5/S6 job annotations + spaces CRUD, S11 brain semantic-search                              | pr/web-s2-s3-s4→main                       | —                   | ✅ Merged |
 | [#113](https://github.com/Leon-87-7/vig/pull/113) | feat(short-pipeline): transcript tail — closes #97 #98 #99 #100                                        | dev→main                                   | #97, #98, #99, #100 | ✅ Merged |

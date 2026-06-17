@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from src import database
 from src.api.deps import get_owned_job
+from src.services import job_recovery
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline, normalize_repo_url
 
@@ -18,6 +19,15 @@ log = get_logger(__name__)
 jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 ThumbnailKind = Literal["landscape", "portrait"]
+RecoveryContentType = Literal["short", "long", "article", "repo"]
+
+
+class RecoveryRequest(BaseModel):
+    content_type: RecoveryContentType | None = None
+
+
+def _recovery_error(exc: ValueError) -> HTTPException:
+    return HTTPException(status_code=422, detail=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +79,45 @@ async def get_job_stats(
         "by_status": by_status,
         "by_content_type": by_content_type,
     }
+
+
+@jobs_router.get("/recovery/summary")
+async def get_recovery_summary(
+    request: Request,
+    content_type: RecoveryContentType | None = Query(default=None),
+) -> dict[str, int]:
+    chat_id: int = request.state.user["id"]
+    try:
+        return await job_recovery.recovery_summary(chat_id, content_type)
+    except ValueError as exc:
+        raise _recovery_error(exc) from exc
+
+
+@jobs_router.post("/recovery/retry-pending")
+async def retry_recovery_pending(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+    chat_id: int = request.state.user["id"]
+    try:
+        return await job_recovery.retry_pending(chat_id, body.content_type if body else None)
+    except ValueError as exc:
+        raise _recovery_error(exc) from exc
+
+
+@jobs_router.post("/recovery/retry-error")
+async def retry_recovery_error(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+    chat_id: int = request.state.user["id"]
+    try:
+        return await job_recovery.retry_error(chat_id, body.content_type if body else None)
+    except ValueError as exc:
+        raise _recovery_error(exc) from exc
+
+
+@jobs_router.post("/recovery/clear-failed")
+async def clear_recovery_failed(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+    chat_id: int = request.state.user["id"]
+    try:
+        return await job_recovery.clear_failed(chat_id, body.content_type if body else None)
+    except ValueError as exc:
+        raise _recovery_error(exc) from exc
 
 
 # ---------------------------------------------------------------------------
