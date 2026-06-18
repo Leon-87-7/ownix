@@ -1215,14 +1215,7 @@ async def _route_document_url(chat_id: int, url: str, message_id: int | None) ->
         await send_message(chat_id, "📄 That link didn't return a PDF.")
         log.info("document_url_not_pdf", chat_id=chat_id, url=url)
         return
-    sha = hashlib.sha256(data).hexdigest()
-    key = storage.object_key("documents", sha, "pdf")
-    await storage.upload(key, data, "application/pdf")
-    job_id = await database.create_job(
-        chat_id=chat_id, url=key, content_type="document", message_id=message_id,
-    )
-    await queue.enqueue({"task": "document", "job_id": job_id})
-    await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+    await _enqueue_document_job(chat_id, data, message_id)
 
 
 @router.post("/webhook")
@@ -1293,8 +1286,8 @@ async def _handle_document_update(chat_id: int, message: dict, document: dict) -
     asyncio.create_task(_ingest_document(chat_id, document, message.get("message_id")))
 
 
-async def _ingest_document(chat_id: int, document: dict, message_id: int | None) -> None:
-    data = await download_file(document["file_id"])
+async def _enqueue_document_job(chat_id: int, data: bytes, message_id: int | None) -> None:
+    """Store PDF bytes content-addressed, create + enqueue the job, ack the user."""
     sha = hashlib.sha256(data).hexdigest()
     key = storage.object_key("documents", sha, "pdf")
     await storage.upload(key, data, "application/pdf")
@@ -1303,6 +1296,11 @@ async def _ingest_document(chat_id: int, document: dict, message_id: int | None)
     )
     await queue.enqueue({"task": "document", "job_id": job_id})
     await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+
+
+async def _ingest_document(chat_id: int, document: dict, message_id: int | None) -> None:
+    data = await download_file(document["file_id"])
+    await _enqueue_document_job(chat_id, data, message_id)
 
 
 async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None:

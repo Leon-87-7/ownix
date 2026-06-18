@@ -26,7 +26,5 @@ async def parse_pdf(data: bytes) -> str:
     """Extract plain text from PDF bytes. Raises ParseError on any parse failure."""
     try:
         return await asyncio.to_thread(_parse_sync, data)
-    except ParseError:
-        raise
     except Exception as exc:  # liteparse.ParseError + any native parse failure
         raise ParseError(str(exc)) from exc

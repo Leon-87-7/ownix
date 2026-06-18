@@ -83,7 +83,10 @@ def _build_enrichment_message(job: dict, tools: list[dict], references: list[str
     tag = f"job_{job['id'][-4:]}:"
     title = html.escape(job.get("title") or "Untitled")
     objective = html.escape(job.get("ai_objective") or "")
-    extra = _decode_template_analysis(job)
+    try:
+        extra = json.loads(job.get("template_analysis") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        extra = {}
 
     parts = [tag, f"📄 {title}"]
     byline = " · ".join(
@@ -111,13 +114,6 @@ def _build_enrichment_message(job: dict, tools: list[dict], references: list[str
             parts.append(f"• {prefix} {name}: {html.escape(t.get('description', ''))}")
 
     return "\n".join(parts)
-
-
-def _decode_template_analysis(job: dict) -> dict:
-    try:
-        return json.loads(job.get("template_analysis") or "{}")
-    except (json.JSONDecodeError, TypeError):
-        return {}
 
 
 def _safe_filename(title: str, max_len: int = 80) -> str:

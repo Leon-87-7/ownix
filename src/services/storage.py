@@ -4,7 +4,6 @@ google-cloud-storage is synchronous, so every call is wrapped in
 asyncio.to_thread. Objects are content-addressed by SHA-256:
     documents/<sha>.pdf   — the uploaded source PDF
     parsed/<sha>.txt      — extracted plain text
-    parsed/<sha>.md       — extracted markdown
 Setup is the human's job — see docs/handoff/gcs-setup.md.
 """
 from __future__ import annotations
