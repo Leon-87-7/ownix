@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Tabs: 'YouTube Transcript Index', 'Short Video Analysis',
     # 'Article Analysis', 'mini PRD'. Tab routing lives in src/services/sheets.py.
     GOOGLE_SHEETS_ID: str = ""
+    # Document pipeline (#150) — GCS content-addressed store for PDFs + parsed
+    # text. See docs/handoff/gcs-setup.md. Non-required: the hot path mocks it
+    # in tests and only needs it when a real PDF is processed end-to-end.
+    GOOGLE_STORAGE_BUCKET: str = ""
 
     # Slice #4 — Gemini enrichment
     GEMINI_FREE_API_KEY: str = ""

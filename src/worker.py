@@ -5,6 +5,7 @@ Task discriminators handled by _dispatch:
     - 'enrichment'      → processors.enrichment.run
     - 'article'         → processors.article.run
     - 'repo'            → processors.repo.run
+    - 'document'        → processors.document.run
     - 'prd_auto'        → processors.prd.run_auto
     - 'prd_auto_resend' → processors.prd.run_auto_resend
     - 'prd_intent'      → processors.prd.run_intent
@@ -115,6 +116,20 @@ async def _handle_repo(task: dict) -> None:
         await _notify_failure(job["chat_id"], job_id, "❌ Repo processing failed. Please try again.")
 
 
+async def _handle_document(task: dict) -> None:
+    job_id = task["job_id"]
+    job = await _load_job_or_log(job_id)
+    if not job:
+        return
+    try:
+        from src.processors import document
+        await document.run(job, skip_document=task.get("skip_document", False))
+    except Exception:
+        log.exception("document_processor_error", job_id=job_id)
+        await database.update_job_status(job_id, "error")
+        await _notify_failure(job["chat_id"], job_id, "❌ Document processing failed. Please try again.")
+
+
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
     """Roll a crashed PRD slot back to 'error' and offer retry buttons. Never raises."""
     # status_col is interpolated into SQL — keep it pinned to known columns.
@@ -182,6 +197,7 @@ _TASK_HANDLERS = {
     "video": _handle_video,
     "article": _handle_article,
     "repo": _handle_repo,
+    "document": _handle_document,
     "prd_auto": _handle_prd_auto,
     "prd_auto_resend": _handle_prd_auto_resend,
     "prd_intent": _handle_prd_intent,

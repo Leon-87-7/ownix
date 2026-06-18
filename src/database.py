@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
-    CHECK(content_type IN ('short', 'long', 'article', 'repo')),
+    CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
     CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
     CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error'))
@@ -602,6 +602,83 @@ _MIGRATIONS.append([
 _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN summary TEXT",
 ])
+
+
+# v16 → v17: widen content_type CHECK to include 'document' (issue #150/#151).
+# SQLite can't ALTER a CHECK, so rebuild the table. _V17_CREATE is the current
+# full jobs DDL (mirrors SCHEMA_SQL) with 'document' added to the CHECK.
+_V17_CREATE = """CREATE TABLE IF NOT EXISTS jobs_v17 (
+    id                          TEXT PRIMARY KEY,
+    chat_id                     INTEGER NOT NULL,
+    message_id                  INTEGER,
+    url                         TEXT NOT NULL,
+    content_type                TEXT NOT NULL,
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    attempt                     INTEGER NOT NULL DEFAULT 1,
+    error_msg                   TEXT,
+    drive_url                   TEXT,
+    title                       TEXT,
+    transcript                  TEXT,
+    ai_category                 TEXT,
+    ai_topic                    TEXT,
+    ai_objective                TEXT,
+    ai_action_points            TEXT,
+    ai_tools                    TEXT,
+    ai_market_data              TEXT,
+    prd_auto_status             TEXT,
+    prd_auto_drive_file_id      TEXT,
+    prd_auto_drive_url          TEXT,
+    prd_auto_json               TEXT,
+    prd_intent_status           TEXT,
+    prd_intent_drive_file_id    TEXT,
+    prd_intent_drive_url        TEXT,
+    prd_intent_json             TEXT,
+    prd_intent_text             TEXT,
+    prd_intent_completed_at     TEXT,
+    sheets_row_id               TEXT,
+    template                    TEXT,
+    template_analysis           TEXT,
+    key_phrases                 TEXT,
+    validation_warning_sent     INTEGER DEFAULT 0,
+    template_detection_method   TEXT,
+    processing_time_ms          INTEGER,
+    promise_gap                 TEXT,
+    bot_message_id              INTEGER,
+    freestyle_prompt            TEXT,
+    best_frame_index            INTEGER,
+    platform                    TEXT,
+    video_id                    TEXT,
+    og_image_url                TEXT,
+    summary                     TEXT,
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at                TIMESTAMP,
+    CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
+    CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
+    CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error'))
+)"""
+
+_V17_COLS = [
+    "id", "chat_id", "message_id", "url", "content_type", "status", "attempt",
+    "error_msg", "drive_url", "title", "transcript", "ai_category", "ai_topic",
+    "ai_objective", "ai_action_points", "ai_tools", "ai_market_data",
+    "prd_auto_status", "prd_auto_drive_file_id", "prd_auto_drive_url", "prd_auto_json",
+    "prd_intent_status", "prd_intent_drive_file_id", "prd_intent_drive_url",
+    "prd_intent_json", "prd_intent_text", "prd_intent_completed_at", "sheets_row_id",
+    "template", "template_analysis", "key_phrases", "validation_warning_sent",
+    "template_detection_method", "processing_time_ms", "promise_gap", "bot_message_id",
+    "freestyle_prompt", "best_frame_index", "platform", "video_id", "og_image_url",
+    "summary", "created_at", "updated_at", "completed_at",
+]
+
+
+async def _migrate_v16_v17(conn: aiosqlite.Connection) -> None:
+    """Widen content_type CHECK to include 'document' via selective column copy."""
+    await _rebuild_jobs_table(conn, _V17_CREATE, "jobs_v17", _V17_COLS)
+
+
+_MIGRATIONS.append(_migrate_v16_v17)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:

@@ -250,3 +250,18 @@ async def download_photo(file_id: str) -> tuple[bytes, str]:
     ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "jpg"
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
     return file_resp.content, mime_map.get(ext, "image/jpeg")
+
+
+async def download_file(file_id: str) -> bytes:
+    """Download any Telegram file by file_id. Returns the raw bytes.
+
+    Same getFile → /file/bot{token}/{path} two-step as download_photo, but
+    format-agnostic (no mime map) — used for document uploads (#151).
+    """
+    resp = await _http().get(_endpoint("getFile"), params={"file_id": file_id})
+    _raise_for_status(resp, method="getFile")
+    file_path: str = resp.json()["result"]["file_path"]
+    dl_url = f"{_API_BASE}/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+    file_resp = await _http().get(dl_url)
+    _raise_for_status(file_resp, method="getFile.download")
+    return file_resp.content

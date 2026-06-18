@@ -5,7 +5,7 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
-Pipeline = Literal["short", "long", "article", "repo", "rejected"]
+Pipeline = Literal["short", "long", "article", "repo", "document", "rejected"]
 
 _TIKTOK_VIDEO_PATH = re.compile(r"^/@[^/]+/video/\d+", re.IGNORECASE)
 
@@ -82,6 +82,10 @@ def detect_pipeline(
     github = _match_github(host, path)
     if github is not None:
         return github
+    # Document pipeline: route by extension only (.pdf). No arxiv host special-
+    # casing at MVP (ADR-0023) — that returns when someone actually sends one.
+    if path.lower().endswith(".pdf"):
+        return "document"
     if _match_article(host, extra_domains):
         return "article"
     return "rejected"

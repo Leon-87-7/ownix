@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html
+import ipaddress
+import socket
 from collections.abc import Awaitable, Callable
+
+import httpx
 from secrets import compare_digest
 from urllib.parse import urlparse
 from dataclasses import dataclass
@@ -15,8 +20,10 @@ import re
 
 from src import database, queue
 from src.config import settings
+from src.services import storage
 from src.telegram.sender import (
     answer_callback_query,
+    download_file,
     download_photo,
     edit_message_text,
     forward_message,
@@ -1139,6 +1146,9 @@ async def _route_url(chat_id: int, text: str, message_id: int) -> None:
     if pipeline == "rejected":
         await _reject_url(chat_id, text)
         return
+    if pipeline == "document":
+        await _route_document_url(chat_id, text, message_id)
+        return
     if pipeline == "article":
         await _route_article(chat_id, text, message_id, pending_template)
         return
@@ -1146,6 +1156,75 @@ async def _route_url(chat_id: int, text: str, message_id: int) -> None:
         await _route_repo(chat_id, text, message_id, pending_template, client)
         return
     await _route_video(chat_id, text, pipeline, message_id, pending_template)
+
+
+async def _is_public_host(host: str) -> bool:
+    """True only when every resolved address for *host* is a public, routable IP.
+
+    Blocks SSRF to loopback / private / link-local (incl. 169.254.169.254 cloud
+    metadata) / reserved ranges. ponytail: validates via getaddrinfo, not pinned
+    to the socket — a DNS-rebinding attacker could still race the resolution;
+    upgrade to an IP-pinned httpx transport if that threat becomes real.
+    """
+    try:
+        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
+async def _safe_get_pdf(url: str) -> bytes | None:
+    """GET a user-supplied URL with SSRF guards. Returns body bytes or None.
+
+    Redirects are followed manually so each hop's host is re-validated (httpx's
+    own follow_redirects would skip the check on subsequent hops).
+    """
+    for _ in range(5):  # redirect cap
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return None
+        if not await _is_public_host(parsed.hostname):
+            log.warning("document_url_blocked_ssrf", host=parsed.hostname)
+            return None
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            async with client.stream("GET", url) as resp:
+                if resp.is_redirect and resp.next_request is not None:
+                    url = str(resp.next_request.url)
+                    continue
+                resp.raise_for_status()
+                if int(resp.headers.get("content-length") or 0) > _MAX_DOC_BYTES:
+                    log.warning("document_url_too_large", host=parsed.hostname)
+                    return None
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf += chunk
+                    if len(buf) > _MAX_DOC_BYTES:  # streamed cap: trust no Content-Length
+                        log.warning("document_url_too_large", host=parsed.hostname)
+                        return None
+                return bytes(buf)
+    return None  # too many redirects
+
+
+async def _route_document_url(chat_id: int, url: str, message_id: int | None) -> None:
+    """Fetch a .pdf URL, store it content-addressed, and enqueue a document job (#152)."""
+    try:
+        data = await _safe_get_pdf(url)
+    except Exception:
+        data = None
+    if data is None:
+        log.info("document_url_fetch_failed", chat_id=chat_id, url=url)
+        await send_message(chat_id, "📄 Couldn't download that PDF. Check the link and try again.")
+        return
+    if not data.startswith(b"%PDF"):
+        await send_message(chat_id, "📄 That link didn't return a PDF.")
+        log.info("document_url_not_pdf", chat_id=chat_id, url=url)
+        return
+    await _enqueue_document_job(chat_id, data, message_id)
 
 
 @router.post("/webhook")
@@ -1179,11 +1258,67 @@ async def webhook(
         await _handle_photo_update(chat_id, message, photo)
         return {"ok": True}
 
+    # Document upload path (#151) — a file message has no `.text`, so this must
+    # run before the text guard below.
+    document = message.get("document")
+    if document and chat_id:
+        await _handle_document_update(chat_id, message, document)
+        return {"ok": True}
+
     if not chat_id or not text:
         return {"ok": True}
 
     await _route_text(chat_id, text, message_id)
     return {"ok": True}
+
+
+_MAX_DOC_BYTES = 20 * 1024 * 1024  # Telegram bot getFile cap (ADR-0023)
+_DOC_TOO_LARGE_MSG = (
+    "📄 File too large for Telegram (max 20MB). Upload via the web "
+    "dashboard — feature coming soon."
+)
+
+
+async def _handle_document_update(chat_id: int, message: dict, document: dict) -> None:
+    """Validate + ingest a Telegram document upload. PDF-only at MVP (#151)."""
+    file_name = document.get("file_name") or ""
+    is_pdf = document.get("mime_type") == "application/pdf" or file_name.lower().endswith(".pdf")
+    if not is_pdf:
+        await send_message(chat_id, "📄 Only PDF files are supported right now.")
+        log.info("document_rejected_type", chat_id=chat_id, mime=document.get("mime_type"))
+        return
+    if (document.get("file_size") or 0) > _MAX_DOC_BYTES:
+        await send_message(chat_id, _DOC_TOO_LARGE_MSG)
+        log.info("document_rejected_size", chat_id=chat_id, size=document.get("file_size"))
+        return
+    # Heavy download/upload runs off the webhook request, mirroring the photo path.
+    asyncio.create_task(_ingest_document(chat_id, document, message.get("message_id")))
+
+
+async def _enqueue_document_job(chat_id: int, data: bytes, message_id: int | None) -> None:
+    """Store PDF bytes content-addressed, create + enqueue the job, ack the user."""
+    sha = hashlib.sha256(data).hexdigest()
+    key = storage.object_key("documents", sha, "pdf")
+    await storage.upload(key, data, "application/pdf")
+    job_id = await database.create_job(
+        chat_id=chat_id, url=key, content_type="document", message_id=message_id,
+    )
+    await queue.enqueue({"task": "document", "job_id": job_id})
+    await send_message(chat_id, f"📥 Received! \njob_{job_id[-4:]}")
+
+
+async def _ingest_document(chat_id: int, document: dict, message_id: int | None) -> None:
+    # Runs unawaited via create_task, so swallow nothing silently: catch and tell the user.
+    try:
+        data = await download_file(document["file_id"])
+        if not data.startswith(b"%PDF"):  # parity with the URL path; skip wasted upload+job
+            await send_message(chat_id, "📄 That file isn't a valid PDF.")
+            log.info("document_rejected_magic", chat_id=chat_id)
+            return
+        await _enqueue_document_job(chat_id, data, message_id)
+    except Exception:
+        log.exception("document_ingest_failed", chat_id=chat_id)
+        await send_message(chat_id, "📄 Couldn't process that PDF. Please try again.")
 
 
 async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None:

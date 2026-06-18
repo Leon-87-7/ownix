@@ -6,6 +6,23 @@ from src.utils.validators import detect_pipeline, extract_description_links, is_
 @pytest.mark.parametrize(
     "url",
     [
+        "https://example.com/papers/whitepaper.pdf",
+        "https://arxiv.org/pdf/2401.00001v1.pdf",
+        "https://host.tld/Doc.PDF",
+        "https://example.com/a.pdf?download=1",
+    ],
+)
+def test_document_pipeline(url: str) -> None:
+    assert detect_pipeline(url) == "document"
+
+
+def test_non_pdf_article_url_unaffected() -> None:
+    assert detect_pipeline("https://medium.com/@x/post") == "article"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
         "https://youtube.com/shorts/abc123",
         "https://www.youtube.com/shorts/abc123",
         "https://m.youtube.com/shorts/abc123",

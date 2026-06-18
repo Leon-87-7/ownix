@@ -8,6 +8,8 @@ structlog>=24.1
 google-genai>=1.0
 google-api-python-client>=2.120
 google-auth>=2.0
+google-cloud-storage>=2.0
+liteparse==2.0.7
 apscheduler>=3.10
 numpy>=1.26
 json-repair>=0.30
