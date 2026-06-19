@@ -1,6 +1,6 @@
 # vig — Module Map
 
-**Generated:** 2026-05-22 · **Refreshed:** 2026-05-28 (post #59–#62 article pipeline, Jina/allowlist/sheets consolidation)  
+**Generated:** 2026-05-22 · **Refreshed:** 2026-06-18 (post document pipeline, GCS storage, job recovery, short-video transcript tail)  
 Code-level reference: every `src/` module, what it owns, and how modules call each other.
 
 ---
@@ -50,7 +50,7 @@ queue.py  (Redis list "video_jobs")
   └─ dequeue()                 brpop (30 s blocking)
 ```
 
-**Task discriminators:** `video` | `article` | `enrichment` | `prd_auto` | `prd_auto_resend` | `prd_intent`
+**Task discriminators:** `video` | `article` | `repo` | `enrichment` | `prd_auto` | `prd_auto_resend` | `prd_intent` | `document`
 
 ---
 
@@ -62,6 +62,7 @@ worker.py._dispatch()
   │                    → job.content_type == "long"  → processors/long_video.py
   ├─ "article"         → processors/article.py
   ├─ "enrichment"      → processors/enrichment.py
+  ├─ "document"        → processors/document.py
   ├─ "prd_auto"        → processors/prd.py  run_auto()
   ├─ "prd_auto_resend" → processors/prd.py  run_auto_resend()
   └─ "prd_intent"      → processors/prd.py  run_intent()
@@ -78,6 +79,7 @@ worker.py._dispatch()
 | `processors/enrichment.py` | job after `transcript_done` | `gemini_client` (text gen), `templates`, `validation` |
 | `processors/prd.py` | job with enrichment done | `gemini_client` (text gen), `drive`, `sheets`, `brain` (ingest_links), `telegram/sender` |
 | `processors/article.py` | job (article) | `jina` (fetch_markdown), `database` (markdown_cache), `gemini_client` (text gen), `sheets` (append/update article row), `brain` (ingest_links), `telegram/sender` |
+| `processors/document.py` | job (document) | `storage` (GCS download/upload), `parse` (liteparse PDF extraction), `gemini_client` (text gen), `database`, `telegram/sender` |
 
 ---
 
@@ -95,6 +97,10 @@ worker.py._dispatch()
 | `services/sheets.py` | Google Sheets row write |
 | `services/brave.py` | Brave Search — link verification for short-video Vision links |
 | `services/jina.py` | Jina Reader API client — `fetch_markdown(url) → (title, body)`; optional `JINA_API_KEY` Bearer auth; raises `JinaFetchError` on HTTP errors |
+| `services/google_auth.py` | Shared Google credential builder — OAuth refresh token (personal) or service-account fallback; `prefer_service_account` flag for GCS |
+| `services/job_recovery.py` | Dashboard-triggered job recovery orchestration — stale job detection, re-enqueue, batch retry/cancel for the web recovery panel |
+| `services/storage.py` | GCS content-addressed blob store — `upload`/`download`/`exists` keyed by SHA-256; prefixes `documents/` and `parsed/`; sync SDK wrapped in `asyncio.to_thread` |
+| `services/parse.py` | liteparse PDF text extraction — `parse_pdf(bytes) → str`; raises `ParseError`; sync CPU-bound work wrapped in `asyncio.to_thread` |
 
 ---
 
@@ -125,8 +131,9 @@ api.py  (brain_router, prefix=/links)
 | SQLite `chat_state` table | `awaiting_intent` / `awaiting_freestyle` mode per chat (10-min TTL) |
 | Redis `video_jobs` list | Task envelope queue |
 | Redis `photo_batch_*` keys | Photo batch session state per chat |
-| Google Drive | Enrichment docs, PRD docs, Brain `.md` nodes (article pipeline has **no** Drive upload) |
-| Google Sheets | Per-job summary rows: `YouTube Transcript Index`, `Short Video Analysis`, `Article Analysis`, `mini PRD` |
+| Google Cloud Storage | Content-addressed document blobs: `documents/<sha>.pdf`, `parsed/<sha>.txt` |
+| Google Drive | Enrichment docs, PRD docs, Brain `.md` nodes (article + document pipelines have **no** Drive upload) |
+| Google Sheets | Per-job summary rows: `YouTube Transcript Index`, `Short Video Analysis`, `Article Analysis`, `Repo Analysis`, `mini PRD` |
 
 ---
 

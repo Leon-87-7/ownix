@@ -1,6 +1,6 @@
 # vig — Video Intelligence Gateway
 
-Telegram bot that processes short videos, long videos, Github URLs and dev articles into structured AI analysis, stores everything in Google Drive + Sheets, and builds a searchable semantic Second Brain — with a Next.js web dashboard ("The Operator's Console") for browsing the results.
+Telegram bot that processes short videos, long videos, Github URLs, dev articles, and PDF documents into structured AI analysis, stores everything in Google Drive + Sheets + GCS, and builds a searchable semantic Second Brain — with a Next.js web dashboard ("The Operator's Console") for browsing the results.
 
 ---
 
@@ -10,6 +10,7 @@ Telegram bot that processes short videos, long videos, Github URLs and dev artic
 - **Long video pipeline** — YouTube: transcript extraction → Drive upload → Gemini enrichment (topic, objective, action points, tools, promise-gap) → optional Mini-PRD spec generation
 - **Article pipeline** — Substack, Medium, dev.to, Ghost, Hashnode + per-chat allowlist: Jina Reader fetch → markdown cache → paywall heuristic → Gemini analysis → Sheets → Brain
 - **Repo pipeline** — `github.com/<owner>/<repo>` URLs: GitHub API bundle (README + prioritized file tree + package manifests + stars/forks/language) → Gemini 2.5 Flash structured analysis (tagline, tech stack, developer use-cases, educational concepts + file-pointed curriculum hooks) → `.md` document → Sheets → Brain. Handles archived repos and missing-README repos; gists and enterprise hosts are rejected
+- **Document pipeline** — PDF documents (file upload or `.pdf` URL): liteparse text extraction → content-addressed GCS cache (`parsed/<sha>.txt`) → Gemini enrichment (title, author, document type, key points, references, tools) → Telegram delivery (parsed `.txt` + enrichment summary)
 - **Photo OCR** — Screenshot link extraction with verbatim-grounded anti-hallucination filter; multi-image sends are auto-batched via Telegram's `media_group_id` (no command needed) into one unified result
 - **Second Brain** — Semantic link graph (Gemini embeddings + NumPy cosine similarity) searchable via `/find`
 - **Mini-PRD** — AI-generated product specs from long-video transcripts; two slots: auto (Flash) and intent (Pro, user-directed)
@@ -22,10 +23,10 @@ Telegram bot that processes short videos, long videos, Github URLs and dev artic
 - Docker + Docker Compose
 - Python 3.11+ (for the transcript sidecar, run on host)
 - Telegram bot token
-- Google Cloud project with Drive + Sheets APIs enabled (OAuth credentials)
+- Google Cloud project with Drive + Sheets + Cloud Storage APIs enabled (OAuth credentials + optional service account)
 - Gemini API key (free tier sufficient for personal use)
 
-Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo pipeline + higher GitHub rate limit), `JINA_API_KEY` (Jina quota), `GEMINI_PAID_API_KEY` (fallback).
+Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo pipeline + higher GitHub rate limit), `JINA_API_KEY` (Jina quota), `GEMINI_PAID_API_KEY` (fallback), `GOOGLE_STORAGE_BUCKET` (document pipeline).
 
 ---
 
@@ -126,6 +127,7 @@ FastAPI :8000  ─── detect_pipeline ──► create_job ──► Redis LP
       │                                              ├─ "video" long  → transcript → Drive
       │                                              ├─ "article"     → Jina → Gemini
       │                                              ├─ "repo"        → GitHub bundle → Gemini
+      │                                              ├─ "document"    → liteparse → GCS cache → Gemini
       │                                              ├─ "enrichment"  → Gemini text
       │                                              └─ "prd_*"       → Gemini PRD
 
@@ -144,6 +146,7 @@ Sheets:  5 tabs: YouTube Transcript Index | Short Video Analysis | Article Analy
 | `youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@*/video/` | short    |
 | `youtube.com/watch`, `youtu.be/`                                     | long     |
 | `github.com/<owner>/<repo>` (gists / enterprise hosts rejected)      | repo     |
+| any URL with path ending `.pdf`                                      | document |
 | host in `ARTICLE_DEFAULT_DOMAINS` or per-chat `allowed_domains`      | article  |
 | anything else                                                        | rejected |
 
@@ -152,7 +155,7 @@ Sheets:  5 tabs: YouTube Transcript Index | Short Video Analysis | Article Analy
 ```
 pending → processing → transcript_done → enriching → done
                     ↘                              ↗
-                     (short / article: no intermediate states)
+                     (short / article / document: no intermediate states)
                 error (retryable via user button or /force)
 ```
 
@@ -229,6 +232,8 @@ All env vars are validated at startup by `src/config.py` (pydantic-settings). Mi
 | `BRAIN_MIN_SCORE`                             | —        | Cosine similarity floor for `/find` (default: 0.5)  |
 | `PRD_MAX_TRANSCRIPT_CHARS`                    | —        | PRD transcript cap (default: 60000)                 |
 | `PRD_INTENT_COOLDOWN_SECONDS`                 | —        | Cooldown between intent PRD re-runs (default: 15)   |
+| `GOOGLE_STORAGE_BUCKET`                       | —        | GCS bucket for document pipeline (document pipeline disabled if absent) |
+| `GOOGLE_SERVICE_ACCOUNT_JSON`                 | —        | Service-account key file (GCS auth; falls back to OAuth) |
 
 ---
 
@@ -293,20 +298,25 @@ src/
 ├── queue.py             # Redis brpop/lpush wrapper
 ├── config.py            # pydantic-settings, all env vars
 ├── processors/
-│   ├── short_video.py   # Frames → Vision → Brave → Drive
+│   ├── short_video.py   # Frames → Vision → Brave → Drive + transcript tail
 │   ├── long_video.py    # Transcript + metadata → Drive → Phase 1
 │   ├── enrichment.py    # Gemini text enrichment, Phase 2
 │   ├── prd.py           # Mini-PRD: run_auto / run_intent / run_auto_resend
 │   ├── article.py       # Jina → cache → paywall → Gemini → Sheets → Brain
-│   └── repo.py          # GitHub bundle → Gemini structured analysis → Sheets → Brain
+│   ├── repo.py          # GitHub bundle → Gemini structured analysis → Sheets → Brain
+│   └── document.py      # PDF parse (liteparse) → GCS cache → Gemini enrichment
 ├── services/
 │   ├── gemini_client.py # free→paid fallback, GeminiUnavailableError
 │   ├── gemini.py        # Vision + resolve_tool_urls
 │   ├── gemini_photo.py  # Photo link extraction (verbatim-grounded)
 │   ├── jina.py          # Jina Reader client, JinaFetchError
 │   ├── drive.py         # Drive upload + update
-│   ├── sheets.py        # Sheets append (4 tabs) + article in-place update
+│   ├── sheets.py        # Sheets append (5 tabs) + article in-place update
 │   ├── github.py        # GitHub metadata + Redis cache
+│   ├── google_auth.py   # Shared Google OAuth / service-account credentials
+│   ├── job_recovery.py  # Dashboard-triggered job recovery orchestration
+│   ├── storage.py       # GCS content-addressed blob store (document pipeline)
+│   ├── parse.py         # liteparse PDF text extraction
 │   ├── frames.py        # /short_frames sidecar client
 │   ├── transcript.py    # /transcript + /metadata sidecar clients
 │   └── brave.py         # Brave Search client

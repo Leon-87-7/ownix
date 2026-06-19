@@ -1,6 +1,6 @@
 # Video Intelligence Gateway — Tech Stack
 
-**Last Updated:** 2026-05-28  
+**Last Updated:** 2026-06-18  
 **Rule:** Every technology earns its place. This document records what's here, why it was chosen over the alternatives, and the concrete signal that should trigger a replacement.
 
 ---
@@ -29,6 +29,9 @@
 | Image processing                | Pillow                  | —                         |
 | Sidecar server                  | Flask + Waitress        | FastAPI (if rewriting)    |
 | Cron scheduling                 | APScheduler             | —                         |
+| PDF text extraction             | liteparse               | PyMuPDF (if OCR needed)   |
+| Object storage (documents)      | Google Cloud Storage    | S3 / R2                   |
+| JSON repair (LLM output)       | json-repair             | —                         |
 | Vector math                     | NumPy                   | pgvector / Qdrant         |
 | Deployment                      | Docker Compose          | —                         |
 | Testing                         | pytest + pytest-asyncio | —                         |
@@ -412,6 +415,63 @@ Files are shared "anyone with link" (reader). The shareable URL is sent to the u
 
 ---
 
+## 21. PDF Text Extraction — liteparse
+
+**What:** Pure-Python PDF text extractor. Used in `src/services/parse.py` for the document pipeline — extracts plain text page-by-page from uploaded PDFs. Pinned to `2.0.7`. Synchronous and CPU-bound, so every call runs in `asyncio.to_thread`.
+
+**Why here:**
+
+- Pure Python — no native binaries, no system-level dependencies (`poppler`, `tesseract`). Deploys identically in Docker and on bare metal.
+- Lightweight: one `pip install`, ~2MB. The document pipeline is text-extraction-only at MVP — no OCR, no layout analysis, no table detection.
+- The `LiteParse(ocr_enabled=False, quiet=True)` interface is three lines: parse → iterate pages → join text.
+
+**Why not PyMuPDF (fitz):** PyMuPDF is a C extension wrapping MuPDF. Faster and more capable, but adds a native build dependency and a ~15MB wheel. Overkill when the MVP scope is "extract text from text-layer PDFs" with no OCR.
+
+**Why not pdfplumber / pdfminer:** Both are heavier and designed for layout-aware extraction (tables, bounding boxes). The document pipeline needs plain text, not spatial data.
+
+**Switch when:** Scanned/image-only PDFs become a common user complaint (liteparse with `ocr_enabled=False` returns empty text for these). At that point, swap to PyMuPDF or add Tesseract OCR behind a feature flag. The `parse_pdf(data: bytes) -> str` contract in `parse.py` doesn't change.
+
+---
+
+## 22. Object Storage — Google Cloud Storage
+
+**What:** Content-addressed blob store for the document pipeline. Used in `src/services/storage.py` via the `google-cloud-storage` SDK. Two prefixes:
+
+- `documents/<sha256>.pdf` — uploaded source PDFs
+- `parsed/<sha256>.txt` — extracted plain text (parse cache)
+
+Objects are keyed by SHA-256 of the PDF bytes. The parse cache is shared across tenants — if two users upload the same PDF, the second hit skips liteparse entirely.
+
+**Why here:**
+
+- Content-addressed dedup is free: identical PDFs produce identical keys. No metadata table needed to track "have I parsed this before."
+- GCS is already on the Google Cloud platform alongside Drive, Sheets, and Gemini — same service account credentials, same project.
+- The `google-cloud-storage` SDK is synchronous, but the three operations (`upload`, `download`, `exists`) are thin wrappers around `asyncio.to_thread` — no event loop blocking.
+
+**Why not Google Drive (reuse existing):** Drive is a user-facing file system — shared links, folder structure, permissions model. Content-addressed blobs with no human-readable name don't fit that model. GCS is cheaper, faster, and has no per-file sharing overhead.
+
+**Why not S3 / R2:** Would require a second cloud vendor's credentials and SDK. GCS keeps the entire Google surface under one service account.
+
+**Switch when:** Leaving Google Cloud entirely. At that point, swap `storage.py` to `boto3` (S3) or the R2-compatible S3 client. The `upload(key, data)` / `download(key)` / `exists(key)` interface doesn't change.
+
+---
+
+## 23. JSON Repair — json-repair
+
+**What:** Deterministic JSON fixer. Used in `src/processors/enrichment.py` as a fallback when `json.loads()` fails on Gemini's structured output. Called as `json.loads(repair_json(text))` — repairs common LLM JSON mistakes (trailing commas, unquoted keys, truncated strings) without re-prompting the model.
+
+**Why here:**
+
+- Gemini's `responseSchema` parameter handles most cases, but edge cases (especially on the free tier under load) still produce malformed JSON — missing closing braces, trailing commas, smart quotes.
+- `repair_json` is deterministic and fast (<1ms). Retrying the Gemini call would cost another API round-trip (~2–5s) and might produce the same malformed output.
+- Zero-config: `from json_repair import repair_json` is the entire API. No model, no heuristic tuning.
+
+**Why not manual regex cleanup:** The existing `_extract_json` function already strips markdown fences and finds the JSON object boundary. But structural errors (mismatched brackets, trailing commas inside arrays) need a real parser — regex can't handle nested structures reliably.
+
+**Switch when:** Never likely at this scale. If Gemini's structured output mode becomes fully reliable (zero parse failures over 30 days), the `repair_json` fallback becomes dead code and can be removed — but it costs nothing to keep.
+
+---
+
 ## Dependency Install Surface
 
 ```txt
@@ -424,12 +484,17 @@ aiosqlite
 structlog
 
 # Queue
-redis[asyncio]
+redis[hiredis]
 
 # Google / AI
-google-generativeai
+google-genai
 google-api-python-client
 google-auth
+google-cloud-storage
+
+# Document pipeline
+liteparse
+json-repair
 
 # Second Brain
 apscheduler>=3.10

@@ -253,7 +253,7 @@
 
 <!-- Sidebar -->
 <nav class="sidebar">
-    <div class="sidebar-title">Architecture v2.1</div>
+    <div class="sidebar-title">Architecture v2.2</div>
     <nav>
         <a href="#s1">1. System Architecture</a>
         <a href="#s2">2. URL Routing</a>
@@ -266,6 +266,7 @@
         <a href="#s6a" class="sub">Auto-fire path</a>
         <a href="#s6b" class="sub">Manual path</a>
         <a href="#s6c" class="sub">Boot-time reaper</a>
+        <a href="#s6d">6b. Document Pipeline</a>
         <a href="#s7">7. Link Extraction</a>
         <a href="#s8">8. Second Brain</a>
         <a href="#s9">9. Transcript Server</a>
@@ -283,12 +284,12 @@
     <h1>Video Intelligence Gateway</h1>
     <div class="subtitle">Architecture Specification</div>
     <div class="meta">
-        <span class="badge badge-blue">v2.1</span>
-        <span class="badge badge-green">Updated 2026-05-17</span>
+        <span class="badge badge-blue">v2.2</span>
+        <span class="badge badge-green">Updated 2026-06-18</span>
         <span class="badge badge-orange">Replaces 60+ n8n nodes</span>
     </div>
     <div class="summary">
-        FastAPI + SQLite + Redis service with three AI-enrichment stages per video: Gemini Vision (short pipeline), Gemini Text enrichment (long Phase 2), and Mini-PRD spec generation (long Phase 3). Stores all outputs to Google Drive + Sheets and accumulates a semantic link graph (Second Brain) powered by <code>text-embedding-004</code> embeddings and cosine similarity.
+        FastAPI + SQLite + Redis service with six content pipelines: short video (Gemini Vision), long video (transcript + enrichment + Mini-PRD), article (Jina + Gemini), repo (GitHub bundle + Gemini), document (liteparse PDF + GCS + Gemini), and photo OCR. Stores outputs to Google Drive + Sheets + GCS and accumulates a semantic link graph (Second Brain) powered by <code>text-embedding-004</code> embeddings and cosine similarity.
     </div>
 </header>
 
@@ -347,6 +348,13 @@ graph TB
         PRD_CHAT["chat_state\nawaiting_intent\n10-min window"]
     end
 
+    subgraph "Document Pipeline"
+        DOC_GCS["GCS download\ndocuments/sha.pdf"]
+        DOC_PARSE["liteparse\nPDF text extraction"]
+        DOC_CACHE["GCS parsed cache\nparsed/sha.txt"]
+        DOC_GEMINI["Gemini 2.5 Flash\nenrichment"]
+    end
+
     subgraph "Second Brain"
         BR[brain.py]
         BR_EMBED["text-embedding-004\nGEMINI_BRAIN_API_KEY"]
@@ -354,7 +362,7 @@ graph TB
         BR_SCHED["APScheduler\n0 9 Sun+Wed UTC"]
     end
 
-    USER -->|video URL| WH
+    USER -->|video URL / PDF| WH
     WH -->|validate + route| DB
     WH -->|enqueue| QUEUE
     WH -->|ack| USER
@@ -388,6 +396,10 @@ graph TB
     PRD_DRIVE -->|.md doc + summary msg| USER
     PRD_AUTO -.->|ingest tech_stack fire+forget| BR
     PRD_INTENT -.->|ingest tech_stack fire+forget| BR
+    W -->|document| DOC_GCS
+    DOC_GCS --> DOC_PARSE --> DOC_CACHE
+    DOC_CACHE --> DOC_GEMINI
+    DOC_GEMINI -->|.txt + enrichment msg| USER
     BR --> BR_EMBED
     BR --> BR_DRIVE
     BR_SCHED --> BR
@@ -416,7 +428,13 @@ flowchart TD
     R4 -->|yes| LONG[long pipeline]
     R4 -->|no| R5{youtu.be/ ?}
     R5 -->|yes| LONG
-    R5 -->|no| REJ["rejected\nno job created\nbot replies unsupported"]
+    R5 -->|no| R6{"github.com/owner/repo ?"}
+    R6 -->|yes| REPO[repo pipeline]
+    R6 -->|no| R7{"path ends .pdf ?"}
+    R7 -->|yes| DOC[document pipeline]
+    R7 -->|no| R8{"host in ARTICLE_DOMAINS\nor allowlist ?"}
+    R8 -->|yes| ART[article pipeline]
+    R8 -->|no| REJ["rejected\nno job created\nbot replies unsupported"]
         </div>
     </div>
     <div class="table-wrap">
@@ -428,6 +446,9 @@ flowchart TD
                 <tr><td><code>tiktok.com/@{user}/video/{id}</code></td><td><span class="badge badge-blue">short</span></td><td>TikTok video</td></tr>
                 <tr><td><code>youtube.com/watch?v={id}</code></td><td><span class="badge badge-green">long</span></td><td>Standard YouTube</td></tr>
                 <tr><td><code>youtu.be/{id}</code></td><td><span class="badge badge-green">long</span></td><td>YouTube short-link</td></tr>
+                <tr><td><code>github.com/{owner}/{repo}</code></td><td><span class="badge badge-purple">repo</span></td><td>GitHub repository (gists / enterprise hosts rejected)</td></tr>
+                <tr><td><code>*.pdf</code> (any host, path ends <code>.pdf</code>)</td><td><span class="badge badge-purple">document</span></td><td>PDF document URL</td></tr>
+                <tr><td>host in <code>ARTICLE_DEFAULT_DOMAINS</code> or <code>allowed_domains</code></td><td><span class="badge badge-green">article</span></td><td>Substack, Medium, dev.to, Ghost, Hashnode, etc.</td></tr>
                 <tr><td><code>instagram.com/p/{id}</code></td><td><span class="badge badge-orange">rejected</span></td><td>Carousel / photo post</td></tr>
                 <tr><td>anything else</td><td><span class="badge badge-orange">rejected</span></td><td>No job created</td></tr>
             </tbody>
@@ -738,6 +759,58 @@ sequenceDiagram
     <p>Transcript &gt; <code>PRD_MAX_TRANSCRIPT_CHARS = 60_000</code>: three-window sample — first 20k + middle 20k + last 20k, joined with <code>[...truncated...]</code> markers. Preserves the tutorial arc so phase ordering reflects intro → core → deployment. Model can populate <code>open_questions[]</code> with notes about what was truncated.</p>
 </section>
 
+<!-- §6d Document Pipeline -->
+<section id="s6d">
+    <h2><span class="section-num">6b</span> Document Pipeline — Detail</h2>
+    <p>Handles PDF documents — uploaded directly to Telegram or sent as <code>.pdf</code> URLs. Uses <code>liteparse</code> for text extraction, content-addressed GCS caching, and Gemini enrichment. No Drive upload — delivers parsed <code>.txt</code> + enrichment summary via Telegram.</p>
+    <details open>
+        <summary>Sequence Diagram</summary>
+        <div class="details-body">
+            <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Bot
+    participant Worker
+    participant GCS as Google Cloud Storage
+    participant Parse as liteparse
+    participant Gemini as Gemini 2.5 Flash
+    participant DB as SQLite jobs
+
+    alt PDF file upload
+        User->>Bot: Telegram file upload (.pdf)
+        Bot->>GCS: upload documents/sha256.pdf
+        Bot->>DB: create_job(url=documents/sha.pdf, content_type=document)
+        Bot->>Worker: enqueue {task:document, job_id}
+    else .pdf URL
+        User->>Bot: https://example.com/paper.pdf
+        Bot->>Bot: detect_pipeline → document
+        Bot->>DB: create_job(url=documents/sha.pdf, content_type=document)
+        Bot->>Worker: enqueue {task:document, job_id}
+    end
+    Worker->>User: Reading document...
+    Worker->>GCS: exists(parsed/sha.txt)?
+    alt parse cache hit
+        GCS-->>Worker: cached plain text
+    else cache miss
+        Worker->>GCS: download(documents/sha.pdf)
+        GCS-->>Worker: PDF bytes
+        Worker->>Parse: parse_pdf(bytes)
+        Parse-->>Worker: plain text
+        Note over Worker,Parse: Rejects empty parse (scanned/image-only)
+        Worker->>GCS: upload(parsed/sha.txt, text)
+    end
+    Worker->>Gemini: document enrichment prompt
+    Gemini-->>Worker: {title, author, document_type, summary, key_points[], references[], tools[]}
+    Worker->>DB: update job — ai_objective, ai_action_points, ai_tools, status=done
+    Worker->>User: sendDocument(title.txt)
+    Worker->>User: sendMessage(enrichment summary)
+            </div>
+        </div>
+    </details>
+    <h3>GCS Content Addressing</h3>
+    <p>Objects keyed by SHA-256 of the PDF bytes. Two prefixes: <code>documents/&lt;sha&gt;.pdf</code> (source) and <code>parsed/&lt;sha&gt;.txt</code> (extracted text). Shared across tenants — identical PDFs skip liteparse on second upload.</p>
+</section>
+
 <!-- §7 -->
 <section id="s7">
     <h2><span class="section-num">7</span> Description Link Extraction</h2>
@@ -898,35 +971,55 @@ graph TB
 <span class="td">src/</span>
 ├── <span class="th">main.py</span>                  <span class="tc"># FastAPI app, startup hooks, APScheduler registration</span>
 ├── <span class="th">config.py</span>                <span class="tc"># pydantic-settings BaseSettings, all env vars</span>
-├── <span class="th">database.py</span>              <span class="tc"># SQLite schema (jobs + links), CRUD, aiosqlite</span>
+├── <span class="th">database.py</span>              <span class="tc"># SQLite schema (jobs + links + chat_state + allowed_domains + markdown_cache), CRUD, aiosqlite</span>
 ├── <span class="th">queue.py</span>                 <span class="tc"># Redis brpop/lpush wrapper; asyncio.Queue fallback</span>
-├── <span class="th">worker.py</span>                <span class="tc"># job dispatch loop; routes to short/long pipeline</span>
+├── <span class="th">worker.py</span>                <span class="tc"># job dispatch loop; routes to short/long/article/repo/document pipeline</span>
 ├── <span class="td">telegram/</span>
-│   ├── <span class="tf">webhook.py</span>           <span class="tc"># POST /webhook — chat_state check first, then slash commands, then URL routing</span>
-│   ├── <span class="tf">callback.py</span>          <span class="tc"># POST /callback — Run Gemini / No Thanks / Retry / Build Spec / sub-menu</span>
-│   ├── <span class="tf">commands.py</span>          <span class="tc"># /spec, /cancel, /start, /help handlers</span>
-│   └── <span class="tf">sender.py</span>            <span class="tc"># sendMessage, sendPhoto, sendDocument, ForceReply helpers</span>
+│   ├── <span class="tf">webhook.py</span>           <span class="tc"># POST /webhook — chat_state check, slash commands, URL routing, PDF upload, dispatch tables</span>
+│   └── <span class="tf">sender.py</span>            <span class="tc"># sendMessage, sendPhoto, sendDocument, ForceReply, inline keyboard helpers</span>
 ├── <span class="td">processors/</span>
-│   ├── <span class="tf">short_video.py</span>       <span class="tc"># frame extraction → Gemini Vision → Brave → Drive</span>
+│   ├── <span class="tf">short_video.py</span>       <span class="tc"># frame extraction → Gemini Vision → Brave → Drive + transcript tail</span>
 │   ├── <span class="tf">long_video.py</span>        <span class="tc"># transcript+metadata → link extract → Drive → Phase 1 messages</span>
-│   ├── <span class="tf">enrichment.py</span>        <span class="tc"># Gemini Text enrichment (Phase 2); free→paid fallback;</span>
+│   ├── <span class="tf">enrichment.py</span>        <span class="tc"># Gemini Text enrichment (Phase 2); free→paid fallback; json-repair;</span>
 │   │                        <span class="tc"># tail-call enqueues prd_auto if Technical Tutorial; fire-and-forget brain ingest</span>
 │   ├── <span class="tf">prd.py</span>               <span class="tc"># Mini-PRD generator (Phase 3): run_auto() + run_intent(intent_text);</span>
 │   │                        <span class="tc"># builds prompt with optional enrichment scaffolding, samples transcript at 60k cap,</span>
 │   │                        <span class="tc"># calls Flash (auto) or Pro (intent), renders markdown, writes Drive, appends Sheet,</span>
 │   │                        <span class="tc"># fires brain.ingest_links(tech_stack[])</span>
-│   └── <span class="tf">gemini.py</span>            <span class="tc"># Gemini SDK client (Vision, Text, Embedding) — exposes responseSchema mode</span>
+│   ├── <span class="tf">article.py</span>           <span class="tc"># Jina → markdown cache → paywall → Gemini → Sheets → Brain</span>
+│   ├── <span class="tf">repo.py</span>              <span class="tc"># GitHub API bundle → Gemini structured analysis → Sheets → Brain</span>
+│   └── <span class="tf">document.py</span>          <span class="tc"># PDF parse (liteparse) → GCS cache → Gemini enrichment → Telegram delivery</span>
 ├── <span class="td">services/</span>
+│   ├── <span class="tf">gemini_client.py</span>     <span class="tc"># Central text-gen client — free→paid fallback, GeminiUnavailableError</span>
+│   ├── <span class="tf">gemini.py</span>            <span class="tc"># Gemini Vision + resolve_tool_urls</span>
+│   ├── <span class="tf">gemini_photo.py</span>      <span class="tc"># Photo OCR — verbatim-grounded link extraction</span>
+│   ├── <span class="tf">github.py</span>            <span class="tc"># GitHub REST API + Redis cache (repo metadata)</span>
+│   ├── <span class="tf">jina.py</span>              <span class="tc"># Jina Reader API client — fetch_markdown(url)</span>
+│   ├── <span class="tf">google_auth.py</span>       <span class="tc"># Shared Google credentials (OAuth / service-account)</span>
+│   ├── <span class="tf">storage.py</span>           <span class="tc"># GCS content-addressed blob store (document pipeline)</span>
+│   ├── <span class="tf">parse.py</span>             <span class="tc"># liteparse PDF text extraction</span>
+│   ├── <span class="tf">job_recovery.py</span>      <span class="tc"># Dashboard-triggered job recovery orchestration</span>
+│   ├── <span class="tf">space_export.py</span>      <span class="tc"># Space export (PDF/Drive)</span>
 │   ├── <span class="tf">frames.py</span>            <span class="tc"># GET /short_frames client</span>
 │   ├── <span class="tf">transcript.py</span>        <span class="tc"># GET /transcript + /metadata clients</span>
 │   ├── <span class="tf">drive.py</span>             <span class="tc"># Google Drive upload/update helpers (cached drive_file_id per slot)</span>
-│   ├── <span class="tf">sheets.py</span>            <span class="tc"># Google Sheets append (short + long + prd)</span>
+│   ├── <span class="tf">sheets.py</span>            <span class="tc"># Google Sheets append (5 tabs) + article in-place update</span>
 │   └── <span class="tf">brave.py</span>             <span class="tc"># Brave Search API client</span>
+├── <span class="td">api/</span>
+│   ├── <span class="tf">auth.py</span>              <span class="tc"># API authentication middleware</span>
+│   ├── <span class="tf">brain.py</span>             <span class="tc"># brain_router: GET /links/search, POST /links/rebuild</span>
+│   ├── <span class="tf">controls.py</span>          <span class="tc"># Controls API (allowed/ignored domains)</span>
+│   ├── <span class="tf">jobs.py</span>              <span class="tc"># Jobs API (feed, detail, recovery, stats)</span>
+│   ├── <span class="tf">spaces.py</span>            <span class="tc"># Spaces CRUD + export</span>
+│   └── <span class="tf">templates.py</span>         <span class="tc"># Prompt templates API</span>
 ├── <span class="th">brain.py</span>                 <span class="tc"># Second Brain: ingest, search, rebuild, refresh</span>
+├── <span class="th">analysis.py</span>              <span class="tc"># extract_key_phrases (enrichment KEY CONTEXT block)</span>
+├── <span class="th">templates.py</span>             <span class="tc"># PROMPT_TEMPLATES registry (summary/method/technical/review/narrative)</span>
+├── <span class="th">validation.py</span>            <span class="tc"># validate_template_choice (mismatch warning)</span>
 └── <span class="td">utils/</span>
     ├── <span class="tf">logger.py</span>            <span class="tc"># structlog JSON config</span>
-    ├── <span class="tf">validators.py</span>        <span class="tc"># detect_pipeline(), is_valid_url()</span>
-    └── <span class="tf">markdown.py</span>          <span class="tc"># build_transcript_markdown(), build_prd_markdown(), slugify()</span>
+    ├── <span class="tf">validators.py</span>        <span class="tc"># detect_pipeline(), extract_description_links(), slugify()</span>
+    └── <span class="tf">markdown.py</span>          <span class="tc"># build_links_message(), build_enriched_links_message()</span>
 
 <span class="th">transcript_server.py</span>         <span class="tc"># Existing sidecar — Flask+Waitress :5151</span>
 <span class="td">scripts/</span>
@@ -1047,7 +1140,7 @@ graph TB
         <table>
             <thead><tr><th>Aspect</th><th>n8n Workflow</th><th>Python Service</th></tr></thead>
             <tbody>
-                <tr><td>Component count</td><td>60+ visual nodes</td><td>~15 Python modules</td></tr>
+                <tr><td>Component count</td><td>60+ visual nodes</td><td>~30 Python modules</td></tr>
                 <tr><td>State management</td><td>Google Sheets</td><td>SQLite (<code>jobs</code> + <code>links</code>)</td></tr>
                 <tr><td>Gemini fallback</td><td>Anthropic <code>claude-sonnet-4-5</code></td><td>Paid Gemini API key</td></tr>
                 <tr><td>Transcript service</td><td><code>host.docker.internal:5151</code></td><td><code>TRANSCRIPT_SERVICE_URL</code> env var</td></tr>
@@ -1058,6 +1151,11 @@ graph TB
                 <tr><td>Testing</td><td>Manual</td><td>Unit + integration</td></tr>
                 <tr><td>Second Brain</td><td>Not present</td><td><code>brain.py</code> module</td></tr>
                 <tr><td>Mini-PRD</td><td>Not present</td><td><code>processors/prd.py</code> — two-slot, auto-fire + <code>/spec</code></td></tr>
+                <tr><td>Article pipeline</td><td>Not present</td><td><code>processors/article.py</code> — Jina + Gemini + Sheets</td></tr>
+                <tr><td>Repo pipeline</td><td>Not present</td><td><code>processors/repo.py</code> — GitHub bundle + Gemini</td></tr>
+                <tr><td>Document pipeline</td><td>Not present</td><td><code>processors/document.py</code> — liteparse + GCS + Gemini</td></tr>
+                <tr><td>Photo OCR</td><td>Not present</td><td><code>services/gemini_photo.py</code> — verbatim-grounded extraction</td></tr>
+                <tr><td>Web dashboard</td><td>Not present</td><td>Next.js 14 — feed, brain, spaces, job detail, recovery</td></tr>
             </tbody>
         </table>
     </div>
@@ -1088,9 +1186,9 @@ graph TB
 </section>
 
 <footer>
-    <span>Diagram Version: 2.1</span>
-    <span>Last Updated: 2026-05-17</span>
-    <span>Status: Updated to match PRD v2.1 — adds Mini-PRD feature, closes enrichment→brain asymmetry</span>
+    <span>Diagram Version: 2.2</span>
+    <span>Last Updated: 2026-06-18</span>
+    <span>Status: v2.2 — adds document pipeline, repo/article/photo-OCR pipelines, web dashboard, updated component map</span>
 </footer>
 
 </main>
