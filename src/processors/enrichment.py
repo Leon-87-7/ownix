@@ -129,8 +129,12 @@ def _extract_json(raw: str) -> dict:
     try:
         parsed = extract_json(raw)
     except (json.JSONDecodeError, ValueError):
+        clean = re.sub(r"^```json\s*", "", raw, flags=re.IGNORECASE)
+        clean = re.sub(r"```\s*$", "", clean).strip()
+        m = re.search(r"\{[\s\S]*\}", clean)
+        text = m.group(0) if m else clean
         try:
-            parsed = json.loads(repair_json(raw))
+            parsed = json.loads(repair_json(text))
         except (json.JSONDecodeError, ValueError) as exc:
             raise EnrichmentUnavailableError(f"Gemini returned unparseable JSON: {exc}") from exc
     if not isinstance(parsed, dict):
