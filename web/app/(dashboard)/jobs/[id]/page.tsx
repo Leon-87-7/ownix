@@ -151,7 +151,11 @@ function JobHeader({ job }: { job: JobDetail }) {
   const displayTitle = job.title ?? job.url;
   return (
     <div>
-      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink">
+      {/* #192: full-width 44px touch target on mobile, compact text link on desktop. */}
+      <Link
+        href="/"
+        className="mb-4 flex h-11 w-full items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink sm:inline-flex sm:h-auto sm:w-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:text-xs sm:font-normal sm:text-muted sm:hover:bg-transparent"
+      >
         <span aria-hidden="true">&#8592;</span> Back to feed
       </Link>
       <div className="flex flex-wrap items-start gap-3">

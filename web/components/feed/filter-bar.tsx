@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import type React from 'react';
 
 const CONTENT_TYPE_FILTERS = [
@@ -86,11 +89,31 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
     count: value ? contentTypeCounts[value] ?? 0 : totalCount,
   }));
 
+  // #187: status filters + recovery panel collapse behind a disclosure on mobile.
+  // Default collapsed; component remounts on navigation so it resets naturally.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Track the < sm (640px) breakpoint in JS so the collapsed panel is also
+  // removed from the tab order / AT tree (inert), not just hidden visually.
+  // Guarded for non-browser/jsdom envs → stays on the desktop (always-open) path.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  const collapsed = isMobile && !filtersOpen;
+
   return (
     <section className="mt-8 flex flex-col gap-3" aria-label="Search and filters">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="min-w-0 overflow-x-auto" role="tablist" aria-label="Content type">
-          <div className="flex min-w-max items-center gap-1">
+        {/* #186: tabs wrap to a second row on narrow screens — no horizontal scroll. */}
+        <div className="min-w-0" role="tablist" aria-label="Content type">
+          <div className="flex flex-wrap items-center gap-1">
             {tabs.map((tab) => (
               <ContentTypeTab
                 key={tab.value}
@@ -110,13 +133,33 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
           className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
         />
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
-        <div className="flex flex-wrap items-center gap-1">
-          {STATUS_FILTERS.map(({ label, value }) => (
-            <FilterButton key={value} label={label} active={stFilter === value} onClick={() => setStFilter(value)} />
-          ))}
+      <button
+        type="button"
+        onClick={() => setFiltersOpen((o) => !o)}
+        aria-expanded={filtersOpen}
+        aria-controls="status-filter-bar"
+        className="self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
+      >
+        Filters <span aria-hidden="true">{filtersOpen ? '▴' : '▾'}</span>
+      </button>
+      <div
+        id="status-filter-bar"
+        aria-hidden={collapsed || undefined}
+        {...(collapsed ? ({ inert: "" } as Record<string, unknown>) : {})}
+        className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
+          collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
+            <div className="flex flex-wrap items-center gap-1">
+              {STATUS_FILTERS.map(({ label, value }) => (
+                <FilterButton key={value} label={label} active={stFilter === value} onClick={() => setStFilter(value)} />
+              ))}
+            </div>
+            {recoveryPanel}
+          </div>
         </div>
-        {recoveryPanel}
       </div>
     </section>
   );

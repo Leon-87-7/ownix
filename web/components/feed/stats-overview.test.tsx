@@ -13,12 +13,13 @@ const makeStats = (overrides: Partial<{ total: number; by_status: Record<string,
 describe('StatsOverview', () => {
   it('renders total count', () => {
     render(<StatsOverview stats={makeStats()} />);
-    expect(screen.getByText('42')).toBeTruthy();
+    // Appears in both the desktop grid and the mobile inline row (#185).
+    expect(screen.getAllByText('42').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders done count', () => {
     render(<StatsOverview stats={makeStats()} />);
-    expect(screen.getByText('20')).toBeTruthy();
+    expect(screen.getAllByText('20').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders processing + enriching + transcript_done combined', () => {

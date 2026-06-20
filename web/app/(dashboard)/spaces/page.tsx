@@ -4,10 +4,11 @@ import { SpaceCard } from "@/components/SpaceCard";
 import { useSpaceList } from "@/lib/hooks/useSpaceList";
 import { useCreateSpace } from "@/lib/hooks/useCreateSpace";
 import { Spinner } from "@/components/ui";
+import { SPACE_ICONS } from "@/lib/space-icons";
 
 export default function SpacesPage() {
   const { spaces, loading, error, reload } = useSpaceList();
-  const { showForm, openForm, newName, setNewName, newColor, setNewColor, submitting, formError, handleCreate, resetForm } = useCreateSpace(reload);
+  const { showForm, openForm, newName, setNewName, newColor, setNewColor, newIcon, setNewIcon, submitting, formError, handleCreate, resetForm } = useCreateSpace(reload);
 
   if (loading) {
     return (
@@ -38,6 +39,30 @@ export default function SpacesPage() {
         <form onSubmit={handleCreate} className="space-y-4 rounded-lg border border-line bg-surface p-4">
           <h2 className="text-sm font-semibold text-ink">Create Space</h2>
           {formError && <p className="text-sm text-status-error">{formError}</p>}
+          <div>
+            <span className="mb-1 block text-xs font-medium text-body">Icon</span>
+            <div className="flex flex-wrap gap-1">
+              {SPACE_ICONS.map(({ name, Icon }) => {
+                const active = newIcon === name;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setNewIcon(name)}
+                    aria-label={name}
+                    aria-pressed={active}
+                    className={`flex h-8 w-8 items-center justify-center rounded-md transition-ui ${
+                      active
+                        ? "bg-signal text-onsignal hover:bg-signal-bright"
+                        : "border border-line bg-surface text-body hover:bg-raised hover:text-ink"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="mb-1 block text-xs font-medium text-body" htmlFor="space-name">Name</label>
@@ -47,7 +72,7 @@ export default function SpacesPage() {
               <label className="mb-1 block text-xs font-medium text-body" htmlFor="space-color">Color</label>
               <input id="space-color" type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="h-9 w-12 cursor-pointer rounded-md border border-line bg-canvas p-0.5" />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 sm:self-end">
               <button type="submit" disabled={submitting} className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted">
                 {submitting ? "Creating…" : "Create"}
               </button>
@@ -68,7 +93,7 @@ export default function SpacesPage() {
 
       {spaces.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {spaces.map((space) => <SpaceCard key={space.id} space={space} />)}
+          {spaces.map((space) => <SpaceCard key={space.id} space={space} onDeleted={reload} />)}
         </div>
       )}
     </div>
