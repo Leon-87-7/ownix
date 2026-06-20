@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS spaces (
     chat_id    INTEGER NOT NULL,
     name       TEXT NOT NULL,
     color      TEXT NOT NULL DEFAULT '#6366f1',
+    icon       TEXT NOT NULL DEFAULT 'folder',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
@@ -679,6 +680,9 @@ async def _migrate_v16_v17(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v16_v17)
+
+# v17 → v18: per-space curated icon (issue #189)
+_MIGRATIONS.append(["ALTER TABLE spaces ADD COLUMN icon TEXT NOT NULL DEFAULT 'folder'"])
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -1427,13 +1431,13 @@ async def detach_job_tag(job_id: str, tag_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def create_space(*, chat_id: int, name: str, color: str) -> dict:
+async def create_space(*, chat_id: int, name: str, color: str, icon: str = "folder") -> dict:
     """INSERT a new space row and return it as a dict."""
     space_id = generate_id()
     return await _insert_returning(
-        "INSERT INTO spaces (id, chat_id, name, color) VALUES (?, ?, ?, ?)",
-        (space_id, chat_id, name, color),
-        "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+        "INSERT INTO spaces (id, chat_id, name, color, icon) VALUES (?, ?, ?, ?, ?)",
+        (space_id, chat_id, name, color, icon),
+        "SELECT id, chat_id, name, color, icon, created_at, updated_at FROM spaces WHERE id = ?",
         (space_id,),
     )
 
@@ -1441,7 +1445,7 @@ async def create_space(*, chat_id: int, name: str, color: str) -> dict:
 async def list_spaces(chat_id: int) -> list[dict]:
     """Return all spaces for chat_id ordered newest-first."""
     return await _fetch_dicts(
-        "SELECT id, chat_id, name, color, created_at, updated_at "
+        "SELECT id, chat_id, name, color, icon, created_at, updated_at "
         "FROM spaces WHERE chat_id = ? ORDER BY created_at DESC",
         (chat_id,),
     )
@@ -1450,18 +1454,18 @@ async def list_spaces(chat_id: int) -> list[dict]:
 async def get_space(space_id: str) -> dict | None:
     """Return a single space by PK, or None."""
     row = await _fetch_one(
-        "SELECT id, chat_id, name, color, created_at, updated_at FROM spaces WHERE id = ?",
+        "SELECT id, chat_id, name, color, icon, created_at, updated_at FROM spaces WHERE id = ?",
         (space_id,),
     )
     return dict(row) if row else None
 
 
-async def update_space(*, chat_id: int, space_id: str, name: str, color: str) -> bool:
-    """UPDATE name/color for a space owned by chat_id. Returns True if updated."""
+async def update_space(*, chat_id: int, space_id: str, name: str, color: str, icon: str = "folder") -> bool:
+    """UPDATE name/color/icon for a space owned by chat_id. Returns True if updated."""
     return await _execute_rowcount(
-        "UPDATE spaces SET name = ?, color = ?, updated_at = CURRENT_TIMESTAMP "
+        "UPDATE spaces SET name = ?, color = ?, icon = ?, updated_at = CURRENT_TIMESTAMP "
         "WHERE id = ? AND chat_id = ?",
-        (name, color, space_id, chat_id),
+        (name, color, icon, space_id, chat_id),
     ) > 0
 
 

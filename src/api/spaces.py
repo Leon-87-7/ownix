@@ -3,9 +3,18 @@ from __future__ import annotations
 
 import asyncio
 
+from typing import Literal
+
 import aiosqlite
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+# Curated Lucide icon names a space may use (issue #189). Literal → 422 on anything else.
+SpaceIcon = Literal[
+    "folder", "star", "bookmark", "globe", "zap", "heart", "code", "music",
+    "film", "camera", "coffee", "flame", "rocket", "target", "compass",
+    "anchor", "crown", "diamond", "shield", "lightbulb",
+]
 
 from src import database
 from src.config import settings
@@ -19,6 +28,7 @@ spaces_router = APIRouter(prefix="/api/spaces", tags=["spaces"])
 class SpaceIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     color: str = Field(default="#6366f1", pattern=r"^#[0-9a-fA-F]{6}$")
+    icon: SpaceIcon = "folder"
 
 
 class UrlIn(BaseModel):
@@ -74,7 +84,7 @@ async def create_space(body: SpaceIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     try:
         return await database.create_space(
-            chat_id=chat_id, name=body.name.strip(), color=body.color
+            chat_id=chat_id, name=body.name.strip(), color=body.color, icon=body.icon
         )
     except aiosqlite.IntegrityError:
         raise HTTPException(status_code=409, detail="Space name already exists")
@@ -91,7 +101,7 @@ async def update_space(space_id: str, body: SpaceIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_space(space_id, chat_id)
     ok = await database.update_space(
-        chat_id=chat_id, space_id=space_id, name=body.name.strip(), color=body.color
+        chat_id=chat_id, space_id=space_id, name=body.name.strip(), color=body.color, icon=body.icon
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Space not found")

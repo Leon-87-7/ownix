@@ -2,18 +2,29 @@ import { StatCard } from "@/components/stat-card";
 import type { FeedStats } from "@/lib/hooks/useFeedData";
 
 export function StatsOverview({ stats }: { stats: FeedStats }) {
+  const done = stats.by_status.done ?? 0;
+  const pending = stats.by_status.pending ?? 0;
+  const error = stats.by_status.error ?? 0;
+  const processing =
+    (stats.by_status.processing ?? 0) +
+    (stats.by_status.enriching ?? 0) +
+    (stats.by_status.transcript_done ?? 0);
+
   return (
     <section className="mt-5" aria-label="Overview">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Mobile (#185): one compact inline row instead of the card grid (~100px shorter). */}
+      <div className="flex items-center gap-3 font-mono text-[12px] tabular-nums sm:hidden">
+        <span className="text-muted">T <span className="text-ink">{stats.total}</span></span>
+        <span className="text-muted">D <span className="text-status-done">{done}</span></span>
+        <span className="text-muted">P <span className="text-status-pending">{pending}</span></span>
+        <span className="text-muted">E <span className="text-status-error">{error}</span></span>
+      </div>
+      <div className="hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Total" value={stats.total} />
-        <StatCard label="Done" value={stats.by_status.done ?? 0} valueClass="text-status-done" />
-        <StatCard label="Pending" value={stats.by_status.pending ?? 0} valueClass="text-status-pending" />
-        <StatCard label="Error" value={stats.by_status.error ?? 0} valueClass="text-status-error" />
-        <StatCard
-          label="Processing"
-          value={(stats.by_status.processing ?? 0) + (stats.by_status.enriching ?? 0) + (stats.by_status.transcript_done ?? 0)}
-          valueClass="text-status-processing"
-        />
+        <StatCard label="Done" value={done} valueClass="text-status-done" />
+        <StatCard label="Pending" value={pending} valueClass="text-status-pending" />
+        <StatCard label="Error" value={error} valueClass="text-status-error" />
+        <StatCard label="Processing" value={processing} valueClass="text-status-processing" />
       </div>
     </section>
   );
