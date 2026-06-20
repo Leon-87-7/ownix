@@ -51,7 +51,7 @@ async def get_job_stats(
 
     async with database.connection() as conn:
         # Status breakdown — scoped to content_type when a tab is active.
-        status_conditions = ["chat_id = ?"]
+        status_conditions = ["chat_id = ?", "status != 'cancelled'"]
         status_params: list = [chat_id]
         if content_type is not None:
             status_conditions.append("content_type = ?")
@@ -68,7 +68,7 @@ async def get_job_stats(
 
         # Content-type breakdown — always global so the tab count chips stay correct.
         cur2 = await conn.execute(
-            "SELECT content_type, COUNT(*) AS cnt FROM jobs WHERE chat_id = ? GROUP BY content_type",
+            "SELECT content_type, COUNT(*) AS cnt FROM jobs WHERE chat_id = ? AND status != 'cancelled' GROUP BY content_type",
             (chat_id,),
         )
         rows2 = await cur2.fetchall()
@@ -215,6 +215,8 @@ async def list_jobs(
     if status is not None:
         conditions.append("status = ?")
         params.append(status)
+    else:
+        conditions.append("status != 'cancelled'")
 
     where = " AND ".join(conditions)
 

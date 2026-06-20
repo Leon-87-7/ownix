@@ -238,6 +238,9 @@ async def test_search_returns_empty_on_no_corpus():
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT)"
+            )
             await conn.commit()
 
         with patch("src.brain.settings") as mock_settings, \

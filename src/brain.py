@@ -448,7 +448,10 @@ async def search_links(query: str, top_k: int = 5) -> list[dict]:
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         cursor = await conn.execute(
-            "SELECT id, url, title, topic, embedding FROM links WHERE embedding IS NOT NULL"
+            """SELECT l.id, l.url, l.title, l.topic, l.embedding
+               FROM links l
+               JOIN jobs j ON j.id = l.source_job
+               WHERE l.embedding IS NOT NULL AND j.status != 'cancelled'"""
         )
         rows = [dict(r) for r in await cursor.fetchall()]
 
