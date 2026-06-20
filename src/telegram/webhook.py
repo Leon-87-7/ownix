@@ -295,7 +295,7 @@ async def _cb_article_retry(ctx: CallbackCtx) -> None:
     await database.update_job_status(ctx.job_id, "pending")
     await queue.enqueue({"task": "article", "job_id": ctx.job_id, "skip_document": True})
     log.info("article_retry_enqueued", job_id=ctx.job_id)
-    await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying Gemini enrichment...")
+    await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying article analysis...")
 
 
 async def _cb_reprocess(ctx: CallbackCtx) -> None:
