@@ -134,6 +134,12 @@
 | [#190](https://github.com/Leon-87-7/vig/issues/190) | feat(web/spaces): redesign space cards with icon + color wash + inline delete | Web / Spaces | Merged; PR #193; closed on GH |
 | [#191](https://github.com/Leon-87-7/vig/issues/191) | feat(web/spaces): icon picker on space create/edit | Web / Spaces | Merged; PR #193; closed on GH |
 | [#192](https://github.com/Leon-87-7/vig/issues/192) | feat(web/jobs): enlarge mobile back-link on job detail | Web / Jobs | Merged; PR #193; closed on GH |
+| [#150](https://github.com/Leon-87-7/vig/issues/150) | feat(storage): add GCS-backed content-addressed storage seam | Platform / Storage | Merged; PR #182; closed on GH |
+| [#151](https://github.com/Leon-87-7/vig/issues/151) | feat(document): ingest Telegram file uploads into document jobs | Telegram / Document | Merged; PR #182; closed on GH |
+| [#152](https://github.com/Leon-87-7/vig/issues/152) | feat(document): route direct document URLs before article allowlist | Routing / Document | Merged; PR #182; closed on GH |
+| [#153](https://github.com/Leon-87-7/vig/issues/153) | feat(document): add vig-document liteparse sidecar | Document / Sidecar | Merged; PR #182; closed on GH |
+| [#154](https://github.com/Leon-87-7/vig/issues/154) | feat(document): parse cache and automatic Gemini enrichment | Document Pipeline | Merged; PR #182; closed on GH |
+| [#155](https://github.com/Leon-87-7/vig/issues/155) | feat(document): deliver plain text and enrichment summary in Telegram | Telegram / Document | Merged; PR #182; closed on GH |
 
 ---
 
@@ -150,12 +156,6 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                      | Area               | Depends On |
 | --------------------------------------------------: | ---------------------------------------------------------- | ------------------ | ---------- |
-| [#150](https://github.com/Leon-87-7/vig/issues/150) | feat(storage): add GCS-backed content-addressed storage seam | Platform / Storage | — |
-| [#151](https://github.com/Leon-87-7/vig/issues/151) | feat(document): ingest Telegram file uploads into document jobs | Telegram / Document | #150 |
-| [#152](https://github.com/Leon-87-7/vig/issues/152) | feat(document): route direct document URLs before article allowlist | Routing / Document | #150 |
-| [#153](https://github.com/Leon-87-7/vig/issues/153) | feat(document): add vig-document liteparse sidecar | Document / Sidecar | #150 |
-| [#154](https://github.com/Leon-87-7/vig/issues/154) | feat(document): parse cache and automatic Gemini enrichment | Document Pipeline | #151, #152, #153 |
-| [#155](https://github.com/Leon-87-7/vig/issues/155) | feat(document): deliver plain text and enrichment summary in Telegram | Telegram / Document | #154 |
 | [#158](https://github.com/Leon-87-7/vig/issues/158) | feat(exports): add opt-in Document Analysis export hook | Exports / Sheets | #154 |
 | [#156](https://github.com/Leon-87-7/vig/issues/156) | feat(document): render Markdown on demand from cached plain text | Document / Markdown | #154, #155 |
 | [#157](https://github.com/Leon-87-7/vig/issues/157) | feat(document): support Freestyle re-runs from cached parse | Document / Templates | #154, #155 |
@@ -328,16 +328,17 @@ Phase 1 (frontend + thin backend resolver, no migration):
 Critical path: #142/#143 → #144 → #146/#147 → #148 (all ✅-Done)
 
 Document pipeline (ADR-0023: docs/adr/0023-liteparse-document-pipeline.md + docs/roadmap.md)
-#150 GCS content-addressed storage seam (root — unblocked)
-├── #151 Telegram file upload ingestion
-├── #152 Direct document URL routing
-└── #153 vig-document liteparse sidecar
-    └── #154 parse cache + automatic Gemini enrichment ◄── also #151, #152
-        ├── #155 plain text + enrichment Telegram delivery
+#150 GCS content-addressed storage seam (root) ✅-Done (PR #182)
+├── #151 Telegram file upload ingestion ✅-Done (PR #182)
+├── #152 Direct document URL routing ✅-Done (PR #182)
+└── #153 vig-document liteparse sidecar ✅-Done (PR #182)
+    └── #154 parse cache + automatic Gemini enrichment ◄── also #151, #152 ✅-Done (PR #182)
+        ├── #155 plain text + enrichment Telegram delivery ✅-Done (PR #182)
         │   ├── #156 on-demand Markdown rendering ◄── also #154
         │   └── #157 Freestyle re-runs from cached parse ◄── also #154
         └── #158 opt-in Document Analysis export hook
 Critical path: #150 → {#151, #152, #153} → #154 → #155 → {#156, #157}; #158 can follow #154 in parallel
+(#150–#155 ✅-Done via PR #182; #156/#157/#158 remain open)
 
 Short-thumbnail backfill (docs/backfill_agreed_plan.md — ADR-0025 Phase-2 follow-up)
 #159 core script (happy path) ✅-Done (PR #149)
@@ -384,6 +385,7 @@ Critical path: #189 → {#190, #191}; all others independent (all ✅-Done)
 
 |                                                 # | Title                                                                                                  | Branch→Base                                | Linked Issue        | Status |
 | ------------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------- | ------ |
+| [#199](https://github.com/Leon-87-7/vig/pull/199) | docs(brain): graph map plan — ADR-0027/0028, CONTEXT, issues #194–#198 | feat/brain-graph-map→main | — | Open |
 
 ## Closed PRs
 
