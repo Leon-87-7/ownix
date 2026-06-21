@@ -19,109 +19,105 @@
 
 | Section | Title                                                    | Line |
 | ------- | -------------------------------------------------------- | ---- |
-| §1      | Executive Summary                                        | 119  |
-| §1.1    | Problem Statement                                        | 123  |
-| §1.2    | Proposed Solution                                        | 135  |
-| §1.3    | Success Metrics                                          | 147  |
-| §2      | System Architecture                                      | 159  |
-| §2.1    | High-Level Architecture                                  | 163  |
-| §2.2    | Component Specifications                                 | 211  |
-| §2.2.1  | Telegram Bot Layer                                       | 215  |
-| §2.2.2  | API Layer                                                | 251  |
-| §2.2.3  | Job Management Layer                                     | 318  |
-| §2.2.4  | Async Processing Layer                                   | 478  |
-| §2.2.5  | Short Video Pipeline                                     | 640  |
-| §2.2.6  | Long Video Pipeline                                      | 898  |
-| §2.2.7  | Output Layer                                             | 1238 |
-| §3      | User Experience                                          | 1427 |
-| §3.1    | User Flow - Short Video                                  | 1431 |
-| §3.2    | User Flow - Long Video                                   | 1454 |
-| §3.3    | User Flow - Unsupported URL                              | 1504 |
-| §3.4    | Message Templates                                        | 1525 |
-| §4      | Technical Specifications                                 | 1753 |
-| §4.1    | Technology Stack                                         | 1757 |
-| §4.2    | Environment Configuration                                | 1772 |
-| §4.3    | Project Structure                                        | 1833 |
-| §4.4    | Docker Compose Configuration                             | 1892 |
-| §4.5    | Dockerfile                                               | 1952 |
-| §4.6    | Requirements.txt                                         | 1982 |
-| §4.7    | Logging Schema                                           | 2001 |
-| §4.8    | Performance Requirements                                 | 2066 |
-| §4.9    | Error Handling Strategy                                  | 2080 |
-| §5      | Deployment & Operations                                  | 2134 |
-| §5.1    | Local Development Setup                                  | 2138 |
-| §5.2    | Production Deployment (VPS)                              | 2194 |
-| §5.3    | Health Monitoring                                        | 2231 |
-| §5.4    | Backup & Recovery                                        | 2299 |
-| §6      | Testing Strategy                                         | 2337 |
-| §6.1    | Unit Tests                                               | 2341 |
-| §6.2    | Integration Tests                                        | 2404 |
-| §6.3    | End-to-End Tests                                         | 2441 |
-| §6.4    | Load Testing                                             | 2487 |
-| §7      | Security Considerations                                  | 2567 |
-| §7.1    | Authentication & Authorization                           | 2571 |
-| §7.2    | Input Validation                                         | 2607 |
-| §7.3    | Rate Limiting                                            | 2710 |
-| §7.4    | Data Privacy                                             | 2766 |
-| §7.5    | Secrets Management                                       | 2832 |
-| §8      | Migration from n8n                                       | 2871 |
-| §8.1    | Migration Strategy                                       | 2875 |
-| §8.2    | Rollback Plan                                            | 2907 |
-| §8.3    | Data Export from Google Sheets                           | 2929 |
-| §9      | Future Enhancements                                      | 2978 |
-| §9.1    | Short-Term (Next 3 Months)                               | 2984 |
-| §9.2    | Long-Term (6-12 Months)                                  | 3041 |
-| §10     | Success Criteria & KPIs                                  | 3094 |
-| §10.1   | Technical Metrics                                        | 3098 |
-| §10.2   | Operational Metrics                                      | 3111 |
-| §10.3   | User Experience Metrics                                  | 3123 |
-| §11     | Risks & Mitigations                                      | 3136 |
-| §12     | Open Questions                                           | 3153 |
-| §13     | Second Brain Feature                                     | 3175 |
-| §13.1   | Overview                                                 | 3182 |
-| §13.2   | New Module: `brain.py`                                   | 3190 |
-| §13.3   | Database Schema                                          | 3215 |
-| §13.4   | Title Resolution                                         | 3253 |
-| §13.5   | Ingestion Flow                                           | 3265 |
-| §13.6   | Obsidian `.md` Format                                    | 3286 |
-| §13.7   | Semantic Search                                          | 3314 |
-| §13.8   | Refresh Worker                                           | 3349 |
-| §13.9   | `/rebuild-graph` Command                                 | 3370 |
-| §13.10  | Pipeline Integration Points                              | 3384 |
-| §13.11  | New Dependencies                                         | 3408 |
-| §13.12  | New Environment Variables                                | 3417 |
-| §13.13  | Testing                                                  | 3429 |
-| §13.14  | Graph Model — Links as Nodes (v1) / Videos as Nodes (v2) | 3446 |
-| §13.15  | One-off Backfill from Existing Sheets                    | 3467 |
-| §14     | Mini-PRD Feature                                         | 3671 |
-| §14.1   | Overview                                                 | 3678 |
-| §14.2   | Trigger Surfaces                                         | 3691 |
-| §14.3   | Auto-fire Mechanism                                      | 3705 |
-| §14.4   | Race Protection (atomic slot lock)                       | 3725 |
-| §14.5   | Prompt Inputs                                            | 3763 |
-| §14.6   | Transcript Truncation                                    | 3780 |
-| §14.7   | Model Selection and Fallback Chain                       | 3803 |
-| §14.8   | Output JSON Schema                                       | 3814 |
-| §14.9   | Drive Layout                                             | 3865 |
-| §14.10  | v2 Path — `PRD_INCLUDE_FRAMES`                           | 3940 |
-| §14.11  | Telegram Delivery (Q12)                                  | 3946 |
-| §14.12  | `chat_state` Lifecycle                                   | 3969 |
-| §14.13  | `/spec` Command                                          | 3994 |
-| §14.14  | Failure Handling                                         | 4047 |
-| §14.15  | Sheets Logging (`SHEETS_ID_PRD`)                         | 4059 |
-| §14.16  | New Environment Variables                                | 4079 |
-| §14.17  | Logging Schema                                           | 4093 |
-| §14.18  | Testing                                                  | 4124 |
-| §15     | Photo Link Extraction Feature                            | 4147 |
-| §15.1   | Overview                                                 | 4154 |
-| §15.2   | Decisions                                                | 4163 |
-| §15.3   | Single-Photo Flow                                        | 4183 |
-| §15.4   | Batch-Photo Flow                                         | 4207 |
-| §15.5   | Redis Keys                                               | 4238 |
-| §15.6   | Files Changed                                            | 4248 |
-| §15.7   | New Environment Variables                                | 4270 |
-| §15.8   | Testing                                                  | 4275 |
-| §16     | Appendices                                               | 4295 |
+| §1      | Executive Summary                                        | 130  |
+| §1.1    | Problem Statement                                        | 134  |
+| §1.2    | Proposed Solution                                        | 146  |
+| §1.3    | Success Metrics                                          | 158  |
+| §2      | System Architecture                                      | 170  |
+| §2.1    | High-Level Architecture                                  | 174  |
+| §2.2    | Component Specifications                                 | 222  |
+| §2.2.1  | Telegram Bot Layer                                       | 226  |
+| §2.2.2  | API Layer                                                | 262  |
+| §2.2.3  | Job Management Layer                                     | 329  |
+| §2.2.4  | Async Processing Layer                                   | 489  |
+| §2.2.5  | Short Video Pipeline                                     | 651  |
+| §2.2.6  | Long Video Pipeline                                      | 909  |
+| §2.2.7  | Output Layer                                             | 1249 |
+| §3      | User Experience                                          | 1438 |
+| §3.1    | User Flow - Short Video                                  | 1442 |
+| §3.2    | User Flow - Long Video                                   | 1465 |
+| §3.3    | User Flow - Unsupported URL                              | 1515 |
+| §3.4    | Message Templates                                        | 1536 |
+| §4      | Technical Specifications                                 | 1764 |
+| §4.1    | Technology Stack                                         | 1768 |
+| §4.2    | Environment Configuration                                | 1783 |
+| §4.3    | Project Structure                                        | 1845 |
+| §4.4    | Docker Compose Configuration                             | 1904 |
+| §4.5    | Dockerfile                                               | 1964 |
+| §4.6    | Requirements.txt                                         | 1994 |
+| §4.7    | Logging Schema                                           | 2013 |
+| §4.8    | Performance Requirements                                 | 2078 |
+| §4.9    | Error Handling Strategy                                  | 2092 |
+| §5      | Deployment & Operations                                  | 2146 |
+| §5.1    | Local Development Setup                                  | 2150 |
+| §5.2    | Production Deployment (VPS)                              | 2206 |
+| §5.3    | Health Monitoring                                        | 2243 |
+| §5.4    | Backup & Recovery                                        | 2311 |
+| §6      | Testing Strategy                                         | 2349 |
+| §6.1    | Unit Tests                                               | 2353 |
+| §6.2    | Integration Tests                                        | 2416 |
+| §6.3    | End-to-End Tests                                         | 2453 |
+| §6.4    | Load Testing                                             | 2499 |
+| §7      | Security Considerations                                  | 2579 |
+| §7.1    | Authentication & Authorization                           | 2583 |
+| §7.2    | Input Validation                                         | 2619 |
+| §7.3    | Rate Limiting                                            | 2722 |
+| §7.4    | Data Privacy                                             | 2778 |
+| §7.5    | Secrets Management                                       | 2844 |
+| §8      | Migration from n8n                                       | 2883 |
+| §8.1    | Migration Strategy                                       | 2887 |
+| §8.2    | Rollback Plan                                            | 2919 |
+| §8.3    | Data Export from Google Sheets                           | 2941 |
+| §10     | Success Criteria & KPIs                                  | 2996 |
+| §10.1   | Technical Metrics                                        | 3000 |
+| §10.2   | Operational Metrics                                      | 3013 |
+| §10.3   | User Experience Metrics                                  | 3025 |
+| §11     | Risks & Mitigations                                      | 3038 |
+| §13     | Second Brain Feature                                     | 3061 |
+| §13.1   | Overview                                                 | 3068 |
+| §13.2   | New Module: `brain.py`                                   | 3076 |
+| §13.3   | Database Schema                                          | 3101 |
+| §13.4   | Title Resolution                                         | 3139 |
+| §13.5   | Ingestion Flow                                           | 3151 |
+| §13.6   | Obsidian `.md` Format                                    | 3172 |
+| §13.7   | Semantic Search                                          | 3200 |
+| §13.8   | Refresh Worker                                           | 3235 |
+| §13.9   | `/rebuild-graph` Command                                 | 3256 |
+| §13.10  | Pipeline Integration Points                              | 3270 |
+| §13.11  | New Dependencies                                         | 3294 |
+| §13.12  | New Environment Variables                                | 3303 |
+| §13.13  | Testing                                                  | 3315 |
+| §13.14  | Graph Model — Links as Nodes (v1) / Videos as Nodes (v2) | 3332 |
+| §13.15  | One-off Backfill from Existing Sheets                    | 3353 |
+| §14     | Mini-PRD Feature                                         | 3557 |
+| §14.1   | Overview                                                 | 3564 |
+| §14.2   | Trigger Surfaces                                         | 3577 |
+| §14.3   | Auto-fire Mechanism                                      | 3591 |
+| §14.4   | Race Protection (atomic slot lock)                       | 3611 |
+| §14.5   | Prompt Inputs                                            | 3649 |
+| §14.6   | Transcript Truncation                                    | 3666 |
+| §14.7   | Model Selection and Fallback Chain                       | 3689 |
+| §14.8   | Output JSON Schema                                       | 3700 |
+| §14.9   | Drive Layout                                             | 3751 |
+| §14.10  | v2 Path — `PRD_INCLUDE_FRAMES`                           | 3826 |
+| §14.11  | Telegram Delivery (Q12)                                  | 3832 |
+| §14.12  | `chat_state` Lifecycle                                   | 3855 |
+| §14.13  | `/spec` Command                                          | 3880 |
+| §14.14  | Failure Handling                                         | 3933 |
+| §14.15  | Sheets Logging (`SHEETS_ID_PRD`)                         | 3945 |
+| §14.16  | New Environment Variables                                | 3965 |
+| §14.17  | Logging Schema                                           | 3979 |
+| §14.18  | Testing                                                  | 4010 |
+| §15     | Photo Link Extraction Feature                            | 4033 |
+| §15.1   | Overview                                                 | 4037 |
+| §15.2   | Decisions                                                | 4047 |
+| §15.3   | Single-Photo Flow                                        | 4066 |
+| §15.4   | Batch-Photo Flow                                         | 4098 |
+| §15.5   | Redis Keys                                               | 4132 |
+| §15.6   | Files Changed                                            | 4141 |
+| §15.7   | New Environment Variables                                | 4153 |
+| §15.8   | Testing                                                  | 4159 |
+| §16     | Appendices                                               | 4179 |
 
 ---
 
@@ -2987,117 +2983,7 @@ if __name__ == "__main__":
 
 <!-- §9 -->
 
-## 9. Future Enhancements
-
-> **Note:** The Second Brain feature (semantic link graph, Obsidian vault, `/find`, `/rebuild-graph`) is **approved and fully designed** — see Section 13 for the complete spec. It is not listed here.
-
-<!-- §9.1 -->
-
-### 9.1 Short-Term (Next 3 Months)
-
-**1. Duplicate Detection Enhancement**
-
-```python
-# Add URL hash column for faster lookups
-CREATE INDEX idx_url_hash ON jobs(url);
-
-# Check if URL was processed in last 24h
-SELECT * FROM jobs
-WHERE url = ?
-  AND status = 'complete'
-  AND created_at > datetime('now', '-24 hours')
-ORDER BY created_at DESC
-LIMIT 1;
-```
-
-**2. User Preferences**
-
-```python
-# New table for user settings
-CREATE TABLE user_preferences (
-    chat_id INTEGER PRIMARY KEY,
-    enable_brave_search BOOLEAN DEFAULT TRUE,
-    preferred_language TEXT DEFAULT 'en',
-    notification_level TEXT DEFAULT 'all',  # all, errors_only, none
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**3. Job History Command**
-
-```python
-# Telegram command: /history
-@app.message_handler(commands=['history'])
-async def show_history(message):
-    chat_id = message.chat.id
-
-    jobs = await db.execute("""
-        SELECT url, status, created_at
-        FROM jobs
-        WHERE chat_id = ?
-        ORDER BY created_at DESC
-        LIMIT 10
-    """, (chat_id,))
-
-    text = "📋 Your Recent Jobs:\n\n"
-    for job in jobs:
-        status_emoji = "✅" if job['status'] == 'complete' else "❌"
-        text += f"{status_emoji} {job['url'][:50]}...\n"
-        text += f"   {job['created_at']}\n\n"
-
-    await send_message(chat_id, text)
-```
-
-<!-- §9.2 -->
-
-### 9.2 Long-Term (6-12 Months)
-
-**1. Batch Processing**
-
-```python
-# Accept playlist URLs
-# Telegram command: /batch
-# User sends: "https://youtube.com/playlist?list=..."
-# Bot processes all videos in playlist
-```
-
-**2. Web Dashboard**
-
-```python
-# Simple FastAPI + HTML dashboard
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard():
-    stats = await get_stats()
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "stats": stats
-    })
-```
-
-**3. Multi-Language Support**
-
-```python
-# Detect video language, translate transcript
-from deep_translator import GoogleTranslator
-
-async def translate_if_needed(text: str, target_lang: str = 'en') -> str:
-    # Detect language
-    detected = detect_language(text)
-
-    if detected != target_lang:
-        translated = GoogleTranslator(source=detected, target=target_lang).translate(text)
-        return translated
-
-    return text
-```
-
-**4. Real-Time Streaming**
-
-```python
-# Process live YouTube streams
-# Send periodic updates (every 5 minutes)
-# Full analysis when stream ends
-```
+## removed by Leon
 
 ---
 
@@ -3162,23 +3048,7 @@ async def translate_if_needed(text: str, target_lang: str = 'en') -> str:
 
 <!-- §12 -->
 
-## 12. Open Questions
-
-1. **Platform support** — Resolved: YouTube Shorts, Instagram Reels (`/reel/`), and TikTok (`/@user/video/`) are already supported in the short pipeline. YouTube watch/youtu.be in the long pipeline. Instagram carousels (`/p/`) are rejected. Twitter/X not supported.
-
-2. **How long should we keep job records?**
-   - Proposal: 90 days for completed jobs, 30 days for failed jobs
-   - Implement auto-cleanup cron job
-
-3. **Should we add a web dashboard for job monitoring?**
-   - Decision: Not in MVP, but prepare architecture to support it (API endpoints ready)
-
-4. **What's the maximum video duration we support?**
-   - Short videos (frame pipeline): **180 seconds** — enforced by `transcript_server.py`; videos over 180s return `{"error": {"type": "too_long", ...}}`
-   - Long videos (transcript pipeline): no hard limit enforced in the service; practical limit is Gemini's context window after the 12,000-char truncation gate
-
-5. **Should we implement user authentication beyond Telegram?**
-   - Decision: No, Telegram chat_id is sufficient authentication for now
+## removed by Leon
 
 ---
 
