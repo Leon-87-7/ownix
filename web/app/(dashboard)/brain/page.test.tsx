@@ -14,6 +14,10 @@ vi.mock('@/lib/hooks/useSemanticSearch', () => ({
   useSemanticSearch: vi.fn(),
 }));
 
+vi.mock('@/components/brain-graph', () => ({
+  BrainGraph: () => <div data-testid="brain-graph" />,
+}));
+
 import { useSemanticSearch } from '@/lib/hooks/useSemanticSearch';
 const mockUseSemanticSearch = vi.mocked(useSemanticSearch);
 

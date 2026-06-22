@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { BrainGraph } from '@/components/brain-graph';
 import { useSemanticSearch } from '@/lib/hooks/useSemanticSearch';
 import type { BrainResult } from '@/lib/hooks/useSemanticSearch';
 
@@ -110,6 +111,8 @@ export default function BrainPage() {
       </section>
 
       {blankWarning && <p className="text-xs text-status-pending">Please enter a search query.</p>}
+
+      <BrainGraph results={results} searchState={searchState} />
 
       {searchState === 'idle' && <IdleBanner />}
       {searchState === 'error' && <ErrorBanner message={errorMessage} />}

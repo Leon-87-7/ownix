@@ -19,6 +19,11 @@ async def search_links(q: str = Query(...), k: int = Query(default=5, le=20)) ->
     return await brain.search_links(q.strip(), top_k=k)
 
 
+@brain_router.get("/graph")
+async def get_graph() -> dict[str, list[dict]]:
+    return await brain.get_graph()
+
+
 @brain_router.post("/rebuild")
 async def rebuild_graph() -> dict[str, int]:
     try:

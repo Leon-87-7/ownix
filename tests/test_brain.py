@@ -17,6 +17,9 @@ from src.brain import (
     _rebuild_lock,
     _resolve_title,
     rebuild_graph,
+    get_graph,
+    ingest_links,
+    normalize_url,
     refresh_stale_links,
     search_links,
 )
@@ -254,5 +257,120 @@ async def test_search_returns_empty_on_no_corpus():
 
         assert results == []
 
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_normalized_url_dedup_variants():
+    """Query strings, fragments, and trailing slashes collapse to one Brain node."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executescript("""
+                CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT);
+                INSERT INTO jobs (id, url, drive_url) VALUES ('job_norm', 'https://yt.com/watch?v=1', NULL);
+            """)
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed:
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_embed.return_value = _rand_vec()
+            mock_upload.return_value = ("file-id", "drive-url")
+
+            await ingest_links([{"url": "https://example.com/tool/?v=X&t=10#frag", "title": "Tool"}], "tools", "job_norm")
+            await ingest_links([{"url": "https://example.com/tool/?v=X", "title": "Tool"}], "tools", "job_norm")
+            await ingest_links([{"url": "https://example.com/tool/", "title": "Tool"}], "tools", "job_norm")
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute("SELECT url, seen_count FROM links")
+            rows = await cursor.fetchall()
+
+        assert normalize_url("https://example.com/tool/?v=X#frag") == "https://example.com/tool"
+        assert len(rows) == 1
+        assert rows[0]["url"] == "https://example.com/tool"
+        assert rows[0]["seen_count"] == 3
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_get_graph_empty_corpus():
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.commit()
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            assert await get_graph() == {"nodes": [], "edges": []}
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
+    import aiosqlite
+    import os
+    import tempfile
+    from datetime import datetime, timedelta, timezone
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    old = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('job_repo', 'done')")
+            await conn.execute("""
+                INSERT INTO links (id, url, title, topic, source_job, embedding, drive_file_id, seen_count, last_seen_at, created_at, updated_at, archived)
+                VALUES ('fresh', 'https://github.com/owner/fresh', 'Fresh', 'repo', 'job_repo', ?, 'drive', 1, ?, ?, ?, 0),
+                       ('arch', 'https://github.com/owner/arch', 'Archived', 'repo', 'job_repo', ?, 'drive', 1, ?, ?, ?, 1)
+            """, (_make_blob(_rand_vec()), old, old, old, _make_blob(_rand_vec()), old, old, old))
+            await conn.commit()
+
+        async def fake_bundle(owner, repo, token):
+            return {"metadata": {"stars": 42, "pushed_at": "2026-06-01T00:00:00Z", "archived": False}}
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock), \
+             patch("src.services.github.fetch_repo_bundle", new=AsyncMock(side_effect=fake_bundle)) as mock_fetch:
+            mock_settings.DB_PATH = db_path
+            mock_settings.BRAIN_REFRESH_BATCH = 10
+            mock_settings.BRAIN_MIN_SCORE = 0.0
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "folder"
+            mock_settings.GITHUB_TOKEN = "token"
+            await refresh_stale_links()
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            rows = {r["id"]: r for r in await (await conn.execute("SELECT id, stars, pushed_at FROM links")).fetchall()}
+        assert mock_fetch.await_count == 1
+        assert rows["fresh"]["stars"] == 42
+        assert rows["fresh"]["pushed_at"] == "2026-06-01T00:00:00Z"
+        assert rows["arch"]["stars"] is None
     finally:
         os.unlink(db_path)

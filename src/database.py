@@ -155,7 +155,10 @@ CREATE TABLE IF NOT EXISTS links (
     seen_count    INTEGER NOT NULL DEFAULT 1,
     last_seen_at  TEXT NOT NULL,
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    updated_at    TEXT NOT NULL,
+    stars         INTEGER,
+    pushed_at     TEXT,
+    archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
@@ -683,6 +686,13 @@ _MIGRATIONS.append(_migrate_v16_v17)
 
 # v17 → v18: per-space curated icon (issue #189)
 _MIGRATIONS.append(["ALTER TABLE spaces ADD COLUMN icon TEXT NOT NULL DEFAULT 'folder'"])
+
+# v18 → v19: repo-node metadata refresh (issue #198)
+_MIGRATIONS.append([
+    "ALTER TABLE links ADD COLUMN stars INTEGER",
+    "ALTER TABLE links ADD COLUMN pushed_at TEXT",
+    "ALTER TABLE links ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+])
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
