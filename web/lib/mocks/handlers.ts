@@ -105,7 +105,7 @@ return [
     const i = tags.findIndex((x) => x.id === params.id);
     if (i >= 0) tags.splice(i, 1);
     // Drop attachments to the deleted tag so mock state stays consistent.
-    for (const k of jobTags) if (k.endsWith(`:${params.id}`)) jobTags.delete(k);
+    jobTags.forEach((k) => { if (k.endsWith(`:${params.id}`)) jobTags.delete(k); });
     return new HttpResponse(null, { status: 204 });
   }),
 
