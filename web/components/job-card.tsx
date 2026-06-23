@@ -38,7 +38,7 @@ export function JobCard({ job }: JobCardProps) {
         </div>
       </div>
       {/* Footer: timestamp left, tag badges + dropdown right, one dense line. */}
-      <div className="mt-2 flex items-center justify-between gap-3">
+      <div className="pointer-events-none mt-2 flex items-center justify-between gap-3">
         <p className="pointer-events-none font-mono text-xs text-muted">
           <DateTime iso={job.created_at} />
         </p>
