@@ -5,12 +5,19 @@ import seed from './seed.json';
 // create tag, annotations) persist for the browser session only.
 interface Job { id: string; content_type: string; status: string; [k: string]: unknown }
 interface Tag { id: string; name: string; meaning: string; color: string }
+interface Template { id: string; name: string; description: string; extra_instructions: string; is_builtin: boolean; created_at?: string; updated_at?: string }
 
 const jobs = seed.jobs as unknown as Job[];
 const tags = (seed.tags as Tag[]).slice();
 const jobTags = new Set(
   (seed.job_tags as { job_id: string; tag_id: string }[]).map((jt) => `${jt.job_id}:${jt.tag_id}`),
 );
+const templates: Template[] = [
+  { id: 'b1', name: 'summary', description: 'Concise summary of the video', extra_instructions: '', is_builtin: true },
+  { id: 'b2', name: 'transcript', description: 'Full transcript with timestamps', extra_instructions: '', is_builtin: true },
+  { id: 'b3', name: 'keypoints', description: 'Bullet-point key takeaways', extra_instructions: '', is_builtin: true },
+  { id: 'u1', name: 'startup-notes', description: 'Founder takeaways', extra_instructions: 'Extract actionable startup lessons and growth tactics mentioned in the video.', is_builtin: false },
+];
 const annotations = new Map<string, { notes: string; updated_at: string | null }>(
   (seed.annotations as { job_id: string; notes: string; updated_at: string | null }[]).map((a) => [
     a.job_id,
@@ -77,5 +84,27 @@ export const handlers = [
     const tag: Tag = { id: `mock_${Date.now()}`, name: body.name, meaning: body.meaning ?? '', color: body.color };
     tags.push(tag);
     return HttpResponse.json(tag, { status: 201 });
+  }),
+
+  http.get('/api/templates', () => HttpResponse.json(templates)),
+  http.post('/api/templates', async ({ request }) => {
+    const body = (await request.json()) as { name: string; description?: string; extra_instructions?: string };
+    if (templates.some((t) => !t.is_builtin && t.name === body.name)) {
+      return HttpResponse.json({ detail: 'Template name already exists' }, { status: 409 });
+    }
+    const t: Template = { id: `mock_${Date.now()}`, name: body.name, description: body.description ?? '', extra_instructions: body.extra_instructions ?? '', is_builtin: false };
+    templates.push(t);
+    return HttpResponse.json(t, { status: 201 });
+  }),
+  http.put('/api/templates/:name', async ({ params, request }) => {
+    const t = templates.find((x) => x.name === params.name && !x.is_builtin);
+    if (!t) return new HttpResponse(null, { status: 404 });
+    Object.assign(t, await request.json(), { updated_at: new Date().toISOString() });
+    return HttpResponse.json(t);
+  }),
+  http.delete('/api/templates/:name', ({ params }) => {
+    const i = templates.findIndex((x) => x.name === params.name && !x.is_builtin);
+    if (i >= 0) templates.splice(i, 1);
+    return new HttpResponse(null, { status: 204 });
   }),
 ];

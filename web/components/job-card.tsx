@@ -37,13 +37,15 @@ export function JobCard({ job }: JobCardProps) {
           <PlatformBadge url={job.url} contentType={job.content_type} />
         </div>
       </div>
-      {/* Tag row: attached badges + dropdown, on their own line under the badges. */}
-      <div className="pointer-events-auto relative z-10 mt-2 flex justify-end">
-        <JobCardTags jobId={job.id} />
+      {/* Footer: timestamp left, tag badges + dropdown right, one dense line. */}
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="pointer-events-none font-mono text-xs text-muted">
+          <DateTime iso={job.created_at} />
+        </p>
+        <div className="pointer-events-auto relative z-10">
+          <JobCardTags jobId={job.id} />
+        </div>
       </div>
-      <p className="pointer-events-none mt-1 font-mono text-xs text-muted">
-        <DateTime iso={job.created_at} />
-      </p>
     </div>
   );
 }
