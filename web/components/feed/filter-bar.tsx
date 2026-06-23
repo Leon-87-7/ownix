@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 
 const CONTENT_TYPE_FILTERS = [
@@ -25,31 +25,73 @@ interface ContentTypeTabData {
   count: number;
 }
 
-function ContentTypeTab({ label, count, active, onClick }: ContentTypeTabData & { active: boolean; onClick: () => void }) {
+// Segmented control (motion-primitives "animated background"): one signal-orange
+// thumb slides under the active tab. ponytail: pure-CSS slide via measured
+// offsetLeft/width — no framer-motion dependency for a single sliding highlight.
+function SegmentedTabs({ tabs, value, onChange }: {
+  tabs: ContentTypeTabData[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  const activeIndex = tabs.findIndex((t) => t.value === value);
+
+  useEffect(() => {
+    const el = refs.current[activeIndex];
+    if (!el) return;
+    const update = () => {
+      const next = { left: el.offsetLeft, width: el.offsetWidth };
+      // Guard against the render loop: tabs is rebuilt each render, so bail when unchanged.
+      setThumb((prev) => (prev && prev.left === next.left && prev.width === next.width ? prev : next));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [activeIndex, tabs]);
+
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      aria-label={`${label} ${count}`}
-      onClick={onClick}
-      className={`h-9 shrink-0 rounded-md px-3 text-[13px] font-medium transition-ui ${
-        active
-          ? "bg-signal text-onsignal hover:bg-signal-bright"
-          : "border border-line bg-surface text-body hover:bg-raised hover:text-ink"
-      }`}
+    <div
+      role="tablist"
+      aria-label="Content type"
+      className="relative flex w-full gap-1 rounded-lg border border-line bg-surface p-1 sm:w-auto"
     >
-      <span className="inline-flex items-center gap-2">
-        <span>{label}</span>
+      {thumb && (
         <span
-          className={`rounded border px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${
-            active ? "border-onsignal/30 text-onsignal" : "border-line text-muted"
-          }`}
-        >
-          {count}
-        </span>
-      </span>
-    </button>
+          aria-hidden="true"
+          className="absolute bottom-1 top-1 left-0 rounded-md bg-signal transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width }}
+        />
+      )}
+      {tabs.map((tab, i) => {
+        const active = tab.value === value;
+        return (
+          <button
+            key={tab.value}
+            ref={(el) => { refs.current[i] = el; }}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-label={`${tab.label} ${tab.count}`}
+            onClick={() => onChange(tab.value)}
+            className={`relative z-10 flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-medium transition-colors sm:flex-initial ${
+              active
+                ? "text-onsignal"
+                : "text-body hover:text-ink after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-ink/70 after:transition-transform after:duration-200 after:ease-out hover:after:scale-x-100 motion-reduce:after:transition-none"
+            }`}
+          >
+            <span>{tab.label}</span>
+            <span
+              className={`rounded border px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${
+                active ? "border-onsignal/30 text-onsignal" : "border-line text-muted"
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -111,18 +153,8 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
   return (
     <section className="mt-8 flex flex-col gap-3" aria-label="Search and filters">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        {/* #186: tabs wrap to a second row on narrow screens — no horizontal scroll. */}
-        <div className="min-w-0" role="tablist" aria-label="Content type">
-          <div className="flex flex-wrap items-center gap-1">
-            {tabs.map((tab) => (
-              <ContentTypeTab
-                key={tab.value}
-                {...tab}
-                active={ctFilter === tab.value}
-                onClick={() => setCtFilter(tab.value)}
-              />
-            ))}
-          </div>
+        <div className="min-w-0">
+          <SegmentedTabs tabs={tabs} value={ctFilter} onChange={setCtFilter} />
         </div>
         <input
           type="search"
