@@ -1,5 +1,5 @@
 /**
- * Tests for issue #164: short-pipeline job detail rendering.
+ * Tests for issues #164/#213: short-pipeline job detail rendering.
  *
  * Verifies that:
  * - SHORT_FIELDS contains the expected short-specific field keys
@@ -25,11 +25,10 @@ import type { JobDetail } from '@/lib/hooks/useJobDetail'
 // ---------------------------------------------------------------------------
 
 describe('SHORT_FIELDS', () => {
-  it('contains summary, transcript, key_phrases', () => {
+  it('contains summary, transcript, links', () => {
     const keys = SHORT_FIELDS.map((f) => f.key)
-    expect(keys).toContain('summary')
-    expect(keys).toContain('transcript')
-    expect(keys).toContain('key_phrases')
+    expect(keys).toEqual(['summary', 'transcript', 'links'])
+    expect(keys).not.toContain('key_phrases')
   })
 
   it('does NOT contain long-enrichment keys', () => {
@@ -40,9 +39,10 @@ describe('SHORT_FIELDS', () => {
     expect(keys).not.toContain('template_analysis')
   })
 
-  it('renders key_phrases as json (stored as JSON array)', () => {
-    const kpField = SHORT_FIELDS.find((f) => f.key === 'key_phrases')
-    expect(kpField?.render).toBe('json')
+  it('renders links with the links renderer', () => {
+    const linksField = SHORT_FIELDS.find((f) => f.key === 'links')
+    expect(linksField?.label).toBe('Links Found')
+    expect(linksField?.render).toBe('links')
   })
 })
 
@@ -67,6 +67,7 @@ describe('ENRICHMENT_FIELDS (long/article schema unchanged)', () => {
     expect(keys).not.toContain('summary')
     expect(keys).not.toContain('transcript')
     expect(keys).not.toContain('key_phrases')
+    expect(keys).not.toContain('links')
   })
 })
 
@@ -88,7 +89,7 @@ const baseJob: JobDetail = {
   // short fields
   summary: 'A short clip about Python.',
   transcript: 'Hello world this is a transcript.',
-  key_phrases: '["python", "hello world"]',
+  links: '[{"url":"https://python.org","label":"Python","description":"Official site"}]',
   // long fields (present in DB but should NOT appear in short markdown)
   ai_topic: 'Some topic',
   ai_objective: null,
@@ -107,6 +108,8 @@ describe('buildMarkdown', () => {
     expect(md).toContain('A short clip about Python.')
     expect(md).toContain('## Transcript')
     expect(md).toContain('Hello world this is a transcript.')
+    expect(md).toContain('## Links Found')
+    expect(md).toContain('[Python](https://python.org)')
   })
 
   it('does NOT include long-enrichment headings for short jobs', () => {
@@ -126,7 +129,7 @@ describe('buildMarkdown', () => {
       promise_gap: null,
       summary: null,
       transcript: null,
-      key_phrases: null,
+      links: null,
     }
     const md = buildMarkdown(longJob)
     expect(md).toContain('## Topic')
@@ -144,7 +147,7 @@ describe('buildMarkdown', () => {
       ai_topic: 'Article topic',
       summary: null,
       transcript: null,
-      key_phrases: null,
+      links: null,
     }
     const md = buildMarkdown(articleJob)
     expect(md).toContain('## Topic')
@@ -156,7 +159,7 @@ describe('buildMarkdown', () => {
       ...baseJob,
       summary: null,
       transcript: null,
-      key_phrases: null,
+      links: null,
     }
     // Should not throw; just produces title + url
     const md = buildMarkdown(nullShortJob)
@@ -187,16 +190,17 @@ describe('Detail page field selection logic (unit)', () => {
     })
   }
 
-  it('shows summary/transcript/key_phrases for a short job with data', () => {
+  it('shows summary/transcript/links for a short job with data', () => {
     const fields = selectPresentFields(baseJob, SHORT_FIELDS)
     const keys = fields.map((f) => f.key)
     expect(keys).toContain('summary')
     expect(keys).toContain('transcript')
-    expect(keys).toContain('key_phrases')
+    expect(keys).toContain('links')
+    expect(keys).not.toContain('key_phrases')
   })
 
   it('shows nothing for a short job where all short fields are null', () => {
-    const emptyShort: JobDetail = { ...baseJob, summary: null, transcript: null, key_phrases: null }
+    const emptyShort: JobDetail = { ...baseJob, summary: null, transcript: null, links: null }
     const fields = selectPresentFields(emptyShort, SHORT_FIELDS)
     expect(fields).toHaveLength(0)
   })

@@ -54,7 +54,6 @@ def _build_prompt(
     title: str,
     transcript: str,
     template: str = "summary",
-    key_phrases: list[str] | None = None,
     freestyle_prompt: str | None = None,
 ) -> str:
     truncated = (
@@ -66,13 +65,6 @@ def _build_prompt(
         extra = f"\n### FREESTYLE INSTRUCTIONS\n{freestyle_prompt}"
     else:
         extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
-    context = ""
-    if key_phrases:
-        context = (
-            f"\n### KEY CONTEXT\n"
-            f"The transcript frequently mentions: {', '.join(key_phrases)}. "
-            f"Pay attention to how these topics are explained.\n"
-        )
     return f"""Analyze this YouTube transcript for a video titled: "{title}".
 
 ### STEP 1: CLASSIFICATION
@@ -119,7 +111,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no text before
   "market_data": "Summary of symbols, trends, or price levels if Category B, else empty string"
 }}
 
-{extra}{context}{_PROMISE_GAP_SUFFIX}
+{extra}{_PROMISE_GAP_SUFFIX}
 ### TRANSCRIPT:
 {truncated}"""
 
@@ -172,9 +164,8 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""
     template = job.get("template") or "summary"
-    key_phrases = json.loads(job.get("key_phrases") or "[]")
     freestyle_prompt = job.get("freestyle_prompt")
-    prompt = _build_prompt(title, transcript, template, key_phrases, freestyle_prompt)
+    prompt = _build_prompt(title, transcript, template, freestyle_prompt)
 
     try:
         raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")

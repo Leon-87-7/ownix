@@ -1,12 +1,13 @@
-"""Tests for issue #164: short-pipeline job detail pages.
+"""Tests for issues #164/#213: short-pipeline job detail pages.
 
 Covers:
 - _DETAIL_FIELDS_SHORT / _detail_fields_for API selector
 - GET /api/jobs/{id} returns short fields for short jobs and long fields for long jobs
-- short_video.run() persists the vision summary to the DB column
+- short_video.run() persists the vision summary and enriched links to DB columns
 """
 from __future__ import annotations
 
+import json
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,11 +30,12 @@ from src.api.jobs import (
 )
 
 
-def test_detail_fields_short_includes_summary_transcript_key_phrases() -> None:
+def test_detail_fields_short_includes_summary_transcript_links() -> None:
     fields = _detail_fields_for("short")
     assert "summary" in fields
     assert "transcript" in fields
-    assert "key_phrases" in fields
+    assert "links" in fields
+    assert "key_phrases" not in fields
 
 
 def test_detail_fields_short_excludes_long_enrichment() -> None:
@@ -57,6 +59,7 @@ def test_detail_fields_long_excludes_short_fields() -> None:
     fields = _detail_fields_for("long")
     assert "summary" not in fields
     assert "transcript" not in fields
+    assert "links" not in fields
     assert "key_phrases" not in fields
 
 
@@ -93,6 +96,7 @@ def _make_job(**extra) -> dict:
         # short fields
         "summary": "A short clip about Python.",
         "transcript": "Hello world.",
+        "links": '[{"url":"https://python.org","label":"Python","description":"Official site"}]',
         "key_phrases": '["python", "hello world"]',
         # long fields that must NOT appear for a short job
         "ai_topic": "topic",
@@ -123,7 +127,8 @@ async def test_get_job_short_returns_short_fields(monkeypatch) -> None:
 
     assert response["summary"] == "A short clip about Python."
     assert response["transcript"] == "Hello world."
-    assert response["key_phrases"] == '["python", "hello world"]'
+    assert response["links"] == '[{"url":"https://python.org","label":"Python","description":"Official site"}]'
+    assert "key_phrases" not in response
     assert "ai_topic" not in response
     assert "ai_objective" not in response
     assert "promise_gap" not in response
@@ -150,6 +155,7 @@ async def test_get_job_long_returns_long_fields(monkeypatch) -> None:
     assert response["promise_gap"] == "pg"
     assert "summary" not in response
     assert "transcript" not in response
+    assert "links" not in response
     assert "key_phrases" not in response
 
 
@@ -195,7 +201,6 @@ def _patch_short_pipeline(transcript_resp: dict, *, job: dict | None = None):
         patch("src.processors.short_video.upload_file", new_callable=AsyncMock, return_value=("fid", "https://drive/x")),
         patch("src.processors.short_video.sheets.append_short_row", new_callable=AsyncMock),
         patch("src.processors.short_video.transcript_svc.fetch_transcript", new_callable=AsyncMock, return_value=transcript_resp),
-        patch("src.processors.short_video.extract_key_phrases", new=MagicMock(return_value=["python"])),
         patch("src.processors.enrichment.enrich_audio", new_callable=AsyncMock),
         patch("src.processors.enrichment.transcribe_audio", new_callable=AsyncMock),
         patch("src.processors.enrichment.enrich", new_callable=AsyncMock),
@@ -237,8 +242,34 @@ async def test_short_pipeline_persists_summary_with_non_empty_vision() -> None:
         with patch("src.processors.short_video.gemini.call_gemini_vision", new_callable=AsyncMock, return_value=vision_with_links):
             # brave.verify_links returns links unchanged when disabled
             with patch("src.processors.short_video.brave.verify_links", new_callable=AsyncMock, return_value=vision_with_links["links"]):
-                await short_video.run(_PLAIN_SHORT_JOB)
+                with patch("src.processors.short_video.enrich_github_links", new_callable=AsyncMock, return_value=vision_with_links["links"]):
+                    await short_video.run(_PLAIN_SHORT_JOB)
 
     step5_calls = [c for c in mock_update.call_args_list if c.kwargs.get("drive_url") is not None]
     assert step5_calls
     assert step5_calls[0].kwargs.get("summary") == "Detailed Python tutorial covering decorators."
+
+    links_calls = [c for c in mock_update.call_args_list if c.kwargs.get("links") is not None]
+    assert links_calls
+    assert links_calls[-1].kwargs.get("links") == json.dumps(vision_with_links["links"])
+
+
+@pytest.mark.asyncio
+async def test_short_pipeline_omits_links_when_none_found() -> None:
+    """Link-free videos must not persist links='[]' (would render literal [] in UI)."""
+    from src.processors import short_video
+
+    vision_no_links = {
+        "main_frame_index": 0,
+        "summary": "A short clip about Python.",
+        "links": [],
+    }
+    transcript_resp = {"text": ""}
+
+    with _patch_short_pipeline(transcript_resp, job=_PLAIN_SHORT_JOB) as (_, mock_update):
+        with patch("src.processors.short_video.gemini.call_gemini_vision", new_callable=AsyncMock, return_value=vision_no_links):
+            with patch("src.processors.short_video.brave.verify_links", new_callable=AsyncMock, return_value=[]):
+                with patch("src.processors.short_video.enrich_github_links", new_callable=AsyncMock, return_value=[]):
+                    await short_video.run(_PLAIN_SHORT_JOB)
+
+    assert not any("links" in c.kwargs for c in mock_update.call_args_list)

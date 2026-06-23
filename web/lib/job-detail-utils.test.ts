@@ -10,6 +10,8 @@ import {
   templateAnalysisToMarkdown,
   fieldCopyText,
   buildMarkdown,
+  parseLinks,
+  linksToMarkdown,
 } from '@/lib/job-detail-utils'
 
 // --- splitPipes ---
@@ -202,6 +204,34 @@ describe('fieldCopyText', () => {
   })
 })
 
+
+// --- links ---
+
+describe('links helpers', () => {
+  const raw = JSON.stringify([
+    { url: 'https://example.com/tool', label: 'Example Tool', description: 'A useful tool.' },
+    { url: 'ftp://ignored.example.com', label: 'Ignored' },
+  ])
+
+  it('parses persisted JSON links and filters invalid URLs', () => {
+    expect(parseLinks(raw)).toEqual([
+      { url: 'https://example.com/tool', label: 'Example Tool', description: 'A useful tool.' },
+    ])
+  })
+
+  it('renders links as markdown label plus URL', () => {
+    expect(linksToMarkdown(raw)).toBe('- [Example Tool](https://example.com/tool)\n  A useful tool.')
+  })
+
+  it('returns an empty array for invalid JSON', () => {
+    expect(parseLinks('not json')).toEqual([])
+  })
+
+  it('copies link fields as markdown', () => {
+    expect(fieldCopyText(raw, 'links')).toBe('- [Example Tool](https://example.com/tool)\n  A useful tool.')
+  })
+})
+
 // --- buildMarkdown ---
 
 describe('buildMarkdown', () => {
@@ -226,7 +256,7 @@ describe('buildMarkdown', () => {
     template_analysis: null,
     summary: null,
     transcript: null,
-    key_phrases: null,
+    links: null,
   }
 
   it('starts with a h1 title', () => {

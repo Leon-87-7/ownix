@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     video_id                    TEXT,
     og_image_url                TEXT,
     summary                     TEXT,
+    links                       TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -654,6 +655,7 @@ _V17_CREATE = """CREATE TABLE IF NOT EXISTS jobs_v17 (
     video_id                    TEXT,
     og_image_url                TEXT,
     summary                     TEXT,
+    links                       TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -673,7 +675,7 @@ _V17_COLS = [
     "template", "template_analysis", "key_phrases", "validation_warning_sent",
     "template_detection_method", "processing_time_ms", "promise_gap", "bot_message_id",
     "freestyle_prompt", "best_frame_index", "platform", "video_id", "og_image_url",
-    "summary", "created_at", "updated_at", "completed_at",
+    "summary", "links", "created_at", "updated_at", "completed_at",
 ]
 
 
@@ -692,6 +694,11 @@ _MIGRATIONS.append([
     "ALTER TABLE links ADD COLUMN stars INTEGER",
     "ALTER TABLE links ADD COLUMN pushed_at TEXT",
     "ALTER TABLE links ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+])
+
+# v19 → v20: persist enriched short-video links on jobs (issue #213)
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN links TEXT",
 ])
 
 
@@ -925,6 +932,7 @@ async def reset_job(job_id: str) -> None:
                 video_id = NULL,
                 og_image_url = NULL,
                 summary = NULL,
+                links = NULL,
                 promise_gap = NULL,
                 completed_at = NULL,
                 updated_at = CURRENT_TIMESTAMP

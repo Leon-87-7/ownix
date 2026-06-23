@@ -20,6 +20,7 @@ import {
   templateAnalysisToMarkdown,
   fieldCopyText,
   buildMarkdown,
+  parseLinks,
 } from "@/lib/job-detail-utils";
 
 const MarkdownEditor = dynamic(() => import("@/components/MarkdownEditor"), {
@@ -130,6 +131,31 @@ function FieldBody({ value, render }: { value: string; render: RenderType }) {
     const items = splitPipes(value);
     if (items.length === 0) return <p className="text-sm text-ink">{value}</p>;
     return <ul className="list-disc space-y-1 pl-5 text-sm text-ink">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>;
+  }
+  if (render === "links") {
+    const links = parseLinks(value);
+    if (links.length === 0) return <p className="whitespace-pre-wrap break-words text-sm text-ink">{value}</p>;
+    return (
+      <ul className="space-y-3 text-sm">
+        {links.map((link) => {
+          const label = link.label || link.url;
+          return (
+            <li key={link.url} className="space-y-1">
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all font-medium text-signal transition-ui hover:underline"
+              >
+                {label}
+              </a>
+              <p className="break-all font-mono text-xs text-muted">{link.url}</p>
+              {link.description && <p className="whitespace-pre-wrap break-words text-xs text-muted">{link.description}</p>}
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
   if (render === "json") return <TemplateAnalysis raw={value} />;
   return <p className="whitespace-pre-wrap break-words text-sm text-ink">{value}</p>;

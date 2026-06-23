@@ -1,6 +1,6 @@
 import type { JobDetail } from '@/lib/hooks/useJobDetail'
 
-export type RenderType = 'text' | 'list' | 'json'
+export type RenderType = 'text' | 'list' | 'json' | 'links'
 
 export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
   { key: 'ai_topic', label: 'Topic', render: 'text' },
@@ -12,16 +12,43 @@ export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; ren
   { key: 'template_analysis', label: 'Template Analysis', render: 'json' },
 ]
 
-/** Field set for short-pipeline jobs (vision summary, transcript, key phrases).
- *
- * key_phrases is stored as a JSON array (json.dumps(list[str])) so we render
- * it via 'json' which goes through TemplateAnalysis → JsonValue → scalar list.
- */
+/** Field set for short-pipeline jobs (vision summary, transcript, and persisted links). */
 export const SHORT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
   { key: 'summary', label: 'Summary', render: 'text' },
   { key: 'transcript', label: 'Transcript', render: 'text' },
-  { key: 'key_phrases', label: 'Key Phrases', render: 'json' },
+  { key: 'links', label: 'Links Found', render: 'links' },
 ]
+
+
+export interface JobLink {
+  url: string
+  label?: string | null
+  description?: string | null
+}
+
+export function parseLinks(raw: string): JobLink[] {
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return [] }
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item))
+    .map((item) => ({
+      url: typeof item.url === 'string' ? item.url.trim() : '',
+      label: typeof item.label === 'string' ? item.label.trim() : undefined,
+      description: typeof item.description === 'string' ? item.description.trim() : undefined,
+    }))
+    .filter((link) => /^https?:\/\//i.test(link.url))
+}
+
+export function linksToMarkdown(raw: string): string {
+  return parseLinks(raw)
+    .map((link) => {
+      const label = link.label || link.url
+      const description = link.description ? `\n  ${link.description}` : ''
+      return `- [${label}](${link.url})${description}`
+    })
+    .join('\n')
+}
 
 export function splitPipes(value: string): string[] {
   return value.split(' | ').map((s) => s.trim()).filter(Boolean)
@@ -82,6 +109,10 @@ export function fieldCopyText(value: string, render: RenderType): string {
   }
   if (render === 'json') {
     const md = templateAnalysisToMarkdown(value)
+    return md.trim() ? md : value
+  }
+  if (render === 'links') {
+    const md = linksToMarkdown(value)
     return md.trim() ? md : value
   }
   return value

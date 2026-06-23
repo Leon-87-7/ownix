@@ -349,7 +349,7 @@ _DETAIL_FIELDS_LONG = (
 
 # Extra fields for short jobs
 _DETAIL_FIELDS_SHORT = (
-    "summary", "transcript", "key_phrases",
+    "summary", "transcript", "links",
 )
 
 # Legacy flat tuple kept for callers that import it directly (e.g. tests)

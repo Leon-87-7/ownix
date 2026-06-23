@@ -31,6 +31,7 @@ _VISION_PROMPT = """You are a video content analyzer. Analyze all frames from th
 Return ONLY a valid JSON object — no markdown fences, no commentary:
 
 {
+  "title": "<specific title, <=8 words, names visible tools/topic, never a creator handle>",
   "main_frame_index": <integer: index of the most informative/representative frame>,
   "summary": "<2-3 sentence description — mention specific tools, products, or concepts shown>",
   "links": [
@@ -43,6 +44,7 @@ Return ONLY a valid JSON object — no markdown fences, no commentary:
 }
 
 Rules:
+- title: specific, <=8 words, name the visible tools/products/topic, never use a creator handle
 - main_frame_index: frame with the most visible text, code, or product information
 - summary: specific — name the tools, products, and concepts explicitly
 - links: extract any URLs, website names, app names, social handles visible in any frame; infer full URL from domain/brand

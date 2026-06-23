@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
-
 from src import database
-from src.analysis import extract_key_phrases
 from src.config import settings
 from src.services.drive import upload_file
 from src.services import sheets, transcript as transcript_svc
@@ -94,7 +91,7 @@ async def run(job: dict) -> None:
     views = meta_resp.get("views", "")
     description = meta_resp.get("description", "")
 
-    # 2. Auto-detect template (plain URL jobs only) and extract key phrases
+    # 2. Auto-detect template (plain URL jobs only)
     if not job.get("template"):
         detected = detect_template(title, description)
         await database.update_job_status(
@@ -102,12 +99,6 @@ async def run(job: dict) -> None:
             template=detected,
             template_detection_method="metadata",
         )
-
-    key_phrases = extract_key_phrases(transcript, max_phrases=8)
-    await database.update_job_status(
-        job_id, "processing",
-        key_phrases=json.dumps(key_phrases),
-    )
 
     # 3. Extract description links (failure must not block the pipeline)
     description_links = await _collect_description_links(description, job_id)
