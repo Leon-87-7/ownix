@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import MockProvider from "@/components/MockProvider";
 
 // Two voices (DESIGN.md): Inter for human language, JetBrains Mono for machine facts.
 const inter = Inter({
@@ -30,7 +31,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-canvas font-sans text-ink antialiased">{children}</body>
+      <body className="bg-canvas font-sans text-ink antialiased">
+        <MockProvider>{children}</MockProvider>
+      </body>
     </html>
   );
 }

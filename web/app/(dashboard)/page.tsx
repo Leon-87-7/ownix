@@ -74,7 +74,7 @@ function FeedPageContent() {
     <div className="mx-auto max-w-5xl">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Feed</h1>
 
-      {stats && <StatsOverview stats={stats} />}
+      {stats && <StatsOverview stats={stats} contentType={ctFilter} />}
 
       <FilterBar
         query={query} setQuery={setQuery}

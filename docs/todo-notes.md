@@ -29,4 +29,7 @@
 dedupe on url/doc-title&size - to be worked on.
 
 ## repo job page - skip
-1. the md output should be the structure and info of the repo detail page. 
+
+1. the md output should be the structure and info of the repo detail page.
+
+## tag icon on the job cards to shortcut the creation of the tag and the attachment of it

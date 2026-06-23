@@ -1,7 +1,16 @@
 import { StatCard } from "@/components/stat-card";
 import type { FeedStats } from "@/lib/hooks/useFeedData";
 
-export function StatsOverview({ stats }: { stats: FeedStats }) {
+// Total card label reflects the active content-type tab ("" = All).
+const TOTAL_LABELS: Record<string, string> = {
+  short: "Total Shorts",
+  long: "Total Long",
+  article: "Total Articles",
+  repo: "Total Repos",
+};
+
+export function StatsOverview({ stats, contentType = "" }: { stats: FeedStats; contentType?: string }) {
+  const totalLabel = contentType ? (TOTAL_LABELS[contentType] ?? `Total ${contentType}`) : "Total";
   const done = stats.by_status.done ?? 0;
   const pending = stats.by_status.pending ?? 0;
   const error = stats.by_status.error ?? 0;
@@ -26,7 +35,7 @@ export function StatsOverview({ stats }: { stats: FeedStats }) {
         </div>
       </div>
       <div className="hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Total" value={stats.total} />
+        <StatCard label={totalLabel} value={stats.total} />
         <StatCard label="Done" value={done} valueClass="text-status-done" />
         <StatCard label="Pending" value={pending} valueClass="text-status-pending" />
         <StatCard label="Error" value={error} valueClass="text-status-error" />

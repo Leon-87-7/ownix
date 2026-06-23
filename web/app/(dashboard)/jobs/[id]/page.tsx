@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import TagPicker from "@/components/TagPicker";
+import { TagMenu, TagChips } from "@/components/TagPicker";
 import { StatusBadge, TypeBadge } from "@/components/badges";
 import { Spinner } from "@/components/ui";
 import { useJobDetail } from "@/lib/hooks/useJobDetail";
@@ -147,8 +147,9 @@ function FieldCard({ label, value, render }: { label: string; value: string; ren
   );
 }
 
-function JobHeader({ job }: { job: JobDetail }) {
-  const displayTitle = job.title ?? job.url;
+function JobHeader({ job, tags }: { job: JobDetail; tags?: ReactNode }) {
+  const displayTitle = job.title?.trim() || job.url;
+  const displayUrl = job.url.length > 40 ? `${job.url.slice(0, 40)}...` : job.url;
   return (
     <div>
       {/* #192: full-width 44px touch target on mobile, compact text link on desktop. */}
@@ -165,11 +166,15 @@ function JobHeader({ job }: { job: JobDetail }) {
           <StatusBadge label={job.status} />
         </div>
       </div>
-      {/^https?:\/\//i.test(job.url) ? (
-        <a href={job.url} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline">{job.url}</a>
-      ) : (
-        <p className="mt-1 break-all font-mono text-xs text-muted">{job.url}</p>
-      )}
+      {/* URL on the left, tag row right-aligned under the badges. */}
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        {/^https?:\/\//i.test(job.url) ? (
+          <a href={job.url} target="_blank" rel="noopener noreferrer" title={job.url} className="min-w-0 flex-1 break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline">{displayUrl}</a>
+        ) : (
+          <p title={job.url} className="min-w-0 flex-1 break-all font-mono text-xs text-muted">{displayUrl}</p>
+        )}
+        {tags && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{tags}</div>}
+      </div>
     </div>
   );
 }
@@ -191,7 +196,7 @@ function JobActionsBar({ job, hasFields }: { job: JobDetail; hasFields: boolean 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const { job, fetchState } = useJobDetail(params.id);
   const { annotation, loaded, handleSave } = useJobAnnotation(params.id, fetchState);
-  const { jobTags, allTags, refetchTags } = useJobTags(params.id, fetchState);
+  const { jobTags, allTags, toggleTag, createTag } = useJobTags(params.id, fetchState);
 
   if (fetchState === "loading") {
     return (
@@ -213,7 +218,15 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <JobHeader job={job} />
+      <JobHeader
+        job={job}
+        tags={
+          <>
+            <TagChips jobTags={jobTags} onRemove={(id) => toggleTag(id, true)} />
+            <TagMenu jobTags={jobTags} allTags={allTags} onToggle={toggleTag} onCreate={createTag} />
+          </>
+        }
+      />
 
       {job.status === "error" && job.error_msg && (
         <div className="rounded-lg border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
@@ -230,8 +243,6 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {loaded && <MarkdownEditor initialMarkdown={annotation.notes} onSave={handleSave} />}
-
-      <TagPicker jobId={params.id} jobTags={jobTags} allTags={allTags} onTagChange={refetchTags} />
     </div>
   );
 }

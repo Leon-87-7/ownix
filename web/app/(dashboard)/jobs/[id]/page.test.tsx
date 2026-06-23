@@ -20,7 +20,8 @@ vi.mock('@/lib/hooks/useJobTags', () => ({
   useJobTags: vi.fn(),
 }));
 vi.mock('@/components/TagPicker', () => ({
-  default: () => <div data-testid="tag-picker">TagPicker</div>,
+  TagMenu: () => <div data-testid="tag-menu">TagMenu</div>,
+  TagChips: () => <div data-testid="tag-chips">TagChips</div>,
 }));
 vi.mock('@/components/MarkdownEditor', () => ({
   default: () => <div data-testid="markdown-editor">MarkdownEditor</div>,
@@ -87,6 +88,8 @@ function setupMocks(
     jobTags: [],
     allTags: [],
     refetchTags: vi.fn(),
+    toggleTag: vi.fn(),
+    createTag: vi.fn(),
     ...tagsOverrides,
   } as ReturnType<typeof useJobTags>);
 }
@@ -159,9 +162,10 @@ describe('JobDetailPage', () => {
     expect(screen.getByText('Processing failed')).toBeTruthy();
   });
 
-  it('renders TagPicker component', () => {
+  it('renders tag menu and chips', () => {
     render(<JobDetailPage params={{ id: 'j1' }} />);
-    expect(screen.getByTestId('tag-picker')).toBeTruthy();
+    expect(screen.getByTestId('tag-menu')).toBeTruthy();
+    expect(screen.getByTestId('tag-chips')).toBeTruthy();
   });
 
   it('renders MarkdownEditor when annotation is loaded', () => {

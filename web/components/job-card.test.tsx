@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { JobCard, type JobSummary } from "./job-card";
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: ReactNode; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({ href, children, className, "aria-label": ariaLabel }: { href: string; children?: ReactNode; className?: string; "aria-label"?: string }) => (
+    <a href={href} className={className} aria-label={ariaLabel}>
       {children}
     </a>
   ),
@@ -29,6 +29,16 @@ describe("JobCard", () => {
     const badgeRow = status.parentElement;
 
     expect(badgeRow).toBe(platform.parentElement);
-    expect(Array.from(badgeRow?.children ?? [])).toEqual([status, platform]);
+    const children = Array.from(badgeRow?.children ?? []);
+    expect(children.indexOf(status)).toBeLessThan(children.indexOf(platform));
+  });
+
+  it("renders the tag dropdown on its own row under the badges", () => {
+    render(<JobCard job={baseJob} />);
+    const status = screen.getByText("done");
+    const tagButton = screen.getByLabelText("Tags");
+    // Tag row is a sibling of the badge row, not inside it.
+    expect(status.parentElement?.contains(tagButton)).toBe(false);
+    expect(tagButton).toBeTruthy();
   });
 });

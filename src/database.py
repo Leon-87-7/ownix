@@ -1245,6 +1245,14 @@ async def list_tags(chat_id: int) -> list[dict]:
     )
 
 
+async def get_tag(chat_id: int, tag_id: str) -> dict | None:
+    row = await _fetch_one(
+        "SELECT id, name, meaning, color FROM tags WHERE id = ? AND chat_id = ?",
+        (tag_id, chat_id),
+    )
+    return dict(row) if row else None
+
+
 async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:
     tag_id = generate_id()
     async with connection() as conn:

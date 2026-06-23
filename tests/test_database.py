@@ -313,6 +313,17 @@ async def test_allowed_domains_composite_primary_key(temp_db) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_tag_round_trip_and_chat_scoped(temp_db) -> None:
+    """get_tag (used by attach/detach handlers) must find a tag only for its owner."""
+    from src import database as db
+    created = await db.create_tag(chat_id=1, name="skills", meaning="", color="#fff")
+    found = await db.get_tag(1, created["id"])
+    assert found is not None and found["name"] == "skills"
+    assert await db.get_tag(2, created["id"]) is None  # wrong owner
+    assert await db.get_tag(1, "nope") is None  # missing id
+
+
+@pytest.mark.asyncio
 async def test_add_and_list_allowed_domain_round_trip(temp_db) -> None:
     from src import database as db
     await db.add_allowed_domain(chat_id=42, domain="substack.com")

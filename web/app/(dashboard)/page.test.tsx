@@ -181,10 +181,11 @@ describe('FeedPage', () => {
 
   it('renders the all tab as the existing job list', () => {
     render(<FeedPage />);
-    const card = screen.getByRole('link', { name: /job one/i });
+    // JobCard uses an overlay link inside a styled wrapper; assert on the wrapper.
+    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
 
-    expect(card.className).toContain('px-4');
-    expect(card.className).toContain('py-3');
+    expect(card?.className).toContain('px-4');
+    expect(card?.className).toContain('py-3');
   });
 
   it('renders typed tabs as preview cards', () => {
