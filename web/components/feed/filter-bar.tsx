@@ -57,12 +57,12 @@ function SegmentedTabs({ tabs, value, onChange }: {
     <div
       role="tablist"
       aria-label="Content type"
-      className="relative flex w-full gap-1 rounded-lg border border-line bg-surface p-1 sm:w-auto"
+      className="relative flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:gap-1 sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1"
     >
       {thumb && (
         <span
           aria-hidden="true"
-          className="absolute bottom-1 top-1 left-0 rounded-md bg-signal transition-[transform,width] duration-200 ease-out motion-reduce:transition-none"
+          className="absolute bottom-1 top-1 left-0 hidden rounded-md bg-signal transition-[transform,width] duration-200 ease-out motion-reduce:transition-none sm:block"
           style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width }}
         />
       )}
@@ -77,10 +77,10 @@ function SegmentedTabs({ tabs, value, onChange }: {
             aria-selected={active}
             aria-label={`${tab.label} ${tab.count}`}
             onClick={() => onChange(tab.value)}
-            className={`relative z-10 flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-medium transition-colors sm:flex-initial ${
+            className={`relative z-10 flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors sm:border-0 ${
               active
-                ? "text-onsignal"
-                : "text-body hover:text-ink after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-ink/70 after:transition-transform after:duration-200 after:ease-out hover:after:scale-x-100 motion-reduce:after:transition-none"
+                ? "border-signal bg-signal text-onsignal sm:bg-transparent"
+                : "border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none"
             }`}
           >
             <span>{tab.label}</span>

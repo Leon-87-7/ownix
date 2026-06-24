@@ -205,7 +205,7 @@ function CreateTagModal({
           onSubmit={handleSubmit}
           className="space-y-3"
         >
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex flex-1 flex-col gap-1">
               <label className="text-xs font-medium text-body">
                 Name
@@ -240,7 +240,7 @@ function CreateTagModal({
             <label className="text-xs font-medium text-body">
               Color
             </label>
-            <div className="mx-auto grid w-fit grid-cols-9 gap-2 p-2">
+            <div className="mx-auto grid w-fit grid-cols-6 gap-2 p-2 sm:grid-cols-9">
               {PRESET_COLORS.map((c) => {
                 const selected = c === color;
                 return (

@@ -28,11 +28,11 @@ function CreateForm({ onCreated }: { onCreated: (values: TemplateFormState) => P
       <div className="flex flex-wrap gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-body">Name <span className="text-muted">(no spaces, no leading - or /)</span></label>
-          <input type="text" required maxLength={64} pattern="[a-z0-9_-]+" title="Lowercase letters, digits, hyphens, underscores only" value={values.name} onChange={(e) => setValues((v) => ({ ...v, name: e.target.value.toLowerCase() }))} placeholder="e.g. startup-notes" className="w-52 rounded-md border border-line bg-canvas px-3 py-1.5 font-mono text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none" />
+          <input type="text" required maxLength={64} pattern="[a-z0-9_-]+" title="Lowercase letters, digits, hyphens, underscores only" value={values.name} onChange={(e) => setValues((v) => ({ ...v, name: e.target.value.toLowerCase() }))} placeholder="e.g. startup-notes" className="w-full sm:w-52 rounded-md border border-line bg-canvas px-3 py-1.5 font-mono text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-body">Description (optional)</label>
-          <input type="text" maxLength={500} value={values.description} onChange={(e) => setValues((v) => ({ ...v, description: e.target.value }))} placeholder="Short description..." className="w-72 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none" />
+          <input type="text" maxLength={500} value={values.description} onChange={(e) => setValues((v) => ({ ...v, description: e.target.value }))} placeholder="Short description..." className="w-full sm:w-72 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none" />
         </div>
       </div>
       <div className="flex flex-col gap-1">

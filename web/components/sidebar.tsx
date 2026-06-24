@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   ChevronRight,
   ChevronLeft,
+  Tally2,
   type LucideIcon,
 } from 'lucide-react';
 import { siGithub } from 'simple-icons';
@@ -270,8 +271,24 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Collapsed rail — always visible. Favicon logo + per-page icons. */}
-      <div className="flex w-16 shrink-0 flex-col items-center border-r border-line bg-surface py-5">
+      {/* Mobile pull-tab — the rail is hidden < sm, so this slim edge handle is the
+          affordance that a nav drawer exists. Hidden while the drawer is open. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={open}
+        aria-controls="vig-nav-panel"
+        tabIndex={open ? -1 : undefined}
+        className={`fixed left-0 top-1/2 z-30 flex h-14 w-4 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-line bg-surface text-muted shadow-overlay transition-opacity hover:text-ink sm:hidden ${
+          open ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        <Tally2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+      </button>
+
+      {/* Collapsed rail — desktop only. Favicon logo + per-page icons. */}
+      <div className="hidden w-16 shrink-0 flex-col items-center border-r border-line bg-surface py-5 sm:flex">
         <button
           type="button"
           onClick={() => setOpen(true)}
