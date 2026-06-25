@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import json
+import socket
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -67,16 +69,32 @@ class UrlIn(BaseModel):
     url: str = Field(..., min_length=1)
 
 
+def _assert_public_host(host: str | None) -> None:
+    # SSRF guard: refuse hosts that resolve to non-public addresses (loopback,
+    # private, link-local cloud metadata at 169.254.169.254, etc.).
+    if not host:
+        raise HTTPException(status_code=422, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
+    for *_, sockaddr in socket.getaddrinfo(host, None):
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
+
+
 @parsed_router.post("/url", status_code=201)
 async def upload_url(body: UrlIn, request: Request) -> dict:
     parsed = urlparse(body.url.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.path.lower().endswith(".pdf"):
+    if parsed.scheme != "https" or not parsed.path.lower().endswith(".pdf"):
         raise HTTPException(status_code=422, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
+    _assert_public_host(parsed.hostname)
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=20) as client:
+        # follow_redirects=False: a redirect could bounce to an internal host
+        # past the _assert_public_host check (TOCTOU / redirect-based SSRF).
+        async with httpx.AsyncClient(follow_redirects=False, timeout=20) as client:
             resp = await client.get(body.url.strip())
             resp.raise_for_status()
             data = resp.content
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not fetch PDF URL") from exc
     return await _create_document_job(request.state.user["id"], data, parsed.path.rsplit("/", 1)[-1] or "document.pdf")
