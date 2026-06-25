@@ -195,6 +195,15 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     )
     data = extract_json(raw)
 
+    summary_prompt = (
+        "Create a structured Markdown briefing from this parsed document. "
+        "Include title, TL;DR, key sections, takeaways, and references.\n\n"
+        f"DOCUMENT:\n{text}"
+    )
+    summary_md = await gemini_client.generate(summary_prompt, model="gemini-2.5-flash")
+    summary_key = f"enriched/{sha}_summary.md"
+    await storage.upload(summary_key, summary_md.encode("utf-8"), "text/markdown")
+
     tools: list[dict] = data.get("tools", []) or []  # Gemini may emit null, not absent
     references: list[str] = data.get("references", []) or []
     template_analysis = {
@@ -216,6 +225,9 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         template_analysis=json.dumps(template_analysis),
         completed_at=now,
     )
+
+    await database.add_document_output(job_id, "raw_txt", storage.object_key("parsed", sha, "txt"), "Raw parse")
+    await database.add_document_output(job_id, "summary", summary_key, "Structured summary")
 
     refreshed = await database.get_job(job_id)
 
@@ -244,5 +256,6 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
 
     asyncio.create_task(_sheets_task())
 
-    await _deliver(refreshed or job, text, tools, references)
+    if (refreshed or job).get("telegram_delivery", "on") != "off":
+        await _deliver(refreshed or job, text, tools, references)
     log.info("document_complete", job_id=job_id, title=data.get("title", "")[:80])

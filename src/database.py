@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     og_image_url                TEXT,
     summary                     TEXT,
     links                       TEXT,
+    telegram_delivery           TEXT NOT NULL DEFAULT 'off',
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -238,6 +239,17 @@ CREATE TABLE IF NOT EXISTS context_blobs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id);
+
+CREATE TABLE IF NOT EXISTS document_outputs (
+    id          TEXT PRIMARY KEY,
+    job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    gcs_key     TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+);
+CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at);
 """
 
 
@@ -699,6 +711,21 @@ _MIGRATIONS.append([
 # v19 → v20: persist enriched short-video links on jobs (issue #213)
 _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN links TEXT",
+])
+
+# v20 → v21: Doc Parser dashboard delivery state and output index (ADR-0029).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN telegram_delivery TEXT NOT NULL DEFAULT 'off'",
+    """CREATE TABLE IF NOT EXISTS document_outputs (
+        id          TEXT PRIMARY KEY,
+        job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        gcs_key     TEXT NOT NULL,
+        title       TEXT NOT NULL DEFAULT '',
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at)",
 ])
 
 
@@ -1177,6 +1204,36 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
     )
     return dict(row) if row else None
 
+
+
+
+async def set_job_telegram_delivery(job_id: str, state: str) -> dict | None:
+    if state not in {"off", "on", "retroactive"}:
+        raise ValueError("telegram_delivery must be off, on, or retroactive")
+    await _execute(
+        "UPDATE jobs SET telegram_delivery = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (state, job_id),
+    )
+    return await get_job(job_id)
+
+
+async def add_document_output(job_id: str, kind: str, gcs_key: str, title: str = "") -> dict:
+    output_id = generate_id()
+    async with connection() as conn:
+        await conn.execute(
+            """INSERT INTO document_outputs (id, job_id, kind, gcs_key, title)
+            VALUES (?, ?, ?, ?, ?)""",
+            (output_id, job_id, kind, gcs_key, title),
+        )
+        await conn.commit()
+    return {"id": output_id, "job_id": job_id, "kind": kind, "gcs_key": gcs_key, "title": title}
+
+
+async def list_document_outputs(job_id: str) -> list[dict]:
+    return await _fetch_dicts(
+        "SELECT id, job_id, kind, gcs_key, title, created_at FROM document_outputs WHERE job_id = ? ORDER BY created_at ASC, id ASC",
+        (job_id,),
+    )
 
 # ---------------------------------------------------------------------------
 # Markdown cache (Jina Reader — issue #60 / ADR-0013)
