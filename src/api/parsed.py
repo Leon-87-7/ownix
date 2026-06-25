@@ -20,10 +20,24 @@ from src.processors import document as document_processor
 from src.services import storage
 from src.services.parse import ParseError
 from src.telegram.sender import send_document
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 parsed_router = APIRouter(prefix="/api/parsed", tags=["parsed"])
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
+
+
+async def _try_send_document(chat_id: int, data: bytes, filename: str) -> bool:
+    """Telegram delivery is best-effort: the output is already persisted to GCS +
+    document_outputs, so a send failure must not 500 the request."""
+    try:
+        await send_document(chat_id, data, filename)
+        return True
+    except Exception:
+        log.exception("parsed.telegram_send_failed", filename=filename)
+        return False
 
 
 def _sha(data: bytes) -> str:
@@ -76,7 +90,16 @@ async def upload_pdf(request: Request) -> dict:
         data = await upload.read(MAX_PDF_BYTES + 1)
         filename = getattr(upload, "filename", None) or "document.pdf"
     else:
-        data = await request.body()
+        # Stream-read with a cap so a giant raw body can't exhaust memory before
+        # _validate_pdf checks the size (mirrors the multipart MAX_PDF_BYTES+1 read).
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in request.stream():
+            total += len(chunk)
+            chunks.append(chunk)
+            if total > MAX_PDF_BYTES:
+                break
+        data = b"".join(chunks)
         filename = request.headers.get("x-filename", "document.pdf")
     return await _create_document_job(request.state.user["id"], data, filename)
 
@@ -160,7 +183,7 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
     await storage.upload(key, md.encode("utf-8"), "text/markdown")
     output = await database.add_document_output(job["id"], kind, key, title)
     if job.get("telegram_delivery") == "on":
-        await send_document(job["chat_id"], md.encode("utf-8"), key.rsplit("/", 1)[-1])
+        await _try_send_document(job["chat_id"], md.encode("utf-8"), key.rsplit("/", 1)[-1])
     return {**output, "content": md}
 
 
@@ -188,8 +211,8 @@ async def telegram_delivery(job_id: str, body: DeliveryIn, request: Request) -> 
     if state == "retroactive":
         for output in await database.list_document_outputs(job_id):
             data = await storage.download(output["gcs_key"])
-            await send_document(job["chat_id"], data, output["gcs_key"].rsplit("/", 1)[-1])
-            sent += 1
+            if await _try_send_document(job["chat_id"], data, output["gcs_key"].rsplit("/", 1)[-1]):
+                sent += 1
         state = "on"
     updated = await database.set_job_telegram_delivery(job_id, state)
     return {"telegram_delivery": updated.get("telegram_delivery", state) if updated else state, "sent": sent}
