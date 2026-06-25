@@ -178,9 +178,13 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     chat_id = job["chat_id"]
     key = job["url"]  # documents/<sha>.pdf
     tag = job_tag(job_id)
+    # Dashboard-originated jobs set telegram_delivery='off'; suppress ALL Telegram
+    # traffic for them, including the in-progress status ping (not just _deliver).
+    deliver = job.get("telegram_delivery", "on") != "off"
 
     await database.update_job_status(job_id, "processing")
-    await send_message(chat_id, f"{tag}\n📄 Reading document...")
+    if deliver:
+        await send_message(chat_id, f"{tag}\n📄 Reading document...")
 
     # 1. Parse cache: parsed text is shared by sha across tenants.
     sha = _sha_from_key(key)
@@ -194,6 +198,15 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         _build_document_prompt(text, job.get("freestyle_prompt")), model="gemini-2.5-flash"
     )
     data = extract_json(raw)
+
+    summary_prompt = (
+        "Create a structured Markdown briefing from this parsed document. "
+        "Include title, TL;DR, key sections, takeaways, and references.\n\n"
+        f"DOCUMENT:\n{text}"
+    )
+    summary_md = await gemini_client.generate(summary_prompt, model="gemini-2.5-flash")
+    summary_key = f"enriched/{sha}_summary.md"
+    await storage.upload(summary_key, summary_md.encode("utf-8"), "text/markdown")
 
     tools: list[dict] = data.get("tools", []) or []  # Gemini may emit null, not absent
     references: list[str] = data.get("references", []) or []
@@ -216,6 +229,9 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         template_analysis=json.dumps(template_analysis),
         completed_at=now,
     )
+
+    await database.add_document_output(job_id, "raw_txt", storage.object_key("parsed", sha, "txt"), "Raw parse")
+    await database.add_document_output(job_id, "summary", summary_key, "Structured summary")
 
     refreshed = await database.get_job(job_id)
 
@@ -244,5 +260,6 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
 
     asyncio.create_task(_sheets_task())
 
-    await _deliver(refreshed or job, text, tools, references)
+    if deliver:
+        await _deliver(refreshed or job, text, tools, references)
     log.info("document_complete", job_id=job_id, title=data.get("title", "")[:80])

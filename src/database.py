@@ -77,13 +77,15 @@ CREATE TABLE IF NOT EXISTS jobs (
     og_image_url                TEXT,
     summary                     TEXT,
     links                       TEXT,
+    telegram_delivery           TEXT NOT NULL DEFAULT 'on',
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
     CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
     CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
-    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error'))
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
+    CHECK(telegram_delivery IN ('off','on','retroactive'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
@@ -238,6 +240,20 @@ CREATE TABLE IF NOT EXISTS context_blobs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id);
+
+CREATE TABLE IF NOT EXISTS document_outputs (
+    id          TEXT PRIMARY KEY,
+    job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    gcs_key     TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+);
+CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at);
+-- Singular kinds (raw_txt/raw_md/summary/clean) are one-per-job and upserted;
+-- freestyle accumulates as history, so it's excluded from the uniqueness rule.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle';
 """
 
 
@@ -699,6 +715,31 @@ _MIGRATIONS.append([
 # v19 → v20: persist enriched short-video links on jobs (issue #213)
 _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN links TEXT",
+])
+
+# v20 → v21: Doc Parser dashboard delivery state and output index (ADR-0029).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN telegram_delivery TEXT NOT NULL DEFAULT 'on'",
+    """CREATE TABLE IF NOT EXISTS document_outputs (
+        id          TEXT PRIMARY KEY,
+        job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        gcs_key     TEXT NOT NULL,
+        title       TEXT NOT NULL DEFAULT '',
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at)",
+])
+
+# v21 → v22: dedup singular document outputs and enforce one-per-(job,kind)
+# (ADR-0029). Freestyle stays multi-row; raw/summary/clean upsert in place.
+_MIGRATIONS.append([
+    # Drop pre-existing duplicate singular rows (keep the earliest id) so the
+    # unique index can be created without violating it.
+    "DELETE FROM document_outputs WHERE kind <> 'freestyle' AND id NOT IN "
+    "(SELECT MIN(id) FROM document_outputs WHERE kind <> 'freestyle' GROUP BY job_id, kind)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle'",
 ])
 
 
@@ -1177,6 +1218,43 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
     )
     return dict(row) if row else None
 
+
+
+
+async def set_job_telegram_delivery(job_id: str, state: str) -> dict | None:
+    if state not in {"off", "on", "retroactive"}:
+        raise ValueError("telegram_delivery must be off, on, or retroactive")
+    await _execute(
+        "UPDATE jobs SET telegram_delivery = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (state, job_id),
+    )
+    return await get_job(job_id)
+
+
+async def add_document_output(job_id: str, kind: str, gcs_key: str, title: str = "") -> dict:
+    # Singular kinds (raw_txt/raw_md/summary/clean) upsert in place so re-runs
+    # (a freestyle re-process, a repeated Clean) refresh the one card instead of
+    # duplicating it; freestyle has no unique index, so it accumulates as history.
+    output_id = generate_id()
+    async with connection() as conn:
+        cur = await conn.execute(
+            """INSERT INTO document_outputs (id, job_id, kind, gcs_key, title)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(job_id, kind) WHERE kind <> 'freestyle'
+            DO UPDATE SET gcs_key = excluded.gcs_key, title = excluded.title
+            RETURNING id, job_id, kind, gcs_key, title""",
+            (output_id, job_id, kind, gcs_key, title),
+        )
+        row = await cur.fetchone()
+        await conn.commit()
+    return dict(row)
+
+
+async def list_document_outputs(job_id: str) -> list[dict]:
+    return await _fetch_dicts(
+        "SELECT id, job_id, kind, gcs_key, title, created_at FROM document_outputs WHERE job_id = ? ORDER BY created_at ASC, id ASC",
+        (job_id,),
+    )
 
 # ---------------------------------------------------------------------------
 # Markdown cache (Jina Reader — issue #60 / ADR-0013)

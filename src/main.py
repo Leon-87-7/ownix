@@ -69,6 +69,7 @@ from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router
 from src.api.jobs import jobs_router
+from src.api.parsed import parsed_router
 from src.api.spaces import spaces_router
 from src.api.templates import templates_router
 
@@ -76,6 +77,7 @@ app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)
 app.include_router(jobs_router)
+app.include_router(parsed_router)
 app.include_router(spaces_router)
 app.include_router(templates_router)
 

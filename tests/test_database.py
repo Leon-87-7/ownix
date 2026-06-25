@@ -98,6 +98,26 @@ async def test_find_jobs_by_suffix_chat_scoped(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_add_document_output_dedups_singular_keeps_freestyle_history(temp_db):
+    """Singular kinds upsert one row per (job, kind); freestyle accumulates (ADR-0029)."""
+    from src import database as db
+    await _insert_job(temp_db, "20260618_000000_DOC1", 1, "document", "done")
+    job_id = "20260618_000000_DOC1"
+
+    a = await db.add_document_output(job_id, "summary", "enriched/s1.md", "Structured summary")
+    b = await db.add_document_output(job_id, "summary", "enriched/s2.md", "Structured summary")
+    assert a["id"] == b["id"]  # same row reused, not duplicated
+    assert b["gcs_key"] == "enriched/s2.md"  # upsert refreshed the key
+
+    await db.add_document_output(job_id, "freestyle", "enriched/f1.md", "Freestyle")
+    await db.add_document_output(job_id, "freestyle", "enriched/f2.md", "Freestyle")
+
+    kinds = [r["kind"] for r in await db.list_document_outputs(job_id)]
+    assert kinds.count("summary") == 1
+    assert kinds.count("freestyle") == 2
+
+
+@pytest.mark.asyncio
 async def test_get_recent_jobs_orders_desc_and_limits(temp_db):
     from src import database as db
     for i in range(7):

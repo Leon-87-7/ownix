@@ -36,3 +36,6 @@
     scroll-behavior: auto !important;
   }
 }
+.doc-telegram-hold { box-shadow: 0 0 0 2px #f6921e inset, 0 0 18px rgba(246,146,30,.45); }
+@media (prefers-reduced-motion: no-preference) { .doc-telegram-hold { animation: doc-hold 1.5s linear forwards; } @keyframes doc-hold { from { background: conic-gradient(#f6921e 0deg, transparent 0deg); } to { background: conic-gradient(#f6921e 360deg, transparent 360deg); } } }
+@media (prefers-reduced-motion: reduce) { .doc-telegram-hold { outline: 2px solid #f6921e; } }

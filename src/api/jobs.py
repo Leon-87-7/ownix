@@ -229,7 +229,7 @@ async def list_jobs(
 
         cur_items = await conn.execute(
             f"""
-            SELECT id, title, content_type, status, url, created_at, og_image_url
+            SELECT id, title, content_type, status, url, created_at, og_image_url, telegram_delivery
             FROM jobs
             WHERE {where}
             ORDER BY created_at DESC
@@ -338,7 +338,7 @@ async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
 _DETAIL_FIELDS_COMMON = (
     "id", "url", "content_type", "status", "title",
     "created_at", "updated_at", "completed_at",
-    "error_msg", "drive_url",
+    "error_msg", "drive_url", "telegram_delivery", "sheets_row_id",
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)

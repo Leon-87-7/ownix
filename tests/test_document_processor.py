@@ -28,6 +28,7 @@ def patched(monkeypatch):
         "upload": AsyncMock(),
         "parse_pdf": AsyncMock(return_value="extracted document text"),
         "update_job_status": AsyncMock(),
+        "add_document_output": AsyncMock(return_value={}),
         "send_message": AsyncMock(return_value={}),
         "send_document": AsyncMock(return_value={}),
         "send_inline_keyboard": AsyncMock(return_value={}),
@@ -44,6 +45,7 @@ def patched(monkeypatch):
     monkeypatch.setattr(document.storage, "upload", mocks["upload"])
     monkeypatch.setattr(document, "parse_pdf", mocks["parse_pdf"])
     monkeypatch.setattr(document.database, "update_job_status", mocks["update_job_status"])
+    monkeypatch.setattr(document.database, "add_document_output", mocks["add_document_output"])
     monkeypatch.setattr(document.database, "get_job", mocks["get_job"])
     monkeypatch.setattr(document, "send_message", mocks["send_message"])
     monkeypatch.setattr(document, "send_document", mocks["send_document"])
@@ -71,10 +73,10 @@ async def test_cache_miss_parses_and_uploads(patched):
     await document.run(_job())
 
     m["parse_pdf"].assert_awaited_once()
-    # parsed text cached to parsed/<sha>.txt
-    (parsed_key, body, ctype), _ = m["upload"].call_args
-    assert parsed_key == "parsed/abc123.txt"
-    assert body == b"extracted document text"
+    # parsed text cached to parsed/<sha>.txt (also uploads the structured summary,
+    # so match the specific key rather than the last upload call).
+    uploads = {c.args[0]: c.args[1] for c in m["upload"].call_args_list}
+    assert uploads["parsed/abc123.txt"] == b"extracted document text"
     # final status persisted as done with mapped columns
     done = [c for c in m["update_job_status"].call_args_list if c.args[1] == "done"][0]
     assert done.kwargs["ai_objective"] == "How widgets work."
@@ -107,8 +109,11 @@ async def test_cache_hit_skips_parse(patched):
     await document.run(_job())
 
     m["parse_pdf"].assert_not_called()
-    m["upload"].assert_not_called()  # nothing re-uploaded on a cache hit
-    m["generate"].assert_awaited_once()
+    # Parse is skipped on a cache hit, but the structured summary still generates
+    # and uploads on every run (ADR-0029 §3). No parsed-text re-upload, though.
+    keys = [c.args[0] for c in m["upload"].call_args_list]
+    assert keys == ["enriched/abc123_summary.md"]
+    assert m["generate"].await_count == 2  # enrichment + structured summary
 
 
 @pytest.mark.asyncio
@@ -165,6 +170,22 @@ async def test_tenant_scoped_ownership_shared_parse(patched):
 
 
 @pytest.mark.asyncio
+async def test_dashboard_job_suppresses_all_telegram(patched):
+    """telegram_delivery='off' (dashboard upload) → no status ping, no delivery."""
+    document, m = patched
+    job = _job()
+    job["telegram_delivery"] = "off"
+
+    await document.run(job)
+
+    m["send_message"].assert_not_awaited()  # the in-progress status ping is gated too
+    m["send_document"].assert_not_awaited()
+    m["send_inline_keyboard"].assert_not_awaited()
+    # still reaches 'done' — only the Telegram traffic is suppressed
+    assert any(c.args[1] == "done" for c in m["update_job_status"].call_args_list)
+
+
+@pytest.mark.asyncio
 async def test_happy_path_sends_txt_summary_then_buttons(patched):
     document, m = patched
     m["exists"].return_value = False  # parse → text = "extracted document text"
@@ -217,8 +238,10 @@ async def test_run_passes_freestyle_prompt_to_gemini(patched):
 
     await document.run(job)
 
-    prompt = m["generate"].call_args.args[0]
-    assert "focus on the security section" in prompt
+    # The freestyle instruction rides on the enrichment prompt, not the trailing
+    # structured-summary generate call — search across all generate calls.
+    prompts = [c.args[0] for c in m["generate"].call_args_list]
+    assert any("focus on the security section" in p for p in prompts)
 
 
 @pytest.mark.asyncio

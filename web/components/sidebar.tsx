@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Tally2,
+  FileCode2,
   type LucideIcon,
 } from 'lucide-react';
 import { siGithub } from 'simple-icons';
@@ -24,6 +25,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'Feed', icon: Rss },
+  { href: '/doc-parser', label: 'Doc Parser', icon: FileCode2 },
   { href: '/brain', label: 'Brain', icon: Brain },
   { href: '/spaces', label: 'Spaces', icon: LayoutGrid },
   { href: '/prompts', label: 'Prompts', icon: MessageSquareText },
