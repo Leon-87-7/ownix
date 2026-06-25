@@ -3,13 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import ipaddress
 import json
-import socket
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
@@ -19,14 +15,18 @@ from src.api.deps import get_owned_job
 from src.processors import document as document_processor
 from src.services import storage
 from src.services.parse import ParseError
+from src.services.pdf_intake import (
+    MAX_PDF_BYTES,
+    fetch_remote_pdf,
+    read_capped_body,
+    validate_pdf,
+)
 from src.telegram.sender import send_document
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
 parsed_router = APIRouter(prefix="/api/parsed", tags=["parsed"])
-
-MAX_PDF_BYTES = 20 * 1024 * 1024
 
 
 async def _try_send_document(chat_id: int, data: bytes, filename: str) -> bool:
@@ -44,14 +44,6 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _validate_pdf(data: bytes, name: str = "document.pdf") -> None:
-    # Field-level 400s for malformed input (wrong type / oversized), per #217.
-    if len(data) > MAX_PDF_BYTES:
-        raise HTTPException(status_code=400, detail={"field": "file", "message": "PDF must be 20 MB or smaller"})
-    if not name.lower().endswith(".pdf") or not data.startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail={"field": "file", "message": "Only PDF files are supported"})
-
-
 async def get_owned_document_job(job_id: str, request: Request) -> dict:
     """get_owned_job + a content_type guard. Document-only routes must not run on
     an owned article/repo job: its url is a plain HTTP address, not a GCS key, so
@@ -63,7 +55,7 @@ async def get_owned_document_job(job_id: str, request: Request) -> dict:
 
 
 async def _create_document_job(chat_id: int, data: bytes, filename: str) -> dict:
-    _validate_pdf(data, filename)
+    validate_pdf(data, filename)
     sha = _sha(data)
     key = storage.object_key("documents", sha, "pdf")
     await storage.upload(key, data, "application/pdf")
@@ -90,16 +82,7 @@ async def upload_pdf(request: Request) -> dict:
         data = await upload.read(MAX_PDF_BYTES + 1)
         filename = getattr(upload, "filename", None) or "document.pdf"
     else:
-        # Stream-read with a cap so a giant raw body can't exhaust memory before
-        # _validate_pdf checks the size (mirrors the multipart MAX_PDF_BYTES+1 read).
-        chunks: list[bytes] = []
-        total = 0
-        async for chunk in request.stream():
-            total += len(chunk)
-            chunks.append(chunk)
-            if total > MAX_PDF_BYTES:
-                break
-        data = b"".join(chunks)
+        data = await read_capped_body(request)
         filename = request.headers.get("x-filename", "document.pdf")
     return await _create_document_job(request.state.user["id"], data, filename)
 
@@ -108,49 +91,10 @@ class UrlIn(BaseModel):
     url: str = Field(..., min_length=1)
 
 
-async def _assert_public_host(host: str | None) -> None:
-    # SSRF guard: refuse hosts that resolve to non-public addresses (loopback,
-    # private, link-local cloud metadata at 169.254.169.254, etc.).
-    # getaddrinfo is blocking — run it off the event loop.
-    if not host:
-        raise HTTPException(status_code=400, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
-    try:
-        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
-    except socket.gaierror as exc:
-        raise HTTPException(status_code=400, detail={"field": "url", "message": "Could not resolve URL host"}) from exc
-    for *_, sockaddr in infos:
-        ip = ipaddress.ip_address(sockaddr[0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
-
-
 @parsed_router.post("/url", status_code=201)
 async def upload_url(body: UrlIn, request: Request) -> dict:
-    parsed = urlparse(body.url.strip())
-    if parsed.scheme != "https" or not parsed.path.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
-    await _assert_public_host(parsed.hostname)
-    try:
-        # follow_redirects=False: a redirect could bounce to an internal host
-        # past the _assert_public_host check (TOCTOU / redirect-based SSRF).
-        # Stream with an early abort so a huge/slow body can't exhaust memory
-        # before _validate_pdf runs (httpx has no max-response-size option).
-        async with httpx.AsyncClient(follow_redirects=False, timeout=20) as client:
-            async with client.stream("GET", body.url.strip()) as resp:
-                resp.raise_for_status()
-                chunks: list[bytes] = []
-                total = 0
-                async for chunk in resp.aiter_bytes():
-                    total += len(chunk)
-                    if total > MAX_PDF_BYTES:
-                        raise HTTPException(status_code=422, detail={"field": "url", "message": "PDF must be 20 MB or smaller"})
-                    chunks.append(chunk)
-                data = b"".join(chunks)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not fetch PDF URL") from exc
-    return await _create_document_job(request.state.user["id"], data, parsed.path.rsplit("/", 1)[-1] or "document.pdf")
+    data, filename = await fetch_remote_pdf(body.url)
+    return await _create_document_job(request.state.user["id"], data, filename)
 
 
 class FreestyleIn(BaseModel):
