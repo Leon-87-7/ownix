@@ -156,6 +156,16 @@
 | [#204](https://github.com/Leon-87-7/vig/issues/204) | feat(oauth): per-user 'Connect Google' (web) — encrypted token store → exports to /vig | OAuth / Web | — |
 | [#205](https://github.com/Leon-87-7/vig/issues/205) | feat(telegram): Mini App 'Connect Google' surface — initData identity, shared OAuth backend | Telegram / OAuth | — |
 | [#206](https://github.com/Leon-87-7/vig/issues/206) | feat(oauth): connection lifecycle — invalid_grant handling, /disconnect, notify-once | OAuth | — |
+| [#217](https://github.com/Leon-87-7/vig/issues/217) | feat(api): document upload REST endpoints + telegram_delivery column | API | — |
+| [#218](https://github.com/Leon-87-7/vig/issues/218) | feat(web): Doc Parser page shell + sidebar entry | Web | — |
+| [#219](https://github.com/Leon-87-7/vig/issues/219) | feat(processor): Gemini structured summary + enriched GCS storage | Processor | #217 |
+| [#220](https://github.com/Leon-87-7/vig/issues/220) | feat(api): SSE endpoint for document job status | API | #217 |
+| [#221](https://github.com/Leon-87-7/vig/issues/221) | feat(api): on-demand clean + freestyle document endpoints | API | #219 |
+| [#222](https://github.com/Leon-87-7/vig/issues/222) | feat(web): upload zone — URL input + file dropzone | Web | #217, #218 |
+| [#223](https://github.com/Leon-87-7/vig/issues/223) | feat(web): document job list + SSE real-time updates | Web | #220, #218 |
+| [#224](https://github.com/Leon-87-7/vig/issues/224) | feat(web): three-state Telegram toggle component | Web / API | #217 |
+| [#225](https://github.com/Leon-87-7/vig/issues/225) | feat(web): Doc Parser detail page with output cards | Web | #221, #223, #224 |
+| [#226](https://github.com/Leon-87-7/vig/issues/226) | feat(web): freestyle modal with random + saved prompts | Web | #225 |
 
 ---
 
@@ -404,6 +414,19 @@ Short titles + Links Found (grill 2026-06-23)
 #212 remove key_phrases end-to-end (independent) — template enrichment untouched
 └── #213 Links Found detail section (clickable) ◄── #212 (takes over the detail-section slot key_phrases vacates)
 Critical path: #211 parallel; #212 → #213
+
+Doc Parser dashboard page (ADR-0029: docs/adr/0029-doc-parser-dashboard-page.md)
+#217 upload API + telegram_delivery column (root)
+├── #219 Gemini structured summary + enriched GCS storage
+│   └── #221 on-demand clean + freestyle endpoints
+│       └── #225 detail page + output cards ◄── also #223, #224
+│           └── #226 freestyle modal with random + saved prompts
+├── #220 SSE endpoint for document job status
+│   └── #223 job list + SSE real-time updates ◄── also #218
+├── #222 upload zone — URL input + file dropzone ◄── also #218
+└── #224 three-state Telegram toggle component
+#218 page shell + sidebar entry (root, independent of #217)
+Critical path: #217 → #219 → #221 → #225 → #226
 ```
 
 ---
