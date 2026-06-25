@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
     CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
-    CHECK(telegram_delivery IN ('off','on','retroactive'))
+    CHECK(telegram_delivery IN ('off','on'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
@@ -742,6 +742,102 @@ _MIGRATIONS.append([
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle'",
 ])
 
+# v22 → v23: tighten telegram_delivery to a stored domain of {'off','on'} (#231).
+# 'retroactive' is a request-only action resolved at the API boundary (it sends
+# existing outputs, then persists 'on'); it must never be a stored state. The
+# column was added by ALTER (v20→v21) with no CHECK, so migrated DBs have no
+# constraint at all — this rebuild adds CHECK(telegram_delivery IN ('off','on')).
+# SQLite can't ALTER a CHECK, so the table is rebuilt; foreign_keys is disabled
+# across the DROP/RENAME so the ON DELETE CASCADE children of jobs aren't wiped.
+_V23_CREATE = """CREATE TABLE IF NOT EXISTS jobs_v23 (
+    id                          TEXT PRIMARY KEY,
+    chat_id                     INTEGER NOT NULL,
+    message_id                  INTEGER,
+    url                         TEXT NOT NULL,
+    content_type                TEXT NOT NULL,
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    attempt                     INTEGER NOT NULL DEFAULT 1,
+    error_msg                   TEXT,
+    drive_url                   TEXT,
+    title                       TEXT,
+    transcript                  TEXT,
+    ai_category                 TEXT,
+    ai_topic                    TEXT,
+    ai_objective                TEXT,
+    ai_action_points            TEXT,
+    ai_tools                    TEXT,
+    ai_market_data              TEXT,
+    prd_auto_status             TEXT,
+    prd_auto_drive_file_id      TEXT,
+    prd_auto_drive_url          TEXT,
+    prd_auto_json               TEXT,
+    prd_intent_status           TEXT,
+    prd_intent_drive_file_id    TEXT,
+    prd_intent_drive_url        TEXT,
+    prd_intent_json             TEXT,
+    prd_intent_text             TEXT,
+    prd_intent_completed_at     TEXT,
+    sheets_row_id               TEXT,
+    template                    TEXT,
+    template_analysis           TEXT,
+    key_phrases                 TEXT,
+    validation_warning_sent     INTEGER DEFAULT 0,
+    template_detection_method   TEXT,
+    processing_time_ms          INTEGER,
+    promise_gap                 TEXT,
+    bot_message_id              INTEGER,
+    freestyle_prompt            TEXT,
+    best_frame_index            INTEGER,
+    platform                    TEXT,
+    video_id                    TEXT,
+    og_image_url                TEXT,
+    summary                     TEXT,
+    links                       TEXT,
+    telegram_delivery           TEXT NOT NULL DEFAULT 'on',
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at                TIMESTAMP,
+    CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
+    CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
+    CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
+    CHECK(telegram_delivery IN ('off','on'))
+)"""
+
+_V23_COLS = _V17_COLS + ["telegram_delivery"]
+
+
+async def _migrate_v22_v23(conn: aiosqlite.Connection) -> None:
+    """Tighten telegram_delivery CHECK to {'off','on'}; preserve FK children (#231)."""
+    # A real v22 DB always has telegram_delivery (added v20→v21); guard the check
+    # on its presence so the rebuild is robust on odd/replayed DBs that lack it.
+    cur = await conn.execute("PRAGMA table_info(jobs)")
+    has_col = any(row[1] == "telegram_delivery" for row in await cur.fetchall())
+    if has_col:
+        # Fail loudly rather than silently dropping/coercing a stored 'retroactive'.
+        cur = await conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE telegram_delivery = 'retroactive'"
+        )
+        row = await cur.fetchone()
+        stranded = row[0] if row else 0
+        if stranded:
+            raise RuntimeError(
+                f"Cannot tighten telegram_delivery CHECK: {stranded} job(s) hold "
+                "'retroactive', which has no stored meaning. Resolve them to 'off'/'on' "
+                "before migrating."
+            )
+    # PRAGMA foreign_keys is a no-op inside a transaction, so commit out of any
+    # open one before toggling. With FK enforcement off, DROP TABLE jobs no longer
+    # cascade-deletes its ON DELETE CASCADE children (document_outputs, etc.).
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    await _rebuild_jobs_table(conn, _V23_CREATE, "jobs_v23", _V23_COLS)
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=ON")
+
+
+_MIGRATIONS.append(_migrate_v22_v23)
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1222,8 +1318,10 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
 
 
 async def set_job_telegram_delivery(job_id: str, state: str) -> dict | None:
-    if state not in {"off", "on", "retroactive"}:
-        raise ValueError("telegram_delivery must be off, on, or retroactive")
+    # 'retroactive' is a request-only action resolved at the API boundary (send
+    # existing outputs, then persist 'on'); only 'off'/'on' are storable (#231).
+    if state not in {"off", "on"}:
+        raise ValueError("telegram_delivery must be off or on")
     await _execute(
         "UPDATE jobs SET telegram_delivery = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (state, job_id),
