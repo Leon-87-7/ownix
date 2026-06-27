@@ -16,3 +16,9 @@ fit well on narrow viewports.
 
 **Wanted:** make the create-tag form responsive (stack fields, reflow the color
 grid) for small screens.
+
+
+
+## 3 the picture pipeline enhancement 
+- one every 6 hours all of the links extracted from the pipeline are listed in a table, only unique URLs are ok. 
+-the table is shown in Brain page under a new tab "links" this tableincludes all of the links extracted from all pipelines.
