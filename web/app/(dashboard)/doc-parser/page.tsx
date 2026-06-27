@@ -78,7 +78,7 @@ export default function DocParserPage() {
       <div className="rounded-lg border border-line bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
           <button className="rounded-md bg-signal px-3 py-1.5 text-sm text-onsignal">PDF <span className="font-mono">{jobs.length}</span></button>
-          {['Word', 'Spreadsheet', 'Presentation', 'Image'].map(x => <button key={x} disabled className="rounded-md border border-line px-3 py-1.5 text-sm text-muted">{x} 0</button>)}
+          {['Word', 'Spreadsheet', 'Presentation', 'Image'].map(x => <button key={x} disabled title="Coming soon" className="rounded-md border border-line px-3 py-1.5 text-sm text-muted">{x} <span className="font-mono text-[10px] uppercase tracking-wide text-muted">soon</span></button>)}
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…" className="ml-auto h-9 rounded-md border border-line bg-canvas px-3 text-sm text-ink" />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
