@@ -13,14 +13,18 @@ export default function LogoutPage() {
 
       <section className="relative z-10 flex -translate-y-[55px] flex-col items-center text-center">
         <div className="flex animate-[logout-card-enter_480ms_cubic-bezier(0.25,1,0.5,1)_both] flex-col items-center motion-reduce:animate-none">
-          <h1 className="sr-only">vig — Video Intelligence Gateway</h1>
+          <h1 className="sr-only">
+            vig — Video Intelligence Gateway
+          </h1>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/images/vig_logo_lockup.svg"
             alt="vig"
             className="h-16 w-auto"
           />
-          <p className="mt-4 text-sm text-body">Video Intelligence Gateway</p>
+          <p className="mt-4 text-sm text-body">
+            Video Intelligence Gateway
+          </p>
 
           <div className="mt-10 rounded-xl bg-surface/85 p-3 shadow-[0_0_0_1px_rgba(38,42,49,0.9),0_18px_60px_-34px_rgba(246,146,30,0.55)] backdrop-blur-sm">
             <div className="flex max-w-[360px] flex-col items-center rounded-lg bg-canvas/70 px-8 py-7 shadow-[inset_0_0_0_1px_rgba(52,58,68,0.75)]">

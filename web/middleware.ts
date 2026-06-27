@@ -32,5 +32,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  // Skip _next internals, the API, and any path with a file extension (public/
+  // static assets: *.svg, *.png, manifest.json, icon0.svg, …). Without the
+  // `.*\.` clause, asset requests made while logged out (i.e. on /login and
+  // /logout) hit the session gate and 307 to /login, so the SVGs never load.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|.*\\.).*)"],
 };
