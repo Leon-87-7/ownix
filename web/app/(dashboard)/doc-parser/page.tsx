@@ -9,6 +9,18 @@ import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
 type Job = { id: string; title?: string | null; url: string; status: string; created_at: string; telegram_delivery?: 'off' | 'on' | 'retroactive' };
 const statuses = ['', 'done', 'pending', 'processing', 'error'];
 
+// FastAPI puts the reason in `detail` (a string, or {field, message} for our
+// 400/422s). Surface it instead of a generic "failed" so real causes are visible.
+async function errorMessage(r: Response, fallback: string): Promise<string> {
+  try {
+    const d = await r.json();
+    const detail = d?.detail;
+    if (typeof detail === 'string') return detail;
+    if (detail?.message) return detail.message;
+  } catch { /* non-JSON (e.g. a 500 HTML page) — fall through */ }
+  return `${fallback} (${r.status})`;
+}
+
 export default function DocParserPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [status, setStatus] = useState('');
@@ -44,14 +56,14 @@ export default function DocParserPage() {
     const fd = new FormData();
     fd.append('file', file);
     const r = await fetch('/api/parsed/upload', { method: 'POST', body: fd });
-    if (!r.ok) { setError('Upload failed'); return; }
+    if (!r.ok) { setError(await errorMessage(r, 'Upload failed')); return; }
     await load();
   }
   async function submitUrl(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     const r = await fetch('/api/parsed/url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-    if (!r.ok) { setError('URL upload failed'); return; }
+    if (!r.ok) { setError(await errorMessage(r, 'URL upload failed')); return; }
     setUrl('');
     await load();
   }

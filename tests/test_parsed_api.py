@@ -5,8 +5,20 @@ tests/test_pdf_intake.py with the src/services/pdf_intake.py module (#228).
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi import HTTPException
+
+
+def test_python_multipart_declared_in_runtime_requirements():
+    # /api/parsed/upload calls request.form() to parse the multipart body. Plain
+    # `fastapi` does NOT pull in python-multipart, so if it isn't declared in
+    # requirements.txt the prod image (built from requirements.txt only) 500s on
+    # every upload. The dev env happens to have it installed, so an endpoint test
+    # can't catch this — guard the declared dependency itself.
+    reqs = Path(__file__).resolve().parent.parent / "requirements.txt"
+    assert "python-multipart" in reqs.read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
