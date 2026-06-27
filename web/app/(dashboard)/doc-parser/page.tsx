@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FileCode2, Sparkles, Upload } from 'lucide-react';
 import { StatusBadge } from '@/components/badges';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
@@ -20,6 +20,39 @@ async function errorMessage(r: Response, fallback: string): Promise<string> {
     if (detail?.message) return detail.message;
   } catch { /* non-JSON (e.g. a 500 HTML page) — fall through */ }
   return `${fallback} (${r.status})`;
+}
+
+// One filter pill, two jobs: the active type/status (signal) and the toggles.
+// Color + press are the smoothness — clicks animate instead of snapping, and
+// scale(0.97) gives the tap feedback. min-h-9 keeps the mobile hit area honest.
+function Chip({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      aria-pressed={onClick ? active : undefined}
+      className={`inline-flex min-h-9 items-center gap-1 rounded-md px-3.5 py-1.5 text-sm tabular-nums transition-[transform,background-color,color,border-color] duration-150 ease-out-quart active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60 ${
+        active
+          ? 'bg-signal text-onsignal'
+          : disabled
+            ? 'border border-line text-muted'
+            : 'bg-canvas text-body hover:bg-raised hover:text-ink'
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function DocParserPage() {
@@ -79,16 +112,22 @@ export default function DocParserPage() {
 
       <div className="rounded-lg border border-line bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button className="rounded-md bg-signal px-3 py-1.5 text-sm text-onsignal">PDF <span className="font-mono">{jobs.length}</span></button>
-          {['Word', 'Spreadsheet', 'Presentation', 'Image'].map(x => <button key={x} disabled className="rounded-md border border-line px-3 py-1.5 text-sm text-muted">{x} 0</button>)}
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…" className="ml-auto h-9 rounded-md border border-line bg-canvas px-3 text-sm text-ink" />
+          <Chip active>PDF <span className="font-mono">{jobs.length}</span></Chip>
+          {['Word', 'Spreadsheet', 'Presentation', 'Image'].map(x => (
+            <Chip key={x} disabled>{x} 0</Chip>
+          ))}
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…" className="h-9 w-full min-w-0 rounded-md border border-line bg-canvas px-3 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:ml-auto sm:w-64" />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {statuses.map(s => <button key={s || 'all'} onClick={() => setStatus(s)} className={`rounded-md px-3 py-1.5 text-sm ${status === s ? 'bg-signal text-onsignal' : 'bg-canvas text-body'}`}>{s || 'all'}</button>)}
+          {statuses.map(s => (
+            <Chip key={s || 'all'} active={status === s} onClick={() => setStatus(s)}>
+              {s || 'all'}
+            </Chip>
+          ))}
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section className={`${compact ? 'max-lg:max-h-12 max-lg:overflow-hidden' : ''} rounded-lg border border-line bg-surface p-4`}>
           <button onClick={() => setCompact(!compact)} className="mb-3 w-full text-left text-sm font-medium text-ink lg:hidden">Upload documents</button>
           <form onSubmit={submitUrl} className="flex gap-2">
@@ -100,7 +139,7 @@ export default function DocParserPage() {
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) uploadFile(f); }}
             onClick={() => fileRef.current?.click()}
-            className="mt-4 flex min-h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line-strong bg-canvas text-body"
+            className="mt-4 flex min-h-48 w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line-strong bg-canvas text-body transition-ui hover:border-signal hover:text-ink"
           >
             <Upload />
             <span>Drop a PDF here or click to choose</span>
