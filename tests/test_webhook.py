@@ -1409,3 +1409,59 @@ async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.Monk
 
     assert "github_repo_bundle:owner/repo" in deleted
     assert "github_meta:owner/repo" in deleted
+
+
+# ---------------------------------------------------------------------------
+# /start and /help tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_sends_welcome_message(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/start")
+    sent.assert_awaited_once()
+    args, kwargs = sent.await_args
+    assert args[0] == 100
+    assert "Video Intelligence Gateway" in args[1]
+    assert kwargs.get("parse_mode") == "Markdown"
+
+
+@pytest.mark.asyncio
+async def test_help_sends_command_list(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/help")
+    sent.assert_awaited_once()
+    args, kwargs = sent.await_args
+    assert "/find" in args[1]
+    assert "/spec" in args[1]
+    assert "/cancel" in args[1]
+    assert kwargs.get("parse_mode") == "Markdown"
+
+
+# ---------------------------------------------------------------------------
+# Webhook error handling tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_handler_error_returns_ok_and_notifies_user(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """An exception in _route_text must not 500 the webhook — return ok and notify."""
+    monkeypatch.setattr(
+        "src.telegram.webhook._route_text",
+        AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    result = await _post_webhook("https://youtu.be/abc")
+    assert result == {"ok": True}
+    sent.assert_awaited_once()
+    assert "went wrong" in sent.await_args.args[1]

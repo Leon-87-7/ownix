@@ -799,7 +799,49 @@ async def _cmd_allowlist_list(ctx: SlashCtx) -> None:
     await send_message(ctx.chat_id, f"✅ Allowlisted domains ({len(domains)}):\n{lines}")
 
 
+_START_TEXT = (
+    "👋 *vig — Video Intelligence Gateway*\n\n"
+    "Send me a link and I'll process it:\n"
+    "• YouTube video or Short\n"
+    "• Instagram Reel\n"
+    "• TikTok video\n"
+    "• Article URL (use /allowlist to add domains)\n"
+    "• GitHub repo URL\n"
+    "• PDF file or link\n\n"
+    "Type /help for available commands."
+)
+
+_HELP_TEXT = (
+    "📖 *Commands*\n\n"
+    "/start — show welcome message\n"
+    "/help — this message\n"
+    "/find <query> — search your processed content\n"
+    "/spec <suffix> [intent] — generate a mini-PRD from a long video\n"
+    "/freestyle — use a custom Gemini prompt for the next job\n"
+    "/force <url> — reprocess a URL (skip cache)\n"
+    "/cancel — cancel the current pending prompt\n"
+    "/ignore <domain> — hide a domain from link results\n"
+    "/unignore <domain> — stop hiding a domain\n"
+    "/ignore\\_list — show ignored domains\n"
+    "/allowlist <domain> — add an article domain\n"
+    "/unallowlist <domain> — remove an article domain\n"
+    "/allowlist\\_list — show allowlisted domains\n"
+    "/download\\_md <suffix> — download a job result as Markdown\n"
+    "/rebuild-graph — rebuild the Second Brain link graph"
+)
+
+
+async def _cmd_start(ctx: SlashCtx) -> None:
+    await send_message(ctx.chat_id, _START_TEXT, parse_mode="Markdown")
+
+
+async def _cmd_help(ctx: SlashCtx) -> None:
+    await send_message(ctx.chat_id, _HELP_TEXT, parse_mode="Markdown")
+
+
 _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
+    "/start":            _cmd_start,
+    "/help":             _cmd_help,
     "/cancel":           _cmd_cancel,
     "/spec":             _cmd_spec,
     "/find":             _cmd_find,
@@ -1263,7 +1305,10 @@ async def webhook(
     # Handle callback queries (inline keyboard button presses)
     callback = update.get("callback_query")
     if callback:
-        await _handle_callback(callback)
+        try:
+            await _handle_callback(callback)
+        except Exception:
+            log.exception("webhook_callback_error")
         return {"ok": True}
 
     message = update.get("message") or update.get("edited_message") or {}
@@ -1290,7 +1335,14 @@ async def webhook(
     if not chat_id or not text:
         return {"ok": True}
 
-    await _route_text(chat_id, text, message_id)
+    try:
+        await _route_text(chat_id, text, message_id)
+    except Exception:
+        log.exception("webhook_handler_error", chat_id=chat_id)
+        try:
+            await send_message(chat_id, "⚠️ Something went wrong processing your message. Please try again.")
+        except Exception:
+            log.exception("webhook_error_notification_failed", chat_id=chat_id)
     return {"ok": True}
 
 
