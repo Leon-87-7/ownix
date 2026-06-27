@@ -28,21 +28,24 @@ async function errorMessage(r: Response, fallback: string): Promise<string> {
 function Chip({
   active,
   disabled,
+  slim,
   onClick,
   children,
 }: {
   active?: boolean;
   disabled?: boolean;
+  slim?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }) {
+  const size = slim ? 'min-h-7 px-2.5 py-0.5 text-xs' : 'min-h-9 px-3.5 py-1.5 text-sm';
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
-      className={`inline-flex min-h-9 items-center gap-1 rounded-md px-3.5 py-1.5 text-sm tabular-nums transition-[transform,background-color,color,border-color] duration-150 ease-out-quart active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60 ${
+      className={`inline-flex ${size} items-center gap-1 rounded-md tabular-nums transition-[transform,background-color,color,border-color] duration-150 ease-out-quart active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60 ${
         active
           ? 'bg-signal text-onsignal'
           : disabled
@@ -166,7 +169,7 @@ export default function DocParserPage() {
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {statuses.map(s => (
-            <Chip key={s || 'all'} active={status === s} onClick={() => setStatus(s)}>
+            <Chip key={s || 'all'} slim active={status === s} onClick={() => setStatus(s)}>
               {s || 'all'}
             </Chip>
           ))}
