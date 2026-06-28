@@ -37,11 +37,11 @@ describe('StatsOverview', () => {
 
   it('renders all stat card labels', () => {
     render(<StatsOverview stats={makeStats()} />);
-    expect(screen.getByText('Total')).toBeTruthy();
-    expect(screen.getByText('Done')).toBeTruthy();
-    expect(screen.getByText('Pending')).toBeTruthy();
-    expect(screen.getByText('Error')).toBeTruthy();
-    expect(screen.getByText('Processing')).toBeTruthy();
+    // Labels also appear in the (always-mounted) collapsible breakdown, so assert
+    // presence rather than uniqueness.
+    for (const label of ['Total', 'Done', 'Pending', 'Error', 'Processing']) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
   });
 
   it('labels the overview region for assistive tech', () => {

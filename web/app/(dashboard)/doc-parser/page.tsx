@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileCode2, Sparkles, Upload, CircleQuestionMark } from 'lucide-react';
 import { StatusBadge } from '@/components/badges';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
+import { FilterBar } from '@/components/filter-bar';
 import { PageShell, PageHeader } from '@/components/page-shell';
 
 type Job = { id: string; title?: string | null; url: string; status: string; created_at: string; telegram_delivery?: 'off' | 'on' | 'retroactive' };
-const statuses = ['', 'done', 'pending', 'processing', 'error'];
 
 // FastAPI puts the reason in `detail` (a string, or {field, message} for our
 // 400/422s). Surface it instead of a generic "failed" so real causes are visible.
@@ -20,42 +20,6 @@ async function errorMessage(r: Response, fallback: string): Promise<string> {
     if (detail?.message) return detail.message;
   } catch { /* non-JSON (e.g. a 500 HTML page) — fall through */ }
   return `${fallback} (${r.status})`;
-}
-
-// One filter pill, two jobs: the active type/status (signal) and the toggles.
-// Color + press are the smoothness — clicks animate instead of snapping, and
-// scale(0.97) gives the tap feedback. min-h-9 keeps the mobile hit area honest.
-function Chip({
-  active,
-  disabled,
-  slim,
-  onClick,
-  children,
-}: {
-  active?: boolean;
-  disabled?: boolean;
-  slim?: boolean;
-  onClick?: () => void;
-  children: ReactNode;
-}) {
-  const size = slim ? 'min-h-7 px-2.5 py-0.5 text-xs' : 'min-h-9 px-3.5 py-1.5 text-sm';
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      aria-pressed={onClick ? active : undefined}
-      className={`inline-flex ${size} items-center gap-1 rounded-md tabular-nums transition-[transform,background-color,color,border-color] duration-150 ease-out-quart active:scale-[0.97] disabled:pointer-events-none disabled:opacity-60 ${
-        active
-          ? 'bg-signal text-onsignal'
-          : disabled
-            ? 'border border-line text-muted'
-            : 'bg-canvas text-body hover:bg-raised hover:text-ink'
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 // Full format list (LlamaParse multi-format). All-inline markup so it stays
@@ -159,22 +123,20 @@ export default function DocParserPage() {
         }
       />
 
-      <div className="rounded-lg border border-line bg-surface p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip active>PDF <span className="font-mono">{jobs.length}</span></Chip>
-          {['Word', 'Spreadsheet', 'Presentation', 'Image'].map(x => (
-            <Chip key={x} disabled>{x} <span className="font-mono text-[10px] uppercase tracking-wide text-muted">soon</span></Chip>
-          ))}
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…" className="h-9 w-full min-w-0 rounded-md border border-line bg-canvas px-3 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:ml-auto sm:w-64" />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {statuses.map(s => (
-            <Chip key={s || 'all'} slim active={status === s} onClick={() => setStatus(s)}>
-              {s || 'all'}
-            </Chip>
-          ))}
-        </div>
-      </div>
+      <FilterBar
+        tabs={[
+          { label: 'PDF', value: 'pdf', count: jobs.length },
+          { label: 'Word', value: 'word', disabled: true, badge: 'soon', dividerBefore: true },
+          { label: 'Spreadsheet', value: 'spreadsheet', disabled: true, badge: 'soon', dividerBefore: true },
+          { label: 'Presentation', value: 'presentation', disabled: true, badge: 'soon', dividerBefore: true },
+          { label: 'Image', value: 'image', disabled: true, badge: 'soon', dividerBefore: true },
+        ]}
+        tabValue="pdf"
+        onTabChange={() => {}}
+        tabsLabel="Document format"
+        query={q} setQuery={setQ} searchPlaceholder="Search documents…" searchLabel="Search documents"
+        statusValue={status} onStatusChange={setStatus}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section className={`${compact ? 'max-lg:max-h-12 max-lg:overflow-hidden' : ''} rounded-lg border border-line bg-surface p-4`}>

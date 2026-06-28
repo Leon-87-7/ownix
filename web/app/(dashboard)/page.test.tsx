@@ -92,9 +92,9 @@ beforeEach(() => {
 });
 
 describe('FeedPage', () => {
-  it('renders Feed heading', () => {
+  it('renders VIG heading', () => {
     render(<FeedPage />);
-    expect(screen.getByText('Feed')).toBeTruthy();
+    expect(screen.getByText('VIG')).toBeTruthy();
   });
 
   it('renders Jobs section', () => {
@@ -192,11 +192,13 @@ describe('FeedPage', () => {
     setupMocks({ ctFilter: 'short' });
 
     render(<FeedPage />);
-    const card = screen.getByRole('link', { name: /job one/i });
+    // Preview cards use a stretched overlay link; flex/p-3 and the date text live
+    // on the card container, the link's parent.
+    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
 
-    expect(card.className).toContain('flex');
-    expect(card.className).toContain('p-3');
-    expect(card.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
+    expect(card?.className).toContain('flex');
+    expect(card?.className).toContain('p-3');
+    expect(card?.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
   });
 
   it('renders the recovery panel from the active tab summary', async () => {

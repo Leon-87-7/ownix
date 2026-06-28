@@ -1,20 +1,27 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type React from 'react';
 
 // useLayoutEffect on the server warns; fall back to useEffect there (no DOM to measure anyway).
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-const CONTENT_TYPE_FILTERS = [
-  { label: "All", value: "" },
-  { label: "Short", value: "short" },
-  { label: "Long", value: "long" },
-  { label: "Article", value: "article" },
-  { label: "Repo", value: "repo" },
-];
+export interface FilterTab {
+  label: string;
+  value: string;
+  count?: number;   // rendered as the mono count badge
+  badge?: string;   // overrides count, e.g. "soon" for a not-yet-supported option
+  disabled?: boolean;
+  dividerBefore?: boolean; // thin rule before this tab (desktop only), e.g. to fence off "soon" options
+}
 
-const STATUS_FILTERS = [
+export interface StatusOption {
+  label: string;
+  value: string;
+}
+
+// Shared default: feed and doc-parser both filter on the same job statuses.
+export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
   { label: "All", value: "" },
   { label: "Done", value: "done" },
   { label: "Pending", value: "pending" },
@@ -22,19 +29,16 @@ const STATUS_FILTERS = [
   { label: "Error", value: "error" },
 ];
 
-interface ContentTypeTabData {
-  label: string;
-  value: string;
-  count: number;
-}
-
 // Segmented control (motion-primitives "animated background"): one signal-orange
 // thumb slides under the active tab. ponytail: pure-CSS slide via measured
 // offsetLeft/width — no framer-motion dependency for a single sliding highlight.
-function SegmentedTabs({ tabs, value, onChange }: {
-  tabs: ContentTypeTabData[];
+// Exported so view-switcher tablists (e.g. Brain) can share the same look without
+// pulling in FilterBar's search + status-panel machinery.
+export function SegmentedTabs({ tabs, value, onChange, label }: {
+  tabs: FilterTab[];
   value: string;
   onChange: (value: string) => void;
+  label: string;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
@@ -56,7 +60,7 @@ function SegmentedTabs({ tabs, value, onChange }: {
   return (
     <div
       role="tablist"
-      aria-label="Content type"
+      aria-label={label}
       className="relative flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:gap-1 sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1"
     >
       {thumb && (
@@ -69,29 +73,40 @@ function SegmentedTabs({ tabs, value, onChange }: {
       {tabs.map((tab, i) => {
         const active = tab.value === value;
         return (
+          <Fragment key={tab.value}>
+            {tab.dividerBefore && (
+              <span aria-hidden="true" className="mx-0.5 my-1 hidden w-px self-stretch bg-line sm:block" />
+            )}
           <button
-            key={tab.value}
             ref={(el) => { refs.current[i] = el; }}
             type="button"
             role="tab"
             aria-selected={active}
-            aria-label={`${tab.label} ${tab.count}`}
+            aria-label={tab.badge ? `${tab.label} (${tab.badge})` : `${tab.label} ${tab.count ?? ''}`.trim()}
+            disabled={tab.disabled}
             onClick={() => onChange(tab.value)}
-            className={`relative z-10 flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors sm:border-0 ${
+            className={`relative z-10 flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors disabled:cursor-default sm:border-0 ${
               active
                 ? "border-signal bg-signal text-onsignal sm:bg-transparent"
-                : "border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none"
+                : tab.disabled
+                  ? "border-line bg-surface text-muted"
+                  : "border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none"
             }`}
           >
             <span>{tab.label}</span>
-            <span
-              className={`rounded border px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${
-                active ? "border-onsignal/30 text-onsignal" : "border-line text-muted"
-              }`}
-            >
-              {tab.count}
-            </span>
+            {tab.badge ? (
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted">{tab.badge}</span>
+            ) : tab.count !== undefined ? (
+              <span
+                className={`rounded border px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${
+                  active ? "border-onsignal/30 text-onsignal" : "border-line text-muted"
+                }`}
+              >
+                {tab.count}
+              </span>
+            ) : null}
           </button>
+          </Fragment>
         );
       })}
     </div>
@@ -117,27 +132,33 @@ function FilterButton({ label, active, onClick }: { label: string; active: boole
   );
 }
 
-export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeCounts, totalCount, stFilter, setStFilter, recoveryPanel }: {
+export function FilterBar({
+  tabs,
+  tabValue,
+  onTabChange,
+  tabsLabel = "Content type",
+  query,
+  setQuery,
+  searchPlaceholder = "Search…",
+  searchLabel = "Search",
+  statusFilters = DEFAULT_STATUS_FILTERS,
+  statusValue,
+  onStatusChange,
+  recoveryPanel,
+}: {
+  tabs: FilterTab[];
+  tabValue: string;
+  onTabChange: (value: string) => void;
+  tabsLabel?: string;
   query: string;
   setQuery: (q: string) => void;
-  ctFilter: string;
-  setCtFilter: (v: string) => void;
-  contentTypeCounts: Record<string, number>;
-  totalCount: number;
-  stFilter: string;
-  setStFilter: (v: string) => void;
+  searchPlaceholder?: string;
+  searchLabel?: string;
+  statusFilters?: StatusOption[];
+  statusValue: string;
+  onStatusChange: (v: string) => void;
   recoveryPanel?: React.ReactNode;
 }) {
-  const tabs = useMemo(
-    () =>
-      CONTENT_TYPE_FILTERS.map(({ label, value }) => ({
-        label,
-        value,
-        count: value ? contentTypeCounts[value] ?? 0 : totalCount,
-      })),
-    [contentTypeCounts, totalCount],
-  );
-
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed; component remounts on navigation so it resets naturally.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -161,14 +182,14 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
     <section className="mt-8 flex flex-col gap-3" aria-label="Search and filters">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0">
-          <SegmentedTabs tabs={tabs} value={ctFilter} onChange={setCtFilter} />
+          <SegmentedTabs tabs={tabs} value={tabValue} onChange={onTabChange} label={tabsLabel} />
         </div>
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search by title or URL"
-          placeholder="Search by title or URL…"
+          aria-label={searchLabel}
+          placeholder={searchPlaceholder}
           className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
         />
       </div>
@@ -192,8 +213,8 @@ export function FilterBar({ query, setQuery, ctFilter, setCtFilter, contentTypeC
         <div className="min-h-0 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
             <div className="flex flex-wrap items-center gap-1">
-              {STATUS_FILTERS.map(({ label, value }) => (
-                <FilterButton key={value} label={label} active={stFilter === value} onClick={() => setStFilter(value)} />
+              {statusFilters.map(({ label, value }) => (
+                <FilterButton key={value} label={label} active={statusValue === value} onClick={() => onStatusChange(value)} />
               ))}
             </div>
             {recoveryPanel}
