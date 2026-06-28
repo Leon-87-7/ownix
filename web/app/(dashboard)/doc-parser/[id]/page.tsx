@@ -2,8 +2,9 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ExternalLink, Sparkles } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Sparkles } from 'lucide-react';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
+import { downloadBlob } from '@/components/ExportModal';
 import { PageShell } from '@/components/page-shell';
 
 const RANDOM_PROMPTS = [
@@ -12,8 +13,97 @@ const RANDOM_PROMPTS = [
   'Explain this to a non-technical person',
 ];
 
+const FEEDBACK_RESET_MS = 1500;
+
 type Job = { id: string; title?: string; url: string; status: string; telegram_delivery?: 'off' | 'on' | 'retroactive'; sheets_row_id?: string | null };
 type Output = { id: string; kind: string; title: string; preview: string; content_url: string; created_at: string };
+type OutputActionState = 'idle' | 'copied' | 'copy_failed' | 'download_failed';
+
+function outputFilename(job: Job, output: Output) {
+  const stem = (job.title || job.id).replace(/[/\\:*?"<>|]/g, '_') || job.id;
+  const ext = output.kind === 'raw_txt' ? 'txt' : 'md';
+  return `vig-${stem}-${output.kind}.${ext}`;
+}
+
+async function fetchOutputContent(output: Output) {
+  const accept = output.kind === 'raw_txt' ? 'text/plain' : 'text/markdown';
+  const res = await fetch(output.content_url, { headers: { Accept: accept } });
+  if (!res.ok) throw new Error(`Output request failed (${res.status})`);
+  return res.text();
+}
+
+function OutputCard({ job, output }: { job: Job; output: Output }) {
+  const [actionState, setActionState] = useState<OutputActionState>('idle');
+
+  useEffect(() => {
+    if (actionState === 'idle') return;
+    const timer = window.setTimeout(() => setActionState('idle'), FEEDBACK_RESET_MS);
+    return () => window.clearTimeout(timer);
+  }, [actionState]);
+
+  async function copyFullOutput() {
+    try {
+      const fullText = await fetchOutputContent(output);
+      await navigator.clipboard.writeText(fullText);
+      setActionState('copied');
+    } catch {
+      setActionState('copy_failed');
+    }
+  }
+
+  async function downloadFullOutput() {
+    try {
+      const fullText = await fetchOutputContent(output);
+      const mime = output.kind === 'raw_txt' ? 'text/plain' : 'text/markdown';
+      downloadBlob(fullText, outputFilename(job, output), mime);
+    } catch {
+      setActionState('download_failed');
+    }
+  }
+
+  const copyLabel = actionState === 'copied' ? 'Copied' : actionState === 'copy_failed' ? 'Copy failed' : 'Copy full output';
+  const downloadLabel = actionState === 'download_failed' ? 'Download failed' : 'Download full output';
+  const liveMessage =
+    actionState === 'copied' ? 'Copied' : actionState === 'copy_failed' ? 'Copy failed' : actionState === 'download_failed' ? 'Download failed' : '';
+
+  return (
+    <article className="rounded-lg border border-line bg-surface p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-signal" />
+        <h2 className="flex-1 text-sm font-semibold text-ink">{output.title || output.kind}</h2>
+        <button
+          type="button"
+          onClick={copyFullOutput}
+          aria-label="Copy full output"
+          title={copyLabel}
+          className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-ui hover:text-ink active:scale-[0.96] ${actionState === 'copy_failed' ? 'text-status-error' : 'text-muted'}`}
+        >
+          {actionState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={downloadFullOutput}
+          aria-label="Download full output"
+          title={downloadLabel}
+          className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-ui hover:text-ink active:scale-[0.96] ${actionState === 'download_failed' ? 'text-status-error' : 'text-muted'}`}
+        >
+          <Download className="h-4 w-4" />
+        </button>
+        <a
+          href={output.content_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open full output"
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+      <span role="status" className="sr-only">{liveMessage}</span>
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">{output.preview}</pre>
+    </article>
+  );
+}
 
 export default function DocDetail() {
   const { id } = useParams<{ id: string }>();
@@ -68,17 +158,15 @@ export default function DocDetail() {
 
   return (
     <PageShell>
-      <header className="flex items-start gap-3">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-ink">{job.title || 'Document job'}</h1>
-          <p className="font-mono text-xs text-muted">{job.id}</p>
-        </div>
-        <TelegramToggle jobId={job.id} value={job.telegram_delivery || 'off'} />
+      <header>
+        <h1 className="text-2xl font-semibold text-ink">{job.title || 'Document job'}</h1>
+        <p className="font-mono text-xs text-muted">{job.id}</p>
       </header>
 
       {err && <p className="text-sm text-status-error" role="alert">{err}</p>}
 
       <div className="flex flex-wrap gap-2">
+        <TelegramToggle jobId={job.id} value={job.telegram_delivery || 'off'} />
         <button onClick={clean} disabled={busy} className="rounded-md bg-signal px-4 py-2 text-sm text-onsignal disabled:opacity-50">Clean</button>
         <button onClick={() => setOpen(true)} disabled={busy} className="rounded-md border border-line px-4 py-2 text-sm text-ink disabled:opacity-50">Freestyle</button>
         {rawParse && <a href={rawParse.content_url} target="_blank" className="rounded-md border border-line px-4 py-2 text-sm text-ink">Get Markdown</a>}
@@ -86,16 +174,7 @@ export default function DocDetail() {
       </div>
 
       <section className="grid gap-3 md:grid-cols-2">
-        {outs.map((o) => (
-          <article key={o.id} className="rounded-lg border border-line bg-surface p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-signal" />
-              <h2 className="flex-1 text-sm font-semibold text-ink">{o.title || o.kind}</h2>
-              <a href={o.content_url} target="_blank" className="text-muted hover:text-ink"><ExternalLink className="h-4 w-4" /></a>
-            </div>
-            <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">{o.preview}</pre>
-          </article>
-        ))}
+        {outs.map((o) => <OutputCard key={o.id} job={job} output={o} />)}
       </section>
 
       {open && (
