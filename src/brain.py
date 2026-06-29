@@ -519,8 +519,10 @@ async def list_links(
     sort: str = "last_seen",
     order: str = "desc",
 ) -> dict[str, Any]:
-    """Return deduplicated Brain links ordered newest-first with pagination.
+    """Return deduplicated Brain links with configurable sorting and pagination.
 
+    ``sort`` is ``last_seen`` or ``appearances`` and ``order`` is ``asc``/``desc``
+    (anything else falls back to ``last_seen`` desc).
     ``q`` filters by case-insensitive substring across url/title/topic.
     # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
     """

@@ -148,5 +148,10 @@ describe('BrainPage', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('4')).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&sort=last_seen&order=desc');
+    // The skipFirstPut guard must not write the freshly-loaded view back.
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/brain/links/view',
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 });

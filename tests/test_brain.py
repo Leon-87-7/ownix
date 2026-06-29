@@ -543,12 +543,18 @@ async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
         with patch("src.brain.settings") as mock_settings:
             mock_settings.DB_PATH = db_path
             by_appearances = await list_links(sort="appearances", order="desc")
+            by_appearances_asc = await list_links(sort="appearances", order="asc")
             fallback = await list_links(sort="nonsense", order="sideways")
 
         assert [item["url"] for item in by_appearances["items"]] == [
             "https://example.com/b",
             "https://example.com/a",
             "https://example.com/c",
+        ]
+        assert [item["url"] for item in by_appearances_asc["items"]] == [
+            "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
         ]
         assert [item["url"] for item in fallback["items"]] == [
             "https://example.com/c",

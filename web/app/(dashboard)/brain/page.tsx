@@ -121,6 +121,12 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
+function SortIcon({ active, order }: { active: boolean; order: LinksOrder }) {
+  if (!active) return null;
+  const Icon = order === 'desc' ? ArrowDown : ArrowUp;
+  return <Icon className="h-3.5 w-3.5" aria-hidden="true" />;
+}
+
 function LinksTable() {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
@@ -210,6 +216,8 @@ function LinksTable() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(view),
+    }).catch(() => {
+      // Preference persistence is best-effort.
     });
   }, [view, viewLoaded]);
 
@@ -243,12 +251,6 @@ function LinksTable() {
     setPage(Math.min(Math.max(requested, 1), pageCount) - 1);
   };
 
-  const SortIcon = ({ sort }: { sort: LinksSort }) => {
-    if (view.sort !== sort) return null;
-    const Icon = view.order === 'desc' ? ArrowDown : ArrowUp;
-    return <Icon className="h-3.5 w-3.5" aria-hidden="true" />;
-  };
-
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -279,8 +281,9 @@ function LinksTable() {
           Page size
           <select
             value={view.size}
+            disabled={!viewLoaded}
             onChange={(e) => updateView({ size: Number(e.target.value) as LinksView['size'] })}
-            className="h-10 rounded-lg border border-line bg-canvas px-3 font-mono text-xs tabular-nums text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
+            className="h-10 rounded-lg border border-line bg-canvas px-3 font-mono text-xs tabular-nums text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none disabled:opacity-50"
           >
             {LINKS_PAGE_SIZES.map((size) => (
               <option key={size} value={size}>{size}</option>
@@ -298,13 +301,13 @@ function LinksTable() {
               <tr>
                 <th scope="col" className="px-4 py-3 font-medium">URL</th>
                 <th scope="col" aria-sort={view.sort === 'last_seen' ? (view.order === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 font-medium">
-                  <button type="button" onClick={() => toggleSort('last_seen')} className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-left transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]">
-                    Last seen <SortIcon sort="last_seen" />
+                  <button type="button" disabled={!viewLoaded} onClick={() => toggleSort('last_seen')} className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-left transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50">
+                    Last seen <SortIcon active={view.sort === 'last_seen'} order={view.order} />
                   </button>
                 </th>
                 <th scope="col" aria-sort={view.sort === 'appearances' ? (view.order === 'asc' ? 'ascending' : 'descending') : 'none'} className="px-4 py-3 text-right font-medium">
-                  <button type="button" onClick={() => toggleSort('appearances')} className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]">
-                    Appearances <SortIcon sort="appearances" />
+                  <button type="button" disabled={!viewLoaded} onClick={() => toggleSort('appearances')} className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50">
+                    Appearances <SortIcon active={view.sort === 'appearances'} order={view.order} />
                   </button>
                 </th>
               </tr>

@@ -702,3 +702,6 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
 
     await database.set_user_setting(42, "brain_links_view", '{"sort":"bad","order":"bad","size":999}')
     assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
+
+    await database.set_user_setting(42, "brain_links_view", "{not-json")
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
