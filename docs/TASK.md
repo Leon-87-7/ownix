@@ -266,3 +266,67 @@ next, and enqueues a repo job for each chosen one.
   article jobs that extract repos?
 - Encoding selected repos in callback data given Telegram's 64-byte limit — index
   into a cached candidate list, or pack the URL?
+
+## 10. Char-count truncation for the links-table description (ui/ux)
+
+In the Brain "Links" table (`web/app/(dashboard)/brain/page.tsx`, `LinksTable`),
+each row's URL cell renders the URL string with CSS `truncate` (width-based, so
+truncation length floats with container width) plus a secondary `title · topic`
+line at `page.tsx:336`. The data comes from `GET /api/brain/links`
+(`src/api/brain.py`); rows expose `url`, `title`, `topic` (`LinkRow`, `page.tsx:13`).
+
+**Wanted:** the link's description text truncates at a fixed **40 characters on
+mobile, 60 on desktop**.
+
+**UI**
+
+- The cell already uses `font-mono`, so a `ch`-unit cap maps cleanly to character
+  count — native approach is `max-w-[40ch] md:max-w-[60ch]` alongside the existing
+  `truncate`, rather than slicing strings in JS. Confirm against DESIGN.md tokens;
+  keep the full value reachable (e.g. `title` attribute / accessible name) so the
+  truncation is presentational only (WCAG-AA).
+- Tailwind's default `md:` breakpoint is the mobile/desktop split unless the repo
+  uses a different convention.
+
+**Open questions** (resolve in grill)
+
+- Which text is "the description" — the URL string itself (line 330/334), the
+  `title · topic` secondary line (line 336), or both? They truncate differently.
+- 40/60 **characters** vs. CSS `ch` (advance width of `0`): with `font-mono` these
+  are near-identical, but is exact character count required (forcing JS slicing) or
+  is `ch` good enough?
+- Does the truncated value still need to be fully visible on hover/focus or via the
+  row expanding, or is the existing `target=_blank` link enough?
+
+## 11. Tags should follow the URL, not the job (many-to-many)
+
+Tags today attach to **jobs**: the `job_tags` join table
+(`src/database.py:205`, `job_id ↔ tag_id`, issue #88 / S5) keyed off a single job,
+with the `tags` vocabulary in the `tags` table (`src/database.py:171`, issue #87).
+The links table (`src/brain.py`, `ingest_links` / the `links` table at
+`src/database.py:151`) is already deduplicated by canonical `url` — one row per
+unique URL — and the same URL can surface across many jobs. So a tag pinned to a
+job can't express "this URL is ui/ux" once that URL recurs in other jobs.
+
+**Wanted:** model tags as following the canonical URL (many-to-many URL ↔ tag),
+independent of how many jobs a URL appears in.
+
+**Data**
+
+- A URL appears in many jobs and a job extracts many URLs (many-to-many);
+  `links.url` is the stable key. Tagging at the URL level needs a `link_tags`
+  (`url`/`link_id ↔ tag_id`) join rather than overloading `job_tags`.
+- **Reuse, don't fork:** the `tags` vocabulary table and `TagPicker`
+  (`web/components/TagPicker.tsx`) already exist — reuse the vocabulary; only the
+  *attachment* target changes from job to URL.
+
+**Open questions** (resolve in grill)
+
+- Does this **replace** job-level tagging (`job_tags`) or coexist with it? If both,
+  what's the relationship when a job's tag and its URL's tag disagree?
+- Key the join on `links.id` or on canonical `url`? (Dedup canonicalization rules
+  here echo task 3's open question — same canonical form must be used.)
+- Surface/edit URL tags where: the Brain Links table (new column / `TagPicker`
+  inline), the existing controls page, or both?
+- Migration: do existing `job_tags` rows get projected onto their URLs, or do URL
+  tags start empty?
