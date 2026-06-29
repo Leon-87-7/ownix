@@ -366,6 +366,11 @@ export function Sidebar() {
         id="vig-nav-panel"
         aria-label="Primary navigation"
         aria-hidden={!open}
+        // ponytail: close on clicks in the drawer's dead space; links/buttons
+        // (closest a/button) keep their own handlers.
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest('a,button')) setOpen(false);
+        }}
         className={`fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-surface px-4 py-5 shadow-overlay transition-transform duration-200 ease-out-quart ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
