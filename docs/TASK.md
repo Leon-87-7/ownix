@@ -153,7 +153,7 @@ them.
 
 ## 6. Make the web app an installable PWA
 
-("pwd" → PWA.) Scope is the `web/` Next.js app (app router).
+Scope is the `web/` Next.js app (app router).
 
 **Wanted:** the dashboard is installable and has an offline app shell.
 
