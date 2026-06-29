@@ -559,10 +559,12 @@ async def run_prd(
     # h. Sheets append (non-fatal)
     await _append_prd_sheet_row(job_id, job, slot, is_intent, drive_url, chat_id)
 
-    # i. Update job DB
+    # i. Update job DB — preserve any cached Drive id/url when the export was a
+    # no-op (gated non-operator job returns "" / ("", "")), so flipping on
+    # OPERATOR_CHAT_ID for an existing deployment can't clobber a stored URL.
     db_kwargs: dict = {
-        drive_file_col: file_id,
-        drive_url_col: drive_url,
+        drive_file_col: file_id or job.get(drive_file_col, ""),
+        drive_url_col: drive_url or job.get(drive_url_col, ""),
         json_col: json.dumps(prd_data),
     }
     if is_intent:
