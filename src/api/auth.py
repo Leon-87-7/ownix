@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from src import database
@@ -72,12 +73,13 @@ async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
 
 
 @auth_router.post("/logout")
-async def logout(request: Request, response: Response) -> dict:
+async def logout(request: Request) -> RedirectResponse:
     session_id = request.cookies.get(COOKIE_NAME)
     if session_id:
         await session_store.revoke(session_id)
+    response = RedirectResponse(url="/logout", status_code=303)
     response.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
-    return {"ok": True}
+    return response
 
 
 @auth_router.get("/me")

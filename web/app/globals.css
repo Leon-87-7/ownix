@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer base {
+
   /* One focus treatment everywhere: the 2px signal ring (DESIGN.md §5). */
   :focus-visible {
     outline: 2px solid theme("colors.signal.DEFAULT");
@@ -16,6 +17,7 @@
 }
 
 @layer utilities {
+
   /* The console's one interactive transition: colors, 150ms, ease-out-quart. */
   .transition-ui {
     transition-property: color, background-color, border-color,
@@ -27,6 +29,7 @@
 
 /* Reduced motion is not optional (PRODUCT.md / DESIGN.md). */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -35,4 +38,126 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Hold-to-deliver-retroactively progress cue. The glow is a loader spinner: a
+   telegram-ring (#145b7d) arc that sweeps from 12 o'clock clockwise and lands
+   back at 12, over the full 1.5s hold window — a deep Telegram-blue that ties
+   the spinner to the brand mark it surrounds. The ring is carved out of a conic
+   disc with a radial mask, then blurred so it reads as a soft glow. */
+@property --doc-hold-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.doc-telegram-hold::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, theme("colors.telegram-ring") var(--doc-hold-angle), transparent 0deg);
+  /* Carve a 2px circular ring out of the conic disc. The closing transparent stop
+     past 100% is essential — without it the square's corners (which sit beyond the
+     farthest-side radius) stay opaque and the glow reads as a square, not a ring. */
+  -webkit-mask: radial-gradient(circle farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px) 100%, transparent 100%);
+  mask: radial-gradient(circle farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px) 100%, transparent 100%);
+  filter: blur(1px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .doc-telegram-hold::before {
+    animation: doc-hold 1.5s linear forwards;
+  }
+
+  @keyframes doc-hold {
+    from {
+      --doc-hold-angle: 0deg;
+    }
+
+    to {
+      --doc-hold-angle: 360deg;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  /* No sweep available — show the completed ring as a static "charging" cue. */
+  .doc-telegram-hold::before {
+    --doc-hold-angle: 360deg;
+  }
+}
+
+/* Chevron-trail end-caps for the stats underscore: three solid chevrons per side
+   point toward the centre and light up progressively — 1 → 2 → 3 → 2 → 1 — on a
+   lazy 3s loop to flag the tappable strip. The outermost (c1) stays lit and the
+   count fills inward toward the line. Opacity-only steps (no scale/blur) keep each
+   chevron crisp and solid — scaling overlapped icons made them jump and smear.
+   Reduced motion (global block) freezes to a single chevron per side via the
+   c2/c3 base opacity. */
+@keyframes chev-step-2 {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  28%,
+  72% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes chev-step-3 {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  44%,
+  56% {
+    opacity: 1;
+  }
+  60%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.chev-c1 {
+  opacity: 1;
+}
+
+.chev-c2 {
+  opacity: 0;
+  animation: chev-step-2 3s ease-in-out infinite;
+}
+
+.chev-c3 {
+  opacity: 0;
+  animation: chev-step-3 3s ease-in-out infinite;
+}
+
+@keyframes logout-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tooltip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tooltip-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }

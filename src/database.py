@@ -7,6 +7,7 @@ no silent swallowing.
 
 from __future__ import annotations
 
+import json
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -76,13 +77,16 @@ CREATE TABLE IF NOT EXISTS jobs (
     video_id                    TEXT,
     og_image_url                TEXT,
     summary                     TEXT,
+    links                       TEXT,
+    telegram_delivery           TEXT NOT NULL DEFAULT 'on',
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
     CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
     CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
-    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error'))
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
+    CHECK(telegram_delivery IN ('off','on'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at);
@@ -155,7 +159,10 @@ CREATE TABLE IF NOT EXISTS links (
     seen_count    INTEGER NOT NULL DEFAULT 1,
     last_seen_at  TEXT NOT NULL,
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    updated_at    TEXT NOT NULL,
+    stars         INTEGER,
+    pushed_at     TEXT,
+    archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
@@ -234,6 +241,20 @@ CREATE TABLE IF NOT EXISTS context_blobs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id);
+
+CREATE TABLE IF NOT EXISTS document_outputs (
+    id          TEXT PRIMARY KEY,
+    job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    gcs_key     TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+);
+CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at);
+-- Singular kinds (raw_txt/raw_md/summary/clean) are one-per-job and upserted;
+-- freestyle accumulates as history, so it's excluded from the uniqueness rule.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle';
 """
 
 
@@ -651,6 +672,7 @@ _V17_CREATE = """CREATE TABLE IF NOT EXISTS jobs_v17 (
     video_id                    TEXT,
     og_image_url                TEXT,
     summary                     TEXT,
+    links                       TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
@@ -670,7 +692,7 @@ _V17_COLS = [
     "template", "template_analysis", "key_phrases", "validation_warning_sent",
     "template_detection_method", "processing_time_ms", "promise_gap", "bot_message_id",
     "freestyle_prompt", "best_frame_index", "platform", "video_id", "og_image_url",
-    "summary", "created_at", "updated_at", "completed_at",
+    "summary", "links", "created_at", "updated_at", "completed_at",
 ]
 
 
@@ -683,6 +705,145 @@ _MIGRATIONS.append(_migrate_v16_v17)
 
 # v17 → v18: per-space curated icon (issue #189)
 _MIGRATIONS.append(["ALTER TABLE spaces ADD COLUMN icon TEXT NOT NULL DEFAULT 'folder'"])
+
+# v18 → v19: repo-node metadata refresh (issue #198)
+_MIGRATIONS.append([
+    "ALTER TABLE links ADD COLUMN stars INTEGER",
+    "ALTER TABLE links ADD COLUMN pushed_at TEXT",
+    "ALTER TABLE links ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+])
+
+# v19 → v20: persist enriched short-video links on jobs (issue #213)
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN links TEXT",
+])
+
+# v20 → v21: Doc Parser dashboard delivery state and output index (ADR-0029).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN telegram_delivery TEXT NOT NULL DEFAULT 'on'",
+    """CREATE TABLE IF NOT EXISTS document_outputs (
+        id          TEXT PRIMARY KEY,
+        job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        gcs_key     TEXT NOT NULL,
+        title       TEXT NOT NULL DEFAULT '',
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK(kind IN ('raw_txt','raw_md','summary','clean','freestyle'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_id, created_at)",
+])
+
+# v21 → v22: dedup singular document outputs and enforce one-per-(job,kind)
+# (ADR-0029). Freestyle stays multi-row; raw/summary/clean upsert in place.
+_MIGRATIONS.append([
+    # Drop pre-existing duplicate singular rows (keep the earliest id) so the
+    # unique index can be created without violating it.
+    "DELETE FROM document_outputs WHERE kind <> 'freestyle' AND id NOT IN "
+    "(SELECT MIN(id) FROM document_outputs WHERE kind <> 'freestyle' GROUP BY job_id, kind)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle'",
+])
+
+# v22 → v23: tighten telegram_delivery to a stored domain of {'off','on'} (#231).
+# 'retroactive' is a request-only action resolved at the API boundary (it sends
+# existing outputs, then persists 'on'); it must never be a stored state. The
+# column was added by ALTER (v20→v21) with no CHECK, so migrated DBs have no
+# constraint at all — this rebuild adds CHECK(telegram_delivery IN ('off','on')).
+# SQLite can't ALTER a CHECK, so the table is rebuilt; foreign_keys is disabled
+# across the DROP/RENAME so the ON DELETE CASCADE children of jobs aren't wiped.
+_V23_CREATE = """CREATE TABLE IF NOT EXISTS jobs_v23 (
+    id                          TEXT PRIMARY KEY,
+    chat_id                     INTEGER NOT NULL,
+    message_id                  INTEGER,
+    url                         TEXT NOT NULL,
+    content_type                TEXT NOT NULL,
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    attempt                     INTEGER NOT NULL DEFAULT 1,
+    error_msg                   TEXT,
+    drive_url                   TEXT,
+    title                       TEXT,
+    transcript                  TEXT,
+    ai_category                 TEXT,
+    ai_topic                    TEXT,
+    ai_objective                TEXT,
+    ai_action_points            TEXT,
+    ai_tools                    TEXT,
+    ai_market_data              TEXT,
+    prd_auto_status             TEXT,
+    prd_auto_drive_file_id      TEXT,
+    prd_auto_drive_url          TEXT,
+    prd_auto_json               TEXT,
+    prd_intent_status           TEXT,
+    prd_intent_drive_file_id    TEXT,
+    prd_intent_drive_url        TEXT,
+    prd_intent_json             TEXT,
+    prd_intent_text             TEXT,
+    prd_intent_completed_at     TEXT,
+    sheets_row_id               TEXT,
+    template                    TEXT,
+    template_analysis           TEXT,
+    key_phrases                 TEXT,
+    validation_warning_sent     INTEGER DEFAULT 0,
+    template_detection_method   TEXT,
+    processing_time_ms          INTEGER,
+    promise_gap                 TEXT,
+    bot_message_id              INTEGER,
+    freestyle_prompt            TEXT,
+    best_frame_index            INTEGER,
+    platform                    TEXT,
+    video_id                    TEXT,
+    og_image_url                TEXT,
+    summary                     TEXT,
+    links                       TEXT,
+    telegram_delivery           TEXT NOT NULL DEFAULT 'on',
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at                TIMESTAMP,
+    CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document')),
+    CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
+    CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
+    CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
+    CHECK(telegram_delivery IN ('off','on'))
+)"""
+
+_V23_COLS = _V17_COLS + ["telegram_delivery"]
+
+
+async def _migrate_v22_v23(conn: aiosqlite.Connection) -> None:
+    """Tighten telegram_delivery CHECK to {'off','on'}; preserve FK children (#231)."""
+    # A real v22 DB always has telegram_delivery (added v20→v21); guard the check
+    # on its presence so the rebuild is robust on odd/replayed DBs that lack it.
+    cur = await conn.execute("PRAGMA table_info(jobs)")
+    has_col = any(row[1] == "telegram_delivery" for row in await cur.fetchall())
+    if has_col:
+        # Fail loudly rather than silently dropping/coercing a stored 'retroactive'.
+        cur = await conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE telegram_delivery = 'retroactive'"
+        )
+        row = await cur.fetchone()
+        stranded = row[0] if row else 0
+        if stranded:
+            raise RuntimeError(
+                f"Cannot tighten telegram_delivery CHECK: {stranded} job(s) hold "
+                "'retroactive', which has no stored meaning. Resolve them to 'off'/'on' "
+                "before migrating."
+            )
+    # PRAGMA foreign_keys is a no-op inside a transaction, so commit out of any
+    # open one before toggling. With FK enforcement off, DROP TABLE jobs no longer
+    # cascade-deletes its ON DELETE CASCADE children (document_outputs, etc.).
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        await _rebuild_jobs_table(conn, _V23_CREATE, "jobs_v23", _V23_COLS)
+        await conn.commit()
+    finally:
+        # Re-enable FK even if the rebuild raised, so a partially-failed upgrade
+        # can't leave enforcement off for the rest of the connection. Roll back any
+        # open transaction first — PRAGMA foreign_keys is a no-op inside one.
+        await conn.rollback()
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+
+_MIGRATIONS.append(_migrate_v22_v23)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -830,6 +991,45 @@ async def set_user_setting(chat_id: int, key: str, value: str) -> None:
     )
 
 
+_BRAIN_LINKS_VIEW_KEY = "brain_links_view"
+_DEFAULT_BRAIN_LINKS_VIEW = {"sort": "last_seen", "order": "desc", "size": 25}
+_BRAIN_LINKS_VIEW_SORTS = {"last_seen", "appearances"}
+_BRAIN_LINKS_VIEW_ORDERS = {"asc", "desc"}
+_BRAIN_LINKS_VIEW_SIZES = {25, 50, 100}
+
+
+def _normalize_brain_links_view(value: object) -> dict[str, int | str]:
+    view = dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    if isinstance(value, dict):
+        sort = value.get("sort")
+        order = value.get("order")
+        size = value.get("size")
+        if sort in _BRAIN_LINKS_VIEW_SORTS:
+            view["sort"] = str(sort)
+        if order in _BRAIN_LINKS_VIEW_ORDERS:
+            view["order"] = str(order)
+        if size in _BRAIN_LINKS_VIEW_SIZES:
+            view["size"] = int(size)
+    return view
+
+
+async def get_brain_links_view(chat_id: int) -> dict[str, int | str]:
+    value = await get_user_setting(chat_id, _BRAIN_LINKS_VIEW_KEY)
+    if value is None:
+        return dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    return _normalize_brain_links_view(parsed)
+
+
+async def set_brain_links_view(chat_id: int, *, sort: str, order: str, size: int) -> dict[str, int | str]:
+    view = _normalize_brain_links_view({"sort": sort, "order": order, "size": size})
+    await set_user_setting(chat_id, _BRAIN_LINKS_VIEW_KEY, json.dumps(view, separators=(",", ":")))
+    return view
+
+
 _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY = "dashboard_recovery_telegram_notifications"
 
 
@@ -915,6 +1115,7 @@ async def reset_job(job_id: str) -> None:
                 video_id = NULL,
                 og_image_url = NULL,
                 summary = NULL,
+                links = NULL,
                 promise_gap = NULL,
                 completed_at = NULL,
                 updated_at = CURRENT_TIMESTAMP
@@ -1160,6 +1361,45 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
     return dict(row) if row else None
 
 
+
+
+async def set_job_telegram_delivery(job_id: str, state: str) -> dict | None:
+    # 'retroactive' is a request-only action resolved at the API boundary (send
+    # existing outputs, then persist 'on'); only 'off'/'on' are storable (#231).
+    if state not in {"off", "on"}:
+        raise ValueError("telegram_delivery must be off or on")
+    await _execute(
+        "UPDATE jobs SET telegram_delivery = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (state, job_id),
+    )
+    return await get_job(job_id)
+
+
+async def add_document_output(job_id: str, kind: str, gcs_key: str, title: str = "") -> dict:
+    # Singular kinds (raw_txt/raw_md/summary/clean) upsert in place so re-runs
+    # (a freestyle re-process, a repeated Clean) refresh the one card instead of
+    # duplicating it; freestyle has no unique index, so it accumulates as history.
+    output_id = generate_id()
+    async with connection() as conn:
+        cur = await conn.execute(
+            """INSERT INTO document_outputs (id, job_id, kind, gcs_key, title)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(job_id, kind) WHERE kind <> 'freestyle'
+            DO UPDATE SET gcs_key = excluded.gcs_key, title = excluded.title
+            RETURNING id, job_id, kind, gcs_key, title""",
+            (output_id, job_id, kind, gcs_key, title),
+        )
+        row = await cur.fetchone()
+        await conn.commit()
+    return dict(row)
+
+
+async def list_document_outputs(job_id: str) -> list[dict]:
+    return await _fetch_dicts(
+        "SELECT id, job_id, kind, gcs_key, title, created_at FROM document_outputs WHERE job_id = ? ORDER BY created_at ASC, id ASC",
+        (job_id,),
+    )
+
 # ---------------------------------------------------------------------------
 # Markdown cache (Jina Reader — issue #60 / ADR-0013)
 # ---------------------------------------------------------------------------
@@ -1233,6 +1473,14 @@ async def list_tags(chat_id: int) -> list[dict]:
         "SELECT id, name, meaning, color, created_at FROM tags WHERE chat_id = ? ORDER BY name",
         (chat_id,),
     )
+
+
+async def get_tag(chat_id: int, tag_id: str) -> dict | None:
+    row = await _fetch_one(
+        "SELECT id, name, meaning, color FROM tags WHERE id = ? AND chat_id = ?",
+        (tag_id, chat_id),
+    )
+    return dict(row) if row else None
 
 
 async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:

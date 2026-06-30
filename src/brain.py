@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit, urlunsplit
 from typing import Any
 
 import numpy as np
@@ -33,10 +34,14 @@ CREATE TABLE IF NOT EXISTS links (
     seen_count    INTEGER NOT NULL DEFAULT 1,
     last_seen_at  TEXT NOT NULL,
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    updated_at    TEXT NOT NULL,
+    stars         INTEGER,
+    pushed_at     TEXT,
+    archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
+CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 """
 
 
@@ -126,6 +131,28 @@ def _load_embeddings(rows: list[dict]) -> tuple[list[str], np.ndarray]:
         return [], np.empty((0, EMBEDDING_DIM), dtype=np.float32)
 
     return ids, np.stack(arrays)
+
+
+def normalize_url(url: str) -> str:
+    """Canonical URL for Brain node identity: no query, fragment, or trailing slash."""
+    stripped = url.strip()
+    parts = urlsplit(stripped)
+    path = parts.path.rstrip("/")
+    return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+
+
+def _github_owner_repo(url: str) -> tuple[str, str] | None:
+    parts = urlsplit(url)
+    if (parts.hostname or "").lower() not in {"github.com", "www.github.com"}:
+        return None
+    segments = [s for s in parts.path.split("/") if s]
+    if len(segments) < 2:
+        return None
+    return segments[0], segments[1]
+
+
+def _is_repo_archived(row: dict) -> bool:
+    return bool(row.get("archived"))
 
 
 def _slugify(title: str) -> str:
@@ -259,7 +286,8 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for link in links:
-        url: str = link.get("url", "").strip()
+        raw_url: str = link.get("url", "").strip()
+        url = normalize_url(raw_url)
         if not url:
             continue
         try:
@@ -433,6 +461,126 @@ def _build_obsidian_md(
     for t in related_titles:
         lines.append(f"- [[{t}]]")
     return "\n".join(lines)
+
+
+async def get_graph() -> dict[str, list[dict]]:
+    """Return Brain graph nodes and on-request derived cosine edges."""
+    import aiosqlite
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute(
+            """SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
+               FROM links l
+               LEFT JOIN jobs j ON j.id = l.source_job
+               WHERE COALESCE(j.status, '') != 'cancelled'
+               ORDER BY l.created_at ASC"""
+        )
+        rows = [dict(r) for r in await cursor.fetchall()]
+
+    nodes = [
+        {
+            "id": row["url"],
+            "title": row.get("title") or row["url"],
+            "topic": row.get("topic") or "",
+            "url": row["url"],
+            "seen_count": row.get("seen_count") or 1,
+            "archived": bool(row.get("archived")),
+            **(
+                {"stars": row.get("stars"), "pushed_at": row.get("pushed_at")}
+                if _github_owner_repo(row["url"])
+                else {}
+            ),
+        }
+        for row in rows
+    ]
+
+    ids_list, matrix = _load_embeddings(rows)
+    id_to_row = {row["id"]: row for row in rows}
+    seen_pairs: set[tuple[str, str]] = set()
+    edges: list[dict] = []
+    for idx, link_id in enumerate(ids_list):
+        for related in _compute_related(link_id, matrix[idx], ids_list, matrix, None):
+            source = id_to_row[link_id]["url"]
+            target = id_to_row[related["id"]]["url"]
+            key = tuple(sorted((source, target)))
+            if source == target or key in seen_pairs:
+                continue
+            seen_pairs.add(key)
+            edges.append({"source": source, "target": target, "score": round(related["score"], 4)})
+
+    return {"nodes": nodes, "edges": edges}
+
+
+async def list_links(
+    limit: int = 50,
+    offset: int = 0,
+    q: str = "",
+    sort: str = "last_seen",
+    order: str = "desc",
+) -> dict[str, Any]:
+    """Return deduplicated Brain links with configurable sorting and pagination.
+
+    ``sort`` is ``last_seen`` or ``appearances`` and ``order`` is ``asc``/``desc``
+    (anything else falls back to ``last_seen`` desc).
+    ``q`` filters by case-insensitive substring across url/title/topic.
+    # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
+    """
+    import aiosqlite
+
+    where = "COALESCE(j.status, '') != 'cancelled'"
+    filter_params: list[Any] = []
+    if q.strip():
+        where += " AND (l.url LIKE ? ESCAPE '\\' OR l.title LIKE ? ESCAPE '\\' OR l.topic LIKE ? ESCAPE '\\')"
+        escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        filter_params = [like, like, like]
+
+    sort_columns = {
+        "last_seen": "l.last_seen_at",
+        "appearances": "l.seen_count",
+    }
+    sort_column = sort_columns.get(sort, sort_columns["last_seen"])
+    sort_direction = "ASC" if order == "asc" else "DESC"
+    order_by = f"{sort_column} {sort_direction}, l.url ASC"
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        count_cursor = await conn.execute(
+            f"""SELECT COUNT(*) AS total
+                FROM links l
+                LEFT JOIN jobs j ON j.id = l.source_job
+                WHERE {where}""",
+            filter_params,
+        )
+        count_row = await count_cursor.fetchone()
+        cursor = await conn.execute(
+            f"""SELECT l.url, l.title, l.topic, l.seen_count, l.created_at, l.last_seen_at
+                FROM links l
+                LEFT JOIN jobs j ON j.id = l.source_job
+                WHERE {where}
+                ORDER BY {order_by}
+                LIMIT ? OFFSET ?""",
+            (*filter_params, limit, offset),
+        )
+        rows = [dict(r) for r in await cursor.fetchall()]
+
+    return {
+        "items": [
+            {
+                "url": row["url"],
+                "title": row.get("title"),
+                "topic": row.get("topic"),
+                "seen_count": row.get("seen_count") or 1,
+                "first_seen": row["created_at"],
+                "last_seen": row["last_seen_at"],
+            }
+            for row in rows
+        ],
+        "limit": limit,
+        "offset": offset,
+        "total": count_row["total"] if count_row else 0,
+    }
 
 
 async def search_links(query: str, top_k: int = 5) -> list[dict]:
@@ -665,9 +813,39 @@ async def _refresh_one_link(
     except Exception as exc:
         log.warning("brain.refresh_drive_failed", link_id=lnk_id, error=str(exc))
 
+    stars = lnk.get("stars")
+    pushed_at = lnk.get("pushed_at")
+    archived = int(bool(lnk.get("archived")))
+    repo_pair = _github_owner_repo(lnk["url"])
+    is_stale_repo = False
+    if repo_pair and not _is_repo_archived(lnk):
+        try:
+            updated_at = datetime.fromisoformat(
+                (lnk.get("updated_at") or "").replace("Z", "+00:00")
+            )
+            is_stale_repo = (
+                stars is None
+                or pushed_at is None
+                or datetime.now(timezone.utc) - updated_at > timedelta(days=14)
+            )
+        except Exception:
+            is_stale_repo = True
+    if is_stale_repo:
+        try:
+            from src.services.github import fetch_repo_bundle
+
+            owner, repo = repo_pair
+            bundle = await fetch_repo_bundle(owner, repo, settings.GITHUB_TOKEN or None)
+            meta = bundle.get("metadata", {})
+            stars = meta.get("stars")
+            pushed_at = meta.get("pushed_at")
+            archived = int(bool(meta.get("archived", False)))
+        except Exception as exc:
+            log.warning("brain.repo_metadata_refresh_failed", link_id=lnk_id, error=str(exc)[:120])
+
     await conn.execute(
-        "UPDATE links SET updated_at = ? WHERE id = ?",
-        (now_iso, lnk_id),
+        "UPDATE links SET updated_at = ?, stars = ?, pushed_at = ?, archived = ? WHERE id = ?",
+        (now_iso, stars, pushed_at, archived, lnk_id),
     )
 
     return repaired_delta, matrix

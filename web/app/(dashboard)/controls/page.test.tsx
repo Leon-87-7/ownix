@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import ControlsPage from './page';
 
@@ -63,99 +63,102 @@ beforeEach(() => {
   }));
 });
 
+// Each section is a native <details>; all mount at once, so scope queries to
+// the relevant section to avoid cross-section duplicates.
+function section(title: string) {
+  return within(screen.getByText(title).closest('details') as HTMLElement);
+}
+
+// Allowed/Ignored share one "Domains" section; scope by the column heading.
+function domainColumn(name: 'Allowed' | 'Ignored') {
+  return within(screen.getByRole('heading', { name }).closest('div') as HTMLElement);
+}
+
 describe('ControlsPage', () => {
   it('renders Controls heading', () => {
     render(<ControlsPage />);
     expect(screen.getByText('Controls')).toBeTruthy();
   });
 
-  it('renders tab buttons', () => {
+  it('renders section headers', () => {
     render(<ControlsPage />);
-    expect(screen.getByRole('button', { name: 'Tags' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Allowed Domains' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ignored Domains' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Recovery' })).toBeTruthy();
+    expect(screen.getByText('Tags')).toBeTruthy();
+    expect(screen.getByText('Domains')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Allowed' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Ignored' })).toBeTruthy();
   });
 
-  it('shows Tags tab content by default', () => {
+  it('shows Tags section content', () => {
     render(<ControlsPage />);
-    expect(screen.getByText('Create tag')).toBeTruthy();
+    expect(section('Tags').getByText('Create tag')).toBeTruthy();
   });
 
   it('renders tag list', () => {
     render(<ControlsPage />);
-    expect(screen.getByText('Alpha')).toBeTruthy();
-    expect(screen.getByText('Beta')).toBeTruthy();
+    expect(section('Tags').getByText('Alpha')).toBeTruthy();
+    expect(section('Tags').getByText('Beta')).toBeTruthy();
   });
 
   it('shows loading state in TagsTab', () => {
     setupTagsMock({ loading: true, tags: [] });
     render(<ControlsPage />);
-    expect(screen.getByText(/loading tags/i)).toBeTruthy();
+    expect(section('Tags').getByText(/loading tags/i)).toBeTruthy();
   });
 
   it('shows fetchError in TagsTab', () => {
     setupTagsMock({ fetchError: 'Failed to load tags', tags: [] });
     render(<ControlsPage />);
-    expect(screen.getByText('Failed to load tags')).toBeTruthy();
+    expect(section('Tags').getByText('Failed to load tags')).toBeTruthy();
   });
 
   it('shows empty message when no tags', () => {
     setupTagsMock({ tags: [] });
     render(<ControlsPage />);
-    expect(screen.getByText(/no tags yet/i)).toBeTruthy();
+    expect(section('Tags').getByText(/no tags yet/i)).toBeTruthy();
   });
 
-  it('switches to Allowed Domains tab', () => {
+  it('shows Allowed Domains content', () => {
     render(<ControlsPage />);
-    const allowedBtn = screen.getByRole('button', { name: 'Allowed Domains' });
-    fireEvent.click(allowedBtn);
-    expect(screen.getByText('Add domain')).toBeTruthy();
-    expect(screen.getByText('example.com')).toBeTruthy();
+    const allowed = domainColumn('Allowed');
+    expect(allowed.getByText('Add domain')).toBeTruthy();
+    expect(allowed.getByText('example.com')).toBeTruthy();
   });
 
   it('shows domains in DomainTab', () => {
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    expect(screen.getByText('test.org')).toBeTruthy();
+    expect(domainColumn('Allowed').getByText('test.org')).toBeTruthy();
   });
 
   it('shows loading state in DomainTab', () => {
     setupDomainsMock({ loading: true, domains: [] });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    expect(screen.getByText(/loading allowed domains/i)).toBeTruthy();
+    expect(domainColumn('Allowed').getByText(/loading allowed domains/i)).toBeTruthy();
   });
 
   it('shows fetchError in DomainTab', () => {
     setupDomainsMock({ fetchError: 'Network error', domains: [] });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    expect(screen.getByText('Network error')).toBeTruthy();
+    expect(domainColumn('Allowed').getByText('Network error')).toBeTruthy();
   });
 
   it('shows empty message in DomainTab when no domains', () => {
     setupDomainsMock({ domains: [] });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    expect(screen.getByText(/no allowed domains yet/i)).toBeTruthy();
+    expect(domainColumn('Allowed').getByText(/no allowed domains yet/i)).toBeTruthy();
   });
 
-  it('switches to Ignored Domains tab', () => {
+  it('renders Ignored Domains content', () => {
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ignored Domains' }));
-    expect(screen.getByText('Add domain')).toBeTruthy();
+    expect(domainColumn('Ignored').getByText('Add domain')).toBeTruthy();
   });
 
   it('calls addDomain on form submit in DomainTab', async () => {
     const addDomain = vi.fn(async () => {});
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    const input = screen.getByPlaceholderText('example.com');
+    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
     fireEvent.change(input, { target: { value: 'newdomain.com' } });
-    const form = input.closest('form')!;
-    fireEvent.submit(form);
+    fireEvent.submit(input.closest('form')!);
     await new Promise(r => setTimeout(r, 10));
     expect(addDomain).toHaveBeenCalledWith('newdomain.com');
   });
@@ -164,11 +167,9 @@ describe('ControlsPage', () => {
     const addDomain = vi.fn(async () => {});
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    const input = screen.getByPlaceholderText('example.com');
+    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
     // leave blank
-    const form = input.closest('form')!;
-    fireEvent.submit(form);
+    fireEvent.submit(input.closest('form')!);
     await new Promise(r => setTimeout(r, 10));
     expect(addDomain).not.toHaveBeenCalled();
   });
@@ -177,8 +178,7 @@ describe('ControlsPage', () => {
     const removeDomain = vi.fn(async () => {});
     setupDomainsMock({ removeDomain });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    const removeBtns = screen.getAllByRole('button', { name: /remove/i });
+    const removeBtns = domainColumn('Allowed').getAllByRole('button', { name: /remove/i });
     fireEvent.click(removeBtns[0]);
     await new Promise(r => setTimeout(r, 10));
     expect(removeDomain).toHaveBeenCalledWith('example.com');
@@ -188,30 +188,23 @@ describe('ControlsPage', () => {
     const addDomain = vi.fn(async () => { throw new Error('Duplicate domain'); });
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    const input = screen.getByPlaceholderText('example.com');
+    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
     fireEvent.change(input, { target: { value: 'dup.com' } });
-    const form = input.closest('form')!;
-    fireEvent.submit(form);
-    const { waitFor: wf } = await import('@testing-library/react');
-    await wf(() => expect(screen.getByText('Duplicate domain')).toBeTruthy());
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(domainColumn('Allowed').getByText('Duplicate domain')).toBeTruthy());
   });
 
   it('shows removeError when removeDomain rejects', async () => {
     const removeDomain = vi.fn(async () => { throw new Error('Remove failed'); });
     setupDomainsMock({ removeDomain });
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allowed Domains' }));
-    const removeBtns = screen.getAllByRole('button', { name: /remove/i });
+    const removeBtns = domainColumn('Allowed').getAllByRole('button', { name: /remove/i });
     fireEvent.click(removeBtns[0]);
-    const { waitFor: wf } = await import('@testing-library/react');
-    await wf(() => expect(screen.getByText('Remove failed')).toBeTruthy());
+    await waitFor(() => expect(domainColumn('Allowed').getByText('Remove failed')).toBeTruthy());
   });
 
   it('shows the recovery Telegram notification preference', async () => {
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
-
     const checkbox = await screen.findByRole('checkbox', {
       name: /dashboard recovery telegram notifications/i,
     });
@@ -220,8 +213,6 @@ describe('ControlsPage', () => {
 
   it('persists the recovery Telegram notification preference', async () => {
     render(<ControlsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
-
     const checkbox = await screen.findByRole('checkbox', {
       name: /dashboard recovery telegram notifications/i,
     });

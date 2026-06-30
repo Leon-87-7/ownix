@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSpaceUrls } from '@/lib/hooks/useSpaceUrls';
 import { TypeBadge } from '@/components/badges';
 import { Spinner } from '@/components/ui';
+import { Tooltip } from '@/components/ui/tooltip';
 
 export function UrlsTab({ spaceId }: { spaceId: string }) {
   const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } = useSpaceUrls(spaceId);
@@ -54,13 +55,14 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
                     aria-label="Move down"
                   >&#9660;</button>
                 </div>
-                <Link
-                  href={`/jobs/${item.id}`}
-                  className="min-w-0 flex-1 truncate text-sm text-ink transition-ui hover:text-signal"
-                  title={display}
-                >
-                  {display}
-                </Link>
+                <Tooltip content={display} mono>
+                  <Link
+                    href={`/jobs/${item.id}`}
+                    className="min-w-0 flex-1 truncate text-sm text-ink transition-ui hover:text-signal"
+                  >
+                    {display}
+                  </Link>
+                </Tooltip>
                 <TypeBadge label={item.content_type} />
                 <button
                   onClick={() => removeUrl(item.id)}

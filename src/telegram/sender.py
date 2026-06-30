@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Any
 
 import httpx
@@ -147,7 +148,8 @@ async def send_document(
         data["caption"] = caption
     if parse_mode:
         data["parse_mode"] = parse_mode
-    files = {"document": (filename, file_bytes, "text/markdown")}
+    mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    files = {"document": (filename, file_bytes, mime)}
     return await _post_and_parse(
         "sendDocument", data=data, files=files, chat_id=chat_id,
         error_event="telegram_document_failed", success_event="telegram_document_sent",

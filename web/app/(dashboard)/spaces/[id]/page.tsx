@@ -9,6 +9,7 @@ import { useSpaceEdit } from "@/lib/hooks/useSpaceEdit";
 import { UrlsTab } from "./UrlsTab";
 import { ContextTab } from "./ContextTab";
 import { Spinner, TabBar } from "@/components/ui";
+import { PageShell } from "@/components/page-shell";
 
 type ActiveTab = "urls" | "context";
 
@@ -39,7 +40,7 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
   if (fetchState === "error" || !space) return <div className="text-sm text-body">Failed to load space. <Link href="/spaces" className="text-signal hover:underline">Back to spaces</Link></div>;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <PageShell width="narrow">
       <Link href="/spaces" className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink">
         <span aria-hidden="true">&#8592;</span> Back to spaces
       </Link>
@@ -88,6 +89,6 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
       {activeTab === "context" && <ContextTab spaceId={params.id} />}
 
       {showExport && <ExportModal spaceId={params.id} spaceName={space.name} onClose={() => setShowExport(false)} />}
-    </div>
+    </PageShell>
   );
 }

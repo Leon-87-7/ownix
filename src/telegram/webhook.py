@@ -8,6 +8,7 @@ import html
 import ipaddress
 import socket
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 
 import httpx
 from secrets import compare_digest
@@ -298,6 +299,11 @@ async def _cb_article_retry(ctx: CallbackCtx) -> None:
     await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying article analysis...")
 
 
+def _task_for(pipeline: str | None) -> str:
+    """Worker task name for a pipeline / content_type. Default video."""
+    return pipeline if pipeline in ("repo", "article", "document") else "video"
+
+
 async def _cb_reprocess(ctx: CallbackCtx) -> None:
     """One-tap retry for a 'processing' job orphaned by a restart (ADR-0010).
 
@@ -315,11 +321,7 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
         content_type=job["content_type"],
         template=job.get("template"),
     )
-    task_type = (
-        "repo" if job["content_type"] == "repo"
-        else "article" if job["content_type"] == "article"
-        else "video"
-    )
+    task_type = _task_for(job["content_type"])
     await queue.enqueue({"task": task_type, "job_id": new_job_id})
     log.info("reprocess_enqueued", orphan_job_id=ctx.job_id, new_job_id=new_job_id)
     await send_message(ctx.chat_id, f"📥 Received! \njob_{new_job_id[-4:]}")
@@ -337,6 +339,25 @@ async def _cb_show_done(ctx: CallbackCtx) -> None:
         await edit_message_text(ctx.chat_id, ctx.message_id, "here you go")
 
 
+async def _cb_document_md(ctx: CallbackCtx) -> None:
+    """📄 Get Markdown — render/serve parsed/<sha>.md on demand (#156)."""
+    job = await database.get_job(ctx.job_id)
+    if (
+        not job
+        or job.get("content_type") != "document"
+        or str(job.get("chat_id")) != str(ctx.chat_id)
+    ):
+        await answer_callback_query(ctx.cq_id, text="Job not found.")
+        return
+    await answer_callback_query(ctx.cq_id)
+    from src.processors import document
+    try:
+        await document.deliver_markdown(job)
+    except Exception:
+        log.exception("document_md.failed", job_id=ctx.job_id)
+        await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n⚠️ Couldn't render Markdown — try again later.")
+
+
 _CALLBACK_TABLE: dict[str, Callable[[CallbackCtx], Awaitable[None]]] = {
     "gemini_no":          _cb_gemini_no,
     "gemini_yes":         _cb_gemini_yes,
@@ -351,6 +372,7 @@ _CALLBACK_TABLE: dict[str, Callable[[CallbackCtx], Awaitable[None]]] = {
     "article_retry":      _cb_article_retry,
     "reprocess":          _cb_reprocess,
     "show_done":          _cb_show_done,
+    "document_md":        _cb_document_md,
 }
 
 
@@ -533,7 +555,7 @@ async def _cmd_template(ctx: SlashCtx) -> None:
         job_id, "pending",
         template_detection_method="explicit_command",
     )
-    await queue.enqueue({"task": "video", "job_id": job_id})
+    await queue.enqueue({"task": _task_for(pipeline), "job_id": job_id})
     await send_message(ctx.chat_id, f"📥 Received\n✨ Kicking off Gemini analysis ({template})\njob_{job_id[-4:]}")
 
 
@@ -581,7 +603,7 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         job_id = existing_job["id"]
         await database.reset_job(job_id)
         content_type = existing_job.get("content_type")
-        task_type = "repo" if content_type == "repo" else ("article" if content_type == "article" else "video")
+        task_type = _task_for(content_type)
         if pipeline == "repo":
             try:
                 from urllib.parse import urlparse as _urlparse
@@ -621,7 +643,7 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         content_type=pipeline,
         message_id=ctx.message_id,
     )
-    task_type = "repo" if pipeline == "repo" else ("article" if pipeline == "article" else "video")
+    task_type = _task_for(pipeline)
     await queue.enqueue({"task": task_type, "job_id": job_id})
     await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
 
@@ -778,7 +800,49 @@ async def _cmd_allowlist_list(ctx: SlashCtx) -> None:
     await send_message(ctx.chat_id, f"✅ Allowlisted domains ({len(domains)}):\n{lines}")
 
 
+_START_TEXT = (
+    "👋 *vig — Video Intelligence Gateway*\n\n"
+    "Send me a link and I'll process it:\n"
+    "• YouTube video or Short\n"
+    "• Instagram Reel\n"
+    "• TikTok video\n"
+    "• Article URL (use /allowlist to add domains)\n"
+    "• GitHub repo URL\n"
+    "• PDF file or link\n\n"
+    "Type /help for available commands."
+)
+
+_HELP_TEXT = (
+    "📖 *Commands*\n\n"
+    "/start — show welcome message\n"
+    "/help — this message\n"
+    "/find <query> — search your processed content\n"
+    "/spec <suffix> [intent] — generate a mini-PRD from a long video\n"
+    "/freestyle — use a custom Gemini prompt for the next job\n"
+    "/force <url> — reprocess a URL (skip cache)\n"
+    "/cancel — cancel the current pending prompt\n"
+    "/ignore <domain> — hide a domain from link results\n"
+    "/unignore <domain> — stop hiding a domain\n"
+    "`/ignore_list` — show ignored domains\n"
+    "/allowlist <domain> — add an article domain\n"
+    "/unallowlist <domain> — remove an article domain\n"
+    "`/allowlist_list` — show allowlisted domains\n"
+    "`/download_md` <suffix> — download a job result as Markdown\n"
+    "/rebuild-graph — rebuild the Second Brain link graph"
+)
+
+
+async def _cmd_start(ctx: SlashCtx) -> None:
+    await send_message(ctx.chat_id, _START_TEXT, parse_mode="Markdown")
+
+
+async def _cmd_help(ctx: SlashCtx) -> None:
+    await send_message(ctx.chat_id, _HELP_TEXT, parse_mode="Markdown")
+
+
 _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
+    "/start":            _cmd_start,
+    "/help":             _cmd_help,
     "/cancel":           _cmd_cancel,
     "/spec":             _cmd_spec,
     "/find":             _cmd_find,
@@ -890,6 +954,10 @@ async def _handle_awaiting_freestyle(chat_id: int, text: str, state: dict) -> No
         await queue.enqueue({"task": "article", "job_id": job_id})
         log.info("freestyle.article.enqueued", chat_id=chat_id, job_id=job_id)
         await send_message(chat_id, f"{job_tag(job_id)}\n✨ Freestyle prompt received — starting article analysis")
+    elif job and job.get("content_type") == "document":
+        await queue.enqueue({"task": "document", "job_id": job_id})
+        log.info("freestyle.document.enqueued", chat_id=chat_id, job_id=job_id)
+        await send_message(chat_id, f"{job_tag(job_id)}\n✨ Freestyle prompt received — re-running document analysis")
     elif job and job.get("status") == "transcript_done":
         await queue.enqueue({"task": "enrichment", "job_id": job_id})
         log.info("freestyle.enrichment.enqueued", chat_id=chat_id, job_id=job_id)
@@ -1037,11 +1105,7 @@ async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: in
         freestyle_prompt=extra_instructions or None,
         template_detection_method=f"user_template:{tmpl_name}",
     )
-    task_type = (
-        "repo" if pipeline == "repo"
-        else "article" if pipeline == "article"
-        else "video"
-    )
+    task_type = _task_for(pipeline)
     await queue.enqueue({"task": task_type, "job_id": job_id})
     await send_message(
         chat_id,
@@ -1242,7 +1306,13 @@ async def webhook(
     # Handle callback queries (inline keyboard button presses)
     callback = update.get("callback_query")
     if callback:
-        await _handle_callback(callback)
+        try:
+            await _handle_callback(callback)
+        except Exception:
+            log.exception("webhook_callback_error")
+            # Acknowledge so the client's inline button stops spinning even on failure.
+            with suppress(Exception):
+                await answer_callback_query(callback.get("id", ""))
         return {"ok": True}
 
     message = update.get("message") or update.get("edited_message") or {}
@@ -1269,7 +1339,14 @@ async def webhook(
     if not chat_id or not text:
         return {"ok": True}
 
-    await _route_text(chat_id, text, message_id)
+    try:
+        await _route_text(chat_id, text, message_id)
+    except Exception:
+        log.exception("webhook_handler_error", chat_id=chat_id)
+        try:
+            await send_message(chat_id, "⚠️ Something went wrong processing your message. Please try again.")
+        except Exception:
+            log.exception("webhook_error_notification_failed", chat_id=chat_id)
     return {"ok": True}
 
 

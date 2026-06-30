@@ -30,6 +30,7 @@ Key dependency source code is cached globally at `C:\Users\leone\.opensrc\repos\
 | `@testing-library/react`      | `github.com/testing-library/react-testing-library/16.3.2` |
 | `@testing-library/jest-dom`   | `github.com/testing-library/jest-dom/6.9.1`               |
 | `@testing-library/user-event` | `github.com/testing-library/user-event/14.6.1`            |
+| `react-force-graph-2d`        | `github.com/vasturiano/react-force-graph-2d/1.29.1`       |
 
 All paths are relative to the cache root. Example full path: `C:\Users\leone\.opensrc\repos\github.com\fastapi\fastapi\0.136.3\`.
 

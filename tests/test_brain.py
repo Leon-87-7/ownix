@@ -17,6 +17,10 @@ from src.brain import (
     _rebuild_lock,
     _resolve_title,
     rebuild_graph,
+    get_graph,
+    ingest_links,
+    list_links,
+    normalize_url,
     refresh_stale_links,
     search_links,
 )
@@ -254,5 +258,308 @@ async def test_search_returns_empty_on_no_corpus():
 
         assert results == []
 
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_normalized_url_dedup_variants():
+    """Query strings, fragments, and trailing slashes collapse to one Brain node."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executescript("""
+                CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT);
+                INSERT INTO jobs (id, url, drive_url) VALUES ('job_norm', 'https://yt.com/watch?v=1', NULL);
+            """)
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed:
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_embed.return_value = _rand_vec()
+            mock_upload.return_value = ("file-id", "drive-url")
+
+            await ingest_links([{"url": "https://example.com/tool/?v=X&t=10#frag", "title": "Tool"}], "tools", "job_norm")
+            await ingest_links([{"url": "https://example.com/tool/?v=X", "title": "Tool"}], "tools", "job_norm")
+            await ingest_links([{"url": "https://example.com/tool/", "title": "Tool"}], "tools", "job_norm")
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute("SELECT url, seen_count FROM links")
+            rows = await cursor.fetchall()
+
+        assert normalize_url("https://example.com/tool/?v=X#frag") == "https://example.com/tool"
+        # Root-domain URLs collapse to one canonical form regardless of trailing slash.
+        assert normalize_url("https://example.com/") == normalize_url("https://example.com") == "https://example.com"
+        assert len(rows) == 1
+        assert rows[0]["url"] == "https://example.com/tool"
+        assert rows[0]["seen_count"] == 3
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_get_graph_empty_corpus():
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.commit()
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            assert await get_graph() == {"nodes": [], "edges": []}
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_but_keeps_photo_rows():
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.executemany(
+                "INSERT INTO jobs (id, status) VALUES (?, ?)",
+                [("job_done", "done"), ("job_cancelled", "cancelled")],
+            )
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [
+                    (
+                        "old",
+                        "https://example.com/old",
+                        "Old",
+                        "topic-a",
+                        "job_done",
+                        3,
+                        "2026-06-29T09:00:00+00:00",
+                        "2026-06-27T10:00:00+00:00",
+                        "2026-06-29T09:00:00+00:00",
+                    ),
+                    (
+                        "new",
+                        "https://example.com/new",
+                        "New",
+                        "topic-b",
+                        "job_done",
+                        7,
+                        "2026-06-28T10:00:00+00:00",
+                        "2026-06-28T10:00:00+00:00",
+                        "2026-06-28T10:00:00+00:00",
+                    ),
+                    (
+                        "cancelled",
+                        "https://example.com/cancelled",
+                        "Cancelled",
+                        "topic-c",
+                        "job_cancelled",
+                        1,
+                        "2026-06-29T10:00:00+00:00",
+                        "2026-06-29T10:00:00+00:00",
+                        "2026-06-29T10:00:00+00:00",
+                    ),
+                    (
+                        "photo",
+                        "https://example.com/photo",
+                        "Photo",
+                        "topic-photo",
+                        "photo_123",
+                        2,
+                        "2026-06-28T12:00:00+00:00",
+                        "2026-06-28T12:00:00+00:00",
+                        "2026-06-28T12:00:00+00:00",
+                    ),
+                ],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            first_page = await list_links(limit=2, offset=0)
+            second_page = await list_links(limit=2, offset=2)
+
+        assert first_page["total"] == 3
+        assert [item["url"] for item in first_page["items"]] == [
+            "https://example.com/old",
+            "https://example.com/photo",
+        ]
+        assert first_page["items"][0]["first_seen"] == "2026-06-27T10:00:00+00:00"
+        assert first_page["items"][0]["last_seen"] == "2026-06-29T09:00:00+00:00"
+        assert first_page["items"][0]["seen_count"] == 3
+        assert [item["url"] for item in second_page["items"]] == [
+            "https://example.com/new",
+        ]
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_list_links_q_filters_by_substring_across_url_title_topic():
+    import aiosqlite
+    import os
+    import tempfile
+    from unittest.mock import patch
+    from src.brain import SCHEMA_SQL, list_links
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 'j', 1, ?, ?, ?)""",
+                [
+                    ("a", "https://github.com/foo", "Repo", "code", "t", "t", "t"),
+                    ("b", "https://news.com/x", "GitHub digest", "media", "t", "t", "t"),
+                    ("c", "https://blog.io/y", "Other", "github-actions", "t", "t", "t"),
+                    ("d", "https://example.com/z", "Nope", "misc", "t", "t", "t"),
+                ],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            res = await list_links(q="github")  # case-insensitive; matches url/title/topic
+            empty = await list_links(q="   ")  # blank q is ignored, returns all
+
+        assert {item["url"] for item in res["items"]} == {
+            "https://github.com/foo",
+            "https://news.com/x",
+            "https://blog.io/y",
+        }
+        assert res["total"] == 3
+        assert empty["total"] == 4
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
+    import aiosqlite
+    import os
+    import tempfile
+    from datetime import datetime, timedelta, timezone
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    old = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('job_repo', 'done')")
+            await conn.execute("""
+                INSERT INTO links (id, url, title, topic, source_job, embedding, drive_file_id, seen_count, last_seen_at, created_at, updated_at, archived)
+                VALUES ('fresh', 'https://github.com/owner/fresh', 'Fresh', 'repo', 'job_repo', ?, 'drive', 1, ?, ?, ?, 0),
+                       ('arch', 'https://github.com/owner/arch', 'Archived', 'repo', 'job_repo', ?, 'drive', 1, ?, ?, ?, 1)
+            """, (_make_blob(_rand_vec()), old, old, old, _make_blob(_rand_vec()), old, old, old))
+            await conn.commit()
+
+        async def fake_bundle(owner, repo, token):
+            return {"metadata": {"stars": 42, "pushed_at": "2026-06-01T00:00:00Z", "archived": False}}
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock), \
+             patch("src.services.github.fetch_repo_bundle", new=AsyncMock(side_effect=fake_bundle)) as mock_fetch:
+            mock_settings.DB_PATH = db_path
+            mock_settings.BRAIN_REFRESH_BATCH = 10
+            mock_settings.BRAIN_MIN_SCORE = 0.0
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "folder"
+            mock_settings.GITHUB_TOKEN = "token"
+            await refresh_stale_links()
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            rows = {r["id"]: r for r in await (await conn.execute("SELECT id, stars, pushed_at FROM links")).fetchall()}
+        assert mock_fetch.await_count == 1
+        assert rows["fresh"]["stars"] == 42
+        assert rows["fresh"]["pushed_at"] == "2026-06-01T00:00:00Z"
+        assert rows["arch"]["stars"] is None
+    finally:
+        os.unlink(db_path)
+
+@pytest.mark.asyncio
+async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
+    import aiosqlite
+    import os
+    import tempfile
+    from unittest.mock import patch
+    from src.brain import SCHEMA_SQL, list_links
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'topic', 'j', ?, ?, ?, ?)""",
+                [
+                    ("a", "https://example.com/a", "A", 2, "2026-06-28T10:00:00+00:00", "t", "t"),
+                    ("b", "https://example.com/b", "B", 9, "2026-06-27T10:00:00+00:00", "t", "t"),
+                    ("c", "https://example.com/c", "C", 1, "2026-06-29T10:00:00+00:00", "t", "t"),
+                ],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            by_appearances = await list_links(sort="appearances", order="desc")
+            by_appearances_asc = await list_links(sort="appearances", order="asc")
+            fallback = await list_links(sort="nonsense", order="sideways")
+
+        assert [item["url"] for item in by_appearances["items"]] == [
+            "https://example.com/b",
+            "https://example.com/a",
+            "https://example.com/c",
+        ]
+        assert [item["url"] for item in by_appearances_asc["items"]] == [
+            "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
+        ]
+        assert [item["url"] for item in fallback["items"]] == [
+            "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
+        ]
     finally:
         os.unlink(db_path)

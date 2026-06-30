@@ -1,4 +1,5 @@
 fastapi>=0.110
+python-multipart>=0.0.18  # required by /api/parsed/upload form parsing; plain fastapi does not pull it in
 uvicorn[standard]>=0.27
 httpx>=0.27
 pydantic-settings>=2.2

@@ -227,3 +227,14 @@ async def test_route_document_url_blocks_ssrf(patched, monkeypatch, url):
     m["upload"].assert_not_called()
     m["create_job"].assert_not_called()
     assert called["got"] is False  # never opened a client for a blocked literal IP
+
+
+def test_task_for_routes_document_not_video():
+    """Regression: the dispatch mapper must not drop a document job into the video task."""
+    from src.telegram import webhook
+
+    assert webhook._task_for("document") == "document"
+    assert webhook._task_for("repo") == "repo"
+    assert webhook._task_for("article") == "article"
+    assert webhook._task_for("short") == "video"
+    assert webhook._task_for("long") == "video"

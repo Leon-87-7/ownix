@@ -25,7 +25,7 @@ export interface JobDetail {
   // Short pipeline fields
   summary: string | null;
   transcript: string | null;
-  key_phrases: string | null;
+  links: string | null;
 }
 
 export function useJobDetail(jobId: string) {

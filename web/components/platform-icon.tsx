@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileText } from "lucide-react";
 import { siGithub, siInstagram, siTiktok, siYoutube } from "simple-icons";
+import { Tooltip } from "@/components/ui/tooltip";
 
 type Platform = "youtube" | "youtube-short" | "instagram" | "tiktok" | "github" | "article" | "unknown";
 
@@ -92,12 +93,13 @@ export function PlatformBadge({ url, contentType }: { url: string; contentType: 
   const label = labelFor(platform, url, contentType);
 
   return (
-    <span
-      className="inline-flex h-6 w-6 items-center justify-center rounded border border-line bg-canvas text-muted"
-      title={`${label} source`}
-      aria-label={`${label} source`}
-    >
-      <PlatformGlyph url={url} contentType={contentType} size={14} />
-    </span>
+    <Tooltip content={`${label} source`}>
+      <span
+        className="inline-flex h-6 w-6 items-center justify-center rounded border border-line bg-canvas text-muted"
+        aria-label={`${label} source`}
+      >
+        <PlatformGlyph url={url} contentType={contentType} size={14} />
+      </span>
+    </Tooltip>
   );
 }

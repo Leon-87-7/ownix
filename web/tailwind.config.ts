@@ -45,6 +45,8 @@ const config: Config = {
           article: "#2dd4bf",
           repo: "#fb7185",
         },
+        "telegram-blue": "#26A5E4",
+        "telegram-ring": "#145b7d",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
@@ -57,6 +59,10 @@ const config: Config = {
         // The one shadow in the system (DESIGN.md Plate Rule): overlays only.
         overlay:
           "0px 2px 4px rgba(0,0,0,0.4), 0px 12px 24px -8px rgba(0,0,0,0.5)",
+      },
+      animation: {
+        "tooltip-in": "tooltip-in 140ms ease-out both",
+        "tooltip-out": "tooltip-out 100ms ease-out both",
       },
     },
   },

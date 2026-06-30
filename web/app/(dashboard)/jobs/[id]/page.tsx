@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import TagPicker from "@/components/TagPicker";
+import { TagMenu, TagChips } from "@/components/TagPicker";
 import { StatusBadge, TypeBadge } from "@/components/badges";
 import { Spinner } from "@/components/ui";
 import { useJobDetail } from "@/lib/hooks/useJobDetail";
@@ -20,7 +20,10 @@ import {
   templateAnalysisToMarkdown,
   fieldCopyText,
   buildMarkdown,
+  parseLinks,
 } from "@/lib/job-detail-utils";
+import { PageShell } from "@/components/page-shell";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const MarkdownEditor = dynamic(() => import("@/components/MarkdownEditor"), {
   ssr: false,
@@ -118,10 +121,12 @@ function CopyButton({ value, ariaLabel, label }: { value: string; ariaLabel: str
     try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
   };
   return (
-    <button onClick={handleCopy} aria-label={ariaLabel} title={ariaLabel} className="inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink">
-      {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
-      {label && <span>{copied ? "Copied!" : label}</span>}
-    </button>
+    <Tooltip content={ariaLabel}>
+      <button onClick={handleCopy} aria-label={ariaLabel} className="inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink">
+        {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+        {label && <span>{copied ? "Copied!" : label}</span>}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -130,6 +135,31 @@ function FieldBody({ value, render }: { value: string; render: RenderType }) {
     const items = splitPipes(value);
     if (items.length === 0) return <p className="text-sm text-ink">{value}</p>;
     return <ul className="list-disc space-y-1 pl-5 text-sm text-ink">{items.map((item, i) => <li key={i}>{item}</li>)}</ul>;
+  }
+  if (render === "links") {
+    const links = parseLinks(value);
+    if (links.length === 0) return <p className="whitespace-pre-wrap break-words text-sm text-ink">{value}</p>;
+    return (
+      <ul className="space-y-3 text-sm">
+        {links.map((link) => {
+          const label = link.label || link.url;
+          return (
+            <li key={link.url} className="space-y-1">
+              <a
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all font-medium text-signal transition-ui hover:underline"
+              >
+                {label}
+              </a>
+              <p className="break-all font-mono text-xs text-muted">{link.url}</p>
+              {link.description && <p className="whitespace-pre-wrap break-words text-xs text-muted">{link.description}</p>}
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
   if (render === "json") return <TemplateAnalysis raw={value} />;
   return <p className="whitespace-pre-wrap break-words text-sm text-ink">{value}</p>;
@@ -147,8 +177,9 @@ function FieldCard({ label, value, render }: { label: string; value: string; ren
   );
 }
 
-function JobHeader({ job }: { job: JobDetail }) {
-  const displayTitle = job.title ?? job.url;
+function JobHeader({ job, tags }: { job: JobDetail; tags?: ReactNode }) {
+  const displayTitle = job.title?.trim() || job.url;
+  const displayUrl = job.url.length > 40 ? `${job.url.slice(0, 40)}...` : job.url;
   return (
     <div>
       {/* #192: full-width 44px touch target on mobile, compact text link on desktop. */}
@@ -165,11 +196,19 @@ function JobHeader({ job }: { job: JobDetail }) {
           <StatusBadge label={job.status} />
         </div>
       </div>
-      {/^https?:\/\//i.test(job.url) ? (
-        <a href={job.url} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline">{job.url}</a>
-      ) : (
-        <p className="mt-1 break-all font-mono text-xs text-muted">{job.url}</p>
-      )}
+      {/* URL on the left, tag row right-aligned under the badges. */}
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        {/^https?:\/\//i.test(job.url) ? (
+          <Tooltip content={job.url} mono>
+            <a href={job.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline">{displayUrl}</a>
+          </Tooltip>
+        ) : (
+          <Tooltip content={job.url} mono>
+            <p className="min-w-0 flex-1 break-all font-mono text-xs text-muted">{displayUrl}</p>
+          </Tooltip>
+        )}
+        {tags && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{tags}</div>}
+      </div>
     </div>
   );
 }
@@ -191,7 +230,7 @@ function JobActionsBar({ job, hasFields }: { job: JobDetail; hasFields: boolean 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
   const { job, fetchState } = useJobDetail(params.id);
   const { annotation, loaded, handleSave } = useJobAnnotation(params.id, fetchState);
-  const { jobTags, allTags, refetchTags } = useJobTags(params.id, fetchState);
+  const { jobTags, allTags, toggleTag, createTag } = useJobTags(params.id, fetchState);
 
   if (fetchState === "loading") {
     return (
@@ -212,8 +251,16 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <JobHeader job={job} />
+    <PageShell width="narrow">
+      <JobHeader
+        job={job}
+        tags={
+          <>
+            <TagChips jobTags={jobTags} onRemove={(id) => toggleTag(id, true)} />
+            <TagMenu jobTags={jobTags} allTags={allTags} onToggle={toggleTag} onCreate={createTag} />
+          </>
+        }
+      />
 
       {job.status === "error" && job.error_msg && (
         <div className="rounded-lg border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
@@ -230,8 +277,6 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {loaded && <MarkdownEditor initialMarkdown={annotation.notes} onSave={handleSave} />}
-
-      <TagPicker jobId={params.id} jobTags={jobTags} allTags={allTags} onTagChange={refetchTags} />
-    </div>
+    </PageShell>
   );
 }

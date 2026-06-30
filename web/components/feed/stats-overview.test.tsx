@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@/test/render';
 import { describe, expect, it } from 'vitest';
 import { StatsOverview } from './stats-overview';
 
@@ -37,11 +37,12 @@ describe('StatsOverview', () => {
 
   it('renders all stat card labels', () => {
     render(<StatsOverview stats={makeStats()} />);
-    expect(screen.getByText('Total')).toBeTruthy();
-    expect(screen.getByText('Done')).toBeTruthy();
-    expect(screen.getByText('Pending')).toBeTruthy();
-    expect(screen.getByText('Error')).toBeTruthy();
-    expect(screen.getByText('Processing')).toBeTruthy();
+    // Labels also appear in the always-mounted mobile breakdown, so scope to the
+    // desktop card grid — this fails if the cards themselves stop rendering.
+    const cards = within(screen.getByTestId('stat-cards'));
+    for (const label of ['Total', 'Done', 'Pending', 'Error', 'Processing']) {
+      expect(cards.getByText(label)).toBeTruthy();
+    }
   });
 
   it('labels the overview region for assistive tech', () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { UrlsTab } from './UrlsTab';
 

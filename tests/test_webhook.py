@@ -341,6 +341,22 @@ async def test_callback_prd_intent_prompt_debounces_same_job(temp_db, monkeypatc
     fr.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_callback_document_md_rejects_foreign_chat(temp_db, monkeypatch):
+    """Ownership guard: a document_md callback from a chat that doesn't own the
+    job is denied before any markdown delivery (CodeRabbit, PR #200)."""
+    from src.telegram import webhook
+
+    await _seed_job(temp_db, "J_DOC", chat_id=100, content_type="document")
+    answered = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
+    # Button pressed from chat 200, but the job belongs to chat 100.
+    await webhook._handle_callback(
+        {"id": "CB", "data": "document_md:J_DOC", "message": {"chat": {"id": 200}}}
+    )
+    answered.assert_awaited_once_with("CB", text="Job not found.")
+
+
 # ---------------------------------------------------------------------------
 # Routing + /spec + /cancel tests (Task 13)
 # ---------------------------------------------------------------------------
@@ -1393,3 +1409,82 @@ async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.Monk
 
     assert "github_repo_bundle:owner/repo" in deleted
     assert "github_meta:owner/repo" in deleted
+
+
+# ---------------------------------------------------------------------------
+# /start and /help tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_sends_welcome_message(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/start")
+    sent.assert_awaited_once()
+    args, kwargs = sent.await_args
+    assert args[0] == 100
+    assert "Video Intelligence Gateway" in args[1]
+    assert kwargs.get("parse_mode") == "Markdown"
+
+
+@pytest.mark.asyncio
+async def test_help_sends_command_list(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _post_webhook("/help")
+    sent.assert_awaited_once()
+    args, kwargs = sent.await_args
+    assert "/find" in args[1]
+    assert "/spec" in args[1]
+    assert "/cancel" in args[1]
+    assert kwargs.get("parse_mode") == "Markdown"
+
+
+# ---------------------------------------------------------------------------
+# Webhook error handling tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_handler_error_returns_ok_and_notifies_user(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """An exception in _route_text must not 500 the webhook — return ok and notify."""
+    monkeypatch.setattr(
+        "src.telegram.webhook._route_text",
+        AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    result = await _post_webhook("https://youtu.be/abc")
+    assert result == {"ok": True}
+    sent.assert_awaited_once()
+    assert "went wrong" in sent.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_webhook_callback_error_acknowledges_query(
+    _patch_webhook_secret, monkeypatch
+):
+    """A failing callback must still answer the query so the button stops spinning."""
+    from src.telegram.webhook import webhook
+
+    monkeypatch.setattr(
+        "src.telegram.webhook._handle_callback",
+        AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    ack = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
+
+    class _Req:
+        async def json(self):
+            return {"callback_query": {"id": "cb1", "data": "x"}}
+
+    result = await webhook(_Req(), x_telegram_bot_api_secret_token="S")
+    assert result == {"ok": True}
+    ack.assert_awaited_once_with("cb1")

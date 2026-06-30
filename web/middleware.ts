@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/logout"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Mock/demo mode: no real auth backend, so skip the session gate. Guarded to
+  // non-production so a stray NEXT_PUBLIC_API_MOCK=1 in a prod build can't ship
+  // with auth disabled.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_API_MOCK === "1"
+  ) {
+    return NextResponse.next();
+  }
+
+  if (
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
     return NextResponse.next();
   }
 
@@ -20,5 +32,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/).*)"],
+  // Skip _next internals, the API, and any path with a file extension (public/
+  // static assets: *.svg, *.png, manifest.json, icon0.svg, …). Without the
+  // `.*\.` clause, asset requests made while logged out (i.e. on /login and
+  // /logout) hit the session gate and 307 to /login, so the SVGs never load.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/|.*\\.).*)"],
 };

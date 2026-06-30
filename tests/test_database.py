@@ -98,6 +98,26 @@ async def test_find_jobs_by_suffix_chat_scoped(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_add_document_output_dedups_singular_keeps_freestyle_history(temp_db):
+    """Singular kinds upsert one row per (job, kind); freestyle accumulates (ADR-0029)."""
+    from src import database as db
+    await _insert_job(temp_db, "20260618_000000_DOC1", 1, "document", "done")
+    job_id = "20260618_000000_DOC1"
+
+    a = await db.add_document_output(job_id, "summary", "enriched/s1.md", "Structured summary")
+    b = await db.add_document_output(job_id, "summary", "enriched/s2.md", "Structured summary")
+    assert a["id"] == b["id"]  # same row reused, not duplicated
+    assert b["gcs_key"] == "enriched/s2.md"  # upsert refreshed the key
+
+    await db.add_document_output(job_id, "freestyle", "enriched/f1.md", "Freestyle")
+    await db.add_document_output(job_id, "freestyle", "enriched/f2.md", "Freestyle")
+
+    kinds = [r["kind"] for r in await db.list_document_outputs(job_id)]
+    assert kinds.count("summary") == 1
+    assert kinds.count("freestyle") == 2
+
+
+@pytest.mark.asyncio
 async def test_get_recent_jobs_orders_desc_and_limits(temp_db):
     from src import database as db
     for i in range(7):
@@ -310,6 +330,17 @@ async def test_allowed_domains_composite_primary_key(temp_db) -> None:
         cur = await conn.execute("SELECT COUNT(*) FROM allowed_domains")
         count = (await cur.fetchone())[0]
     assert count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_tag_round_trip_and_chat_scoped(temp_db) -> None:
+    """get_tag (used by attach/detach handlers) must find a tag only for its owner."""
+    from src import database as db
+    created = await db.create_tag(chat_id=1, name="skills", meaning="", color="#fff")
+    found = await db.get_tag(1, created["id"])
+    assert found is not None and found["name"] == "skills"
+    assert await db.get_tag(2, created["id"]) is None  # wrong owner
+    assert await db.get_tag(1, "nope") is None  # missing id
 
 
 @pytest.mark.asyncio
@@ -552,3 +583,125 @@ async def test_create_repo_job(temp_db) -> None:
     job = await db.get_job(job_id)
     assert job is not None
     assert job["content_type"] == "repo"
+
+
+# ---------------------------------------------------------------------------
+# telegram_delivery is a stored domain of {'off','on'} only (#231).
+# 'retroactive' is a request-only action resolved at the API boundary.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_set_telegram_delivery_rejects_retroactive(temp_db) -> None:
+    """'retroactive' is a request action, never a storable state — the setter rejects it."""
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=1, url="documents/abc.pdf", content_type="document"
+    )
+    with pytest.raises(ValueError):
+        await db.set_job_telegram_delivery(job_id, "retroactive")
+
+
+@pytest.mark.asyncio
+async def test_set_telegram_delivery_accepts_off_and_on(temp_db) -> None:
+    from src import database as db
+    job_id = await db.create_job(
+        chat_id=1, url="documents/abc.pdf", content_type="document"
+    )
+    off = await db.set_job_telegram_delivery(job_id, "off")
+    assert off["telegram_delivery"] == "off"
+    on = await db.set_job_telegram_delivery(job_id, "on")
+    assert on["telegram_delivery"] == "on"
+
+
+async def _build_pre_v23_db(path: str, *, job_delivery: str) -> None:
+    """A DB pinned one version before the telegram_delivery-tighten migration:
+    jobs carries telegram_delivery with no CHECK (it was added by ALTER), plus a
+    document_outputs child row to prove the FK-CASCADE survives the rebuild."""
+    from src import database
+    target_version = len(database._MIGRATIONS) - 1
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
+            "url TEXT NOT NULL, content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', "
+            "telegram_delivery TEXT NOT NULL DEFAULT 'on', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(
+            "CREATE TABLE document_outputs (id TEXT PRIMARY KEY, "
+            "job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, "
+            "kind TEXT NOT NULL, gcs_key TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(
+            "INSERT INTO jobs (id, chat_id, url, content_type, telegram_delivery) VALUES (?,?,?,?,?)",
+            ("20260625_000000_DOC1", 1, "documents/abc.pdf", "document", job_delivery),
+        )
+        await conn.execute(
+            "INSERT INTO document_outputs (id, job_id, kind, gcs_key) VALUES (?,?,?,?)",
+            ("OUT1", "20260625_000000_DOC1", "summary", "enriched/s1.md"),
+        )
+        await conn.execute(f"PRAGMA user_version = {target_version}")
+        await conn.commit()
+
+
+@pytest.mark.asyncio
+async def test_migration_tightens_telegram_delivery_and_preserves_children(tmp_path, monkeypatch) -> None:
+    """v22→v23 adds CHECK(telegram_delivery IN ('off','on')) without wiping FK children."""
+    from src import database
+    db_file = str(tmp_path / "pre_td.db")
+    await _build_pre_v23_db(db_file, job_delivery="on")
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute("PRAGMA foreign_keys=ON")
+        # FK-CASCADE child row survived the table rebuild.
+        cur = await conn.execute("SELECT COUNT(*) FROM document_outputs")
+        assert (await cur.fetchone())[0] == 1
+        # The CHECK is now enforced: 'retroactive' is no longer storable.
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, telegram_delivery) VALUES (?,?,?,?,?)",
+                ("20260625_000001_DOC2", 1, "documents/x.pdf", "document", "retroactive"),
+            )
+        # 'off'/'on' still accepted.
+        await conn.execute(
+            "INSERT INTO jobs (id, chat_id, url, content_type, telegram_delivery) VALUES (?,?,?,?,?)",
+            ("20260625_000002_DOC3", 1, "documents/y.pdf", "document", "off"),
+        )
+        cur2 = await conn.execute("PRAGMA user_version")
+        assert (await cur2.fetchone())[0] == len(database._MIGRATIONS)
+
+
+@pytest.mark.asyncio
+async def test_migration_fails_loudly_on_stored_retroactive(tmp_path, monkeypatch) -> None:
+    """A pre-existing stored 'retroactive' is a defect — the migration refuses to coerce it silently."""
+    from src import database
+    db_file = str(tmp_path / "pre_td_bad.db")
+    await _build_pre_v23_db(db_file, job_delivery="retroactive")
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    with pytest.raises(RuntimeError, match="retroactive"):
+        await database.init_db()
+
+@pytest.mark.asyncio
+async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "settings.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
+
+    saved = await database.set_brain_links_view(42, sort="appearances", order="asc", size=100)
+    assert saved == {"sort": "appearances", "order": "asc", "size": 100}
+    assert await database.get_brain_links_view(42) == saved
+
+    await database.set_user_setting(42, "brain_links_view", '{"sort":"bad","order":"bad","size":999}')
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
+
+    await database.set_user_setting(42, "brain_links_view", "{not-json")
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}

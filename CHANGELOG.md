@@ -7,8 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Doc Parser dashboard page (#227, ADR-0029)** — a `/doc-parser` web surface for the document pipeline: file + URL upload, live SSE status, and Gemini-as-transformer output. Closes #217–#226. Trust-boundary logic (SSRF guard, PDF validation, capped remote fetch, capped raw-body read) lives in a dedicated `src/services/pdf_intake.py` deep module with direct unit tests (#228, #229).
+- **Brain Links tab + search (#239, #238)** — the Brain page gains a deduplicated, paginated **Links** table surfacing enrichment-discovered links. `GET /api/brain/links` reads the live `links` table (LEFT JOIN jobs, keeps photo-OCR rows that have no job row, newest-first, limit/offset); `list_links(q=...)` does case-insensitive substring matching across url/title/topic. Debounced search input, URLs open in a new tab with `rel="noopener"`. Includes a feed dashboard redesign.
+- **Short-pipeline vision titles + clickable links (#211, #212, #213)** — short jobs now harvest a `title` from the existing vision pass (no extra Gemini call) with sidecar fallback, and persist enriched links per job (migration v20) rendered as a clickable "Links Found" detail section. `key_phrases` removed end-to-end (DB column left dormant).
+- **Telegram delivery toggle redesign (#233, #231, #232)** — official Telegram brand mark, a `telegram-blue`/`telegram-ring` token pair, a 26px circular toggle, and a hold-to-deliver-retroactively spinner cue that honours `prefers-reduced-motion`. `telegram_delivery` is now a stored DB domain of `{off, on}`.
+- **Webhook `/start` + `/help` handlers (#237)** — the bot now responds to `/start` and `/help`.
+- **Logout confirmation page (#235)** and dashboard polish — animated segmented content-type tabs, login page design, and signal page-heading icons across dashboard pages.
+- **VPS deployment workflow** — GitHub Actions workflow with pre-deploy secret checks, plus docs for moving VPS deployments to prebuilt Docker images via GHCR.
+
+### Changed
+
+- **Consistent mobile page layout (#236)** — unified mobile layout across dashboard pages and broad mobile-responsiveness fixes.
+- **Webhook hardened against unhandled errors (#237)** so a single bad update can't crash the handler.
+
 ### Fixed
 
+- **`/short_frames` Instagram frames** — `/short_frames` now passes Instagram cookies to yt-dlp so Instagram videos extract frames instead of failing.
+- **Brain extracted links ordering (#241)** — extracted links are sorted by latest sighting.
+- **Login/logout SVGs blocked by auth (#7723817)** — public assets are excluded from the auth middleware so login/logout artwork loads.
+- **Doc Parser deploy fixes** — declare `python-multipart`, copy the web `public/` dir into the image, and surface API errors to the UI.
+- **TelegramToggle guarded against failed PUT (#230)** — the toggle no longer desyncs when the PUT request fails.
 - **og:image scan no longer aborts on invalid-scheme tags** — `_extract_og_image_url` now `continue`s past `data:`/`javascript:` og:image meta tags instead of returning `None` immediately, so a valid `https://` URL that follows an invalid one is no longer silently dropped (PR #163).
 - **og:image scheme validation** — non-http(s) URLs (e.g. `data:` base64 blobs) are now rejected before being stored in `og_image_url`, preventing oversized values from being echoed in every `/api/jobs` response (PR #163).
 - **Short-thumbnail backfill memory bound** — `backfill_short_thumbnails._load_candidates` now applies `--limit` at the SQL level (`LIMIT ?`) rather than loading the full table and slicing in Python, matching the article backfill pattern (PR #163).

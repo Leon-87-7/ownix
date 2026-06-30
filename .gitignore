@@ -47,3 +47,8 @@ docs/images/*
 docs/features/*
 web/node_modules/
 web/.next/
+
+# Local dev mock snapshot of real data (regenerate from data/jobs.db)
+web/public/seed.json
+
+*/brag/*

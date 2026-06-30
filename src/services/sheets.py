@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re as _re
 from datetime import datetime, timezone
 from typing import Any
@@ -20,6 +21,7 @@ TAB_SHORT = "Short Video Analysis"
 TAB_PRD = "mini PRD"
 TAB_ARTICLE = "Article Analysis"
 TAB_REPO = "Repo Analysis"
+TAB_DOCUMENT = "Document Analysis"
 
 
 def _repo_row(job: dict, analysis: dict, bundle: dict) -> list:
@@ -257,6 +259,47 @@ async def update_article_row(row_idx: int, job: dict, *, domain: str) -> None:
     """Overwrite the existing Article Analysis row at *row_idx* (1-based) in-place."""
     row = _article_row(job, domain=domain)
     await _update_row_logged(TAB_ARTICLE, row_idx, row, "sheets_article", job.get("id"))
+
+
+def _document_row(job: dict) -> list:
+    """Build the Document Analysis row from a completed document job.
+
+    author/publisher/document_type/references live in the template_analysis
+    JSON blob (document.py persists them there, ADR-0008 column reuse)."""
+    try:
+        extra = json.loads(job.get("template_analysis") or "{}")
+    except Exception:
+        extra = {}
+    refs = extra.get("references") or []
+    refs_str = " | ".join(str(r) for r in refs) if isinstance(refs, list) else str(refs)
+    return [
+        job.get("id", ""),
+        job.get("url", ""),
+        job.get("title", ""),
+        extra.get("document_type", ""),
+        extra.get("author", ""),
+        extra.get("publisher", ""),
+        job.get("ai_objective", ""),
+        job.get("ai_action_points", ""),
+        job.get("ai_tools", ""),
+        refs_str,
+        job.get("created_at", ""),
+        job.get("status", ""),
+    ]
+
+
+async def append_document_row(job: dict) -> int | None:
+    """Append one row to the 'Document Analysis' tab; return its 1-based row index.
+
+    Columns: job_id, url, title, document_type, author, publisher, objective,
+             key_points, tools, references, submitted_at, status
+    """
+    return await _append_row_logged(TAB_DOCUMENT, _document_row(job), "sheets_document", job.get("id"))
+
+
+async def update_document_row(row_idx: int, job: dict) -> None:
+    """Overwrite the Document Analysis row at *row_idx* (1-based) in-place."""
+    await _update_row_logged(TAB_DOCUMENT, row_idx, _document_row(job), "sheets_document", job.get("id"))
 
 
 async def append_prd_row(

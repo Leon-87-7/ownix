@@ -1,0 +1,369 @@
+# vig — Feature ideation & task briefs
+
+Canonical home for feature ideas, from one-line spark to grill-ready brief.
+
+**How this file works**
+
+1. **Dump** raw one-line ideas under `## Inbox` below — no structure needed.
+2. Run **`/pre-grill`** — it grounds each one-liner in the real code, fattens it
+   into a technical brief (Context · Wanted · Scope · Open questions), moves it
+   into `## Briefs`, and clears it from the Inbox.
+3. **Grill** the briefed tasks (`/grill-with-docs`, `/grill-with-search-docs`,
+   or `/grilling`) to resolve the Open questions, then `/to-issue-kanban` or
+   `/spec-to-kanban`.
+
+Status markers on a brief: `✅ DONE` · `✅ ISSUED #NNN`. `/pre-grill` never
+touches a marked task.
+
+---
+
+## Inbox
+
+_Raw one-line ideas go here. `/pre-grill` consumes them._
+
+<!-- - e.g. the feed should have a saved-filters dropdown -->
+
+---
+
+## Briefs
+
+## 1. Segmented tabs line breaks on mobile ✅ DONE
+
+The new content-type segmented control (`web/components/feed/filter-bar.tsx`,
+`SegmentedTabs`) overflows awkwardly on small screens,making a horizontal scroll.
+
+**Wanted:** on small screens, render the tabs as separate tab buttons (stacked
+or wrapped individual buttons) instead of one continuous segmented line.
+with out the motion on hover. (just as it was pre-`SegmentedTabs`).
+
+## 2. Tag creation modal not responsive ✅ DONE
+
+The create-tag modal (`web/components/TagPicker.tsx`, `CreateTagModal`) and the `TagForm`, `web\app\(dashboard)\controls\page.tsx` don't adapt to small screens — the Name/Meaning row and the 9-column color grid don't
+fit well on narrow viewports.
+
+**Wanted:** make the create-tag form responsive (stack fields, reflow the color
+grid) for small screens.
+
+## 3. Extracted-links table in the Brain page ✅ ISSUED TO GITHUB #238
+
+Surface every link discovered by the enrichment pipelines as a deduplicated
+table in the dashboard.
+
+**Data**
+
+- Aggregate the links extracted across **all** pipeline runs (not a single run)
+  into a deduplicated set keyed by canonical URL — one row per unique URL.
+- Refresh the aggregation on a schedule of **every 6 hours** (reuse the existing
+  APScheduler setup; add a job rather than a new scheduler). The table reads the
+  last computed snapshot; it is not recomputed on each page load.
+- Each row exposes at least: canonical URL, first-seen timestamp, and the count
+  of pipeline runs / source videos it appeared in.
+
+**API**
+
+- Add a read endpoint (e.g. `GET /api/links`) returning the deduplicated rows,
+  ordered most-recent-first, with pagination.
+
+**UI**
+
+- Add a **"Links"** tab to the Brain page (`web/app/(dashboard)/brain/...`)
+  alongside the existing tabs.
+- Render the rows in a table; URLs are clickable (open in a new tab,
+  `rel="noopener"`). Follow DESIGN.md tokens.
+
+**Open questions** (confirm before building)
+
+- Canonicalization rules for dedupe — strip query params / tracking params, or
+  exact-match only?
+- Where are extracted links currently persisted (which table/column), or does
+  this need a new store?
+
+## 4. Dashboard URL submission — a second ingest surface
+
+> **Grill together with task 5.** Web submissions need a `chat_id`, which is
+> exactly what #208's `OPERATOR_CHAT_ID` export gate keys on — the ownership
+> decision spans both tasks.
+>
+> **Grill together with task 9.** Both add a new caller of the create-job +
+> enqueue core: task 4 from the web surface, task 9 from the post-enrichment
+> repo follow-up. Decide the shape of the one shared service so neither forks it.
+
+Today URLs only enter through the Telegram webhook
+(`src/telegram/webhook.py`). PRODUCT.md calls for the operator to drive the
+pipeline from the dashboard too ("submitting URLs, triggering and re-running
+jobs … without leaving the dashboard").
+
+**Wanted:** let the operator submit a URL from the web UI and get the same job
+the Telegram path produces — including the per-template behavior exposed by the
+slash commands (`/method`, `/review`, `/technical`, `/narrative`, `/summary`,
+and `/freestyle`).
+
+**Backend**
+
+- Add a write endpoint (e.g. `POST /api/jobs`, in `src/api/jobs.py`) that
+  classifies the URL with `detect_pipeline()` (`src/utils/validators.py`),
+  creates the job row, and enqueues the worker task.
+- **Reuse, don't fork:** the create-job + enqueue core currently lives inside
+  `webhook.py`'s handlers (the `content_type` + `template` + `_task_for(...)`
+  path). Extract it into a shared function/service so the Telegram and web
+  surfaces share one code path and can't drift.
+- Templates come from `PROMPT_TEMPLATES` (`src/templates.py`); accept an optional
+  `template` field. Reject `rejected`/unsupported URLs with the same semantics
+  the bot uses.
+
+**UI**
+
+- Add a submit control to the Feed page (`web/app/(dashboard)/page.tsx`): a URL
+  input plus a template selector mirroring the slash commands. Follow DESIGN.md
+  tokens (signal orange on the submit action only). New job should surface in the
+  Feed (prepend / refetch).
+
+**Open questions** (resolve in grill)
+
+- Is `/freestyle` (custom prompt) in scope for v1, or templates-only?
+- Ownership: what `chat_id` does a web-submitted job carry, and how does that
+  interact with the `OPERATOR_CHAT_ID` export gate (#202 / #208, see task 5)?
+- All pipelines (short/long/article/repo/document) on day one, or videos first?
+- Optimistic insert vs. wait-for-`job_id` before showing the row.
+
+## 5. Reconcile the export-isolation PRs (#207, #208) before building on them
+
+> **Grill together with task 4.** The export gate's `chat_id` ownership model
+> determines what a web-submitted job carries — decide both at once.
+
+Both PRs are open against `main` and belong to epic #201 (per-user export
+isolation):
+
+- **#207** — docs-only: ADR-0027 (two-phase credential model) + `CONTEXT.md`
+  `Operator` term + slices #201 into #202–#206 on the Kanban.
+- **#208** — the "now" fix (closes #202): `settings.OPERATOR_CHAT_ID` +
+  `export_blocked(chat_id)` gating every Drive/Sheets call site.
+
+**Wanted:** confirm whether either PR needs updates before we merge and build on
+them.
+
+- Verify ADR-0027 still matches the intended approach and that #208 actually
+  gates **every** Drive/Sheets export call site (cross-check against the
+  acceptance list in the PR body).
+- Decide merge order, and whether #208 should land **before** task 4 — web
+  submissions need a `chat_id`, which is exactly what the gate keys on.
+- Sweep any outstanding CodeRabbit / Greptile review comments on both PRs.
+
+**Open questions**
+
+- Does the (intentionally ungated) brain-rebuild aggregate collide with anything
+  task 4 introduces?
+- Anything in #207's later slices (#204–#206, OAuth) that task 4 should not
+  pre-empt?
+
+## 6. Make the web app an installable PWA
+
+Scope is the `web/` Next.js app (app router).
+
+**Wanted:** the dashboard is installable and has an offline app shell.
+
+- Add a web app manifest (name, maskable icons, `theme_color`/`background_color`
+  from DESIGN.md `#0b0c0f` + signal, `display: standalone`) and wire it via
+  `web/app/layout.tsx` metadata.
+- Add a service worker for installability + offline shell: precache the static
+  shell/assets, network-first for `/api/*` so live data isn't served stale.
+- Provide the required icon set (incl. maskable).
+
+**Open questions**
+
+- Offline scope: installable shell only, or also cache last Feed/Brain payloads
+  for offline read?
+- Hand-rolled SW vs. a dependency (`next-pwa`/Workbox) — prefer the minimum that
+  makes it installable.
+- Are web push notifications in scope, or explicitly out for now?
+
+## 7. Better navigation for the Brain "Links" table
+
+`LinksTable` in `web/app/(dashboard)/brain/page.tsx` paginates 25 rows with
+Previous/Next only, backed by `GET /api/brain/links` (limit/offset + optional
+`q`; response already includes `total`).
+
+**Wanted:** richer navigation than prev/next.
+
+- Page indicator / jump-to-page (using the `total` already returned), a
+  selectable page size, and column sorting (Appearances, Last seen).
+- Keep DESIGN.md tokens, a sticky header, keyboard operability, and preserve the
+  active `q` filter across navigation.
+
+**Open questions**
+
+- Sort server-side (extend the endpoint) or client-side within the current page?
+- Mirror the Feed's URL-state pattern (`?type=`) so page/sort are shareable?
+
+## 8. Controls UI on the Brain search graph
+
+`web/components/brain-graph.tsx` renders `react-force-graph-2d` from
+`/api/brain/graph`, highlighting search matches in signal orange. There are no
+user-facing controls today (no zoom, recenter, or filtering).
+
+**Wanted:** an on-canvas controls overlay for navigating the graph.
+
+- Zoom in/out, zoom-to-fit, and recenter via the ForceGraph ref methods
+  (`zoom()`, `zoomToFit()`, `centerAt()` — source cached at the
+  `react-force-graph-2d` opensrc path in CLAUDE.md).
+- Consider a topic legend/filter (toggle topics on/off) and focus-on-match
+  (center + zoom the matched node when a search runs).
+- Ghost-style controls, signal orange only on the active control; honor
+  `prefers-reduced-motion`; DESIGN.md tokens.
+
+**Open questions**
+
+- v1 scope: zoom/fit/recenter only, or also topic filtering and
+  node-detail-on-click?
+- Touch/mobile gestures alongside buttons?
+- Is a fullscreen/expand mode wanted?
+
+## 9. Offer extracted GitHub repos as a follow-up repo analysis
+
+> **Grill together with task 4.** This is a third caller of the create-job +
+> enqueue core (alongside the Telegram webhook and task 4's web surface). Settle
+> the shared service shape so the repo follow-up reuses it instead of forking.
+
+When a short-form video finishes, enrichment (`src/processors/enrichment.py`,
+`enrich`) returns `tools_raw` — a list of `{name, type, url, description}` where
+`type` can be `"repo"`. Today those repo URLs are surfaced in the result text
+only; nothing offers to analyze them. The repo pipeline already exists end to
+end: `detect_pipeline()` (`src/utils/validators.py`) classifies
+`github.com/{org}/{repo}` as `"repo"`, and `_route_repo` /
+`_enqueue_simple_job` (`src/telegram/webhook.py`) create + enqueue a `"repo"`
+job processed by `enrich_repo` (`src/services/github.py`).
+
+**Wanted:** after a short video is processed, if its enrichment yielded one or
+more GitHub repos, the bot prompts the operator to pick which repo(s) to analyze
+next, and enqueues a repo job for each chosen one.
+
+**Backend**
+
+- In the short pipeline (`src/processors/short_video.py`), after enrichment,
+  collect candidate repo URLs from `tools_raw` and present them via the existing
+  inline-keyboard machinery (`send_inline_keyboard` + `CallbackCtx` /
+  `_handle_callback` / `answer_callback_query`, `src/telegram/sender.py` +
+  `webhook.py`). Validate each candidate with `detect_pipeline()` /
+  `normalize_repo_url` before offering it.
+- On selection, **reuse, don't fork** the repo create+enqueue path that
+  `_route_repo` already drives — route the chosen URL(s) through the same shared
+  service task 4 extracts, not a parallel copy.
+- The spawned repo job inherits the same `chat_id`; honor the existing
+  recent-job cache (`database.find_recent_job_by_url`) so an already-analyzed
+  repo isn't re-queued.
+
+**Open questions** (resolve in grill)
+
+- Multi-select on a Telegram inline keyboard is not native (one tap = one
+  callback). Toggle-state checkboxes + a "Confirm" button (re-render the keyboard
+  per tap), or one tap = enqueue that repo immediately and allow repeated taps?
+- Which `tools_raw` entries qualify — only `type == "repo"`, or any entry whose
+  `url` `detect_pipeline()` resolves to `"repo"` (Gemini sometimes labels a repo
+  as `"library"`)?
+- Cap on how many repo buttons to show when enrichment returns many; dedupe by
+  normalized URL.
+- Scope to the short pipeline only (as asked), or also offer this after long /
+  article jobs that extract repos?
+- Encoding selected repos in callback data given Telegram's 64-byte limit — index
+  into a cached candidate list, or pack the URL?
+
+## 10. Char-count truncation for the links-table description (ui/ux)
+
+In the Brain "Links" table (`web/app/(dashboard)/brain/page.tsx`, `LinksTable`),
+each row's URL cell renders the URL string with CSS `truncate` (width-based, so
+truncation length floats with container width) plus a secondary `title · topic`
+line at `page.tsx:336`. The data comes from `GET /api/brain/links`
+(`src/api/brain.py`); rows expose `url`, `title`, `topic` (`LinkRow`, `page.tsx:13`).
+
+**Wanted:** the link's description text truncates at a fixed **40 characters on
+mobile, 60 on desktop**.
+
+**UI**
+
+- The cell already uses `font-mono`, so a `ch`-unit cap maps cleanly to character
+  count — native approach is `max-w-[40ch] md:max-w-[60ch]` alongside the existing
+  `truncate`, rather than slicing strings in JS. Confirm against DESIGN.md tokens;
+  keep the full value reachable (e.g. `title` attribute / accessible name) so the
+  truncation is presentational only (WCAG-AA).
+- Tailwind's default `md:` breakpoint is the mobile/desktop split unless the repo
+  uses a different convention.
+
+**Open questions** (resolve in grill)
+
+- Which text is "the description" — the URL string itself (line 330/334), the
+  `title · topic` secondary line (line 336), or both? They truncate differently.
+- 40/60 **characters** vs. CSS `ch` (advance width of `0`): with `font-mono` these
+  are near-identical, but is exact character count required (forcing JS slicing) or
+  is `ch` good enough?
+- Does the truncated value still need to be fully visible on hover/focus or via the
+  row expanding, or is the existing `target=_blank` link enough?
+
+## 11. Tags should follow the URL, not the job (many-to-many)
+
+Tags today attach to **jobs**: the `job_tags` join table
+(`src/database.py:205`, `job_id ↔ tag_id`, issue #88 / S5) keyed off a single job,
+with the `tags` vocabulary in the `tags` table (`src/database.py:171`, issue #87).
+The links table (`src/brain.py`, `ingest_links` / the `links` table at
+`src/database.py:151`) is already deduplicated by canonical `url` — one row per
+unique URL — and the same URL can surface across many jobs. So a tag pinned to a
+job can't express "this URL is ui/ux" once that URL recurs in other jobs.
+
+**Wanted:** model tags as following the canonical URL (many-to-many URL ↔ tag),
+independent of how many jobs a URL appears in.
+
+**Data**
+
+- A URL appears in many jobs and a job extracts many URLs (many-to-many);
+  `links.url` is the stable key. Tagging at the URL level needs a `link_tags`
+  (`url`/`link_id ↔ tag_id`) join rather than overloading `job_tags`.
+- **Reuse, don't fork:** the `tags` vocabulary table and `TagPicker`
+  (`web/components/TagPicker.tsx`) already exist — reuse the vocabulary; only the
+  *attachment* target changes from job to URL.
+
+**Open questions** (resolve in grill)
+
+- Does this **replace** job-level tagging (`job_tags`) or coexist with it? If both,
+  what's the relationship when a job's tag and its URL's tag disagree?
+- Key the join on `links.id` or on canonical `url`? (Dedup canonicalization rules
+  here echo task 3's open question — same canonical form must be used.)
+- Surface/edit URL tags where: the Brain Links table (new column / `TagPicker`
+  inline), the existing controls page, or both?
+- Migration: do existing `job_tags` rows get projected onto their URLs, or do URL
+  tags start empty?
+
+## 12. Repalette: new signal orange + dark plate tokens
+
+The design tokens have a single source: `web/tailwind.config.ts` defines
+`signal.DEFAULT: '#f6921e'` plus the cool plate ladder `canvas: '#0b0c0f'` →
+`surface: '#14161a'` → `raised: '#1c1f25'` (`tailwind.config.ts:12-27`). The same
+values are normative in `DESIGN.md`'s frontmatter, and the ~39 `web/` consumers
+use Tailwind classes (`bg-signal`, `text-signal`, `bg-canvas`…), so they inherit
+the change without edits. `DESIGN.md` also pins a derived signal ramp:
+`signal-bright #ffa83d`, `signal-deep #b96a06`, `onsignal #16100a`.
+
+**Wanted:** the signal color becomes `#FFBE0B` and "the dark color" becomes
+`#2A2312`, applied at the token source so the whole console repalettes.
+
+**UI / Design tokens**
+
+- Update `web/tailwind.config.ts` and mirror into `DESIGN.md`'s frontmatter
+  (normative per CLAUDE.md) — one change at the source, not per-component.
+- DESIGN.md prose hardcodes the hexes in many places (the Signal Rule, button
+  specs, plate-ladder descriptions); those references and any logo SVGs under
+  `web/images/` / `web/public/images/` that bake in the orange need a sweep too.
+
+**Open questions** (resolve in grill)
+
+- "The dark color" is ambiguous — the plate ladder is three cool darks
+  (`canvas`/`surface`/`raised`). Does `#2A2312` replace `canvas` (the page floor),
+  the whole ladder (re-derive all three), or a specific plate?
+- `#2A2312` is a **warm** near-black (yellow/red cast), which breaks DESIGN.md's
+  stated "cool near-black chassis" identity. Intended pivot to a warm chassis, or
+  should the cool ladder stay and only the signal change?
+- `#FFBE0B` is brighter/yellower than `#f6921e` — does the derived ramp
+  (`signal-bright`, `signal-deep`, `onsignal`) get recomputed around it? The
+  "dark-on-orange ≥7:1" contrast (`onsignal #16100a`) and WCAG-AA bar must be
+  re-verified against the new hue.
+- Does `#FFBE0B` collide with the **pending-yellow** status hue? The Signal Rule
+  forbids signal and pending-yellow trading places — a yellower signal narrows
+  that gap.

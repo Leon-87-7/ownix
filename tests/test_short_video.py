@@ -213,7 +213,6 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
             "upload_file": p("src.processors.short_video.upload_file", new_callable=AsyncMock, return_value=("fid", "https://drive/x")),
             "append_short_row": p("src.processors.short_video.sheets.append_short_row", new_callable=AsyncMock),
             "fetch_transcript": p("src.processors.short_video.transcript_svc.fetch_transcript", new_callable=AsyncMock, return_value=transcript_resp),
-            "extract_key_phrases": p("src.processors.short_video.extract_key_phrases", new=MagicMock(return_value=["kw"])),
             "enrich_audio": p("src.processors.enrichment.enrich_audio", new_callable=AsyncMock),
             "transcribe_audio": p("src.processors.enrichment.transcribe_audio", new_callable=AsyncMock),
             "enrich": p("src.processors.enrichment.enrich", new_callable=AsyncMock),
@@ -222,6 +221,15 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
         resolved_job = job if job is not None else _TEMPLATE_JOB
         mocks["get_job"].return_value = resolved_job
         yield short_video, mocks
+
+
+def _final_update_kwargs(mocks: dict) -> dict:
+    """Return kwargs from the final rich done update in short_video.run()."""
+    for call in mocks["update_job_status"].await_args_list:
+        kwargs = call.kwargs
+        if kwargs.get("drive_url") and "title" in kwargs:
+            return kwargs
+    raise AssertionError("final update_job_status call not found")
 
 
 @pytest.mark.asyncio
@@ -241,6 +249,35 @@ async def test_instagram_best_frame_thumbnail_is_persisted() -> None:
 
     done_calls = [str(call) for call in mocks["update_job_status"].call_args_list]
     assert any("best_frame_index" in call and "instagram_reels" in call for call in done_calls)
+
+
+@pytest.mark.asyncio
+async def test_short_video_vision_title_wins_over_sidecar_title() -> None:
+    """Gemini Vision title is stored when both Vision and sidecar provide titles."""
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["vision"].return_value = {
+            **_VISION,
+            "title": "Gemini Python Tools",
+        }
+        await short_video.run(_PLAIN_JOB)
+
+    assert _final_update_kwargs(mocks)["title"] == "Gemini Python Tools"
+    mocks["vision"].assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_short_video_sidecar_title_fallback_when_vision_title_missing() -> None:
+    """Sidecar title is stored when Gemini Vision omits title."""
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["vision"].return_value = {**_VISION}
+        await short_video.run(_PLAIN_JOB)
+
+    assert _final_update_kwargs(mocks)["title"] == "Test Reel"
+    mocks["vision"].assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -358,14 +395,13 @@ async def test_plain_job_wordless_transcript_sends_wordless_warning() -> None:
 
 
 @pytest.mark.asyncio
-async def test_transcript_persisted_and_key_phrases_run_on_all_short_jobs() -> None:
-    """Every short job with a transcript persists it and runs key_phrases extraction."""
+async def test_transcript_persisted_on_all_short_jobs() -> None:
+    """Every short job with a transcript persists it without computing key phrases."""
     transcript_resp = {"text": "python fastapi tutorial step by step guide"}
 
     with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
         await short_video.run(_PLAIN_JOB)
 
-    mocks["extract_key_phrases"].assert_called_once()
     update_calls = mocks["update_job_status"].call_args_list
     persisted = any(
         "transcript" in str(c) and "python fastapi" in str(c)
@@ -445,7 +481,6 @@ async def test_plain_caption_less_transcript_tail_runs() -> None:
         mocks["transcribe_audio"].return_value = "spoken content from audio"
         await short_video.run(_PLAIN_JOB)
 
-    mocks["extract_key_phrases"].assert_called_once()
     upload_calls = [str(c) for c in mocks["upload_file"].call_args_list]
     assert any("_transcript.md" in f for f in upload_calls), "transcript.md not uploaded to Drive"
     mocks["send_document"].assert_awaited_once()
@@ -501,7 +536,6 @@ async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
         job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
         await short_video.run(job)
 
-    mocks["extract_key_phrases"].assert_called_once()
     update_calls = mocks["update_job_status"].call_args_list
     assert any("verbatim spoken content" in str(c) for c in update_calls), "transcript not persisted"
     upload_calls = [str(c) for c in mocks["upload_file"].call_args_list]

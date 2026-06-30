@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobSummary } from '@/components/job-card';
 import FeedPage from './page';
@@ -92,9 +92,9 @@ beforeEach(() => {
 });
 
 describe('FeedPage', () => {
-  it('renders Feed heading', () => {
+  it('renders VIG heading', () => {
     render(<FeedPage />);
-    expect(screen.getByText('Feed')).toBeTruthy();
+    expect(screen.getByText('VIG')).toBeTruthy();
   });
 
   it('renders Jobs section', () => {
@@ -161,11 +161,11 @@ describe('FeedPage', () => {
 
   it('renders content-type tabs with counts', () => {
     render(<FeedPage />);
-    expect(screen.getByRole('tab', { name: /all 5/i })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /short 3/i })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /long 2/i })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /article 0/i })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: /repo 0/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /all 5/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /short 3/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /long 2/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /article 0/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /repo 0/i })).toBeTruthy();
   });
 
   it('updates the type query param when a content tab is clicked', () => {
@@ -173,7 +173,7 @@ describe('FeedPage', () => {
     setupMocks({ setCtFilter });
 
     render(<FeedPage />);
-    fireEvent.click(screen.getByRole('tab', { name: /long 2/i }));
+    fireEvent.click(screen.getByRole('button', { name: /long 2/i }));
 
     expect(navigationMock.replace).toHaveBeenCalledWith('/?type=long', { scroll: false });
     expect(setCtFilter).toHaveBeenCalledWith('long');
@@ -181,21 +181,24 @@ describe('FeedPage', () => {
 
   it('renders the all tab as the existing job list', () => {
     render(<FeedPage />);
-    const card = screen.getByRole('link', { name: /job one/i });
+    // JobCard uses an overlay link inside a styled wrapper; assert on the wrapper.
+    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
 
-    expect(card.className).toContain('px-4');
-    expect(card.className).toContain('py-3');
+    expect(card?.className).toContain('px-4');
+    expect(card?.className).toContain('py-3');
   });
 
   it('renders typed tabs as preview cards', () => {
     setupMocks({ ctFilter: 'short' });
 
     render(<FeedPage />);
-    const card = screen.getByRole('link', { name: /job one/i });
+    // Preview cards use a stretched overlay link; flex/p-3 and the date text live
+    // on the card container, the link's parent.
+    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
 
-    expect(card.className).toContain('flex');
-    expect(card.className).toContain('p-3');
-    expect(card.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
+    expect(card?.className).toContain('flex');
+    expect(card?.className).toContain('p-3');
+    expect(card?.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
   });
 
   it('renders the recovery panel from the active tab summary', async () => {

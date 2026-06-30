@@ -29,5 +29,5 @@ export function TypeBadge({ label }: { label: string }) {
 
 export function StatusBadge({ label }: { label: string }) {
   const colors = STATUS_COLORS[label] ?? "bg-status-cancelled-tint text-status-cancelled";
-  return <span className={`${badgeBase} ${colors}`}>{label}</span>;
+  return <span className={`${badgeBase} capitalize ${colors}`}>{label.replace(/_/g, " ")}</span>;
 }

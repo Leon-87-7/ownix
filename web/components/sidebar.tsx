@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Tooltip } from '@/components/ui/tooltip';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -11,6 +12,8 @@ import {
   SlidersHorizontal,
   ChevronRight,
   ChevronLeft,
+  Tally2,
+  FileCode2,
   type LucideIcon,
 } from 'lucide-react';
 import { siGithub } from 'simple-icons';
@@ -23,6 +26,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'Feed', icon: Rss },
+  { href: '/doc-parser', label: 'Doc Parser', icon: FileCode2 },
   { href: '/brain', label: 'Brain', icon: Brain },
   { href: '/spaces', label: 'Spaces', icon: LayoutGrid },
   { href: '/prompts', label: 'Prompts', icon: MessageSquareText },
@@ -198,25 +202,26 @@ function NavLink({
     ? 'flex h-9 w-9 items-center justify-center'
     : 'flex items-center gap-3 px-3 py-2';
   return (
-    <Link
-      href={href}
-      title={collapsed ? label : undefined}
-      aria-label={collapsed ? label : undefined}
-      aria-current={active ? 'page' : undefined}
-      tabIndex={tabbable ? undefined : -1}
-      className={`${layout} rounded-md text-sm font-medium transition-ui ${
-        active
-          ? 'bg-raised text-signal'
-          : 'text-body hover:bg-raised hover:text-ink'
-      }`}
-    >
-      <Icon
-        className="h-[18px] w-[18px] shrink-0"
-        strokeWidth={2}
-        aria-hidden="true"
-      />
-      {!collapsed && label}
-    </Link>
+    <Tooltip content={collapsed ? label : undefined}>
+      <Link
+        href={href}
+        aria-label={collapsed ? label : undefined}
+        aria-current={active ? 'page' : undefined}
+        tabIndex={tabbable ? undefined : -1}
+        className={`${layout} rounded-md text-sm font-medium transition-ui ${
+          active
+            ? 'bg-raised text-signal'
+            : 'text-body hover:bg-raised hover:text-ink'
+        }`}
+      >
+        <Icon
+          className="h-[18px] w-[18px] shrink-0"
+          strokeWidth={2}
+          aria-hidden="true"
+        />
+        {!collapsed && label}
+      </Link>
+    </Tooltip>
   );
 }
 
@@ -270,8 +275,24 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Collapsed rail — always visible. Favicon logo + per-page icons. */}
-      <div className="flex w-16 shrink-0 flex-col items-center border-r border-line bg-surface py-5">
+      {/* Mobile pull-tab — the rail is hidden < sm, so this slim edge handle is the
+          affordance that a nav drawer exists. Hidden while the drawer is open. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open navigation"
+        aria-expanded={open}
+        aria-controls="vig-nav-panel"
+        tabIndex={open ? -1 : undefined}
+        className={`fixed left-0 top-1/2 z-30 flex h-14 w-4 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-line bg-surface text-muted shadow-overlay transition-opacity hover:text-ink sm:hidden ${
+          open ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        <Tally2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+      </button>
+
+      {/* Collapsed rail — desktop only. Favicon logo + per-page icons. */}
+      <div className="hidden w-16 shrink-0 flex-col items-center border-r border-line bg-surface py-5 sm:flex">
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -299,31 +320,35 @@ export function Sidebar() {
         </nav>
 
         <div className="mt-auto flex flex-col items-center gap-1">
-          <a
-            href="https://github.com/Leon-87-7/vig"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="GitHub repository"
-            title="GitHub repository"
-            tabIndex={open ? -1 : undefined}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
-          >
-            <GithubIcon className="h-[18px] w-[18px]" />
-          </a>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-label="Expand navigation"
-            aria-expanded={open}
-            aria-controls="vig-nav-panel"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
-          >
-            <ChevronRight
-              className="h-[18px] w-[18px]"
-              strokeWidth={2}
-              aria-hidden="true"
-            />
-          </button>
+          <Tooltip content="GitHub repository">
+            <a
+              href="https://github.com/Leon-87-7/vig"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="GitHub repository"
+              tabIndex={open ? -1 : undefined}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
+            >
+              <GithubIcon className="h-[18px] w-[18px]" />
+            </a>
+          </Tooltip>
+          <Tooltip content="Expand navigation">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              tabIndex={open ? -1 : undefined}
+              aria-label="Expand navigation"
+              aria-expanded={open}
+              aria-controls="vig-nav-panel"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
+            >
+              <ChevronRight
+                className="h-[18px] w-[18px]"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -341,6 +366,11 @@ export function Sidebar() {
         id="vig-nav-panel"
         aria-label="Primary navigation"
         aria-hidden={!open}
+        // ponytail: close on clicks in the drawer's dead space; links/buttons
+        // (closest a/button) keep their own handlers.
+        onClick={(e) => {
+          if (!(e.target as HTMLElement).closest('a,button')) setOpen(false);
+        }}
         className={`fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-line bg-surface px-4 py-5 shadow-overlay transition-transform duration-200 ease-out-quart ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
