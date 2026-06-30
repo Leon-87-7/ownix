@@ -290,7 +290,7 @@ async def export_space(space_id: str, body: ExportIn, request: Request) -> dict:
     """Build a full space export and push it to Google Drive as a real Doc.
 
     md/txt/pdf are client-side; this endpoint handles the gdoc path only.
-    Returns {"url": <webViewLink>} or {"error": "drive_not_configured"}.
+    Returns {"url": <webViewLink>} or {"error": "drive_not_configured"|"export_blocked"}.
     """
     from src.services.space_export import compose_space_export
     from src.services.drive import export_to_gdoc
@@ -300,6 +300,8 @@ async def export_space(space_id: str, body: ExportIn, request: Request) -> dict:
 
     if not settings.GOOGLE_DRIVE_FOLDER_EXPORTS:
         return {"error": "drive_not_configured"}
+    if settings.export_blocked(chat_id):
+        return {"error": "export_blocked"}
 
     blobs = await database.list_context_blobs(space_id)
     space_urls = await database.list_space_urls(space_id, chat_id)
@@ -312,5 +314,6 @@ async def export_space(space_id: str, body: ExportIn, request: Request) -> dict:
         markdown=markdown,
         name=doc_name,
         folder_id=settings.GOOGLE_DRIVE_FOLDER_EXPORTS,
+        chat_id=chat_id,
     )
     return {"url": url}

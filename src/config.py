@@ -71,5 +71,23 @@ class Settings(BaseSettings):
     PRD_AUTO_MODEL: str = "gemini-2.5-flash"
     PRD_INTENT_MODEL: str = "gemini-2.5-pro"
 
+    # Per-user export isolation (#202, ADR-0027). When set, only this chat's jobs
+    # write to the operator's shared Drive/Sheets; everyone else's results stay in
+    # Platform storage (GCS+DB) + Telegram + dashboard. Unset = export for all
+    # (single-operator backward compat).
+    OPERATOR_CHAT_ID: int | None = None
+
+    def export_blocked(self, chat_id: int | None) -> bool:
+        """True when *chat_id* must NOT write to the operator's shared Drive/Sheets.
+
+        Blocks only an explicit non-operator chat. A None chat_id (system/operator
+        aggregate calls like brain rebuild) and an unset OPERATOR_CHAT_ID both pass.
+        """
+        return (
+            self.OPERATOR_CHAT_ID is not None
+            and chat_id is not None
+            and chat_id != self.OPERATOR_CHAT_ID
+        )
+
 
 settings = Settings()

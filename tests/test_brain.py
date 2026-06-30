@@ -512,3 +512,54 @@ async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
         assert rows["arch"]["stars"] is None
     finally:
         os.unlink(db_path)
+
+@pytest.mark.asyncio
+async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
+    import aiosqlite
+    import os
+    import tempfile
+    from unittest.mock import patch
+    from src.brain import SCHEMA_SQL, list_links
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'topic', 'j', ?, ?, ?, ?)""",
+                [
+                    ("a", "https://example.com/a", "A", 2, "2026-06-28T10:00:00+00:00", "t", "t"),
+                    ("b", "https://example.com/b", "B", 9, "2026-06-27T10:00:00+00:00", "t", "t"),
+                    ("c", "https://example.com/c", "C", 1, "2026-06-29T10:00:00+00:00", "t", "t"),
+                ],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            by_appearances = await list_links(sort="appearances", order="desc")
+            by_appearances_asc = await list_links(sort="appearances", order="asc")
+            fallback = await list_links(sort="nonsense", order="sideways")
+
+        assert [item["url"] for item in by_appearances["items"]] == [
+            "https://example.com/b",
+            "https://example.com/a",
+            "https://example.com/c",
+        ]
+        assert [item["url"] for item in by_appearances_asc["items"]] == [
+            "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
+        ]
+        assert [item["url"] for item in fallback["items"]] == [
+            "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
+        ]
+    finally:
+        os.unlink(db_path)

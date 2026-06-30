@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 
-from src import brain
+from src import brain, database
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
 brain_router = APIRouter(prefix="/api/brain", tags=["brain"])
+
+
+class BrainLinksViewIn(BaseModel):
+    # Server clamps every value in set_brain_links_view; this is just typed parsing.
+    sort: str
+    order: str
+    size: int
 
 
 @brain_router.get("/search")
@@ -29,8 +37,27 @@ async def list_links(
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     q: str = Query(default=""),
+    sort: str = Query(default="last_seen"),
+    order: str = Query(default="desc"),
 ) -> dict:
-    return await brain.list_links(limit=limit, offset=offset, q=q)
+    return await brain.list_links(limit=limit, offset=offset, q=q, sort=sort, order=order)
+
+
+@brain_router.get("/links/view")
+async def get_links_view(request: Request) -> dict[str, int | str]:
+    chat_id: int = request.state.user["id"]
+    return await database.get_brain_links_view(chat_id)
+
+
+@brain_router.put("/links/view")
+async def update_links_view(body: BrainLinksViewIn, request: Request) -> dict[str, int | str]:
+    chat_id: int = request.state.user["id"]
+    return await database.set_brain_links_view(
+        chat_id,
+        sort=body.sort,
+        order=body.order,
+        size=body.size,
+    )
 
 
 @brain_router.post("/rebuild")

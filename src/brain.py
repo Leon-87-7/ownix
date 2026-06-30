@@ -512,9 +512,17 @@ async def get_graph() -> dict[str, list[dict]]:
     return {"nodes": nodes, "edges": edges}
 
 
-async def list_links(limit: int = 50, offset: int = 0, q: str = "") -> dict[str, Any]:
-    """Return deduplicated Brain links ordered newest-first with pagination.
+async def list_links(
+    limit: int = 50,
+    offset: int = 0,
+    q: str = "",
+    sort: str = "last_seen",
+    order: str = "desc",
+) -> dict[str, Any]:
+    """Return deduplicated Brain links with configurable sorting and pagination.
 
+    ``sort`` is ``last_seen`` or ``appearances`` and ``order`` is ``asc``/``desc``
+    (anything else falls back to ``last_seen`` desc).
     ``q`` filters by case-insensitive substring across url/title/topic.
     # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
     """
@@ -527,6 +535,14 @@ async def list_links(limit: int = 50, offset: int = 0, q: str = "") -> dict[str,
         escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{escaped}%"
         filter_params = [like, like, like]
+
+    sort_columns = {
+        "last_seen": "l.last_seen_at",
+        "appearances": "l.seen_count",
+    }
+    sort_column = sort_columns.get(sort, sort_columns["last_seen"])
+    sort_direction = "ASC" if order == "asc" else "DESC"
+    order_by = f"{sort_column} {sort_direction}, l.url ASC"
 
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
@@ -543,7 +559,7 @@ async def list_links(limit: int = 50, offset: int = 0, q: str = "") -> dict[str,
                 FROM links l
                 LEFT JOIN jobs j ON j.id = l.source_job
                 WHERE {where}
-                ORDER BY l.last_seen_at DESC, l.url ASC
+                ORDER BY {order_by}
                 LIMIT ? OFFSET ?""",
             (*filter_params, limit, offset),
         )

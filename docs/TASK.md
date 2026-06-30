@@ -266,3 +266,104 @@ next, and enqueues a repo job for each chosen one.
   article jobs that extract repos?
 - Encoding selected repos in callback data given Telegram's 64-byte limit — index
   into a cached candidate list, or pack the URL?
+
+## 10. Char-count truncation for the links-table description (ui/ux)
+
+In the Brain "Links" table (`web/app/(dashboard)/brain/page.tsx`, `LinksTable`),
+each row's URL cell renders the URL string with CSS `truncate` (width-based, so
+truncation length floats with container width) plus a secondary `title · topic`
+line at `page.tsx:336`. The data comes from `GET /api/brain/links`
+(`src/api/brain.py`); rows expose `url`, `title`, `topic` (`LinkRow`, `page.tsx:13`).
+
+**Wanted:** the link's description text truncates at a fixed **40 characters on
+mobile, 60 on desktop**.
+
+**UI**
+
+- The cell already uses `font-mono`, so a `ch`-unit cap maps cleanly to character
+  count — native approach is `max-w-[40ch] md:max-w-[60ch]` alongside the existing
+  `truncate`, rather than slicing strings in JS. Confirm against DESIGN.md tokens;
+  keep the full value reachable (e.g. `title` attribute / accessible name) so the
+  truncation is presentational only (WCAG-AA).
+- Tailwind's default `md:` breakpoint is the mobile/desktop split unless the repo
+  uses a different convention.
+
+**Open questions** (resolve in grill)
+
+- Which text is "the description" — the URL string itself (line 330/334), the
+  `title · topic` secondary line (line 336), or both? They truncate differently.
+- 40/60 **characters** vs. CSS `ch` (advance width of `0`): with `font-mono` these
+  are near-identical, but is exact character count required (forcing JS slicing) or
+  is `ch` good enough?
+- Does the truncated value still need to be fully visible on hover/focus or via the
+  row expanding, or is the existing `target=_blank` link enough?
+
+## 11. Tags should follow the URL, not the job (many-to-many)
+
+Tags today attach to **jobs**: the `job_tags` join table
+(`src/database.py:205`, `job_id ↔ tag_id`, issue #88 / S5) keyed off a single job,
+with the `tags` vocabulary in the `tags` table (`src/database.py:171`, issue #87).
+The links table (`src/brain.py`, `ingest_links` / the `links` table at
+`src/database.py:151`) is already deduplicated by canonical `url` — one row per
+unique URL — and the same URL can surface across many jobs. So a tag pinned to a
+job can't express "this URL is ui/ux" once that URL recurs in other jobs.
+
+**Wanted:** model tags as following the canonical URL (many-to-many URL ↔ tag),
+independent of how many jobs a URL appears in.
+
+**Data**
+
+- A URL appears in many jobs and a job extracts many URLs (many-to-many);
+  `links.url` is the stable key. Tagging at the URL level needs a `link_tags`
+  (`url`/`link_id ↔ tag_id`) join rather than overloading `job_tags`.
+- **Reuse, don't fork:** the `tags` vocabulary table and `TagPicker`
+  (`web/components/TagPicker.tsx`) already exist — reuse the vocabulary; only the
+  *attachment* target changes from job to URL.
+
+**Open questions** (resolve in grill)
+
+- Does this **replace** job-level tagging (`job_tags`) or coexist with it? If both,
+  what's the relationship when a job's tag and its URL's tag disagree?
+- Key the join on `links.id` or on canonical `url`? (Dedup canonicalization rules
+  here echo task 3's open question — same canonical form must be used.)
+- Surface/edit URL tags where: the Brain Links table (new column / `TagPicker`
+  inline), the existing controls page, or both?
+- Migration: do existing `job_tags` rows get projected onto their URLs, or do URL
+  tags start empty?
+
+## 12. Repalette: new signal orange + dark plate tokens
+
+The design tokens have a single source: `web/tailwind.config.ts` defines
+`signal.DEFAULT: '#f6921e'` plus the cool plate ladder `canvas: '#0b0c0f'` →
+`surface: '#14161a'` → `raised: '#1c1f25'` (`tailwind.config.ts:12-27`). The same
+values are normative in `DESIGN.md`'s frontmatter, and the ~39 `web/` consumers
+use Tailwind classes (`bg-signal`, `text-signal`, `bg-canvas`…), so they inherit
+the change without edits. `DESIGN.md` also pins a derived signal ramp:
+`signal-bright #ffa83d`, `signal-deep #b96a06`, `onsignal #16100a`.
+
+**Wanted:** the signal color becomes `#FFBE0B` and "the dark color" becomes
+`#2A2312`, applied at the token source so the whole console repalettes.
+
+**UI / Design tokens**
+
+- Update `web/tailwind.config.ts` and mirror into `DESIGN.md`'s frontmatter
+  (normative per CLAUDE.md) — one change at the source, not per-component.
+- DESIGN.md prose hardcodes the hexes in many places (the Signal Rule, button
+  specs, plate-ladder descriptions); those references and any logo SVGs under
+  `web/images/` / `web/public/images/` that bake in the orange need a sweep too.
+
+**Open questions** (resolve in grill)
+
+- "The dark color" is ambiguous — the plate ladder is three cool darks
+  (`canvas`/`surface`/`raised`). Does `#2A2312` replace `canvas` (the page floor),
+  the whole ladder (re-derive all three), or a specific plate?
+- `#2A2312` is a **warm** near-black (yellow/red cast), which breaks DESIGN.md's
+  stated "cool near-black chassis" identity. Intended pivot to a warm chassis, or
+  should the cool ladder stay and only the signal change?
+- `#FFBE0B` is brighter/yellower than `#f6921e` — does the derived ramp
+  (`signal-bright`, `signal-deep`, `onsignal`) get recomputed around it? The
+  "dark-on-orange ≥7:1" contrast (`onsignal #16100a`) and WCAG-AA bar must be
+  re-verified against the new hue.
+- Does `#FFBE0B` collide with the **pending-yellow** status hue? The Signal Rule
+  forbids signal and pending-yellow trading places — a yellower signal narrows
+  that gap.

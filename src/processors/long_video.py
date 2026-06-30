@@ -113,7 +113,7 @@ async def run(job: dict) -> None:
     else:
         await send_message(chat_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")
 
-    file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG)
+    file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG, chat_id=chat_id)
 
     # 5. Update job to transcript_done, caching title + transcript for Phase 2
     await database.update_job_status(

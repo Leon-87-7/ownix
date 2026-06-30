@@ -7,6 +7,7 @@ no silent swallowing.
 
 from __future__ import annotations
 
+import json
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -988,6 +989,45 @@ async def set_user_setting(chat_id: int, key: str, value: str) -> None:
         """,
         (chat_id, key, value),
     )
+
+
+_BRAIN_LINKS_VIEW_KEY = "brain_links_view"
+_DEFAULT_BRAIN_LINKS_VIEW = {"sort": "last_seen", "order": "desc", "size": 25}
+_BRAIN_LINKS_VIEW_SORTS = {"last_seen", "appearances"}
+_BRAIN_LINKS_VIEW_ORDERS = {"asc", "desc"}
+_BRAIN_LINKS_VIEW_SIZES = {25, 50, 100}
+
+
+def _normalize_brain_links_view(value: object) -> dict[str, int | str]:
+    view = dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    if isinstance(value, dict):
+        sort = value.get("sort")
+        order = value.get("order")
+        size = value.get("size")
+        if sort in _BRAIN_LINKS_VIEW_SORTS:
+            view["sort"] = str(sort)
+        if order in _BRAIN_LINKS_VIEW_ORDERS:
+            view["order"] = str(order)
+        if size in _BRAIN_LINKS_VIEW_SIZES:
+            view["size"] = int(size)
+    return view
+
+
+async def get_brain_links_view(chat_id: int) -> dict[str, int | str]:
+    value = await get_user_setting(chat_id, _BRAIN_LINKS_VIEW_KEY)
+    if value is None:
+        return dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return dict(_DEFAULT_BRAIN_LINKS_VIEW)
+    return _normalize_brain_links_view(parsed)
+
+
+async def set_brain_links_view(chat_id: int, *, sort: str, order: str, size: int) -> dict[str, int | str]:
+    view = _normalize_brain_links_view({"sort": sort, "order": order, "size": size})
+    await set_user_setting(chat_id, _BRAIN_LINKS_VIEW_KEY, json.dumps(view, separators=(",", ":")))
+    return view
 
 
 _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY = "dashboard_recovery_telegram_notifications"

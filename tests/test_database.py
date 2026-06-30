@@ -685,3 +685,23 @@ async def test_migration_fails_loudly_on_stored_retroactive(tmp_path, monkeypatc
     monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
     with pytest.raises(RuntimeError, match="retroactive"):
         await database.init_db()
+
+@pytest.mark.asyncio
+async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "settings.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
+
+    saved = await database.set_brain_links_view(42, sort="appearances", order="asc", size=100)
+    assert saved == {"sort": "appearances", "order": "asc", "size": 100}
+    assert await database.get_brain_links_view(42) == saved
+
+    await database.set_user_setting(42, "brain_links_view", '{"sort":"bad","order":"bad","size":999}')
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}
+
+    await database.set_user_setting(42, "brain_links_view", "{not-json")
+    assert await database.get_brain_links_view(42) == {"sort": "last_seen", "order": "desc", "size": 25}

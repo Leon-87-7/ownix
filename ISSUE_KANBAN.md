@@ -159,6 +159,7 @@
 | [#231](https://github.com/Leon-87-7/vig/issues/231) | Latent: 'retroactive' storable as a persistent telegram_delivery state                                     | DB / Document            | Merged; PR #232; closed on GH                                                             |
 | [#228](https://github.com/Leon-87-7/vig/issues/228) | Refactor: extract parsed.py trust-boundary PDF intake into a deep module (post-#227)                       | Refactor / Document      | Merged; PR #229; closed on GH                                                             |
 | [#240](https://github.com/Leon-87-7/vig/issues/240) | Doc detail page: move Telegram toggle next to Clean + add download/copy buttons to output cards            | Web / Doc Parser         | Merged; PR #242; closed on GH                                                             |
+| [#238](https://github.com/Leon-87-7/vig/issues/238) | Extracted-links table on the Brain page (deduplicated, paginated)                                          | Web / Brain              | Merged; PR #239; closed on GH                                                             |
 | [#82](https://github.com/Leon-87-7/vig/issues/82)   | bug(test_long_video): under-mocked send_message → coroutine reaches editMessageText JSON encode            | Test / Long Video        | ⚠ Closed on GH as COMPLETED despite `wontfix` label (dep-map marked WONTFIX 2026-06-07)   |
 
 ---
@@ -168,11 +169,11 @@
 |                                                   # | Title                                                                                       | Area             | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------- | ---------------- | ---------- |
 | [#201](https://github.com/Leon-87-7/vig/issues/201) | epic(multi-tenancy): per-user export isolation                                              | Multi-tenancy    | —          |
-| [#202](https://github.com/Leon-87-7/vig/issues/202) | feat(config): operator-only export gate (per-user isolation, the #201 'now' fix)            | Config / Exports | —          |
-| [#203](https://github.com/Leon-87-7/vig/issues/203) | chore(ops): Google Cloud OAuth app — production publishing + sensitive-scope verification   | Ops / OAuth      | —          |
-| [#204](https://github.com/Leon-87-7/vig/issues/204) | feat(oauth): per-user 'Connect Google' (web) — encrypted token store → exports to /vig      | OAuth / Web      | —          |
-| [#205](https://github.com/Leon-87-7/vig/issues/205) | feat(telegram): Mini App 'Connect Google' surface — initData identity, shared OAuth backend | Telegram / OAuth | —          |
-| [#206](https://github.com/Leon-87-7/vig/issues/206) | feat(oauth): connection lifecycle — invalid_grant handling, /disconnect, notify-once        | OAuth            | —          |
+| [#202](https://github.com/Leon-87-7/vig/issues/202) | feat(config): operator-only export gate (per-user isolation, the #201 'now' fix)            | Multi-tenancy    | —          |
+| [#203](https://github.com/Leon-87-7/vig/issues/203) | chore(ops): Google Cloud OAuth app — production publishing + sensitive-scope verification   | Ops / Google Cloud | —        |
+| [#204](https://github.com/Leon-87-7/vig/issues/204) | feat(oauth): per-user 'Connect Google' (web) — encrypted token store → exports to /vig      | OAuth / Export   | #202, #203 |
+| [#205](https://github.com/Leon-87-7/vig/issues/205) | feat(telegram): Mini App 'Connect Google' surface — initData identity, shared OAuth backend | OAuth / Telegram | #204       |
+| [#206](https://github.com/Leon-87-7/vig/issues/206) | feat(oauth): connection lifecycle — invalid_grant handling, /disconnect, notify-once        | OAuth / Export   | #204       |
 | [#234](https://github.com/Leon-87-7/vig/issues/234) | Replace raw logout API response with dedicated logout page                                   | Web / Auth       | —          |
 
 ---
@@ -183,7 +184,8 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                                | Area                     | Depends On       |
 | --------------------------------------------------: | -------------------------------------------------------------------- | ------------------------ | ---------------- |
-| [#238](https://github.com/Leon-87-7/vig/issues/238) | Extracted-links table on the Brain page (deduplicated, paginated)    | Web / Brain              | —                |
+| [#251](https://github.com/Leon-87-7/vig/issues/251) | Brain Links table: richer navigation + persisted per-tenant view     | Web / Brain              | —                |
+| [#252](https://github.com/Leon-87-7/vig/issues/252) | Brain graph on-canvas controls overlay (zoom/fit/recenter + filter)  | Web / Brain              | —                |
 | [#243](https://github.com/Leon-87-7/vig/issues/243) | Tooltip primitive + first adoption (foundation)                      | Web / Tooltips           | —                |
 | [#244](https://github.com/Leon-87-7/vig/issues/244) | Migrate explanatory title= tooltips to Tooltip primitive             | Web / Tooltips           | #243             |
 | [#245](https://github.com/Leon-87-7/vig/issues/245) | Migrate overflow-reveal title= tooltips (mono variant)               | Web / Tooltips           | #243             |
@@ -442,6 +444,20 @@ Tooltip system (spec: docs/superpowers/specs/2026-06-28-tooltips-design.md) — 
 ├── #246 add tooltips to icon-only controls ◄── #243 — Ready for Agent
 └── #247 add tooltips to metric labels (stats-overview) ◄── #243 — Ready for Agent
 Critical path: #243 → {#244, #245, #246, #247} (all parallel once #243 lands)
+
+Brain Links nav + graph controls (grill 2026-06-29 — tasks #7/#8 from docs/TASK.md)
+#238 Extracted-links table on the Brain page ✅-Done (PR #239) — foundation the nav builds on
+#251 Links table — server-side sort params + per-tenant user_settings view + jump-to-page/page-size — Ready for Agent (independent; LinksTable already shipped via #238)
+#252 Brain graph on-canvas controls — zoom/fit/recenter + focus-on-match + topic legend/filter (desktop-only) — Ready for Agent (independent)
+Critical path: #251 and #252 are independent — no dependency between them
+
+Per-user export isolation (epic #201; ADR-0030 + ADR-0022; CONTEXT.md `Operator`)
+#202 operator-only export gate (the "now" fix — root, unblocked) ◄── also gates #158 (open: opt-in Document Analysis export hook)
+└── #204 per-user "Connect Google" (web): encrypted token store → /vig ◄── also #203
+    ├── #205 Telegram Mini App surface (initData → shared OAuth backend)
+    └── #206 connection lifecycle (invalid_grant / /disconnect / notify-once)
+#203 Google Cloud OAuth app: prod publish + sensitive-scope verification (HITL/external — gates #204 for production)
+Critical path: #202 → #204 → {#205, #206}; #203 (external review) gates #204 production readiness
 ```
 
 ---
@@ -457,6 +473,9 @@ Critical path: #243 → {#244, #245, #246, #247} (all parallel once #243 lands)
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#250](https://github.com/Leon-87-7/vig/pull/250) | feat(skills): /pre-grill + TASK.md ideation workflow | feat/pre-grill-skill→main | — | ✅ Merged |
+| [#249](https://github.com/Leon-87-7/vig/pull/249) | feat(skills): /pre-grill — fatten one-line ideas into grill-ready briefs | feat/pre-grill-skill→main | — | ✅ Merged |
+| [#248](https://github.com/Leon-87-7/vig/pull/248) | Add Tooltip component (Radix) and integrate across UI | codex/resolve-issues-#243-to-#247→main | — | ✅ Merged |
 | [#242](https://github.com/Leon-87-7/vig/pull/242) | feat(doc-parser): relocate Telegram toggle + copy/download on output cards (#240) | 240-doc-detail-page-move-telegram-toggle-next-to-clean-add-downloadcopy-buttons-to-output-cards→main | #240 | ✅ Merged |
 | [#241](https://github.com/Leon-87-7/vig/pull/241) | fix(brain): sort extracted links by latest sighting | codex/resolve-issue-240→main | — | ✅ Merged |
 | [#239](https://github.com/Leon-87-7/vig/pull/239) | feat: Brain Links tab (+ search) and feed dashboard redesign | feat(brain)--link-table→main | — | ✅ Merged |

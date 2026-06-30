@@ -109,22 +109,31 @@ describe('BrainPage', () => {
   });
 
   it('renders links tab rows from the paginated endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        items: [
-          {
-            url: 'https://example.com/canonical',
-            title: 'Canonical',
-            topic: 'Docs',
-            seen_count: 4,
-            first_seen: '2026-06-28T12:00:00+00:00',
-          },
-        ],
-        limit: 25,
-        offset: 0,
-        total: 1,
-      }),
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/brain/links/view' && init?.method === 'PUT') {
+        return Promise.resolve({ ok: true, json: async () => ({ sort: 'last_seen', order: 'desc', size: 25 }) });
+      }
+      if (url === '/api/brain/links/view') {
+        return Promise.resolve({ ok: true, json: async () => ({ sort: 'last_seen', order: 'desc', size: 25 }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              url: 'https://example.com/canonical',
+              title: 'Canonical',
+              topic: 'Docs',
+              seen_count: 4,
+              first_seen: '2026-06-28T12:00:00+00:00',
+            },
+          ],
+          limit: 25,
+          offset: 0,
+          total: 1,
+        }),
+      });
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -138,6 +147,11 @@ describe('BrainPage', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('4')).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0');
+    expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&sort=last_seen&order=desc');
+    // The skipFirstPut guard must not write the freshly-loaded view back.
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/brain/links/view',
+      expect.objectContaining({ method: 'PUT' }),
+    );
   });
 });

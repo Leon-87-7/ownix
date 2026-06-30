@@ -37,8 +37,17 @@ async def upload_file(
     filename: str,
     folder_id: str,
     mime_type: str = "text/markdown",
+    *,
+    chat_id: int | None = None,
 ) -> tuple[str, str]:
-    """Upload to Google Drive. Returns (file_id, web_view_link)."""
+    """Upload to Google Drive. Returns (file_id, web_view_link).
+
+    Non-operator jobs are gated out (#202, ADR-0027): they get ("", "") and the
+    file never lands in the operator's Drive. System calls (no chat_id) pass.
+    """
+    if settings.export_blocked(chat_id):
+        log.info("drive_export_gated", filename=filename, chat_id=chat_id)
+        return "", ""
     file_id, link = await asyncio.to_thread(_upload_sync, content, filename, folder_id, mime_type)
     log.info("drive_uploaded", filename=filename, file_id=file_id)
     return file_id, link
@@ -61,8 +70,16 @@ async def update_file(
     file_id: str,
     content: str | bytes,
     mime_type: str = "text/markdown",
+    *,
+    chat_id: int | None = None,
 ) -> str:
-    """In-place update of a Drive file. Returns the (unchanged) webViewLink."""
+    """In-place update of a Drive file. Returns the (unchanged) webViewLink.
+
+    Gated for non-operator jobs (#202) — returns "" without touching Drive.
+    """
+    if settings.export_blocked(chat_id):
+        log.info("drive_update_gated", file_id=file_id, chat_id=chat_id)
+        return ""
     link = await asyncio.to_thread(_update_sync, file_id, content, mime_type)
     log.info("drive_updated", file_id=file_id)
     return link
@@ -88,10 +105,17 @@ def _gdoc_sync(markdown: str, name: str, folder_id: str) -> str:
     return result["webViewLink"]
 
 
-async def export_to_gdoc(markdown: str, name: str, folder_id: str) -> str:
+async def export_to_gdoc(
+    markdown: str, name: str, folder_id: str, *, chat_id: int | None = None
+) -> str:
     """Create a real, editable Google Doc in *folder_id* from *markdown*.
     Returns the Doc's webViewLink.
+
+    Gated for non-operator jobs (#202) — returns "" without creating a Doc.
     """
+    if settings.export_blocked(chat_id):
+        log.info("gdoc_export_gated", name=name, chat_id=chat_id)
+        return ""
     link = await asyncio.to_thread(_gdoc_sync, markdown, name, folder_id)
     log.info("gdoc_exported", name=name)
     return link
