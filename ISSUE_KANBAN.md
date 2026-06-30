@@ -169,11 +169,11 @@
 |                                                   # | Title                                                                                       | Area             | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------- | ---------------- | ---------- |
 | [#201](https://github.com/Leon-87-7/vig/issues/201) | epic(multi-tenancy): per-user export isolation                                              | Multi-tenancy    | —          |
-| [#202](https://github.com/Leon-87-7/vig/issues/202) | feat(config): operator-only export gate (per-user isolation, the #201 'now' fix)            | Config / Exports | —          |
-| [#203](https://github.com/Leon-87-7/vig/issues/203) | chore(ops): Google Cloud OAuth app — production publishing + sensitive-scope verification   | Ops / OAuth      | —          |
-| [#204](https://github.com/Leon-87-7/vig/issues/204) | feat(oauth): per-user 'Connect Google' (web) — encrypted token store → exports to /vig      | OAuth / Web      | —          |
-| [#205](https://github.com/Leon-87-7/vig/issues/205) | feat(telegram): Mini App 'Connect Google' surface — initData identity, shared OAuth backend | Telegram / OAuth | —          |
-| [#206](https://github.com/Leon-87-7/vig/issues/206) | feat(oauth): connection lifecycle — invalid_grant handling, /disconnect, notify-once        | OAuth            | —          |
+| [#202](https://github.com/Leon-87-7/vig/issues/202) | feat(config): operator-only export gate (per-user isolation, the #201 'now' fix)            | Multi-tenancy    | —          |
+| [#203](https://github.com/Leon-87-7/vig/issues/203) | chore(ops): Google Cloud OAuth app — production publishing + sensitive-scope verification   | Ops / Google Cloud | —        |
+| [#204](https://github.com/Leon-87-7/vig/issues/204) | feat(oauth): per-user 'Connect Google' (web) — encrypted token store → exports to /vig      | OAuth / Export   | #202, #203 |
+| [#205](https://github.com/Leon-87-7/vig/issues/205) | feat(telegram): Mini App 'Connect Google' surface — initData identity, shared OAuth backend | OAuth / Telegram | #204       |
+| [#206](https://github.com/Leon-87-7/vig/issues/206) | feat(oauth): connection lifecycle — invalid_grant handling, /disconnect, notify-once        | OAuth / Export   | #204       |
 | [#234](https://github.com/Leon-87-7/vig/issues/234) | Replace raw logout API response with dedicated logout page                                   | Web / Auth       | —          |
 
 ---
@@ -450,6 +450,14 @@ Brain Links nav + graph controls (grill 2026-06-29 — tasks #7/#8 from docs/TAS
 #251 Links table — server-side sort params + per-tenant user_settings view + jump-to-page/page-size — Ready for Agent (independent; LinksTable already shipped via #238)
 #252 Brain graph on-canvas controls — zoom/fit/recenter + focus-on-match + topic legend/filter (desktop-only) — Ready for Agent (independent)
 Critical path: #251 and #252 are independent — no dependency between them
+
+Per-user export isolation (epic #201; ADR-0030 + ADR-0022; CONTEXT.md `Operator`)
+#202 operator-only export gate (the "now" fix — root, unblocked) ◄── also gates #158 (open: opt-in Document Analysis export hook)
+└── #204 per-user "Connect Google" (web): encrypted token store → /vig ◄── also #203
+    ├── #205 Telegram Mini App surface (initData → shared OAuth backend)
+    └── #206 connection lifecycle (invalid_grant / /disconnect / notify-once)
+#203 Google Cloud OAuth app: prod publish + sensitive-scope verification (HITL/external — gates #204 for production)
+Critical path: #202 → #204 → {#205, #206}; #203 (external review) gates #204 production readiness
 ```
 
 ---
