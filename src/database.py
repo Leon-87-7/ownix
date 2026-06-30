@@ -12,7 +12,7 @@ import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Literal
+from typing import Any, AsyncIterator, Literal, cast
 
 import aiosqlite
 
@@ -20,6 +20,8 @@ from src.config import settings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+UserStatus = Literal["pending", "approved", "blocked"]
 
 
 SCHEMA_SQL = """
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS chat_state (
     job_id       TEXT NOT NULL,
     created_at   TEXT NOT NULL,
     expires_at   TEXT NOT NULL,
-    CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle'))
+    CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle', 'awaiting_email'))
 );
 
 -- Jina Reader markdown cache (issue #60 / ADR-0013).
@@ -135,8 +137,11 @@ CREATE TABLE IF NOT EXISTS users (
     first_name  TEXT NOT NULL,
     last_name   TEXT,
     photo_url   TEXT,
+    email       TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending',
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK(status IN ('pending','approved','blocked'))
 );
 
 CREATE TABLE IF NOT EXISTS user_settings (
@@ -846,6 +851,54 @@ async def _migrate_v22_v23(conn: aiosqlite.Connection) -> None:
 _MIGRATIONS.append(_migrate_v22_v23)
 
 
+async def _chat_state_allows(conn: aiosqlite.Connection, mode: str) -> bool:
+    cur = await conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='chat_state'"
+    )
+    row = await cur.fetchone()
+    return bool(row and row[0] and mode in row[0])
+
+
+async def _migrate_v23_v24(conn: aiosqlite.Connection) -> None:
+    """Add invite-gate user fields and awaiting_email chat state (#254)."""
+    cur = await conn.execute("PRAGMA table_info(users)")
+    existing_user_cols = {row[1] for row in await cur.fetchall()}
+    added_status = "status" not in existing_user_cols
+
+    if "email" not in existing_user_cols:
+        await conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if added_status:
+        await conn.execute(
+            "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'pending' "
+            "CHECK(status IN ('pending','approved','blocked'))"
+        )
+        await conn.execute("UPDATE users SET status = 'approved'")
+
+    if not await _chat_state_allows(conn, "awaiting_email"):
+        await conn.execute("DROP TABLE IF EXISTS chat_state_v24")
+        await conn.execute("""
+            CREATE TABLE chat_state_v24 (
+                chat_id    INTEGER PRIMARY KEY,
+                mode       TEXT NOT NULL,
+                job_id     TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle', 'awaiting_email'))
+            )
+        """)
+        await conn.execute(
+            """
+            INSERT OR IGNORE INTO chat_state_v24 (chat_id, mode, job_id, created_at, expires_at)
+            SELECT chat_id, mode, job_id, created_at, expires_at FROM chat_state
+            """
+        )
+        await conn.execute("DROP TABLE chat_state")
+        await conn.execute("ALTER TABLE chat_state_v24 RENAME TO chat_state")
+
+
+_MIGRATIONS.append(_migrate_v23_v24)
+
+
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
     row = await cur.fetchone()
@@ -866,6 +919,41 @@ async def _run_migrations(conn: aiosqlite.Connection) -> None:
         log.info("db_migration_applied", version=new_version)
 
 
+def _validate_user_status(status: str) -> UserStatus:
+    if status not in ("pending", "approved", "blocked"):
+        raise ValueError(f"Invalid user status: {status}")
+    return cast(UserStatus, status)
+
+
+async def _upsert_minimal_user(
+    conn: aiosqlite.Connection,
+    *,
+    tg_id: int,
+    email: str | None = None,
+    status: UserStatus | None = None,
+    update_email: bool = False,
+) -> None:
+    await conn.execute(
+        """
+        INSERT INTO users (tg_id, first_name, email, status, updated_at)
+        VALUES (?, '', ?, COALESCE(?, 'pending'), CURRENT_TIMESTAMP)
+        ON CONFLICT(tg_id) DO UPDATE SET
+            email = CASE WHEN ? THEN excluded.email ELSE users.email END,
+            status = CASE WHEN ? IS NULL THEN users.status ELSE excluded.status END,
+            updated_at = excluded.updated_at
+        """,
+        (tg_id, email, status, update_email, status),
+    )
+
+
+async def _approve_operator_user(conn: aiosqlite.Connection) -> None:
+    operator_chat_id = settings.OPERATOR_CHAT_ID
+    if operator_chat_id is None:
+        return
+    await _upsert_minimal_user(conn, tg_id=operator_chat_id, status="approved")
+    log.info("operator_user_approved", tg_id=operator_chat_id)
+
+
 async def init_db() -> None:
     """Create the database file (if absent), apply DDL, run pending migrations."""
     db_path = Path(settings.DB_PATH)
@@ -884,6 +972,8 @@ async def init_db() -> None:
             await conn.commit()
         else:
             await _run_migrations(conn)
+        await _approve_operator_user(conn)
+        await conn.commit()
     log.info("db_initialized", path=settings.DB_PATH)
 
 
@@ -1461,6 +1551,47 @@ async def upsert_user(
         )
         await conn.commit()
     log.info("user_upserted", tg_id=tg_id)
+
+
+async def get_user_status(tg_id: int) -> UserStatus:
+    """Return the invite-gate status for tg_id; unknown users default to pending."""
+    if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
+        return "approved"
+    row = await _fetch_one("SELECT status FROM users WHERE tg_id = ?", (tg_id,))
+    if row is None:
+        return "pending"
+    return _validate_user_status(str(row["status"]))
+
+
+async def set_user_status(tg_id: int, status: UserStatus) -> None:
+    """Set a user's invite-gate status, creating a minimal row if needed."""
+    status = _validate_user_status(status)
+    if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
+        status = "approved"
+    async with connection() as conn:
+        await _upsert_minimal_user(conn, tg_id=tg_id, status=status)
+        await conn.commit()
+    log.info("user_status_set", tg_id=tg_id, status=status)
+
+
+async def set_user_email(tg_id: int, email: str | None) -> None:
+    """Set a user's email address, creating a pending minimal row if needed."""
+    async with connection() as conn:
+        await _upsert_minimal_user(conn, tg_id=tg_id, email=email, update_email=True)
+        await conn.commit()
+    log.info("user_email_set", tg_id=tg_id, has_email=email is not None)
+
+
+async def list_pending_users() -> list[dict]:
+    """Return users waiting for approval, oldest first."""
+    return await _fetch_dicts(
+        """
+        SELECT tg_id, username, first_name, last_name, photo_url, email, status, created_at, updated_at
+        FROM users
+        WHERE status = 'pending'
+        ORDER BY created_at ASC, tg_id ASC
+        """
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,9 @@
 """Unit tests for src/database.py helpers added in slice #7."""
 from __future__ import annotations
 
-import asyncio
 import os
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import aiosqlite
@@ -586,6 +585,102 @@ async def test_create_repo_job(temp_db) -> None:
 
 
 # ---------------------------------------------------------------------------
+# users invite-gate status and awaiting_email chat state (#254).
+# ---------------------------------------------------------------------------
+
+
+async def _build_pre_invite_gate_db(path: str) -> None:
+    """A DB pinned one version before users.email/status + awaiting_email."""
+    from src import database
+
+    target_version = len(database._MIGRATIONS) - 1
+    async with aiosqlite.connect(path) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
+            "url TEXT NOT NULL, content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(
+            "CREATE TABLE users ("
+            "tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, username, first_name) VALUES (?,?,?)",
+            (111, "existing", "Existing"),
+        )
+        await conn.execute(
+            "CREATE TABLE chat_state ("
+            "chat_id INTEGER PRIMARY KEY, mode TEXT NOT NULL, job_id TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, expires_at TEXT NOT NULL, "
+            "CHECK(mode IN ('awaiting_intent', 'awaiting_freestyle')))"
+        )
+        await conn.execute(f"PRAGMA user_version = {target_version}")
+        await conn.commit()
+
+
+@pytest.mark.asyncio
+async def test_invite_gate_migration_adds_columns_chat_state_and_is_idempotent(tmp_path, monkeypatch) -> None:
+    from src import database
+
+    db_file = str(tmp_path / "pre_invite_gate.db")
+    await _build_pre_invite_gate_db(db_file)
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", None)
+
+    await database.init_db()
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("PRAGMA table_info(users)")
+        cols = {row[1] for row in await cur.fetchall()}
+        assert {"email", "status"} <= cols
+
+        cur = await conn.execute("SELECT status, email FROM users WHERE tg_id = 111")
+        row = await cur.fetchone()
+        assert row == ("approved", None)
+
+        await conn.execute(
+            "INSERT INTO chat_state (chat_id, mode, job_id, created_at, expires_at) "
+            "VALUES (1, 'awaiting_email', 'J1', 'now', 'later')"
+        )
+
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute(
+                "INSERT INTO users (tg_id, first_name, status) VALUES (999, 'Bad', 'other')"
+            )
+
+        cur = await conn.execute("PRAGMA user_version")
+        assert (await cur.fetchone())[0] == len(database._MIGRATIONS)
+
+
+@pytest.mark.asyncio
+async def test_user_status_truth_table_and_helpers(tmp_path, monkeypatch) -> None:
+    from src import database
+
+    db_file = str(tmp_path / "invite_gate_truth.db")
+    await _build_pre_invite_gate_db(db_file)
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 222)
+
+    await database.init_db()
+
+    assert await database.get_user_status(999) == "pending"
+    assert await database.get_user_status(111) == "approved"
+    assert await database.get_user_status(222) == "approved"
+
+    await database.set_user_email(999, "pending@example.com")
+    pending = await database.list_pending_users()
+    assert [row["tg_id"] for row in pending] == [999]
+    assert pending[0]["email"] == "pending@example.com"
+
+    await database.set_user_status(999, "approved")
+    assert await database.get_user_status(999) == "approved"
+    assert await database.list_pending_users() == []
+
+
+# ---------------------------------------------------------------------------
 # telegram_delivery is a stored domain of {'off','on'} only (#231).
 # 'retroactive' is a request-only action resolved at the API boundary.
 # ---------------------------------------------------------------------------
@@ -619,7 +714,7 @@ async def _build_pre_v23_db(path: str, *, job_delivery: str) -> None:
     jobs carries telegram_delivery with no CHECK (it was added by ALTER), plus a
     document_outputs child row to prove the FK-CASCADE survives the rebuild."""
     from src import database
-    target_version = len(database._MIGRATIONS) - 1
+    target_version = len(database._MIGRATIONS) - 2
     async with aiosqlite.connect(path) as conn:
         await conn.execute(
             "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
