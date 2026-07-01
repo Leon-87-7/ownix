@@ -27,6 +27,8 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - add to navbar the terms and privacy pages (to btns in one row) nested between the github and the sign out ( add an icon to this btn).
 
+- add a link pipeline, user sends a URL the bot sends a native preview block and the dashboard has it in the links table.
+
 ---
 
 ## Briefs
