@@ -6,8 +6,11 @@ import re as _re
 from datetime import datetime, timezone
 from typing import Any
 
+from google.auth.exceptions import RefreshError
+
 from src.config import settings
-from src.services.google_auth import build_google_service
+from src.services.google_auth import build_google_service, handle_google_refresh_error
+from src.services.google_workspace import user_sheet_id
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -66,22 +69,27 @@ def _repo_row(job: dict, analysis: dict, bundle: dict) -> list:
     ]
 
 
-async def _append_row_logged(tab: str, row: list, event_prefix: str, job_id) -> int | None:
+async def _append_row_logged(tab: str, row: list, event_prefix: str, job_id, chat_id: int | None = None) -> int | None:
     """Append *row* to *tab*; log `<prefix>_appended` / `<prefix>_failed`; never raise."""
     try:
-        row_idx = await asyncio.to_thread(_append_sync, tab, row)
+        row_idx = await asyncio.to_thread(_append_sync, tab, row, chat_id)
         log.info(f"{event_prefix}_appended", job_id=job_id, row_idx=row_idx)
         return row_idx
+    except RefreshError:
+        await handle_google_refresh_error(chat_id)
+        return None
     except Exception:
         log.exception(f"{event_prefix}_failed", job_id=job_id)
         return None
 
 
-async def _update_row_logged(tab: str, row_idx: int, row: list, event_prefix: str, job_id) -> None:
+async def _update_row_logged(tab: str, row_idx: int, row: list, event_prefix: str, job_id, chat_id: int | None = None) -> None:
     """Overwrite *row_idx* in *tab*; log `<prefix>_updated` / `<prefix>_update_failed`."""
     try:
-        await asyncio.to_thread(_update_sync, tab, row_idx, row)
+        await asyncio.to_thread(_update_sync, tab, row_idx, row, chat_id)
         log.info(f"{event_prefix}_updated", job_id=job_id, row_idx=row_idx)
+    except RefreshError:
+        await handle_google_refresh_error(chat_id)
     except Exception:
         log.exception(f"{event_prefix}_update_failed", job_id=job_id)
 
@@ -91,7 +99,7 @@ async def append_repo_row(job: dict, analysis: dict, bundle: dict) -> int | None
     if settings.export_blocked(job.get("chat_id")):
         return None
     row = _repo_row(job, analysis, bundle)
-    return await _append_row_logged(TAB_REPO, row, "sheets_repo", job.get("id"))
+    return await _append_row_logged(TAB_REPO, row, "sheets_repo", job.get("id"), job.get("chat_id"))
 
 
 async def update_repo_row(row_idx: int, job: dict, analysis: dict, bundle: dict) -> None:
@@ -99,14 +107,14 @@ async def update_repo_row(row_idx: int, job: dict, analysis: dict, bundle: dict)
     if settings.export_blocked(job.get("chat_id")):
         return
     row = _repo_row(job, analysis, bundle)
-    await _update_row_logged(TAB_REPO, row_idx, row, "sheets_repo", job.get("id"))
+    await _update_row_logged(TAB_REPO, row_idx, row, "sheets_repo", job.get("id"), job.get("chat_id"))
 
 
-def _build_service() -> Any:
-    return build_google_service("sheets", "v4", _SCOPES)
+def _build_service(chat_id: int | None = None) -> Any:
+    return build_google_service("sheets", "v4", _SCOPES, chat_id=chat_id)
 
 
-def _append_sync(tab_name: str, values: list) -> int | None:
+def _append_sync(tab_name: str, values: list, chat_id: int | None = None) -> int | None:
     """Append `values` to the consolidated workbook's `tab_name` tab.
 
     Range is tab-qualified A1 notation (`"<tab_name>!A1"`) — the Sheets v4 API
@@ -116,9 +124,9 @@ def _append_sync(tab_name: str, values: list) -> int | None:
     Returns the 1-based row index written (parsed from the API's updatedRange),
     or None when the API response doesn't include that information.
     """
-    service = _build_service()
+    service = _build_service(chat_id)
     result = service.spreadsheets().values().append(
-        spreadsheetId=settings.GOOGLE_SHEETS_ID,
+        spreadsheetId=user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID,
         range=f"{tab_name}!A1",
         valueInputOption="USER_ENTERED",
         insertDataOption="INSERT_ROWS",
@@ -129,11 +137,11 @@ def _append_sync(tab_name: str, values: list) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _update_sync(tab_name: str, row_idx: int, values: list) -> None:
+def _update_sync(tab_name: str, row_idx: int, values: list, chat_id: int | None = None) -> None:
     """Overwrite a single row at 1-based *row_idx* in *tab_name*."""
-    service = _build_service()
+    service = _build_service(chat_id)
     service.spreadsheets().values().update(
-        spreadsheetId=settings.GOOGLE_SHEETS_ID,
+        spreadsheetId=user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID,
         range=f"{tab_name}!A{row_idx}",
         valueInputOption="USER_ENTERED",
         body={"values": [values]},
@@ -174,8 +182,10 @@ async def append_short_row(job: dict) -> None:
         job.get("error_msg", ""),
     ]
     try:
-        await asyncio.to_thread(_append_sync, TAB_SHORT, row)
+        await asyncio.to_thread(_append_sync, TAB_SHORT, row, job.get("chat_id"))
         log.info("sheets_short_appended", job_id=job.get("id"))
+    except RefreshError:
+        await handle_google_refresh_error(job.get("chat_id"))
     except Exception:
         log.exception("sheets_short_failed", job_id=job.get("id"))
 
@@ -219,8 +229,10 @@ async def append_long_row(
         "",  # ai_market_data
     ]
     try:
-        await asyncio.to_thread(_append_sync, TAB_LONG, row)
+        await asyncio.to_thread(_append_sync, TAB_LONG, row, job.get("chat_id"))
         log.info("sheets_long_appended", job_id=job.get("id"))
+    except RefreshError:
+        await handle_google_refresh_error(job.get("chat_id"))
     except Exception:
         log.exception("sheets_long_failed", job_id=job.get("id"))
 
@@ -262,7 +274,7 @@ async def append_article_row(job: dict, *, domain: str) -> int | None:
     if settings.export_blocked(job.get("chat_id")):
         return None
     row = _article_row(job, domain=domain)
-    return await _append_row_logged(TAB_ARTICLE, row, "sheets_article", job.get("id"))
+    return await _append_row_logged(TAB_ARTICLE, row, "sheets_article", job.get("id"), job.get("chat_id"))
 
 
 async def update_article_row(row_idx: int, job: dict, *, domain: str) -> None:
@@ -270,7 +282,7 @@ async def update_article_row(row_idx: int, job: dict, *, domain: str) -> None:
     if settings.export_blocked(job.get("chat_id")):
         return
     row = _article_row(job, domain=domain)
-    await _update_row_logged(TAB_ARTICLE, row_idx, row, "sheets_article", job.get("id"))
+    await _update_row_logged(TAB_ARTICLE, row_idx, row, "sheets_article", job.get("id"), job.get("chat_id"))
 
 
 def _document_row(job: dict) -> list:
@@ -306,12 +318,12 @@ async def append_document_row(job: dict) -> int | None:
     Columns: job_id, url, title, document_type, author, publisher, objective,
              key_points, tools, references, submitted_at, status
     """
-    return await _append_row_logged(TAB_DOCUMENT, _document_row(job), "sheets_document", job.get("id"))
+    return await _append_row_logged(TAB_DOCUMENT, _document_row(job), "sheets_document", job.get("id"), job.get("chat_id"))
 
 
 async def update_document_row(row_idx: int, job: dict) -> None:
     """Overwrite the Document Analysis row at *row_idx* (1-based) in-place."""
-    await _update_row_logged(TAB_DOCUMENT, row_idx, _document_row(job), "sheets_document", job.get("id"))
+    await _update_row_logged(TAB_DOCUMENT, row_idx, _document_row(job), "sheets_document", job.get("id"), job.get("chat_id"))
 
 
 async def append_prd_row(
@@ -340,8 +352,10 @@ async def append_prd_row(
         datetime.now(timezone.utc).isoformat(),
     ]
     try:
-        await asyncio.to_thread(_append_sync, TAB_PRD, row)
+        await asyncio.to_thread(_append_sync, TAB_PRD, row, chat_id)
         log.info("sheets_prd_appended", job_id=job_id, slot=slot)
+    except RefreshError:
+        await handle_google_refresh_error(chat_id)
     except Exception:
         log.exception("sheets_prd_failed", job_id=job_id, slot=slot)
         raise  # let caller decide

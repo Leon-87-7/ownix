@@ -1,4 +1,4 @@
-"""Session middleware — gates /api/* routes; exempts /webhook, /health, /api/auth/telegram."""
+"""Session middleware — gates /api/* routes; exempts /webhook, /health, login, Mini App bootstrap, and Google callback."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ COOKIE_NAME = "vig_session"
 # Paths that bypass the session gate entirely
 _OPEN_PATHS = frozenset(["/webhook", "/health"])
 # /api/auth/telegram is the login endpoint — must be reachable without a session
-_OPEN_API_PATHS = frozenset(["/api/auth/telegram"])
+_OPEN_API_PATHS = frozenset(["/api/auth/telegram", "/api/auth/miniapp/session", "/api/google/callback"])
 
 
 class SessionMiddleware(BaseHTTPMiddleware):

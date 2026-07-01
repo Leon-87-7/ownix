@@ -8,7 +8,7 @@ Covers the two PRD seams for S1 (issue #84):
 from __future__ import annotations
 
 import hashlib
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 import hmac
 import json
@@ -260,3 +260,82 @@ class TestAuthRouter:
         resp = auth_client.get("/api/auth/me")
         assert resp.status_code == 200
         assert resp.json()["username"] == "me_user"
+
+# ---------------------------------------------------------------------------
+# Telegram Mini App initData
+# ---------------------------------------------------------------------------
+
+
+def _sign_miniapp(data: dict[str, str], bot_token: str) -> str:
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    return hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+
+def _make_init_data(bot_token: str, *, auth_date: int = 1_700_000_000, user_id: int = 4242, chat_id: int | None = None) -> str:
+    from urllib.parse import urlencode
+
+    data = {
+        "auth_date": str(auth_date),
+        "query_id": "AAH-test",
+        "user": json.dumps({"id": user_id, "first_name": "Mini", "username": "mini_user"}, separators=(",", ":")),
+    }
+    if chat_id is not None:
+        data["chat"] = json.dumps({"id": chat_id, "type": "private"}, separators=(",", ":"))
+    data["hash"] = _sign_miniapp(data, bot_token)
+    return urlencode(data)
+
+
+def test_verify_miniapp_init_data_accepts_fresh_signed_payload() -> None:
+    from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
+
+    init_data = _make_init_data(TOKEN, auth_date=1_700_000_000, chat_id=7777)
+    verified = verify_init_data(init_data, TOKEN, now=1_700_000_030)
+
+    assert verified is not None
+    assert verified["user"]["id"] == 4242
+    assert trusted_chat_id(verified) == 7777
+
+
+def test_verify_miniapp_init_data_rejects_tampering_and_stale_payloads() -> None:
+    from src.auth.telegram_miniapp import verify_init_data
+
+    init_data = _make_init_data(TOKEN, auth_date=1_700_000_000)
+    assert verify_init_data(init_data.replace("mini_user", "attacker"), TOKEN, now=1_700_000_030) is None
+    assert verify_init_data(init_data, TOKEN, now=1_700_004_000) is None
+
+
+def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.api import auth as auth_api
+
+    stored_user: dict[str, object] = {}
+    upserted: dict[str, object] = {}
+
+    async def fake_mint(user: dict) -> str:
+        stored_user.update(user)
+        return "mini-session"
+
+    async def fake_upsert_user(**kwargs: object) -> None:
+        upserted.update(kwargs)
+
+    monkeypatch.setattr(auth_api.session_store, "mint", fake_mint)
+    monkeypatch.setattr(auth_api.database, "upsert_user", fake_upsert_user)
+    monkeypatch.setattr(auth_api.settings, "TELEGRAM_BOT_TOKEN", TOKEN)
+    monkeypatch.setattr(auth_api.settings, "SESSION_COOKIE_SECURE", True)
+
+    response = Response()
+    payload = auth_api.MiniAppSessionPayload(init_data=_make_init_data(TOKEN, auth_date=int(time.time())))
+    import asyncio
+    result = asyncio.run(auth_api.miniapp_session(payload, response))
+
+    assert result["ok"] is True
+    assert result["google_connect_url"] == "/api/google/connect"
+    assert upserted["tg_id"] == 4242
+    assert stored_user == {
+        "id": 4242,
+        "first_name": "Mini",
+        "username": "mini_user",
+        "photo_url": None,
+        "source": "telegram_mini_app",
+    }
+    assert "vig_session=mini-session" in response.headers["set-cookie"]

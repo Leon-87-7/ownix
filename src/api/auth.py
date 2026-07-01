@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from src import database
 from src.auth import session as session_store
 from src.auth.hmac_verify import verify_telegram_auth
+from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
 from src.utils.logger import get_logger
@@ -20,6 +21,10 @@ _COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 days
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+class MiniAppSessionPayload(BaseModel):
+    init_data: str
+
+
 class TelegramPayload(BaseModel):
     id: int
     first_name: str
@@ -28,6 +33,43 @@ class TelegramPayload(BaseModel):
     photo_url: str | None = None
     auth_date: int
     hash: str
+
+
+@auth_router.post("/miniapp/session")
+async def miniapp_session(payload: MiniAppSessionPayload, response: Response) -> dict:
+    verified = verify_init_data(payload.init_data, settings.TELEGRAM_BOT_TOKEN)
+    if verified is None:
+        raise HTTPException(status_code=401, detail="Invalid Telegram Mini App initData")
+
+    user = verified["user"]
+    chat_id = trusted_chat_id(verified)
+    await database.upsert_user(
+        tg_id=chat_id,
+        username=user.get("username"),
+        first_name=user.get("first_name") or "Telegram user",
+        last_name=user.get("last_name"),
+        photo_url=user.get("photo_url"),
+    )
+
+    session_user = {
+        "id": chat_id,
+        "first_name": user.get("first_name") or "Telegram user",
+        "username": user.get("username"),
+        "photo_url": user.get("photo_url"),
+        "source": "telegram_mini_app",
+    }
+    session_id = await session_store.mint(session_user)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite="none",
+        max_age=_COOKIE_MAX_AGE,
+        path="/",
+    )
+    log.info("auth.miniapp_session", tg_id=user.get("id"), chat_id=chat_id)
+    return {"ok": True, "chat_id": chat_id, "google_connect_url": "/api/google/connect"}
 
 
 @auth_router.post("/telegram")
@@ -85,3 +127,6 @@ async def logout(request: Request) -> RedirectResponse:
 @auth_router.get("/me")
 async def me(request: Request) -> dict:
     return request.state.user
+
+# Compatibility aliases for older tests/callers; canonical routes live in src.api.google_oauth.
+from src.api.google_oauth import connect_google as google_connect  # noqa: E402

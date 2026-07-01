@@ -14,3 +14,5 @@ liteparse==2.0.7
 apscheduler>=3.10
 numpy>=1.26
 json-repair>=0.30
+
+cryptography>=42.0

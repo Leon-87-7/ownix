@@ -833,6 +833,14 @@ _HELP_TEXT = (
 
 
 async def _cmd_start(ctx: SlashCtx) -> None:
+    if settings.MINI_APP_URL:
+        await send_inline_keyboard(
+            ctx.chat_id,
+            _START_TEXT + "\n\nOpen the Mini App to connect Google without leaving Telegram.",
+            buttons=[[{"text": "Open Mini App", "web_app": {"url": settings.MINI_APP_URL}}]],
+            parse_mode="Markdown",
+        )
+        return
     await send_message(ctx.chat_id, _START_TEXT, parse_mode="Markdown")
 
 

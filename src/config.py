@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_ID: str = ""
     GOOGLE_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_REFRESH_TOKEN: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = ""
+    GOOGLE_TOKEN_ENCRYPTION_KEY: str = ""
     GOOGLE_DRIVE_FOLDER_SHORT: str = ""
     GOOGLE_DRIVE_FOLDER_LONG: str = ""
     # Single consolidated workbook holding all per-domain tabs (ADR-0013).
@@ -63,6 +65,7 @@ class Settings(BaseSettings):
 
     # Web dashboard (issue #84)
     SESSION_COOKIE_SECURE: bool = True  # set False only for local HTTP dev
+    MINI_APP_URL: str = ""
 
     # Slices #6/#7 — Mini-PRD
     GOOGLE_DRIVE_FOLDER_PRD: str = ""
@@ -83,6 +86,14 @@ class Settings(BaseSettings):
         Blocks only an explicit non-operator chat. A None chat_id (system/operator
         aggregate calls like brain rebuild) and an unset OPERATOR_CHAT_ID both pass.
         """
+        if chat_id is not None:
+            try:
+                from src.services.google_tokens import has_google_connection_sync
+
+                if has_google_connection_sync(chat_id):
+                    return False
+            except Exception:
+                pass
         return (
             self.OPERATOR_CHAT_ID is not None
             and chat_id is not None

@@ -164,6 +164,17 @@ function FeedPageContent() {
         </div>
       </header>
 
+      <section className="rounded-card border border-line bg-panel p-4 shadow-card">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-muted">Google export</p>
+            <h2 className="mt-1 text-lg font-semibold text-ink">Connect Google</h2>
+            <p className="mt-1 max-w-2xl text-sm text-body">Authorize Drive + Sheets so your jobs export into a vig-owned /vig folder in your own Google Drive.</p>
+          </div>
+          <a href="/api/google/connect" className="inline-flex items-center justify-center rounded-full bg-signal px-4 py-2 text-sm font-semibold text-canvas transition-ui hover:brightness-110">Connect Google</a>
+        </div>
+      </section>
+
       {stats && (
         <StatsOverview
           stats={stats}

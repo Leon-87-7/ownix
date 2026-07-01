@@ -147,3 +147,73 @@ async def test_spaces_export_blocked_returns_error(operator_set, monkeypatch):
 
     assert out == {"error": "export_blocked"}
     gdoc.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_drive_invalid_grant_deletes_token_notifies_once_and_completes(monkeypatch):
+    from google.auth.exceptions import RefreshError
+
+    calls = {"handled": 0}
+
+    def boom(*args, **kwargs):
+        raise RefreshError("invalid_grant")
+
+    async def handle_revoked(chat_id):
+        calls["handled"] += 1
+        assert chat_id == OPERATOR
+
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", OPERATOR)
+    monkeypatch.setattr(drive_svc, "_gdoc_sync", boom)
+    monkeypatch.setattr(drive_svc, "handle_google_refresh_error", handle_revoked)
+
+    assert await drive_svc.export_to_gdoc("# md", "n", "folder", chat_id=OPERATOR) == ""
+    assert calls == {"handled": 1}
+
+
+@pytest.mark.asyncio
+async def test_google_connect_forces_consent(monkeypatch):
+    from src.api import google_oauth
+
+    class Url:
+        def __init__(self, value):
+            self.value = value
+        def __str__(self):
+            return self.value
+
+    request = SimpleNamespace(
+        state=SimpleNamespace(user={"id": OPERATOR}),
+        url_for=lambda name: Url("https://api.example.com/api/google/callback"),
+    )
+    monkeypatch.setattr("src.config.settings.GOOGLE_OAUTH_CLIENT_ID", "client")
+
+    response = await google_oauth.connect_google(request)  # type: ignore[arg-type]
+    location = response.headers["location"]
+    assert "prompt=consent" in location
+    assert "access_type=offline" in location
+
+
+@pytest.mark.asyncio
+async def test_google_refresh_handler_deletes_token_and_notifies_once(monkeypatch):
+    from src.services import google_auth
+
+    calls = {"deleted": 0, "marked": 0, "sent": 0}
+
+    async def mark_once(chat_id):
+        calls["marked"] += 1
+        return calls["marked"] == 1
+
+    async def delete_token(chat_id):
+        calls["deleted"] += 1
+
+    async def send_message(chat_id, text, **kwargs):
+        calls["sent"] += 1
+        assert chat_id == OPERATOR
+        assert "/connect" in text
+
+    monkeypatch.setattr(google_auth, "mark_reconnect_notified_once", mark_once)
+    monkeypatch.setattr(google_auth, "delete_google_token", delete_token)
+    monkeypatch.setattr(google_auth.sender, "send_message", send_message)
+
+    assert await google_auth.handle_google_refresh_error(OPERATOR) is True
+    assert await google_auth.handle_google_refresh_error(OPERATOR) is False
+    assert calls == {"deleted": 2, "marked": 2, "sent": 1}
