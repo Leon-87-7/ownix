@@ -9,8 +9,13 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from src.config import settings
-from src.services.google_auth import disconnect_google, google_connected
-from src.services.google_tokens import consume_google_oauth_state, store_google_oauth_state, store_google_token
+from src.services.google_auth import disconnect_google
+from src.services.google_tokens import (
+    consume_google_oauth_state,
+    load_google_token,
+    store_google_oauth_state,
+    store_google_token,
+)
 
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/spreadsheets"]
 
@@ -79,7 +84,7 @@ async def google_oauth_callback(request: Request, code: str, state: str) -> Redi
 @google_oauth_router.get("/status")
 async def google_status(request: Request) -> dict:
     chat_id = int(request.state.user["id"])
-    return {"connected": google_connected(chat_id)}
+    return {"connected": await load_google_token(chat_id) is not None}
 
 
 @google_oauth_router.post("/disconnect")

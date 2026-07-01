@@ -23,11 +23,6 @@ GOOGLE_EXPORT_SCOPES = [
 ]
 
 
-def google_connected(chat_id: int) -> bool:
-    return load_google_token_sync(chat_id) is not None
-
-
-
 async def handle_google_refresh_error(chat_id: int | None) -> bool:
     """Delete a revoked Google token and send the reconnect prompt at most once."""
     if chat_id is None:

@@ -10,6 +10,8 @@ from src.services.google_tokens import has_google_connection_sync
 FOLDER_KEY = "google_workspace:folder_id"
 SHEET_KEY = "google_workspace:sheet_id"
 _LOCKS_GUARD = threading.Lock()
+# ponytail: in-process lock only guards single-worker deploys (current prod is
+# one process); move to a DB-level advisory lock if we ever run multi-worker.
 _WORKSPACE_LOCKS: dict[tuple[int, str], threading.Lock] = {}
 
 
