@@ -25,6 +25,8 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - Fix Google OAuth branding verification rejection: home page must render without login and be the face of the project with visuals and on-brand feel, must explain VIG's purpose.
 
+- add to navbar the terms and privacy pages (to btns in one row) nested between the github and the sign out ( add an icon to this btn).
+
 ---
 
 ## Briefs
