@@ -276,6 +276,28 @@ class TestAuthRouter:
         resp = auth_client.get("/api/auth/me")
         assert resp.status_code == 200
         assert resp.json()["username"] == "me_user"
+        assert resp.json()["status"] == "pending"
+
+    def test_set_email_persists_for_current_user(self, auth_client: TestClient) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        user = {"id": 101, "username": "email_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:email-sid"] = json.dumps(user)
+
+        resp = auth_client.put(
+            "/api/auth/email",
+            cookies={"vig_session": "email-sid"},
+            json={"email": "User@Example.COM"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["email"] == "user@example.com"
+        db_user = asyncio.run(database.get_user(101))
+        assert db_user is not None
+        assert db_user["email"] == "user@example.com"
+
 
 # ---------------------------------------------------------------------------
 # Telegram Mini App initData
@@ -356,24 +378,3 @@ def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.Monke
     }
     assert "vig_session=mini-session" in response.headers["set-cookie"]
     assert "secure" in response.headers["set-cookie"].lower()
-        assert resp.json()["status"] == "pending"
-
-    def test_set_email_persists_for_current_user(self, auth_client: TestClient) -> None:
-        import src.auth.session as session_module
-        from src import database
-
-        user = {"id": 101, "username": "email_user"}
-        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
-        fr._store["session:email-sid"] = json.dumps(user)
-
-        resp = auth_client.put(
-            "/api/auth/email",
-            cookies={"vig_session": "email-sid"},
-            json={"email": "User@Example.COM"},
-        )
-
-        assert resp.status_code == 200
-        assert resp.json()["email"] == "user@example.com"
-        db_user = asyncio.run(database.get_user(101))
-        assert db_user is not None
-        assert db_user["email"] == "user@example.com"

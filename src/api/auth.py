@@ -72,6 +72,8 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
     )
     log.info("auth.miniapp_session", tg_id=user.get("id"), chat_id=chat_id)
     return {"ok": True, "chat_id": chat_id, "google_connect_url": "/api/google/connect"}
+
+
 class EmailPayload(BaseModel):
     email: str
 
@@ -126,10 +128,6 @@ async def logout(request: Request) -> RedirectResponse:
 
 @auth_router.get("/me")
 async def me(request: Request) -> dict:
-    return request.state.user
-
-# Compatibility aliases for older tests/callers; canonical routes live in src.api.google_oauth.
-from src.api.google_oauth import connect_google as google_connect  # noqa: E402
     session_user = request.state.user
     tg_id = int(session_user["id"])
     db_user = await database.get_user(tg_id)
@@ -150,3 +148,7 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
     await database.set_user_email(tg_id, email)
     status = await database.get_user_status(tg_id)
     return {"email": email, "status": status}
+
+
+# Compatibility aliases for older tests/callers; canonical routes live in src.api.google_oauth.
+from src.api.google_oauth import connect_google as google_connect  # noqa: E402
