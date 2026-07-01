@@ -142,6 +142,18 @@ class TestSessionStore:
 
         assert await session.resolve("no-such-session") is None
 
+    async def test_handoff_redeems_once_then_returns_none(self, fake_redis: FakeRedis) -> None:
+        from src.auth import session
+
+        token = await session.mint_handoff("real-session-id")
+        assert await session.redeem_handoff(token) == "real-session-id"
+        assert await session.redeem_handoff(token) is None
+
+    async def test_redeem_unknown_handoff_returns_none(self, fake_redis: FakeRedis) -> None:
+        from src.auth import session
+
+        assert await session.redeem_handoff("no-such-token") is None
+
 
 # ---------------------------------------------------------------------------
 # Session middleware + auth router (integration via TestClient)
@@ -218,11 +230,12 @@ class TestSessionMiddleware:
         assert resp.status_code == 200, f"Unexpected: {resp.text}"
         assert resp.json()["user"]["id"] == 7
 
-    def test_google_connect_reachable_via_session_query_param(
+    def test_google_connect_reachable_via_handoff_token(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """openLink hands off to the system browser, which has no cookie — the Mini App
-        appends the session id as a query param and this path must accept it as a fallback."""
+        appends a single-use handoff token (not the session id) and this path must
+        redeem it as a fallback."""
         import src.auth.session as session_module
         from src import database
 
@@ -230,20 +243,24 @@ class TestSessionMiddleware:
         asyncio.run(database.set_user_status(9, "approved"))
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:mini-connect-sid"] = json.dumps(user)
+        fr._store["connect_handoff:handoff-tok"] = "mini-connect-sid"
 
-        resp = auth_client.get("/api/google/connect", params={"session": "mini-connect-sid"})
+        resp = auth_client.get("/api/google/connect", params={"token": "handoff-tok"})
         assert resp.status_code == 200, f"Unexpected: {resp.text}"
         assert resp.json()["user"]["id"] == 9
+        # Single-use: the token must be gone after redemption.
+        assert "connect_handoff:handoff-tok" not in fr._store
 
-    def test_probe_endpoint_ignores_session_query_param(self, auth_client: TestClient) -> None:
-        """The query-param fallback is scoped to /api/google/connect only, not every route."""
+    def test_probe_endpoint_ignores_handoff_token(self, auth_client: TestClient) -> None:
+        """The handoff-token fallback is scoped to /api/google/connect only, not every route."""
         import src.auth.session as session_module
 
         user = {"id": 10, "username": "should_not_pass"}
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:leaked-sid"] = json.dumps(user)
+        fr._store["connect_handoff:leaked-tok"] = "leaked-sid"
 
-        resp = auth_client.get("/api/probe", params={"session": "leaked-sid"})
+        resp = auth_client.get("/api/probe", params={"token": "leaked-tok"})
         assert resp.status_code == 401
 
     def test_api_endpoint_403_with_pending_session(self, auth_client: TestClient) -> None:
@@ -385,10 +402,15 @@ def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.Monke
         stored_user.update(user)
         return "mini-session"
 
+    async def fake_mint_handoff(session_id: str) -> str:
+        assert session_id == "mini-session"
+        return "mini-handoff-token"
+
     async def fake_upsert_user(**kwargs: object) -> None:
         upserted.update(kwargs)
 
     monkeypatch.setattr(auth_api.session_store, "mint", fake_mint)
+    monkeypatch.setattr(auth_api.session_store, "mint_handoff", fake_mint_handoff)
     monkeypatch.setattr(auth_api.database, "upsert_user", fake_upsert_user)
     monkeypatch.setattr(auth_api.settings, "TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setattr(auth_api.settings, "SESSION_COOKIE_SECURE", False)
@@ -399,7 +421,7 @@ def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.Monke
     result = asyncio.run(auth_api.miniapp_session(payload, response))
 
     assert result["ok"] is True
-    assert result["google_connect_url"] == "/api/google/connect?session=mini-session"
+    assert result["google_connect_url"] == "/api/google/connect?token=mini-handoff-token"
     assert upserted["tg_id"] == 4242
     assert stored_user == {
         "id": 4242,

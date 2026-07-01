@@ -16,6 +16,9 @@ log = get_logger(__name__)
 _SESSION_PREFIX = "session:"
 _TTL_SECONDS = 30 * 24 * 3600  # 30 days
 
+_HANDOFF_PREFIX = "connect_handoff:"
+_HANDOFF_TTL_SECONDS = 60
+
 _redis: redis.Redis | None = None
 
 
@@ -58,3 +61,25 @@ async def revoke(session_id: str) -> None:
     """Delete the session key immediately (one Redis DEL)."""
     await _client().delete(f"{_SESSION_PREFIX}{session_id}")
     log.info("session_revoked")
+
+
+async def mint_handoff(session_id: str) -> str:
+    """Create a short-lived, single-use token that redeems to session_id.
+
+    Used when a session must cross into a context with no cookie access — Mini App
+    openLink hands off to the system browser, a separate cookie jar. Putting the real
+    session id in that URL would leak a long-lived, reusable credential via browser
+    history and server access logs; this token is single-use and expires in 60s.
+    """
+    token = secrets.token_urlsafe(24)
+    await _client().set(f"{_HANDOFF_PREFIX}{token}", session_id, ex=_HANDOFF_TTL_SECONDS)
+    return token
+
+
+async def redeem_handoff(token: str) -> str | None:
+    """Fetch and immediately delete the session id for a handoff token."""
+    key = f"{_HANDOFF_PREFIX}{token}"
+    session_id = await _client().get(key)
+    if session_id is not None:
+        await _client().delete(key)
+    return session_id

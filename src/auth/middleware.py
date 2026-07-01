@@ -25,9 +25,9 @@ _PRE_APPROVAL_AUTH_PATHS = frozenset([
 
 # Mini App "Connect Google" opens this path via Telegram's openLink, which hands off
 # to the system browser — a separate cookie jar with no access to the webview session.
-# The Mini App page appends the already-minted session id as a query param so this one
-# path can authenticate without the cookie.
-_SESSION_QUERY_FALLBACK_PATHS = frozenset(["/api/google/connect"])
+# The Mini App page appends a single-use handoff token (not the session id itself) as
+# a query param so this one path can authenticate without the cookie.
+_HANDOFF_TOKEN_PATHS = frozenset(["/api/google/connect"])
 
 
 class SessionMiddleware(BaseHTTPMiddleware):
@@ -41,8 +41,10 @@ class SessionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         session_id = request.cookies.get(COOKIE_NAME)
-        if not session_id and path in _SESSION_QUERY_FALLBACK_PATHS:
-            session_id = request.query_params.get("session")
+        if not session_id and path in _HANDOFF_TOKEN_PATHS:
+            token = request.query_params.get("token")
+            if token:
+                session_id = await session_store.redeem_handoff(token)
         if not session_id:
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 

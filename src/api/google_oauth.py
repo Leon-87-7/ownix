@@ -50,7 +50,11 @@ async def connect_google(request: Request) -> RedirectResponse:
         "prompt": "consent",
         "state": state,
     }
-    return RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params), status_code=303)
+    return RedirectResponse(
+        "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params),
+        status_code=303,
+        headers={"Referrer-Policy": "no-referrer"},
+    )
 
 
 @google_oauth_router.get("/callback", name="google_oauth_callback")

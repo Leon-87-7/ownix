@@ -71,13 +71,15 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
         path="/",
     )
     log.info("auth.miniapp_session", tg_id=user.get("id"), chat_id=chat_id)
+    # openLink hands off to the system browser, which has no access to this webview's
+    # session cookie. A single-use, 60s handoff token (not the session id itself) lets
+    # /connect authenticate without putting a long-lived credential in the URL, where
+    # it would leak via browser history and server access logs.
+    handoff_token = await session_store.mint_handoff(session_id)
     return {
         "ok": True,
         "chat_id": chat_id,
-        # openLink hands off to the system browser, which has no access to this
-        # webview's session cookie — carry the session id so /connect can still
-        # authenticate (see SessionMiddleware._SESSION_QUERY_FALLBACK_PATHS).
-        "google_connect_url": f"/api/google/connect?session={session_id}",
+        "google_connect_url": f"/api/google/connect?token={handoff_token}",
     }
 
 
