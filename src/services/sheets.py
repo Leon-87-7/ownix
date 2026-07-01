@@ -360,6 +360,7 @@ async def append_prd_row(
         log.info("sheets_prd_appended", job_id=job_id, slot=slot)
     except RefreshError:
         await handle_google_refresh_error(chat_id)
+        raise  # let caller decide
     except Exception:
         log.exception("sheets_prd_failed", job_id=job_id, slot=slot)
         raise  # let caller decide

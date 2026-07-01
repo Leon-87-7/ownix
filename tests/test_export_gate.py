@@ -193,6 +193,7 @@ async def test_google_connect_forces_consent(monkeypatch):
 
     monkeypatch.setattr("src.config.settings.GOOGLE_OAUTH_CLIENT_ID", "client")
     monkeypatch.setattr("src.config.settings.GOOGLE_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setattr("src.config.settings.GOOGLE_TOKEN_ENCRYPTION_KEY", "test-google-token-key")
     monkeypatch.setattr(google_oauth, "store_google_oauth_state", store_state)
 
     response = await google_oauth.connect_google(request)  # type: ignore[arg-type]
@@ -201,6 +202,54 @@ async def test_google_connect_forces_consent(monkeypatch):
     assert "access_type=offline" in location
     assert stored_state["chat_id"] == OPERATOR
     assert f"state={stored_state['state']}" in location
+
+
+@pytest.mark.asyncio
+async def test_google_callback_denied_consent_redirects_without_crashing(monkeypatch):
+    """A user clicking Cancel sends ?error=access_denied with no `code` — must not 422/500."""
+    from src.api import google_oauth
+
+    request = SimpleNamespace(url_for=lambda name: "https://api.example.com/api/google/callback")
+
+    monkeypatch.setattr("src.config.settings.GOOGLE_OAUTH_CLIENT_ID", "client")
+    monkeypatch.setattr("src.config.settings.GOOGLE_OAUTH_CLIENT_SECRET", "secret")
+    monkeypatch.setattr("src.config.settings.GOOGLE_TOKEN_ENCRYPTION_KEY", "test-google-token-key")
+
+    async def consume_state(state: str):
+        return OPERATOR
+
+    monkeypatch.setattr(google_oauth, "consume_google_oauth_state", consume_state)
+
+    response = await google_oauth.google_oauth_callback(
+        request, state="state-1", code=None, error="access_denied"
+    )  # type: ignore[arg-type]
+    assert response.status_code == 303
+    assert "denied" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_append_prd_row_reraises_on_refresh_error(monkeypatch):
+    """append_prd_row must re-raise after handling a revoked token, matching its documented
+    'let caller decide' contract — prd.py relies on the exception to warn the user."""
+    from google.auth.exceptions import RefreshError
+
+    calls = {"handled": 0}
+
+    def boom(*args, **kwargs):
+        raise RefreshError("invalid_grant")
+
+    async def handle_revoked(chat_id):
+        calls["handled"] += 1
+
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", OPERATOR)
+    monkeypatch.setattr(sheets_svc, "_append_sync", boom)
+    monkeypatch.setattr(sheets_svc, "handle_google_refresh_error", handle_revoked)
+
+    with pytest.raises(RefreshError):
+        await sheets_svc.append_prd_row(
+            job_id="j1", video_url="u", title="t", drive_url="", chat_id=OPERATOR
+        )
+    assert calls == {"handled": 1}
 
 
 @pytest.mark.asyncio

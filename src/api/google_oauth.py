@@ -27,7 +27,11 @@ def _redirect_uri(request: Request) -> str:
 
 
 def _require_google_oauth_config() -> None:
-    if not settings.GOOGLE_OAUTH_CLIENT_ID or not settings.GOOGLE_OAUTH_CLIENT_SECRET:
+    if (
+        not settings.GOOGLE_OAUTH_CLIENT_ID
+        or not settings.GOOGLE_OAUTH_CLIENT_SECRET
+        or not settings.GOOGLE_TOKEN_ENCRYPTION_KEY
+    ):
         raise HTTPException(status_code=503, detail="Google OAuth is not configured")
 
 
@@ -50,11 +54,15 @@ async def connect_google(request: Request) -> RedirectResponse:
 
 
 @google_oauth_router.get("/callback", name="google_oauth_callback")
-async def google_oauth_callback(request: Request, code: str, state: str) -> RedirectResponse:
+async def google_oauth_callback(
+    request: Request, state: str, code: str | None = None, error: str | None = None
+) -> RedirectResponse:
     _require_google_oauth_config()
     chat_id = await consume_google_oauth_state(state)
     if chat_id is None:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if error or not code:
+        return RedirectResponse("/?google=denied", status_code=303)
     async with httpx.AsyncClient(timeout=15) as client:
         res = await client.post(
             "https://oauth2.googleapis.com/token",
