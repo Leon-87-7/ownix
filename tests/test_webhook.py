@@ -558,6 +558,39 @@ async def test_invite_callback_approve_rejects_non_operator_chat(temp_db, monkey
 
 
 @pytest.mark.asyncio
+async def test_invite_callback_approve_rejects_unset_operator_and_missing_chat(
+    temp_db, monkeypatch
+):
+    """Unset operator config plus missing chat id must not approve invites."""
+    from src import database as db
+    from src.telegram import webhook
+
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", None)
+    await db.set_user_email(100, "user@example.com")
+    await db.set_user_status(100, "pending")
+    set_status = AsyncMock(wraps=db.set_user_status)
+    monkeypatch.setattr("src.telegram.webhook.database.set_user_status", set_status)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    answered = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
+    monkeypatch.setattr("src.telegram.webhook.edit_message_text", AsyncMock())
+
+    await webhook._handle_callback(
+        {
+            "id": "CB",
+            "data": "invite_approve:100",
+            "message": {"message_id": 7},
+        }
+    )
+
+    set_status.assert_not_awaited()
+    sent.assert_not_awaited()
+    answered.assert_awaited_once_with("CB", text="Not authorized.")
+    assert await db.get_user_status(100) == "pending"
+
+
+@pytest.mark.asyncio
 async def test_invite_callback_block_rejects_non_operator_chat(temp_db, monkeypatch):
     """A chat that isn't the operator must not be able to block invites (blocker fix)."""
     from src import database as db

@@ -368,7 +368,7 @@ async def _cb_invite_decision(
     ctx: CallbackCtx, status: str, notify_message: str, log_action: str
 ) -> None:
     """Shared handler for the operator's ✅ Approve / 🚫 Block invite buttons."""
-    if ctx.chat_id != settings.OPERATOR_CHAT_ID:
+    if settings.OPERATOR_CHAT_ID is None or ctx.chat_id != settings.OPERATOR_CHAT_ID:
         log.warning("invite_decision.unauthorized", chat_id=ctx.chat_id, action=log_action)
         await answer_callback_query(ctx.cq_id, text="Not authorized.")
         return
@@ -1174,7 +1174,6 @@ async def _invite_gate_allows(
         await send_message(chat_id, _INVITE_BLOCKED_MESSAGE)
         return False
 
-    user = await database.get_user(chat_id)
     state = await database.get_chat_state(chat_id)
     if state and state.get("mode") == "awaiting_email" and _resolve_chat_state(state):
         email = normalize_email(text)
@@ -1182,8 +1181,8 @@ async def _invite_gate_allows(
             await send_message(chat_id, "Please send a valid email address.")
             return False
         await database.set_user_email(chat_id, email)
-        await database.clear_chat_state(chat_id)
         await _notify_operator_invite(chat_id, email)
+        await database.clear_chat_state(chat_id)
         await send_message(chat_id, _INVITE_WAITING_MESSAGE)
         return False
 

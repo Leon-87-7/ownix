@@ -221,7 +221,11 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {canShowDashboard ? children : <GateScreen status={user.status === 'blocked' ? 'blocked' : 'pending'} />}
+      {canShowDashboard ? children : user.status === 'blocked' ? (
+        <GateScreen status="blocked" />
+      ) : user.status === 'pending' ? (
+        <GateScreen status="pending" />
+      ) : null}
       {needsEmail && user.status !== 'blocked' && (
         <EmailModal
           onSaved={(email, status) =>

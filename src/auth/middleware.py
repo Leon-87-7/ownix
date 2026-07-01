@@ -15,6 +15,11 @@ COOKIE_NAME = "vig_session"
 _OPEN_PATHS = frozenset(["/webhook", "/health"])
 # /api/auth/telegram is the login endpoint — must be reachable without a session.
 _OPEN_API_PATHS = frozenset(["/api/auth/telegram"])
+_PRE_APPROVAL_AUTH_PATHS = frozenset([
+    "/api/auth/me",
+    "/api/auth/email",
+    "/api/auth/logout",
+])
 
 
 class SessionMiddleware(BaseHTTPMiddleware):
@@ -36,8 +41,8 @@ class SessionMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Invalid or expired session"}, status_code=401)
 
         request.state.user = user
-        # Only /api/auth/me and /api/auth/email are intentionally reachable before approval.
-        if path.startswith("/api/auth/"):
+        # Only these auth routes are intentionally reachable before approval.
+        if path in _PRE_APPROVAL_AUTH_PATHS:
             return await call_next(request)
 
         status = await database.get_user_status(int(user["id"]))

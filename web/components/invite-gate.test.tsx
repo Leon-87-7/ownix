@@ -111,109 +111,6 @@ describe("InviteGate", () => {
     expect(screen.getByText("Pending approval")).toBeTruthy();
   });
 
-  it("shows retry state instead of redirecting on transient session check failures", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ detail: "oops" }), { status: 500 }),
-      ),
-    );
-
-    render(
-      <InviteGate>
-        <div>Dashboard feed</div>
-      </InviteGate>,
-    );
-
-    expect(await screen.findByText("Could not check access")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
-    expect(screen.queryByText("Dashboard feed")).toBeNull();
-    expect(navigationMock.replace).not.toHaveBeenCalled();
-  });
-
-  it("re-enables email submit and shows an alert when saving rejects", async () => {
-    const fetchMock = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (String(input) === "/api/auth/email" && init?.method === "PUT") {
-          throw new Error("network down");
-        }
-        return new Response(
-          JSON.stringify({ id: 1, email: null, status: "pending" }),
-          { status: 200 },
-        );
-      },
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <InviteGate>
-        <div>Dashboard feed</div>
-      </InviteGate>,
-    );
-
-    const input = await screen.findByLabelText("Email");
-    fireEvent.change(input, { target: { value: "user@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: /save email/i }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not save email. Please try again.",
-    );
-    expect(
-      screen.getByRole("button", { name: /save email/i }),
-    ).not.toBeDisabled();
-  });
-
-  it("marks the email modal as a dialog and focuses the email input on mount", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ id: 1, email: null, status: "pending" }),
-            { status: 200 },
-          ),
-      ),
-    );
-
-    render(
-      <InviteGate>
-        <div>Dashboard feed</div>
-      </InviteGate>,
-    );
-
-    const dialog = await screen.findByRole("dialog", {
-      name: /email required/i,
-    });
-    expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(screen.getByLabelText("Email")).toHaveFocus();
-  });
-
-  it("does not show the email modal for blocked users without an email", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({ id: 1, email: null, status: "blocked" }),
-            { status: 200 },
-          ),
-      ),
-    );
-
-    render(
-      <InviteGate>
-        <div>Dashboard feed</div>
-      </InviteGate>,
-    );
-
-    expect(await screen.findByText("Access blocked")).toBeTruthy();
-    expect(
-      screen.queryByRole("dialog", { name: /email required/i }),
-    ).toBeNull();
-    expect(screen.queryByLabelText("Email")).toBeNull();
-  });
-
   it('does not redirect on transient session-check failure and shows retry', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('server error', { status: 500 })));
 
@@ -278,6 +175,7 @@ describe("InviteGate", () => {
     render(<InviteGate><div>Dashboard feed</div></InviteGate>);
 
     expect(await screen.findByRole('dialog', { name: /email required/i })).toBeTruthy();
+    expect(screen.queryByText('Pending approval')).toBeNull();
     expect(screen.queryByText('Dashboard feed')).toBeNull();
   });
 

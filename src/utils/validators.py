@@ -26,14 +26,6 @@ _GITHUB_RESERVED_PATHS: frozenset[str] = frozenset({
 
 _REPO_HINT = "If you meant a repository, the URL should look like https://github.com/<owner>/<repo>."
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-def normalize_email(email: str) -> str | None:
-    normalized = email.strip().lower()
-    return normalized if _EMAIL_RE.fullmatch(normalized) else None
-
-
 ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset({
     "substack.com",
     "medium.com",
