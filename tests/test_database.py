@@ -589,7 +589,7 @@ async def test_create_repo_job(temp_db) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _build_pre_invite_gate_db(path: str) -> None:
+async def _build_pre_invite_gate_db(path: str, *, status_exists: bool = False) -> None:
     """A DB pinned one version before users.email/status + awaiting_email."""
     from src import database
 
@@ -600,16 +600,28 @@ async def _build_pre_invite_gate_db(path: str) -> None:
             "url TEXT NOT NULL, content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', "
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         )
+        status_col = (
+            ", status TEXT NOT NULL DEFAULT 'pending' "
+            "CHECK(status IN ('pending','approved','blocked'))"
+            if status_exists
+            else ""
+        )
         await conn.execute(
             "CREATE TABLE users ("
             "tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
             "last_name TEXT, photo_url TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            f"updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP{status_col})"
         )
-        await conn.execute(
-            "INSERT INTO users (tg_id, username, first_name) VALUES (?,?,?)",
-            (111, "existing", "Existing"),
-        )
+        if status_exists:
+            await conn.execute(
+                "INSERT INTO users (tg_id, username, first_name, status) VALUES (?,?,?,?)",
+                (111, "existing", "Existing", "pending"),
+            )
+        else:
+            await conn.execute(
+                "INSERT INTO users (tg_id, username, first_name) VALUES (?,?,?)",
+                (111, "existing", "Existing"),
+            )
         await conn.execute(
             "CREATE TABLE chat_state ("
             "chat_id INTEGER PRIMARY KEY, mode TEXT NOT NULL, job_id TEXT NOT NULL, "
@@ -656,6 +668,25 @@ async def test_invite_gate_migration_adds_columns_chat_state_and_is_idempotent(t
 
 
 @pytest.mark.asyncio
+async def test_invite_gate_migration_backfills_when_status_column_preexists(
+    tmp_path, monkeypatch
+) -> None:
+    """Crash-retry shape: status DDL exists but user_version has not advanced yet."""
+    from src import database
+
+    db_file = str(tmp_path / "pre_invite_gate_partial.db")
+    await _build_pre_invite_gate_db(db_file, status_exists=True)
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", None)
+
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("SELECT status FROM users WHERE tg_id = 111")
+        assert await cur.fetchone() == ("approved",)
+
+
+@pytest.mark.asyncio
 async def test_user_status_truth_table_and_helpers(tmp_path, monkeypatch) -> None:
     from src import database
 
@@ -669,6 +700,9 @@ async def test_user_status_truth_table_and_helpers(tmp_path, monkeypatch) -> Non
     assert await database.get_user_status(999) == "pending"
     assert await database.get_user_status(111) == "approved"
     assert await database.get_user_status(222) == "approved"
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute("SELECT status FROM users WHERE tg_id = ?", (222,))
+        assert await cur.fetchone() == ("approved",)
 
     await database.set_user_email(999, "pending@example.com")
     pending = await database.list_pending_users()

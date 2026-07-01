@@ -863,16 +863,15 @@ async def _migrate_v23_v24(conn: aiosqlite.Connection) -> None:
     """Add invite-gate user fields and awaiting_email chat state (#254)."""
     cur = await conn.execute("PRAGMA table_info(users)")
     existing_user_cols = {row[1] for row in await cur.fetchall()}
-    added_status = "status" not in existing_user_cols
 
     if "email" not in existing_user_cols:
         await conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
-    if added_status:
+    if "status" not in existing_user_cols:
         await conn.execute(
             "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'pending' "
             "CHECK(status IN ('pending','approved','blocked'))"
         )
-        await conn.execute("UPDATE users SET status = 'approved'")
+    await conn.execute("UPDATE users SET status = 'approved'")
 
     if not await _chat_state_allows(conn, "awaiting_email"):
         await conn.execute("DROP TABLE IF EXISTS chat_state_v24")
@@ -888,7 +887,7 @@ async def _migrate_v23_v24(conn: aiosqlite.Connection) -> None:
         """)
         await conn.execute(
             """
-            INSERT OR IGNORE INTO chat_state_v24 (chat_id, mode, job_id, created_at, expires_at)
+            INSERT INTO chat_state_v24 (chat_id, mode, job_id, created_at, expires_at)
             SELECT chat_id, mode, job_id, created_at, expires_at FROM chat_state
             """
         )
@@ -1567,6 +1566,8 @@ async def set_user_status(tg_id: int, status: UserStatus) -> None:
     """Set a user's invite-gate status, creating a minimal row if needed."""
     status = _validate_user_status(status)
     if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
+        if status != "approved":
+            log.warning("operator_status_override_ignored", tg_id=tg_id, requested=status)
         status = "approved"
     async with connection() as conn:
         await _upsert_minimal_user(conn, tg_id=tg_id, status=status)
