@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { siGithub } from 'simple-icons';
+import { useSessionUser, type InviteUser } from '@/components/invite-gate';
 
 interface NavItem {
   href: string;
@@ -177,6 +178,28 @@ function GithubIcon({ className }: { className?: string }) {
   );
 }
 
+// Telegram avatar with an initial-letter fallback (photo_url is optional).
+function Avatar({ user, className }: { user: InviteUser; className?: string }) {
+  if (user.photo_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- external Telegram CDN, no next/image domains configured
+      <img
+        src={user.photo_url}
+        alt=""
+        className={`rounded-full object-cover ${className ?? ''}`}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex items-center justify-center rounded-full bg-raised font-mono text-[11px] font-medium text-body ${className ?? ''}`}
+    >
+      {(user.first_name?.[0] ?? '?').toUpperCase()}
+    </span>
+  );
+}
+
 function isActive(pathname: string, href: string): boolean {
   if (href === '/')
     return pathname === '/' || pathname.startsWith('/jobs');
@@ -233,6 +256,7 @@ function NavLink({
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const user = useSessionUser();
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -320,6 +344,13 @@ export function Sidebar() {
         </nav>
 
         <div className="mt-auto flex flex-col items-center gap-1">
+          {user && (
+            <Tooltip content={user.first_name ?? 'Signed in'}>
+              <span className="flex h-9 w-9 items-center justify-center">
+                <Avatar user={user} className="h-6 w-6" />
+              </span>
+            </Tooltip>
+          )}
           <Tooltip content="GitHub repository">
             <a
               href="https://github.com/Leon-87-7/vig"
@@ -411,6 +442,19 @@ export function Sidebar() {
         </nav>
 
         <div className="mt-auto flex flex-col gap-1">
+          {user && (
+            <div className="flex items-center gap-3 px-3 py-2">
+              <Avatar user={user} className="h-[26px] w-[26px] shrink-0" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-body">
+                  {user.first_name ?? 'Signed in'}
+                </p>
+                {user.username && (
+                  <p className="truncate font-mono text-[11px] text-muted">@{user.username}</p>
+                )}
+              </div>
+            </div>
+          )}
           <a
             href="https://github.com/Leon-87-7/vig"
             target="_blank"

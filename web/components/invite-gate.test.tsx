@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@/test/render";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InviteGate } from "./invite-gate";
+import { InviteGate, useSessionUser } from "./invite-gate";
 
 const navigationMock = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -41,6 +41,43 @@ describe("InviteGate", () => {
     );
 
     expect(await screen.findByText("Dashboard feed")).toBeTruthy();
+  });
+
+  it("exposes the fetched user to children via useSessionUser", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: 1,
+              first_name: "Leon",
+              username: "leon87",
+              photo_url: "https://t.me/i/userpic/leon.jpg",
+              email: "user@example.com",
+              status: "approved",
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    function WhoAmI() {
+      const user = useSessionUser();
+      return <div>{user ? `${user.first_name} (${user.photo_url})` : "no user"}</div>;
+    }
+
+    render(
+      <InviteGate>
+        <WhoAmI />
+      </InviteGate>,
+    );
+
+    expect(
+      await screen.findByText("Leon (https://t.me/i/userpic/leon.jpg)"),
+    ).toBeTruthy();
+    // Exactly one identity fetch — the sidebar must not add a second one.
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/auth/me")).toHaveLength(1);
   });
 
   it("shows the pending screen instead of dashboard content for pending users", async () => {
