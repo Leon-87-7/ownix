@@ -23,10 +23,6 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 
-- Fix Google OAuth branding verification rejection: home page must render without login and be the face of the project with visuals and on-brand feel, must explain VIG's purpose.
-
-- add to navbar the terms and privacy pages (to btns in one row) nested between the github and the sign out ( add an icon to this btn).
-
 - add a link pipeline, user sends a URL the bot sends a native preview block and the dashboard has it in the links table.
 
 ---
@@ -376,6 +372,11 @@ the change without edits. `DESIGN.md` also pins a derived signal ramp:
 
 ## 13. Brand the /privacy and /terms pages
 
+> **Grill together with task 14.** Both reuse the login page's
+> background+logo treatment — a public home page makes it four consumers, so
+> the "extract `<BrandBackground>` or duplicate once more" call must be made
+> once, for both.
+
 The two legal pages (`web/app/privacy/page.tsx`, `web/app/terms/page.tsx`, added
 for OAuth verification, issue #203) are plain `prose prose-invert` text blocks on
 bare `bg-canvas` — no background art, no logo, no plate. By contrast
@@ -416,3 +417,102 @@ inventing a third pattern.
   directly?
 - Same logo treatment as login (full lockup), or a smaller/plainer mark since
   these are read-only legal pages, not a branded entry moment?
+
+## 14. Public home page — fix Google OAuth branding verification rejection
+
+> **Grill together with task 13.** Both reuse the login page's
+> background+logo treatment — a public home page makes it four consumers, so
+> the "extract `<BrandBackground>` or duplicate once more" call must be made
+> once, for both.
+
+Google rejected the OAuth app's branding verification (the consent-screen
+review tracked in issue #203, epic #201): the submitted homepage must be
+reachable without login and represent the app. Today there is no such page —
+`/` is the authenticated Feed (`web/app/(dashboard)/page.tsx`), and
+`web/middleware.ts` (`PUBLIC_PATHS = ["/login", "/logout", "/privacy",
+"/terms"]`) 307s every logged-out visit to `/login`, which renders only the
+`vig_logo_lockup.svg`, one tagline line, and the Telegram login widget
+(`web/app/login/page.tsx:70-88`) — it does not explain what VIG does.
+
+**Wanted:** a public, on-brand home page that renders without login, acts as
+the face of the project (visuals + brand feel), and explains VIG's purpose —
+satisfying Google's homepage requirements so branding verification passes.
+
+**UI**
+
+- **Reuse, don't fork:** the brand treatment already exists on
+  `login/page.tsx:56-77` — `layered-waves-log.svg` with the fade-mask/opacity
+  treatment plus the `vig_logo_lockup.svg` lockup. Task 13 already asks
+  whether to extract this into a shared `<BrandBackground>`; a fourth consumer
+  answers it — settle in the joint grill.
+- New public route registered in `web/middleware.ts` `PUBLIC_PATHS` (or `/`
+  itself goes public — see open question). If `/` changes meaning, the
+  sidebar's Feed link and `isActive` special-case for `/`
+  (`web/components/sidebar.tsx:27-34,180-184`) are the touchpoints.
+- Content must cover Google's branding checklist: what the app does, app
+  identity matching the consent screen, and a visible link to `/privacy` (and
+  `/terms`) on the same domain (`web/app/privacy/page.tsx`,
+  `web/app/terms/page.tsx` already exist and are public).
+- DESIGN.md is normative: dark plate ladder, signal orange rationed to the
+  single primary CTA (sign in / open console), JetBrains Mono for machine
+  facts, WCAG-AA contrast, `prefers-reduced-motion` honored for any hero
+  motion.
+
+**Open questions** (resolve in grill)
+
+- Where does the landing live: `/` becomes public (Feed moves to `/feed`, or
+  `/` renders landing vs. Feed conditionally on the `vig_session` cookie), or
+  a separate path (e.g. `/home`) with that URL submitted to Google as the
+  homepage? The middleware matcher and sidebar `isActive('/')` both hinge on
+  this.
+- How much content is "the face of the project": logo + purpose paragraph +
+  legal links + sign-in CTA only, or also a feature overview of the pipelines
+  / dashboard screenshots?
+- What does a logged-in operator see at the landing URL — auto-forward to the
+  Feed, or the landing with an "open console" CTA?
+- Does Google's sensitive-scope disclosure (how the app uses Google user
+  data / Limited Use statement) need to appear on the homepage itself, or is
+  the `/privacy` link sufficient for the branding review?
+- Does `/login` itself also gain the purpose copy, or does it stay minimal
+  once the landing page exists upstream of it?
+
+## 15. Sidebar links to Terms & Privacy (one row, between GitHub and Sign out)
+
+The sidebar drawer's footer (`web/components/sidebar.tsx:413-436`) stacks a
+GitHub external link (with `GithubIcon`, `sidebar.tsx:414-423`) above the
+Sign out form/button (`sidebar.tsx:424-435`, currently text-only, no icon).
+The legal pages exist at `/privacy` and `/terms` and are public
+(`web/middleware.ts` `PUBLIC_PATHS`), but nothing in the app links to them —
+the only reference in `web/` is the middleware constant. The collapsed rail's
+footer (`sidebar.tsx:322-352`) shows only GitHub + the expand chevron.
+
+**Wanted:** Terms and Privacy links in the sidebar footer, two buttons
+sharing one row, placed between the GitHub link and Sign out, with icon(s).
+
+**UI**
+
+- Insert one row containing two `next/link` entries (`/terms`, `/privacy`) in
+  the expanded drawer footer between the GitHub anchor and the sign-out form.
+  Internal routes — no `target="_blank"`/`rel` (that's GitHub-only).
+- Match the existing footer row idiom: `text-muted`, `hover:bg-raised
+  hover:text-ink`, `transition-ui`, and the drawer's tabbability pattern
+  (`tabIndex={open ? undefined : -1}`).
+- Icons come from lucide-react, the icon source for all nav items
+  (`sidebar.tsx:7-18`; simple-icons is the GitHub-only exception). Sized
+  `h-[18px] w-[18px]` like the rest.
+- Real links with accessible names; keyboard operable per the drawer's
+  existing focus management. DESIGN.md: no signal orange here — footer rows
+  are muted utility.
+
+**Open questions** (resolve in grill)
+
+- "Add an icon to this btn" — which button: each of the two new Terms/Privacy
+  buttons, or the Sign out button (currently the only footer row without an
+  icon)?
+- Do Terms/Privacy also get icon-only entries in the collapsed rail footer
+  (with tooltips, like GitHub), or expanded drawer only?
+- Row layout: two equal half-width buttons (`grid-cols-2`), or a compact
+  inline pair (`Terms · Privacy`) since two half-width rows break the
+  footer's full-width-row pattern?
+- Icon choice — lucide has no canonical legal glyphs; `ScrollText` for terms
+  and `Shield`/`FileText` for privacy, or one shared glyph?
