@@ -122,18 +122,24 @@ export default function DocDetail() {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  async function load() {
-    const [j, o] = await Promise.all([
-      fetch(`/api/jobs/${id}`).then((r) => r.json()),
-      fetch(`/api/parsed/${id}/outputs`).then((r) => r.json()),
-    ]);
-    setJob(j);
-    setOuts(o);
-  }
   useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const [j, o] = await Promise.all([
+        fetch(`/api/jobs/${id}`).then((r) => r.json()),
+        fetch(`/api/parsed/${id}/outputs`).then((r) => r.json()),
+      ]);
+      if (cancelled) return;
+      setJob(j);
+      setOuts(o);
+    }
     load();
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadKey]);
 
   async function runAction(send: () => Promise<Response>) {
     setErr('');
@@ -145,7 +151,7 @@ export default function DocDetail() {
         setErr(detail?.detail?.message || 'Action failed. Please try again.');
         return;
       }
-      await load();
+      setReloadKey((key) => key + 1);
     } catch {
       setErr('Network error. Please try again.');
     } finally {

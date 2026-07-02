@@ -3,8 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DocDetail from './page';
 
+let routeId = 'job-1';
+
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'job-1' }),
+  useParams: () => ({ id: routeId }),
 }));
 
 vi.mock('@/components/doc-parser/telegram-toggle', () => ({
@@ -44,6 +46,7 @@ const outputs = [
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  routeId = 'job-1';
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url === '/api/jobs/job-1') return Response.json(job);
@@ -108,4 +111,40 @@ describe('DocDetail', () => {
     const anchor = clickMock.mock.contexts[0] as HTMLAnchorElement;
     expect(anchor.download).toBe('vig-13 things_ mentally_strong-raw_txt.txt');
   });
+
+  it('does not apply a stale response after id changes', async () => {
+    let resolveFirst: (value: unknown) => void;
+    const firstJob = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/jobs/first') {
+        return firstJob.then(() => Response.json({ ...job, id: 'first', title: 'First' }));
+      }
+      if (url === '/api/jobs/second') {
+        return Promise.resolve(Response.json({ ...job, id: 'second', title: 'Second' }));
+      }
+      if (url === '/api/parsed/first/outputs' || url === '/api/parsed/second/outputs') {
+        return Promise.resolve(Response.json([]));
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    routeId = 'first';
+    const { rerender } = render(<DocDetail />);
+    routeId = 'second';
+    rerender(<DocDetail />);
+
+    expect(await screen.findByText('Second')).toBeTruthy();
+
+    resolveFirst!(undefined);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText('Second')).toBeTruthy();
+    expect(screen.queryByText('First')).toBeNull();
+  });
+
 });
