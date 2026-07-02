@@ -71,9 +71,12 @@ def user_sheet_id(chat_id: int | None) -> str | None:
         sheets = build_google_service("sheets", "v4", ["https://www.googleapis.com/auth/spreadsheets"], chat_id=chat_id)
         sheet = sheets.spreadsheets().create(body={"properties": {"title": "vig exports"}}, fields="spreadsheetId").execute()
         sheet_id = sheet["spreadsheetId"]
+        # Record the sheet before attempting the folder move: if that call fails
+        # (quota, permission, transient network), the sheet is still tracked instead
+        # of being orphaned and re-created on every subsequent retry.
+        _set(chat_id, SHEET_KEY, sheet_id)
         folder_id = user_folder_id(chat_id)
         if folder_id:
             drive = build_google_service("drive", "v3", ["https://www.googleapis.com/auth/drive.file"], chat_id=chat_id)
             drive.files().update(fileId=sheet_id, addParents=folder_id, fields="id", supportsAllDrives=True).execute()
-        _set(chat_id, SHEET_KEY, sheet_id)
         return sheet_id

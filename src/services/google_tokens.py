@@ -49,7 +49,11 @@ async def load_google_token(chat_id: int) -> dict[str, Any] | None:
     row = await database._fetch_one("SELECT encrypted_token FROM google_oauth_tokens WHERE chat_id = ?", (chat_id,))
     if row is None:
         return None
-    return decrypt_token(row["encrypted_token"])
+    try:
+        return decrypt_token(row["encrypted_token"])
+    except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
+        log.warning("google_token_load_invalid", chat_id=chat_id)
+        return None
 
 
 async def delete_google_token(chat_id: int) -> bool:

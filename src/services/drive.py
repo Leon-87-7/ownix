@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from google.auth.exceptions import RefreshError
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaInMemoryUpload
 
 from src.config import settings
@@ -25,6 +26,15 @@ async def _handle_refresh_error(chat_id: int | None, exc: RefreshError) -> str:
         raise exc
     await handle_google_refresh_error(chat_id)
     return ""
+
+
+def _degrade_or_raise(chat_id: int | None, exc: HttpError, event: str, **fields: object) -> None:
+    """Preserve the operator path's existing failure semantics (raise); degrade a
+    per-user job to an empty result instead of crashing it (matches the RefreshError
+    contract this PR already established for user_folder_id's live Drive calls)."""
+    if chat_id is None:
+        raise exc
+    log.exception(event, chat_id=chat_id, **fields)
 
 
 def _upload_sync(
@@ -71,6 +81,9 @@ async def upload_file(
     except RefreshError as exc:
         await _handle_refresh_error(chat_id, exc)
         return "", ""
+    except HttpError as exc:
+        _degrade_or_raise(chat_id, exc, "drive_upload_failed", filename=filename)
+        return "", ""
     log.info("drive_uploaded", filename=filename, file_id=file_id)
     return file_id, link
 
@@ -108,6 +121,9 @@ async def update_file(
         link = await asyncio.to_thread(_update_sync, file_id, content, mime_type, chat_id)
     except RefreshError as exc:
         return await _handle_refresh_error(chat_id, exc)
+    except HttpError as exc:
+        _degrade_or_raise(chat_id, exc, "drive_update_failed", file_id=file_id)
+        return ""
     log.info("drive_updated", file_id=file_id)
     return link
 
@@ -148,5 +164,8 @@ async def export_to_gdoc(
         link = await asyncio.to_thread(_gdoc_sync, markdown, name, target_folder, chat_id)
     except RefreshError as exc:
         return await _handle_refresh_error(chat_id, exc)
+    except HttpError as exc:
+        _degrade_or_raise(chat_id, exc, "gdoc_export_failed", name=name)
+        return ""
     log.info("gdoc_exported", name=name)
     return link
