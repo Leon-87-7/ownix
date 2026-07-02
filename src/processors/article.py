@@ -272,9 +272,9 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     prompt = _build_article_prompt(title, body, freestyle_prompt)
 
     # 5. Gemini call
-    from src.services.gemini import GeminiUnavailableError, gemini_client
+    from src.services.gemini import GeminiUnavailableError, generate
     try:
-        raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
+        raw = await generate(prompt, model="gemini-2.5-flash")
     except GeminiUnavailableError:
         await database.update_job_status(job_id, "error")
         await send_inline_keyboard(

@@ -159,7 +159,7 @@ def _parse_enrichment(data: dict) -> Enrichment:
 
 async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
-    from src.services.gemini import gemini_client, GeminiUnavailableError
+    from src.services.gemini import generate, GeminiUnavailableError
 
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""
@@ -168,7 +168,7 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     prompt = _build_prompt(title, transcript, template, freestyle_prompt)
 
     try:
-        raw = await gemini_client.generate(prompt, model="gemini-2.5-flash")
+        raw = await generate(prompt, model="gemini-2.5-flash")
     except GeminiUnavailableError as exc:
         raise EnrichmentUnavailableError(str(exc)) from exc
     data = _extract_json(raw)

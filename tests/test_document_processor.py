@@ -50,9 +50,9 @@ def patched(monkeypatch):
     monkeypatch.setattr(document, "send_message", mocks["send_message"])
     monkeypatch.setattr(document, "send_document", mocks["send_document"])
     monkeypatch.setattr(document, "send_inline_keyboard", mocks["send_inline_keyboard"])
-    # gemini_client is imported lazily inside run(); patch the attribute on the module.
+    # generate is imported lazily inside run(); patch the module attribute directly.
     import src.services.gemini as gemini
-    monkeypatch.setattr(gemini.gemini_client, "generate", mocks["generate"])
+    monkeypatch.setattr(gemini, "generate", mocks["generate"])
     # _sheets_task imports sheets lazily; patch the row writers so the fire-and-forget
     # background task never touches the network.
     import src.services.sheets as sheets

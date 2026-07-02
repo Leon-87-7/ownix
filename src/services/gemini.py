@@ -280,22 +280,3 @@ async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
     result = [{**t, "url": url_map.get(t["name"])} for t in tools]
     log.info("gemini.resolve_urls_ok", count=len(result))
     return result
-
-
-# ---------------------------------------------------------------------------
-# Backward-compat: GeminiClient shim used by many callers
-# ---------------------------------------------------------------------------
-
-
-class GeminiClient:
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        model: str,
-        schema: type | dict | None = None,
-    ) -> str:
-        return await generate(prompt, model=model, schema=schema)
-
-
-gemini_client = GeminiClient()

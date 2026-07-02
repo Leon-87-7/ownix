@@ -75,9 +75,9 @@ async def _embed(text: str) -> np.ndarray | None:
 
 
 async def _resolve_title(url: str, topic: str) -> str:
-    """Resolve a short human title for a URL via GeminiClient; fall back to URL hint on any error."""
+    """Resolve a short human title for a URL via Gemini's generate(); fall back to URL hint on any error."""
     from urllib.parse import urlparse
-    from src.services.gemini import gemini_client, GeminiUnavailableError
+    from src.services.gemini import generate, GeminiUnavailableError
 
     parsed = urlparse(url)
     hostname = parsed.hostname or url
@@ -96,7 +96,7 @@ async def _resolve_title(url: str, topic: str) -> str:
         f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
     )
     try:
-        result = await gemini_client.generate(prompt, model="gemini-2.5-flash-lite")
+        result = await generate(prompt, model="gemini-2.5-flash-lite")
         return result.strip()
     except GeminiUnavailableError:
         return hint

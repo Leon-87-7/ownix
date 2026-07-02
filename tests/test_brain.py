@@ -105,12 +105,11 @@ def test_load_embeddings_bad_length_skipped(caplog):
 
 @pytest.mark.asyncio
 async def test_resolve_title_github():
-    """GitHub URL should return the title from gemini_client.generate."""
+    """GitHub URL should return the title from Gemini generate()."""
     url = "https://github.com/vercel/next.js"
     topic = "web dev"
 
-    with patch("src.services.gemini.gemini_client") as mock_client:
-        mock_client.generate = AsyncMock(return_value="vercel/next.js")
+    with patch("src.services.gemini.generate", new=AsyncMock(return_value="vercel/next.js")):
         result = await _resolve_title(url, topic)
 
     assert result == "vercel/next.js"
@@ -124,8 +123,7 @@ async def test_resolve_title_strip_tld():
     url = "https://docs.tailwindcss.com/getting-started"
     topic = "css"
 
-    with patch("src.services.gemini.gemini_client") as mock_client:
-        mock_client.generate = AsyncMock(side_effect=GeminiUnavailableError("both failed"))
+    with patch("src.services.gemini.generate", new=AsyncMock(side_effect=GeminiUnavailableError("both failed"))):
         result = await _resolve_title(url, topic)
 
     assert result == "docs.tailwindcss"

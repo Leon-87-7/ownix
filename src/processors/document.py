@@ -193,8 +193,8 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
 
     # 2. Gemini enrichment (raises GeminiUnavailableError on total failure).
     #    freestyle_prompt is set on a Freestyle re-run (#157); None on first pass.
-    from src.services.gemini import gemini_client
-    raw = await gemini_client.generate(
+    from src.services.gemini import generate
+    raw = await generate(
         _build_document_prompt(text, job.get("freestyle_prompt")), model="gemini-2.5-flash"
     )
     data = extract_json(raw)
@@ -204,7 +204,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         "Include title, TL;DR, key sections, takeaways, and references.\n\n"
         f"DOCUMENT:\n{text}"
     )
-    summary_md = await gemini_client.generate(summary_prompt, model="gemini-2.5-flash")
+    summary_md = await generate(summary_prompt, model="gemini-2.5-flash")
     summary_key = f"enriched/{sha}_summary.md"
     await storage.upload(summary_key, summary_md.encode("utf-8"), "text/markdown")
 

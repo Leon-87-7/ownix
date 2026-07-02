@@ -113,7 +113,7 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
         # Scanned/image-only PDF (or a prior failed parse): surface as a readable
         # 422 instead of a generic 500.
         raise HTTPException(status_code=422, detail={"field": "job", "message": "Document text could not be extracted (scanned or image-only PDF)"}) from exc
-    from src.services.gemini import gemini_client
+    from src.services.gemini import generate
     if kind == "clean":
         instruction = "Clean this parsed PDF text into well-formatted Markdown while preserving the same content."
         key = f"enriched/{sha}_clean.md"
@@ -123,7 +123,7 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
         instruction = prompt or "Summarize this document."
         key = f"enriched/{sha}_freestyle_{ts}.md"
         title = "Freestyle"
-    md = await gemini_client.generate(f"{instruction}\n\nDOCUMENT:\n{text}", model="gemini-2.5-flash")
+    md = await generate(f"{instruction}\n\nDOCUMENT:\n{text}", model="gemini-2.5-flash")
     await storage.upload(key, md.encode("utf-8"), "text/markdown")
     output = await database.add_document_output(job["id"], kind, key, title)
     if job.get("telegram_delivery") == "on":

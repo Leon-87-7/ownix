@@ -499,11 +499,11 @@ async def run_prd(
     prompt = build_prompt(job)
 
     # d. Call Gemini (free → paid fallback)
-    from src.services.gemini import gemini_client, GeminiUnavailableError
+    from src.services.gemini import generate, GeminiUnavailableError
     raw_prd: str | None = None
     last_error: str | None = None
     try:
-        raw_prd = await gemini_client.generate(prompt, model=model, schema=PRD_JSON_SCHEMA)
+        raw_prd = await generate(prompt, model=model, schema=PRD_JSON_SCHEMA)
         log.info("prd.gemini.success", job_id=job_id, slot=slot)
     except GeminiUnavailableError as exc:
         last_error = str(exc)[:120]

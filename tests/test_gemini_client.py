@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.gemini import GeminiClient, GeminiUnavailableError, gemini_client
+from src.services.gemini import GeminiUnavailableError, generate
 
 
 def _make_response(text: str) -> MagicMock:
@@ -26,7 +26,7 @@ async def test_generate_single_key_success(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch("src.services.gemini._call_sync", return_value=_make_response('{"result": "ok"}')):
-        result = await gemini_client.generate("Hello", model="gemini-2.5-flash")
+        result = await generate("Hello", model="gemini-2.5-flash")
 
     assert result == '{"result": "ok"}'
 
@@ -43,7 +43,7 @@ async def test_generate_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("network error")):
         with pytest.raises(GeminiUnavailableError):
-            await gemini_client.generate("Hello", model="gemini-2.5-flash")
+            await generate("Hello", model="gemini-2.5-flash")
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
         return _make_response('{"result": "paid key success"}')
 
     with patch("src.services.gemini._call_sync", side_effect=_fake):
-        result = await gemini_client.generate("Hello", model="gemini-2.5-flash")
+        result = await generate("Hello", model="gemini-2.5-flash")
 
     assert result == '{"result": "paid key success"}'
     assert call_count == 2
@@ -91,7 +91,7 @@ async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPat
     my_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
 
     with patch("src.services.gemini._call_sync", side_effect=_spy):
-        result = await gemini_client.generate(
+        result = await generate(
             "Hello", model="gemini-2.5-flash", schema=my_schema
         )
 
@@ -112,7 +112,7 @@ async def test_generate_no_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with patch("src.services.gemini._call_sync", side_effect=AssertionError("should not be called")):
         with pytest.raises(GeminiUnavailableError):
-            await gemini_client.generate("Hello", model="gemini-2.5-flash")
+            await generate("Hello", model="gemini-2.5-flash")
 
 
 # ---------------------------------------------------------------------------
