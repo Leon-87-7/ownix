@@ -76,6 +76,9 @@ async def _append_row_logged(tab: str, row: list, event_prefix: str, job_id, cha
         log.info(f"{event_prefix}_appended", job_id=job_id, row_idx=row_idx)
         return row_idx
     except RefreshError:
+        # handle_google_refresh_error is a no-op for chat_id=None (operator path) —
+        # log unconditionally so a revoked operator token doesn't fail silently.
+        log.warning(f"{event_prefix}_refresh_error", job_id=job_id, chat_id=chat_id)
         await handle_google_refresh_error(chat_id)
         return None
     except Exception:
@@ -89,6 +92,7 @@ async def _update_row_logged(tab: str, row_idx: int, row: list, event_prefix: st
         await asyncio.to_thread(_update_sync, tab, row_idx, row, chat_id)
         log.info(f"{event_prefix}_updated", job_id=job_id, row_idx=row_idx)
     except RefreshError:
+        log.warning(f"{event_prefix}_refresh_error", job_id=job_id, chat_id=chat_id)
         await handle_google_refresh_error(chat_id)
     except Exception:
         log.exception(f"{event_prefix}_update_failed", job_id=job_id)
@@ -185,6 +189,7 @@ async def append_short_row(job: dict) -> None:
         await asyncio.to_thread(_append_sync, TAB_SHORT, row, job.get("chat_id"))
         log.info("sheets_short_appended", job_id=job.get("id"))
     except RefreshError:
+        log.warning("sheets_short_refresh_error", job_id=job.get("id"), chat_id=job.get("chat_id"))
         await handle_google_refresh_error(job.get("chat_id"))
     except Exception:
         log.exception("sheets_short_failed", job_id=job.get("id"))
@@ -232,6 +237,7 @@ async def append_long_row(
         await asyncio.to_thread(_append_sync, TAB_LONG, row, job.get("chat_id"))
         log.info("sheets_long_appended", job_id=job.get("id"))
     except RefreshError:
+        log.warning("sheets_long_refresh_error", job_id=job.get("id"), chat_id=job.get("chat_id"))
         await handle_google_refresh_error(job.get("chat_id"))
     except Exception:
         log.exception("sheets_long_failed", job_id=job.get("id"))
