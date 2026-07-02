@@ -1,7 +1,7 @@
 ---
 name: pre-grill
 disable-model-invocation: true
-description: Fatten one-line feature ideas in docs/fable-TASK.md into grounded technical briefs ready for a grilling session — anchored to real files via codegraph, with scope split by layer and the genuinely undecided calls surfaced as Open questions (not resolved). Use only when explicitly invoked as /pre-grill, or when the user asks to "fatten", "flesh out", "brief up", or "prep my ideas for grilling".
+description: Fatten one-line feature ideas in docs/TASK.md into grounded technical briefs ready for a grilling session — anchored to real files via codegraph, with scope split by layer and the genuinely undecided calls surfaced as Open questions (not resolved). Use only when explicitly invoked as /pre-grill, or when the user asks to "fatten", "flesh out", "brief up", or "prep my ideas for grilling".
 ---
 
 # pre-grill
@@ -12,16 +12,16 @@ grill skill. Do **not** resolve the open questions — that is the grill's job.
 
 ## What counts as a "raw idea"
 
-In `docs/fable-TASK.md`, a raw idea is any entry that is still a one-liner — a bullet
+In `docs/TASK.md`, a raw idea is any entry that is still a one-liner — a bullet
 under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 **Skip** anything marked `✅ DONE` or `✅ ISSUED #NNN` — never touch those.
 
 ## Workflow
 
 0. **If invoked with an argument** (`/pre-grill "<one-line idea>"`), append it as a
-   new `- ` bullet under `## Inbox` in `docs/fable-TASK.md` first, then continue. With no
+   new `- ` bullet under `## Inbox` in `docs/TASK.md` first, then continue. With no
    argument, skip straight to step 1.
-1. **Read `docs/fable-TASK.md`.** Collect every raw idea. If there are none, say so and stop.
+1. **Read `docs/TASK.md`.** Collect every raw idea. If there are none, say so and stop.
 2. **Ground each idea before writing a word.** Never guess a path or symbol.
    Per idea, find the real code/docs it touches:
    - **Symbols/flow** → codegraph first (`codegraph_search`, `codegraph_explore`,
