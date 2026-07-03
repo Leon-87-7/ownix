@@ -47,6 +47,9 @@ const config: Config = {
         },
         "telegram-blue": "#26A5E4",
         "telegram-ring": "#145b7d",
+        // Google-connected state only (CONTEXT.md `Account affordance`) —
+        // deliberate off-system brand hue; never a substitute for signal.
+        google: "#4285F4",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],

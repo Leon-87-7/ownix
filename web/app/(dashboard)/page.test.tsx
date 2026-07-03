@@ -4,15 +4,21 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobSummary } from '@/components/job-card';
 import FeedPage from './page';
 
-const navigationMock = vi.hoisted(() => ({
-  replace: vi.fn(),
-  searchParams: new URLSearchParams(),
-}));
+const navigationMock = vi.hoisted(() => {
+  const replace = vi.fn();
+  return {
+    replace,
+    // Stable identity like the real useRouter — an unstable object re-fires
+    // effects that depend on the router.
+    router: { push: vi.fn(), replace, back: vi.fn() },
+    searchParams: new URLSearchParams(),
+  };
+});
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
-  useRouter: () => ({ push: vi.fn(), replace: navigationMock.replace, back: vi.fn() }),
+  useRouter: () => navigationMock.router,
   usePathname: () => '/',
   useSearchParams: () => navigationMock.searchParams,
 }));
@@ -40,6 +46,17 @@ vi.mock('@/lib/hooks/useFuseSearch', () => ({
 }));
 vi.mock('@/lib/hooks/useInFlightPolling', () => ({
   useInFlightPolling: vi.fn(),
+}));
+
+const googleStatusMock = vi.hoisted(() => ({
+  connected: null as boolean | null,
+}));
+vi.mock('@/components/google-status', () => ({
+  useGoogleStatus: () => ({
+    connected: googleStatusMock.connected,
+    refresh: vi.fn(),
+    disconnect: vi.fn(),
+  }),
 }));
 
 import { useFeedData } from '@/lib/hooks/useFeedData';
@@ -76,6 +93,7 @@ function setupMocks(overrides: Partial<ReturnType<typeof useFeedData>> = {}) {
 beforeEach(() => {
   navigationMock.replace.mockClear();
   navigationMock.searchParams = new URLSearchParams();
+  googleStatusMock.connected = null;
   mockUseFeedData.mockReset();
   mockUseFuseSearch.mockReset();
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -100,6 +118,60 @@ describe('FeedPage', () => {
   it('renders Jobs section', () => {
     render(<FeedPage />);
     expect(screen.getByText('Jobs')).toBeTruthy();
+  });
+
+  it('shows the Connect Google nudge only while disconnected', () => {
+    googleStatusMock.connected = false;
+    render(<FeedPage />);
+    expect(screen.getByRole('link', { name: /connect google/i })).toBeTruthy();
+  });
+
+  it('hides the Connect Google nudge when connected', () => {
+    googleStatusMock.connected = true;
+    render(<FeedPage />);
+    expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
+  });
+
+  it('hides the Connect Google nudge while status is unknown', () => {
+    render(<FeedPage />);
+    expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
+  });
+
+  it('shows a one-time success banner on ?google=connected and strips the param', () => {
+    navigationMock.searchParams = new URLSearchParams('google=connected');
+    render(<FeedPage />);
+    expect(screen.getByText(/google connected/i)).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
+  });
+
+  it('shows a denied banner on ?google=denied and strips the param', () => {
+    navigationMock.searchParams = new URLSearchParams('google=denied');
+    render(<FeedPage />);
+    expect(screen.getByText(/connection was denied/i)).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
+  });
+
+  it('preserves other query params when stripping ?google=', () => {
+    navigationMock.searchParams = new URLSearchParams('type=short&google=connected');
+    render(<FeedPage />);
+    expect(navigationMock.replace).toHaveBeenCalledWith('/?type=short', { scroll: false });
+  });
+
+  it('strips ?google= and an unsupported ?type= in a single replace', () => {
+    navigationMock.searchParams = new URLSearchParams('type=bogus&google=connected');
+    render(<FeedPage />);
+    expect(screen.getByText(/google connected/i)).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledTimes(1);
+    expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
+  });
+
+  it('still drops an unsupported ?type= without a google param', () => {
+    const setCtFilter = vi.fn();
+    setupMocks({ setCtFilter });
+    navigationMock.searchParams = new URLSearchParams('type=bogus');
+    render(<FeedPage />);
+    expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
+    expect(setCtFilter).toHaveBeenCalledWith('');
   });
 
   it('shows job count when loaded', () => {

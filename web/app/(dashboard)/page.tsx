@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   usePathname,
   useRouter,
@@ -22,6 +22,7 @@ import {
 import { PreviewGrid } from '@/components/feed/preview-grid';
 import { RecoveryPanel } from '@/components/feed/recovery-panel';
 import { PageShell } from '@/components/page-shell';
+import { useGoogleStatus } from '@/components/google-status';
 
 const CONTENT_TYPES = new Set(['short', 'long', 'article', 'repo']);
 
@@ -70,8 +71,31 @@ function FeedPageContent() {
     reload,
   } = useFeedData(urlContentType);
   const { query, setQuery, displayedJobs } = useFuseSearch(jobs);
+  const { connected: googleConnected } = useGoogleStatus();
   useInFlightPolling(jobs, reload);
   useBackgroundFreshness(reload);
+
+  // One URL-cleanup effect for the two transient params: capture the one-time
+  // ?google= OAuth result into state (CONTEXT.md `Account affordance`) and drop
+  // an unsupported ?type=, in a single replace so the two never race each other
+  // back into the address bar.
+  const [oauthResult, setOauthResult] = useState<'connected' | 'denied' | null>(null);
+  useEffect(() => {
+    const google = searchParams.get('google');
+    const rawType = searchParams.get('type');
+    const oauthReturn = google === 'connected' || google === 'denied';
+    const badType = Boolean(rawType && !CONTENT_TYPES.has(rawType));
+    if (!oauthReturn && !badType) return;
+    if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('google');
+    if (badType) {
+      params.delete('type');
+      setCtFilter('');
+    }
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router, setCtFilter]);
 
   const refreshFeed = useCallback(async () => {
     await reload();
@@ -97,13 +121,6 @@ function FeedPageContent() {
     },
     [pathname, router, searchParams, setCtFilter],
   );
-
-  // Drop an unsupported ?type= from the URL so deep links/bookmarks match the
-  // actual ("All") view instead of advertising a filter that isn't applied.
-  useEffect(() => {
-    const raw = searchParams.get('type');
-    if (raw && !CONTENT_TYPES.has(raw)) setContentType('');
-  }, [searchParams, setContentType]);
 
   const contentTypeCounts = useMemo(
     () => stats?.by_content_type ?? {},
@@ -164,16 +181,35 @@ function FeedPageContent() {
         </div>
       </header>
 
-      <section className="rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-muted">Google export</p>
-            <h2 className="mt-1 text-lg font-semibold text-ink">Connect Google</h2>
-            <p className="mt-1 max-w-2xl text-sm text-body">Authorize Drive + Sheets so your jobs export into a vig-owned /vig folder in your own Google Drive.</p>
-          </div>
-          <a href="/api/google/connect" className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep">Connect Google</a>
+      {oauthResult && (
+        <div
+          role="status"
+          className={`rounded-md border px-4 py-3 text-sm ${
+            oauthResult === 'connected'
+              ? 'border-status-done/40 bg-status-done-tint text-status-done'
+              : 'border-status-error/40 bg-status-error-tint text-status-error'
+          }`}
+        >
+          {oauthResult === 'connected'
+            ? 'Google connected — exports will land in your Drive.'
+            : 'Google connection was denied — you can try again anytime.'}
         </div>
-      </section>
+      )}
+
+      {/* Disconnected-only nudge (CONTEXT.md `Account affordance`) — the
+          sidebar owns the persistent state; this panel disappears once connected. */}
+      {googleConnected === false && (
+        <section className="rounded-lg border border-line bg-surface p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-muted">Google export</p>
+              <h2 className="mt-1 text-lg font-semibold text-ink">Connect Google</h2>
+              <p className="mt-1 max-w-2xl text-sm text-body">Authorize Drive + Sheets so your jobs export into a vig-owned /vig folder in your own Google Drive.</p>
+            </div>
+            <a href="/api/google/connect" className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep">Connect Google</a>
+          </div>
+        </section>
+      )}
 
       {stats && (
         <StatsOverview

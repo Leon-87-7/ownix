@@ -1,17 +1,26 @@
 "use client";
 
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spinner } from '@/components/ui';
 
 type UserStatus = "pending" | "approved" | "blocked";
 
-interface InviteUser {
+export interface InviteUser {
   id: number;
   first_name?: string;
   username?: string | null;
+  photo_url?: string | null;
   email?: string | null;
   status: UserStatus;
+}
+
+// Session identity (CONTEXT.md): the gate's single /api/auth/me fetch is the
+// source of truth — consumers read it from here instead of re-fetching.
+const SessionUserContext = createContext<InviteUser | null>(null);
+
+export function useSessionUser(): InviteUser | null {
+  return useContext(SessionUserContext);
 }
 
 
@@ -220,7 +229,7 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
   const canShowDashboard = approved && !needsEmail;
 
   return (
-    <>
+    <SessionUserContext.Provider value={user}>
       {canShowDashboard ? children : user.status === 'blocked' ? (
         <GateScreen status="blocked" />
       ) : user.status === 'pending' ? (
@@ -233,6 +242,6 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
           }
         />
       )}
-    </>
+    </SessionUserContext.Provider>
   );
 }

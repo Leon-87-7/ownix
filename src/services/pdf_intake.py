@@ -16,6 +16,11 @@ import httpx
 from fastapi import HTTPException, Request
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
+REMOTE_PDF_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; vig/1.0; +https://github.com/Leon-87-7/vig)",
+    "Accept": "application/pdf,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def validate_pdf(data: bytes, name: str = "document.pdf") -> None:
@@ -54,7 +59,11 @@ async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:
         # past the assert_public_host check (TOCTOU / redirect-based SSRF).
         # Stream with an early abort so a huge/slow body can't exhaust memory
         # before validate_pdf runs (httpx has no max-response-size option).
-        async with httpx.AsyncClient(follow_redirects=False, timeout=20) as client:
+        async with httpx.AsyncClient(
+            follow_redirects=False,
+            headers=REMOTE_PDF_HEADERS,
+            timeout=20,
+        ) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 chunks: list[bytes] = []
@@ -67,6 +76,22 @@ async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:
                 data = b"".join(chunks)
     except HTTPException:
         raise
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in {401, 403}:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "field": "url",
+                    "message": f"PDF URL rejected the download request ({status})",
+                },
+            ) from exc
+        if status == 404:
+            raise HTTPException(
+                status_code=422,
+                detail={"field": "url", "message": "PDF URL was not found (404)"},
+            ) from exc
+        raise HTTPException(status_code=502, detail=f"PDF URL returned HTTP {status}") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not fetch PDF URL") from exc
     filename = parsed.path.rsplit("/", 1)[-1] or "document.pdf"

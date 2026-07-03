@@ -34,6 +34,7 @@ colors:
   gradient-brain-end: '#22d3ee'
   telegram-blue: '#26A5E4'
   telegram-ring: '#145b7d'
+  google: '#4285F4' # Google-connected state only — brand hue, never a signal substitute
 typography:
   display:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
