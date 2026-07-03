@@ -383,9 +383,13 @@ export function Sidebar() {
         <div className="mt-auto flex flex-col items-center gap-1">
           {user && (
             <Tooltip
-              content={`${user.first_name ?? 'Signed in'} — ${
-                connected ? 'Connected to Google' : 'Google not connected'
-              }`}
+              content={
+                connected === null
+                  ? (user.first_name ?? 'Signed in')
+                  : `${user.first_name ?? 'Signed in'} — ${
+                      connected ? 'Connected to Google' : 'Google not connected'
+                    }`
+              }
             >
               <span className="flex h-9 w-9 items-center justify-center">
                 {/* Static glow — no animation, reduced-motion safe. */}
