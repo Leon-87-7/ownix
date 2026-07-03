@@ -1,11 +1,11 @@
 """Unit tests for src/services/jina.py — Jina Reader markdown fetch."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
 
 _FULL_PREAMBLE_RESPONSE = """Title: Building Scalable Web Apps
 
@@ -51,7 +51,11 @@ def _mock_response(status_code: int, text: str) -> httpx.Response:
 async def test_fetch_markdown_strips_full_preamble():
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(200, _FULL_PREAMBLE_RESPONSE))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(200, _FULL_PREAMBLE_RESPONSE)),
+    ):
         title, body = await jina.fetch_markdown("https://example.com/article")
 
     assert title == "Building Scalable Web Apps"
@@ -69,7 +73,11 @@ async def test_fetch_markdown_strips_full_preamble():
 async def test_fetch_markdown_handles_missing_published_time():
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(200, _NO_PUBLISHED_TIME_RESPONSE))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(200, _NO_PUBLISHED_TIME_RESPONSE)),
+    ):
         title, body = await jina.fetch_markdown("https://example.com/note")
 
     assert title == "Quick Note"
@@ -82,7 +90,11 @@ async def test_fetch_markdown_handles_missing_published_time():
 async def test_fetch_markdown_empty_title_when_no_title_line():
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(200, _MARKDOWN_BODY_ONLY))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(200, _MARKDOWN_BODY_ONLY)),
+    ):
         title, body = await jina.fetch_markdown("https://example.com/whatever")
 
     assert title == ""
@@ -95,7 +107,11 @@ async def test_fetch_markdown_passthrough_when_no_preamble():
     """A response with no Jina preamble lines should be returned essentially unchanged."""
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(200, _NO_PREAMBLE_RESPONSE))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(200, _NO_PREAMBLE_RESPONSE)),
+    ):
         title, body = await jina.fetch_markdown("https://example.com/raw")
 
     assert title == ""
@@ -107,7 +123,11 @@ async def test_fetch_markdown_passthrough_when_no_preamble():
 async def test_fetch_markdown_raises_typed_error_on_non_200():
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(500, "Internal Server Error"))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(500, "Internal Server Error")),
+    ):
         with pytest.raises(jina.JinaFetchError) as exc_info:
             await jina.fetch_markdown("https://example.com/broken")
 
@@ -118,7 +138,11 @@ async def test_fetch_markdown_raises_typed_error_on_non_200():
 async def test_fetch_markdown_raises_typed_error_on_404():
     from src.services import jina
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=_mock_response(404, "Not Found"))):
+    with patch.object(
+        httpx.AsyncClient,
+        "get",
+        new=AsyncMock(return_value=_mock_response(404, "Not Found")),
+    ):
         with pytest.raises(jina.JinaFetchError) as exc_info:
             await jina.fetch_markdown("https://example.com/missing")
 
@@ -165,3 +189,27 @@ async def test_fetch_markdown_omits_bearer_header_when_key_absent(monkeypatch):
     headers = captured_kwargs.get("headers") or {}
     assert "Authorization" not in headers
     assert headers.get("Accept") == "text/plain"
+
+
+@pytest.mark.asyncio
+async def test_fetch_markdown_uses_explicit_timeout(monkeypatch):
+    """Jina Reader fetches can be slow, so use a timeout above httpx's 5s default."""
+    from src.services import jina
+
+    captured: dict = {}
+    real_init = httpx.AsyncClient.__init__
+
+    def spy_init(self, *args, **kwargs):
+        captured.update(kwargs)
+        return real_init(self, *args, **kwargs)
+
+    async def fake_get(self, url, headers=None):
+        return _mock_response(200, "Title: T\n\nMarkdown Content:\nBody")
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", spy_init)
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    await jina.fetch_markdown("https://example.com")
+
+    assert captured.get("timeout") is not None
+    assert captured["timeout"] != 5

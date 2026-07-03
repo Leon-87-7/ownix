@@ -189,7 +189,10 @@ async def test_webhook_rejects_unsupported_url(client) -> None:
 
 async def test_webhook_ignores_non_text_messages(client) -> None:
     c, fake_redis, fake_http = client
-    update = {"update_id": 1, "message": {"message_id": 1, "chat": {"id": 1, "type": "private"}}}
+    update = {
+        "update_id": 1,
+        "message": {"message_id": 1, "chat": {"id": 1, "type": "private"}},
+    }
     response = c.post(
         "/webhook",
         json=update,
@@ -224,7 +227,13 @@ async def temp_db():
 
 async def _seed_job(path: str, job_id: str, chat_id: int = 1, **fields) -> None:
     cols = ["id", "chat_id", "url", "content_type", "status"]
-    vals = [job_id, chat_id, "u", fields.get("content_type", "long"), fields.get("status", "done")]
+    vals = [
+        job_id,
+        chat_id,
+        "u",
+        fields.get("content_type", "long"),
+        fields.get("status", "done"),
+    ]
     for k, v in fields.items():
         if k in ("content_type", "status"):
             continue
@@ -232,7 +241,9 @@ async def _seed_job(path: str, job_id: str, chat_id: int = 1, **fields) -> None:
         vals.append(v)
     placeholders = ",".join("?" * len(cols))
     async with aiosqlite.connect(path) as conn:
-        await conn.execute(f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals)
+        await conn.execute(
+            f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals
+        )
         await conn.commit()
 
 
@@ -251,7 +262,11 @@ async def test_callback_prd_build_spec_sends_submenu(temp_db, monkeypatch):
     sent_kb = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_inline_keyboard", sent_kb)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
-    callback = {"id": "CB1", "data": "prd_build_spec:J1", "message": {"chat": {"id": 100}}}
+    callback = {
+        "id": "CB1",
+        "data": "prd_build_spec:J1",
+        "message": {"chat": {"id": 100}},
+    }
     await webhook._handle_callback(callback)
     sent_kb.assert_awaited_once()
     args, kwargs = sent_kb.await_args
@@ -267,7 +282,9 @@ async def test_callback_prd_auto_resend_when_status_done(temp_db, monkeypatch):
     from src.telegram import webhook
 
     await _approve_user(100)
-    await _seed_job(temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}')
+    await _seed_job(
+        temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}'
+    )
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
@@ -330,7 +347,11 @@ async def test_callback_prd_intent_prompt_arms_state(temp_db, monkeypatch):
     monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
     await webhook._handle_callback(
-        {"id": "CB", "data": "prd_intent_prompt:J_ARM", "message": {"chat": {"id": 100}}}
+        {
+            "id": "CB",
+            "data": "prd_intent_prompt:J_ARM",
+            "message": {"chat": {"id": 100}},
+        }
     )
     state = await db.get_chat_state(100)
     assert state is not None
@@ -350,7 +371,11 @@ async def test_callback_prd_intent_prompt_debounces_same_job(temp_db, monkeypatc
     monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
     await webhook._handle_callback(
-        {"id": "CB", "data": "prd_intent_prompt:J_DBN", "message": {"chat": {"id": 100}}}
+        {
+            "id": "CB",
+            "data": "prd_intent_prompt:J_DBN",
+            "message": {"chat": {"id": 100}},
+        }
     )
     fr.assert_not_awaited()
 
@@ -395,13 +420,15 @@ async def _post_webhook(
             return self._body
 
     from src.telegram.webhook import webhook
+
     if approved:
         await database.set_user_status(chat_id, "approved")
 
     body = {
         "message": {
             "chat": {"id": chat_id},
-            "from": from_user or {"id": chat_id, "first_name": "Test", "username": "tester"},
+            "from": from_user
+            or {"id": chat_id, "first_name": "Test", "username": "tester"},
             "text": text,
             "message_id": 1,
         }
@@ -419,6 +446,20 @@ def _patch_redis(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(queue_module, "_redis", fake)
     return fake
+
+
+def test_invite_prompt_uses_configured_admin_name(monkeypatch):
+    monkeypatch.setattr("src.config.settings.ADMIN_CONTACT_NAME", "Alex")
+    from src.telegram.webhook import _admin_label
+
+    assert _admin_label() == "Alex"
+
+
+def test_invite_prompt_falls_back_when_unset(monkeypatch):
+    monkeypatch.setattr("src.config.settings.ADMIN_CONTACT_NAME", "")
+    from src.telegram.webhook import _admin_label
+
+    assert _admin_label() == "the operator"
 
 
 @pytest.mark.asyncio
@@ -459,7 +500,12 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
     await _post_webhook(
         "User@Example.COM",
         approved=False,
-        from_user={"id": 100, "first_name": "Ada", "last_name": "Lovelace", "username": "ada"},
+        from_user={
+            "id": 100,
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "username": "ada",
+        },
     )
 
     user = await db.get_user(100)
@@ -474,11 +520,13 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
     buttons = kwargs["buttons"]
     assert buttons[0][0]["callback_data"] == "invite_approve:100"
     assert buttons[0][1]["callback_data"] == "invite_block:100"
-    assert "still waiting on Leon" in sent.await_args.args[1]
+    assert "still waiting on the operator" in sent.await_args.args[1]
 
 
 @pytest.mark.asyncio
-async def test_invite_callback_approve_flips_status_and_notifies_user(temp_db, monkeypatch):
+async def test_invite_callback_approve_flips_status_and_notifies_user(
+    temp_db, monkeypatch
+):
     from src import database as db
     from src.telegram import webhook
 
@@ -502,7 +550,9 @@ async def test_invite_callback_approve_flips_status_and_notifies_user(temp_db, m
 
 
 @pytest.mark.asyncio
-async def test_invite_callback_block_flips_status_and_notifies_user(temp_db, monkeypatch):
+async def test_invite_callback_block_flips_status_and_notifies_user(
+    temp_db, monkeypatch
+):
     """Operator-chat block callback still works after the auth-gate change (mirrors approve test)."""
     from src import database as db
     from src.telegram import webhook
@@ -622,12 +672,16 @@ async def test_invite_callback_block_rejects_non_operator_chat(temp_db, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_invite_gate_skips_unchanged_approved_upsert_but_keeps_pending_upsert(temp_db, monkeypatch):
+async def test_invite_gate_skips_unchanged_approved_upsert_but_keeps_pending_upsert(
+    temp_db, monkeypatch
+):
     from src import database as db
     from src.telegram import webhook
 
     identity = {"first_name": "Ada", "last_name": "Lovelace", "username": "ada"}
-    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
+    await db.upsert_user(
+        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
+    )
     await db.set_user_status(100, "approved")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -636,7 +690,11 @@ async def test_invite_gate_skips_unchanged_approved_upsert_but_keeps_pending_ups
     assert await webhook._invite_gate_allows(100, "", identity) is True
     upsert.assert_not_awaited()
 
-    pending_identity = {"first_name": "Grace", "last_name": "Hopper", "username": "grace"}
+    pending_identity = {
+        "first_name": "Grace",
+        "last_name": "Hopper",
+        "username": "grace",
+    }
     assert await webhook._invite_gate_allows(101, "", pending_identity) is False
     upsert.assert_awaited_once_with(
         tg_id=101,
@@ -653,7 +711,9 @@ async def test_callback_reprocess_rejects_blocked_chat(temp_db, monkeypatch):
 
     await db.set_user_email(100, "user@example.com")
     await db.set_user_status(100, "blocked")
-    await _seed_job(temp_db, "J_BLOCKED", chat_id=100, status="error", content_type="short")
+    await _seed_job(
+        temp_db, "J_BLOCKED", chat_id=100, status="error", content_type="short"
+    )
     create_job = AsyncMock(wraps=db.create_job)
     monkeypatch.setattr("src.telegram.webhook.database.create_job", create_job)
     sent = AsyncMock()
@@ -672,11 +732,15 @@ async def test_callback_reprocess_rejects_blocked_chat(temp_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invite_gate_skips_upsert_for_unchanged_approved_identity(temp_db, monkeypatch):
+async def test_invite_gate_skips_upsert_for_unchanged_approved_identity(
+    temp_db, monkeypatch
+):
     from src import database as db
     from src.telegram import webhook
 
-    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
+    await db.upsert_user(
+        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
+    )
     await db.set_user_status(100, "approved")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -696,7 +760,9 @@ async def test_invite_gate_still_upserts_pending_identity(temp_db, monkeypatch):
     from src import database as db
     from src.telegram import webhook
 
-    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
+    await db.upsert_user(
+        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
+    )
     await db.set_user_status(100, "pending")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -785,7 +851,9 @@ async def test_routing_awaiting_intent_url_starts_new_job(
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
+async def test_cancel_with_armed_state(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     from src import database as db
 
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J")
@@ -797,7 +865,9 @@ async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, _patch_re
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
+async def test_cancel_with_no_state(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/cancel")
@@ -805,7 +875,9 @@ async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, _patch_redis
 
 
 @pytest.mark.asyncio
-async def test_spec_no_args_usage(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
+async def test_spec_no_args_usage(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/spec")
@@ -826,8 +898,12 @@ async def test_spec_no_match_shows_recent(
 
 
 @pytest.mark.asyncio
-async def test_spec_short_only_rejection(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
-    await _seed_job(temp_db, "20260101_120000_AAAA", chat_id=100, content_type="short", title="S")
+async def test_spec_short_only_rejection(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    await _seed_job(
+        temp_db, "20260101_120000_AAAA", chat_id=100, content_type="short", title="S"
+    )
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/spec AAAA")
@@ -872,7 +948,10 @@ async def test_spec_with_intent_enqueues_intent(
     monkeypatch.setattr("src.queue.enqueue", enq)
     monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
     await _post_webhook("/spec AAAA desktop app for image processing")
-    assert enq.await_args.args[0] == {"task": "prd_intent", "job_id": "20260101_120000_AAAA"}
+    assert enq.await_args.args[0] == {
+        "task": "prd_intent",
+        "job_id": "20260101_120000_AAAA",
+    }
     job = await db.get_job("20260101_120000_AAAA")
     assert job["prd_intent_text"] == "desktop app for image processing"
 
@@ -913,7 +992,11 @@ async def test_callback_enrichment_retry_rejects_on_done_status(temp_db, monkeyp
     ack = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
     await webhook._handle_callback(
-        {"id": "CB", "data": "enrichment_retry:J_DONE2", "message": {"chat": {"id": 100}}}
+        {
+            "id": "CB",
+            "data": "enrichment_retry:J_DONE2",
+            "message": {"chat": {"id": 100}},
+        }
     )
     enqueued.assert_not_awaited()
     _, kwargs = ack.await_args
@@ -1006,7 +1089,11 @@ async def test_template_pick_rejects_job_not_ready(temp_db, monkeypatch):
     ack = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
     await webhook._handle_callback(
-        {"id": "CB", "data": "template_pick:summary:J_NR", "message": {"chat": {"id": 100}}}
+        {
+            "id": "CB",
+            "data": "template_pick:summary:J_NR",
+            "message": {"chat": {"id": 100}},
+        }
     )
     enqueued.assert_not_awaited()
     _, kwargs = ack.await_args
@@ -1014,7 +1101,9 @@ async def test_template_pick_rejects_job_not_ready(temp_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_template_freestyle_arms_state_and_sends_force_reply(temp_db, monkeypatch):
+async def test_template_freestyle_arms_state_and_sends_force_reply(
+    temp_db, monkeypatch
+):
     from src.telegram import webhook
     from src import database as db
 
@@ -1024,7 +1113,11 @@ async def test_template_freestyle_arms_state_and_sends_force_reply(temp_db, monk
     monkeypatch.setattr("src.telegram.webhook.send_force_reply", fr)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
     await webhook._handle_callback(
-        {"id": "CB", "data": "template_freestyle:J_FS", "message": {"chat": {"id": 100}}}
+        {
+            "id": "CB",
+            "data": "template_freestyle:J_FS",
+            "message": {"chat": {"id": 100}},
+        }
     )
     fr.assert_awaited_once()
     state = await db.get_chat_state(100)
@@ -1050,7 +1143,9 @@ async def test_awaiting_freestyle_enqueues_when_transcript_done(
     await _post_webhook("Summarize the key business lessons from this video")
     enq.assert_awaited_once_with({"task": "enrichment", "job_id": "J_FT"})
     job = await db.get_job("J_FT")
-    assert job["freestyle_prompt"] == "Summarize the key business lessons from this video"
+    assert (
+        job["freestyle_prompt"] == "Summarize the key business lessons from this video"
+    )
     assert await db.get_chat_state(100) is None
 
 
@@ -1135,7 +1230,9 @@ async def test_cb_reprocess_creates_fresh_job_and_enqueues(temp_db, monkeypatch)
     from src.telegram.webhook import CallbackCtx, _cb_reprocess
     from src import database as db
 
-    await _seed_job(temp_db, "J_ORPH", chat_id=100, status="error", content_type="short")
+    await _seed_job(
+        temp_db, "J_ORPH", chat_id=100, status="error", content_type="short"
+    )
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
@@ -1154,7 +1251,7 @@ async def test_cb_reprocess_creates_fresh_job_and_enqueues(temp_db, monkeypatch)
 
     fresh = await db.get_job(new_id)
     assert fresh["status"] == "pending"
-    assert fresh["content_type"] == "short"   # carried over from the orphaned job
+    assert fresh["content_type"] == "short"  # carried over from the orphaned job
     assert fresh["url"] == "u"
     ack.assert_awaited()
 
@@ -1180,10 +1277,12 @@ async def test_cb_reprocess_job_not_found_acks_error(temp_db, monkeypatch):
 # Dispatch table handler unit tests (issue #25)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_cb_gemini_no_marks_done(temp_db, monkeypatch):
     from src.telegram.webhook import CallbackCtx, _cb_gemini_no
     from src import database as db
+
     await _seed_job(temp_db, "J_NO", chat_id=1, status="transcript_done")
     ack = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
@@ -1197,12 +1296,15 @@ async def test_cb_gemini_no_marks_done(temp_db, monkeypatch):
 @pytest.mark.asyncio
 async def test_cb_enrichment_retry_rejects_wrong_status(temp_db, monkeypatch):
     from src.telegram.webhook import CallbackCtx, _cb_enrichment_retry
+
     await _seed_job(temp_db, "J_ENR", chat_id=1, status="enriching")
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     ack = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
-    ctx = CallbackCtx(chat_id=1, job_id="J_ENR", cq_id="CQ2", data="enrichment_retry:J_ENR")
+    ctx = CallbackCtx(
+        chat_id=1, job_id="J_ENR", cq_id="CQ2", data="enrichment_retry:J_ENR"
+    )
     await _cb_enrichment_retry(ctx)
     enqueued.assert_not_awaited()
     _, kwargs = ack.await_args
@@ -1228,12 +1330,14 @@ async def test_intent_text_never_appears_in_log_records(
         await _post_webhook(secret_intent, chat_id=100)
 
     for record in caplog.records:
-        assert secret_intent not in record.getMessage(), (
-            f"intent_text leaked in log record: {record.getMessage()!r}"
-        )
+        assert (
+            secret_intent not in record.getMessage()
+        ), f"intent_text leaked in log record: {record.getMessage()!r}"
         for key, value in record.__dict__.items():
             if isinstance(value, str) and secret_intent in value:
-                raise AssertionError(f"intent_text leaked in record attribute {key!r}: {value!r}")
+                raise AssertionError(
+                    f"intent_text leaked in record attribute {key!r}: {value!r}"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1444,7 @@ async def test_cmd_cancel_awaiting_intent_sends_intent_canceled(temp_db, monkeyp
 
     fake = FakeRedis()
     import src.queue as q_module
+
     monkeypatch.setattr(q_module, "_redis", fake)
 
     ctx = SlashCtx(chat_id=7, parts=["/cancel"], message_id=None)
@@ -1443,7 +1548,9 @@ async def test_awaiting_freestyle_short_video_enqueues_video_task(
     """For short video: user reply with prompt enqueues video task and sends confirmation."""
     from src import database as db
 
-    await _seed_job(temp_db, "J_SH", chat_id=100, content_type="short", status="pending")
+    await _seed_job(
+        temp_db, "J_SH", chat_id=100, content_type="short", status="pending"
+    )
     await db.set_chat_state(chat_id=100, mode="awaiting_freestyle", job_id="J_SH")
     enq = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enq)
@@ -1538,7 +1645,9 @@ async def test_download_md_cache_miss_calls_jina_and_sends_document(
     from src.services import jina as jina_module
 
     url = "https://example.com/article"
-    fetch_mock = AsyncMock(return_value=("Great Article", "# Great Article\n\nBody text."))
+    fetch_mock = AsyncMock(
+        return_value=("Great Article", "# Great Article\n\nBody text.")
+    )
     monkeypatch.setattr(jina_module, "fetch_markdown", fetch_mock)
     send_doc = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
@@ -1594,7 +1703,11 @@ async def test_download_md_jina_error_sends_error_message(
     from src.services import jina as jina_module
 
     url = "https://example.com/missing"
-    monkeypatch.setattr(jina_module, "fetch_markdown", AsyncMock(side_effect=jina_module.JinaFetchError(404)))
+    monkeypatch.setattr(
+        jina_module,
+        "fetch_markdown",
+        AsyncMock(side_effect=jina_module.JinaFetchError(404)),
+    )
     send_doc = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
     sent = AsyncMock()
@@ -1700,7 +1813,9 @@ async def test_force_neither_job_nor_cache_rejects_unsupported_url(
 
 
 @pytest.mark.asyncio
-async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_force_repo_deletes_both_redis_cache_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """When /force is called with a repo URL and an existing job, both Redis keys are deleted."""
     deleted: list[str] = []
 
@@ -1708,8 +1823,10 @@ async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.Monk
         async def delete(self, *keys: str) -> int:
             deleted.extend(keys)
             return len(keys)
+
         async def get(self, key: str) -> None:
             return None
+
         async def lpos(self, *a, **kw) -> None:
             return None
 
@@ -1717,15 +1834,23 @@ async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.Monk
     monkeypatch.setattr("src.telegram.webhook.queue._client", lambda: SpyRedis())
 
     existing_job = {
-        "id": "20260101_120000_ABCD", "content_type": "repo",
-        "bot_message_id": None, "drive_url": None, "status": "done",
+        "id": "20260101_120000_ABCD",
+        "content_type": "repo",
+        "bot_message_id": None,
+        "drive_url": None,
+        "status": "done",
     }
-    monkeypatch.setattr("src.telegram.webhook.database.find_recent_job_by_url",
-                        AsyncMock(return_value=existing_job))
-    monkeypatch.setattr("src.telegram.webhook.database.list_allowed_domains",
-                        AsyncMock(return_value=set()))
-    monkeypatch.setattr("src.telegram.webhook.database.get_markdown_cache",
-                        AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        "src.telegram.webhook.database.find_recent_job_by_url",
+        AsyncMock(return_value=existing_job),
+    )
+    monkeypatch.setattr(
+        "src.telegram.webhook.database.list_allowed_domains",
+        AsyncMock(return_value=set()),
+    )
+    monkeypatch.setattr(
+        "src.telegram.webhook.database.get_markdown_cache", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr("src.telegram.webhook.database.reset_job", AsyncMock())
     monkeypatch.setattr("src.telegram.webhook.database.clear_chat_state", AsyncMock())
     monkeypatch.setattr("src.telegram.webhook.queue.enqueue", AsyncMock())
@@ -1733,7 +1858,10 @@ async def test_force_repo_deletes_both_redis_cache_keys(monkeypatch: pytest.Monk
 
     # Dispatch /force via the slash handler directly
     from src.telegram.webhook import _cmd_force, SlashCtx
-    ctx = SlashCtx(chat_id=1, parts=["/force", "https://github.com/owner/repo"], message_id=None)
+
+    ctx = SlashCtx(
+        chat_id=1, parts=["/force", "https://github.com/owner/repo"], message_id=None
+    )
     await _cmd_force(ctx)
 
     assert "github_repo_bundle:owner/repo" in deleted

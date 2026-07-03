@@ -57,7 +57,7 @@ def _strip_preamble(text: str) -> tuple[str, str]:
         for prefix in _PREAMBLE_PREFIXES:
             if stripped.startswith(prefix):
                 if prefix == "Title:":
-                    title = stripped[len("Title:"):].strip()
+                    title = stripped[len("Title:") :].strip()
                 last_preamble_idx = i
                 break
 
@@ -66,7 +66,7 @@ def _strip_preamble(text: str) -> tuple[str, str]:
         return "", text
 
     # Everything after the last preamble line, skipping leading blank lines.
-    body_lines = lines[last_preamble_idx + 1:]
+    body_lines = lines[last_preamble_idx + 1 :]
     # Drop leading blank lines
     while body_lines and not body_lines[0].strip():
         body_lines = body_lines[1:]
@@ -87,7 +87,7 @@ async def fetch_markdown(url: str) -> tuple[str, str]:
         headers["Authorization"] = f"Bearer {settings.JINA_API_KEY}"
 
     log.info("jina.fetch", url=url)
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(jina_url, headers=headers)
 
     if response.status_code != 200:

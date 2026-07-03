@@ -1,6 +1,11 @@
 import pytest
 
-from src.utils.validators import detect_pipeline, extract_description_links, is_video_url, slugify
+from src.utils.validators import (
+    detect_pipeline,
+    extract_description_links,
+    is_video_url,
+    slugify,
+)
 
 
 @pytest.mark.parametrize(
@@ -114,6 +119,7 @@ def test_is_video_url() -> None:
 # extract_description_links
 # ---------------------------------------------------------------------------
 
+
 def test_extract_description_links_generic_roots_bare() -> None:
     desc = "Follow me on GitHub: https://github.com"
     results = extract_description_links(desc)
@@ -151,6 +157,7 @@ def test_extract_description_links_empty() -> None:
 # slugify
 # ---------------------------------------------------------------------------
 
+
 def test_slugify_basic() -> None:
     assert slugify("Hello World") == "hello_world"
 
@@ -175,7 +182,6 @@ def test_slugify_max_length() -> None:
 
 
 import re  # noqa: E402 — imported here to avoid top-level shadowing in this test module
-
 
 # ---------------------------------------------------------------------------
 # ARTICLE_DEFAULT_DOMAINS + rejection hint (issue #61)
@@ -210,7 +216,10 @@ def test_article_default_domains_contains_named_platforms() -> None:
 
 
 def test_article_hint_verbatim_in_module() -> None:
-    assert "If this is an article you'd like to track, try /allowlist <domain> first." in _ARTICLE_HINT
+    assert (
+        "If this is an article you'd like to track, try /allowlist <domain> first."
+        in _ARTICLE_HINT
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -267,15 +276,29 @@ def test_repo_reserved_paths_case_insensitive() -> None:
 
 
 def test_normalize_repo_url_strips_subpath() -> None:
-    assert normalize_repo_url(
-        "https://github.com/anthropics/claude-code/blob/main/README.md"
-    ) == "https://github.com/anthropics/claude-code"
+    assert (
+        normalize_repo_url(
+            "https://github.com/anthropics/claude-code/blob/main/README.md"
+        )
+        == "https://github.com/anthropics/claude-code"
+    )
 
 
 def test_normalize_repo_url_bare() -> None:
-    assert normalize_repo_url(
-        "https://github.com/owner/repo"
-    ) == "https://github.com/owner/repo"
+    assert (
+        normalize_repo_url("https://github.com/owner/repo")
+        == "https://github.com/owner/repo"
+    )
+
+
+def test_normalize_repo_url_raises_on_missing_segments() -> None:
+    with pytest.raises(ValueError, match="repo URL"):
+        normalize_repo_url("https://github.com/owner")
+
+
+def test_normalize_repo_url_raises_on_bare_domain() -> None:
+    with pytest.raises(ValueError, match="repo URL"):
+        normalize_repo_url("https://github.com/")
 
 
 def test_repo_hint_constant() -> None:

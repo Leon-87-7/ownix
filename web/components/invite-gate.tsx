@@ -29,16 +29,13 @@ function GateScreen({ status }: { status: Exclude<UserStatus, 'approved'> }) {
   return (
     <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center px-4">
       <section className="w-full max-w-md rounded-lg border border-line bg-surface p-6">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
-          {blocked ? "BLOCKED" : "PENDING"}
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
           {blocked ? "Access blocked" : "Pending approval"}
         </h1>
         <p className="mt-2 text-sm leading-6 text-body">
           {blocked
             ? "This Telegram account cannot access VIG."
-            : "Pending approval — ask Leon for access."}
+            : "Pending approval — ask the operator for access."}
         </p>
       </section>
     </div>
@@ -122,8 +119,8 @@ function EmailModal({
       >
         <h2 id="invite-email-title" className="text-lg font-semibold text-ink">Email required</h2>
         <p className="mt-2 text-sm leading-6 text-body">
-          VIG is invite-only. Add the email Leon should approve for this
-          Telegram account.
+          VIG is invite-only. Add the email the operator should approve for
+          this Telegram account.
         </p>
         <form className="mt-4 space-y-3" onSubmit={submit}>
           <label

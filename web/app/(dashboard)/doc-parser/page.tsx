@@ -11,6 +11,14 @@ import { PageShell, PageHeader } from '@/components/page-shell';
 
 type Job = { id: string; title?: string | null; url: string; status: string; created_at: string; telegram_delivery?: 'off' | 'on' | 'retroactive' };
 
+const DOC_FORMAT_TABS = [
+  { label: 'PDF', value: 'pdf', count: undefined },
+  { label: 'Word', value: 'word', disabled: true, badge: 'soon', dividerBefore: true },
+  { label: 'Spreadsheet', value: 'spreadsheet', disabled: true, badge: 'soon', dividerBefore: true },
+  { label: 'Presentation', value: 'presentation', disabled: true, badge: 'soon', dividerBefore: true },
+  { label: 'Image', value: 'image', disabled: true, badge: 'soon', dividerBefore: true },
+] as const;
+
 // FastAPI puts the reason in `detail` (a string, or {field, message} for our
 // 400/422s). Surface it instead of a generic "failed" so real causes are visible.
 async function errorMessage(r: Response, fallback: string): Promise<string> {
@@ -95,6 +103,10 @@ export default function DocParserPage() {
   }, []);
 
   const filtered = useMemo(() => jobs.filter(j => (j.title || j.url).toLowerCase().includes(q.toLowerCase())), [jobs, q]);
+  const formatTabs = useMemo(
+    () => DOC_FORMAT_TABS.map((t) => (t.value === 'pdf' ? { ...t, count: jobs.length } : t)),
+    [jobs.length],
+  );
 
   async function uploadFile(file: File) {
     setError('');
@@ -130,13 +142,7 @@ export default function DocParserPage() {
       />
 
       <FilterBar
-        tabs={[
-          { label: 'PDF', value: 'pdf', count: jobs.length },
-          { label: 'Word', value: 'word', disabled: true, badge: 'soon', dividerBefore: true },
-          { label: 'Spreadsheet', value: 'spreadsheet', disabled: true, badge: 'soon', dividerBefore: true },
-          { label: 'Presentation', value: 'presentation', disabled: true, badge: 'soon', dividerBefore: true },
-          { label: 'Image', value: 'image', disabled: true, badge: 'soon', dividerBefore: true },
-        ]}
+        tabs={formatTabs}
         tabValue="pdf"
         onTabChange={() => {}}
         tabsLabel="Document format"
@@ -174,7 +180,7 @@ export default function DocParserPage() {
             <div key={j.id} className="rounded-lg border border-line bg-surface p-4 hover:bg-raised">
               <div className="flex items-center gap-3">
                 <Link href={`/doc-parser/${j.id}`} className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{j.title || j.url}</Link>
-                <Sparkles className="h-4 w-4 text-signal" />
+                <Sparkles className="h-4 w-4 text-muted" />
                 <StatusBadge label={j.status} />
                 <TelegramToggle jobId={j.id} value={j.telegram_delivery || 'off'} />
               </div>
