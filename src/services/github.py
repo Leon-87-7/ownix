@@ -46,6 +46,16 @@ def _detect_manifests(tree: list[str]) -> list[str]:
     return [p for p in tree if len(p.split("/")) <= 2 and p.split("/")[-1] in _MANIFEST_NAMES]
 
 
+_SUB_README_MAX = 4_000
+_SUB_README_LIMIT = 4
+
+
+def _detect_sub_readmes(tree: list[str]) -> list[str]:
+    """Return `<dir>/README.md` paths one level deep (monorepo sub-projects), capped at 4."""
+    paths = [p for p in tree if len(p.split("/")) == 2 and p.split("/")[-1].lower() == "readme.md"]
+    return sorted(paths)[:_SUB_README_LIMIT]
+
+
 def _readme_sync(owner: str, repo: str, token: str | None) -> bytes | None:
     """Blocking HTTP call — run via asyncio.to_thread. Returns None on 404."""
     url = f"https://api.github.com/repos/{owner}/{repo}/readme"
@@ -129,12 +139,12 @@ def _fetch_bundle_meta_sync(owner: str, repo: str, token: str | None) -> dict | 
 async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
     """Assemble the full repo bundle with README, file tree, and manifests.
 
-    Cache key: github_repo_bundle:v2:{owner}/{repo}, TTL 7 days.
+    Cache key: github_repo_bundle:v3:{owner}/{repo}, TTL 7 days.
     Raises FileNotFoundError on 404, requests.HTTPError on 403/5xx.
     """
     from src import queue
 
-    cache_key = f"github_repo_bundle:v2:{owner}/{repo}"
+    cache_key = f"github_repo_bundle:v3:{owner}/{repo}"
     client = queue._client()
 
     try:
@@ -175,6 +185,20 @@ async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
         if content is not None
     }
 
+    sub_readme_paths = _detect_sub_readmes(tree)
+    sub_readme_contents: list[str | None] = []
+    if sub_readme_paths:
+        sub_readme_contents = list(await asyncio.gather(*[
+            asyncio.to_thread(_manifest_sync, owner, repo, path, token)
+            for path in sub_readme_paths
+        ]))
+
+    sub_readmes = {
+        path: preprocess_readme(content)[:_SUB_README_MAX]
+        for path, content in zip(sub_readme_paths, sub_readme_contents)
+        if content is not None
+    }
+
     bundle = {
         "owner": owner,
         "repo": repo,
@@ -184,6 +208,7 @@ async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
         "readme_raw_bytes": readme_raw_bytes,
         "tree": tree,
         "manifests": manifests,
+        "sub_readmes": sub_readmes,
         "no_readme": no_readme,
     }
 

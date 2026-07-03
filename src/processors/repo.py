@@ -233,6 +233,13 @@ def _build_repo_prompt(
     else:
         manifest_block = "Package manifests: (none detected)"
 
+    sub_readmes = bundle.get("sub_readmes") or {}
+    sub_readme_block = ""
+    if sub_readmes:
+        sub_readme_block = "Sub-project READMEs:\n" + "\n\n".join(
+            f"--- {p} ---\n{c}" for p, c in sub_readmes.items()
+        )
+
     if no_readme:
         readme_block = (
             "README: (not available — no README in this repository)\n"
@@ -259,7 +266,10 @@ def _build_repo_prompt(
     if not freestyle_prompt:
         blocks.append(field_guidance_block)
     blocks.append(constraints_block)
-    blocks += [tree_block, manifest_block, readme_block, focus_block]
+    blocks += [tree_block, manifest_block]
+    if sub_readme_block:
+        blocks.append(sub_readme_block)
+    blocks += [readme_block, focus_block]
     return "\n\n".join(blocks)
 
 

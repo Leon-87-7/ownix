@@ -181,6 +181,19 @@ def test_build_repo_prompt_contains_tree_and_manifests() -> None:
     assert "a.py" in prompt or "file tree" in prompt.lower()
 
 
+def test_build_repo_prompt_includes_sub_readmes() -> None:
+    bundle = {**_BUNDLE, "sub_readmes": {"okf/README.md": "OKF framework docs"}}
+    prompt = _build_repo_prompt(bundle)
+    assert "Sub-project READMEs:" in prompt
+    assert "--- okf/README.md ---" in prompt
+    assert "OKF framework docs" in prompt
+
+
+def test_build_repo_prompt_omits_sub_readme_block_when_absent() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "Sub-project READMEs:" not in prompt
+
+
 def test_build_repo_prompt_freestyle_substitutes_focus() -> None:
     prompt = _build_repo_prompt(_BUNDLE, freestyle_prompt="explain for a Rust developer")
     assert "Rust developer" in prompt
