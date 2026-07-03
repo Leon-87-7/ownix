@@ -181,7 +181,6 @@ function FeedPageContent() {
         </div>
       </header>
 
-<<<<<<< ours
       {oauthResult && (
         <div
           role="status"
@@ -194,15 +193,6 @@ function FeedPageContent() {
           {oauthResult === 'connected'
             ? 'Google connected — exports will land in your Drive.'
             : 'Google connection was denied — you can try again anytime.'}
-=======
-      <section className="rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-ink">Connect Google</h2>
-            <p className="mt-1 max-w-2xl text-sm text-body">Authorize Drive + Sheets so your jobs export into a vig-owned /vig folder in your own Google Drive.</p>
-          </div>
-          <a href="/api/google/connect" className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep">Connect Google</a>
->>>>>>> theirs
         </div>
       )}
 
