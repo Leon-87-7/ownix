@@ -35,7 +35,7 @@ export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
 // Exported so view-switcher tablists (e.g. Brain) can share the same look without
 // pulling in FilterBar's search + status-panel machinery.
 export function SegmentedTabs({ tabs, value, onChange, label }: {
-  tabs: FilterTab[];
+  tabs: readonly FilterTab[];
   value: string;
   onChange: (value: string) => void;
   label: string;
@@ -145,7 +145,7 @@ export function FilterBar({
   onStatusChange,
   recoveryPanel,
 }: {
-  tabs: FilterTab[];
+  tabs: readonly FilterTab[];
   tabValue: string;
   onTabChange: (value: string) => void;
   tabsLabel?: string;
