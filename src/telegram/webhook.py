@@ -1782,14 +1782,11 @@ _DOC_TOO_LARGE_MSG = (
 async def _handle_document_update(chat_id: int, message: dict, document: dict) -> None:
     """Validate + ingest a Telegram document upload. PDF-only at MVP (#151)."""
     file_name = document.get("file_name") or ""
-    is_pdf = document.get(
-        "mime_type"
-    ) == "application/pdf" or file_name.lower().endswith(".pdf")
+    mime_type = document.get("mime_type")
+    is_pdf = mime_type == "application/pdf" or file_name.lower().endswith(".pdf")
     if not is_pdf:
         await send_message(chat_id, "📄 Only PDF files are supported right now.")
-        log.info(
-            "document_rejected_type", chat_id=chat_id, mime=document.get("mime_type")
-        )
+        log.info("document_rejected_type", chat_id=chat_id, mime=mime_type)
         return
     if (document.get("file_size") or 0) > _MAX_DOC_BYTES:
         await send_message(chat_id, _DOC_TOO_LARGE_MSG)
