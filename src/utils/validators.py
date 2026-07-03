@@ -18,33 +18,53 @@ def normalize_email(email: str) -> str | None:
     return normalized if _EMAIL_RE.fullmatch(normalized) else None
 
 
-_GITHUB_RESERVED_PATHS: frozenset[str] = frozenset({
-    "features", "pricing", "marketplace", "sponsors", "topics", "explore",
-    "settings", "notifications", "codespaces", "login", "signup", "apps",
-    "orgs", "about", "security", "trending", "readme",
-})
+_GITHUB_RESERVED_PATHS: frozenset[str] = frozenset(
+    {
+        "features",
+        "pricing",
+        "marketplace",
+        "sponsors",
+        "topics",
+        "explore",
+        "settings",
+        "notifications",
+        "codespaces",
+        "login",
+        "signup",
+        "apps",
+        "orgs",
+        "about",
+        "security",
+        "trending",
+        "readme",
+    }
+)
 
 _REPO_HINT = "If you meant a repository, the URL should look like https://github.com/<owner>/<repo>."
 
-ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset({
-    "substack.com",
-    "medium.com",
-    "dev.to",
-    "ghost.io",
-    "hashnode.com",
-    "freecodecamp.org",
-    "css-tricks.com",
-    "smashingmagazine.com",
-    "stackoverflow.blog",
-    "aws.amazon.com",
-    "blog.cloudflare.com",
-    "github.blog",
-    "netflixtechblog.com",
-    "engineering.fb.com",
-    "engineering.linkedin.com",
-})
+ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset(
+    {
+        "substack.com",
+        "medium.com",
+        "dev.to",
+        "ghost.io",
+        "hashnode.com",
+        "freecodecamp.org",
+        "css-tricks.com",
+        "smashingmagazine.com",
+        "stackoverflow.blog",
+        "aws.amazon.com",
+        "blog.cloudflare.com",
+        "github.blog",
+        "netflixtechblog.com",
+        "engineering.fb.com",
+        "engineering.linkedin.com",
+    }
+)
 
-_ARTICLE_HINT = "If this is an article you'd like to track, try /allowlist <domain> first."
+_ARTICLE_HINT = (
+    "If this is an article you'd like to track, try /allowlist <domain> first."
+)
 
 
 def detect_pipeline(
@@ -102,7 +122,11 @@ def detect_pipeline(
 
 def _match_short(host: str, path: str) -> bool:
     """YouTube Shorts, Instagram Reels (NOT /p/ carousels), TikTok user videos."""
-    if host.endswith("youtube.com") and path.startswith("/shorts/") and len(path) > len("/shorts/"):
+    if (
+        host.endswith("youtube.com")
+        and path.startswith("/shorts/")
+        and len(path) > len("/shorts/")
+    ):
         return True
     if host.endswith("instagram.com") and path.startswith("/reel/"):
         return True
@@ -137,9 +161,14 @@ def _match_article(host: str, extra_domains: frozenset[str]) -> bool:
     all_article_domains = ARTICLE_DEFAULT_DOMAINS | extra_domains
     return any(host == d or host.endswith("." + d) for d in all_article_domains)
 
+
 def normalize_repo_url(url: str) -> str:
     """Strip subpaths from a github.com URL, returning canonical https://github.com/{owner}/{repo}."""
     segments = [s for s in urlparse(url.strip()).path.split("/") if s]
+    if len(segments) < 2:
+        raise ValueError(
+            f"Not a full owner/repo URL, cannot normalize as a repo URL: {url!r}"
+        )
     return f"https://github.com/{segments[0]}/{segments[1]}"
 
 
@@ -153,17 +182,54 @@ def is_video_url(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 GENERIC_ROOTS = {
-    "github.com", "claude.ai", "openai.com", "twitter.com", "x.com",
-    "discord.gg", "discord.com", "linkedin.com", "youtube.com", "youtu.be",
-    "patreon.com", "ko-fi.com", "buymeacoffee.com", "bit.ly", "t.co",
-    "linktr.ee", "instagram.com", "facebook.com", "tiktok.com", "reddit.com",
+    "github.com",
+    "claude.ai",
+    "openai.com",
+    "twitter.com",
+    "x.com",
+    "discord.gg",
+    "discord.com",
+    "linkedin.com",
+    "youtube.com",
+    "youtu.be",
+    "patreon.com",
+    "ko-fi.com",
+    "buymeacoffee.com",
+    "bit.ly",
+    "t.co",
+    "linktr.ee",
+    "instagram.com",
+    "facebook.com",
+    "tiktok.com",
+    "reddit.com",
 }
 
-PROMO_SUBDOMAINS = {"get", "try", "go", "link", "ref", "promo", "deal", "offers", "start"}
+PROMO_SUBDOMAINS = {
+    "get",
+    "try",
+    "go",
+    "link",
+    "ref",
+    "promo",
+    "deal",
+    "offers",
+    "start",
+}
 
 LABEL_KEYWORDS = {
-    "free", "resource", "github", "repo", "guide", "apis", "markdown",
-    "by", "+", "docs", "self", "hosted", "source",
+    "free",
+    "resource",
+    "github",
+    "repo",
+    "guide",
+    "apis",
+    "markdown",
+    "by",
+    "+",
+    "docs",
+    "self",
+    "hosted",
+    "source",
 }
 
 _URL_RE = re.compile(r"https?://\S+")

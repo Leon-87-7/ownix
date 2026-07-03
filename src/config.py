@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # (single-operator backward compat).
     OPERATOR_CHAT_ID: int | None = None
 
+    # User-facing copy — the name shown in invite-gate messages ("ask X for access").
+    # Falls back to generic phrasing when unset so a fresh deploy is not stuck with a specific name.
+    ADMIN_CONTACT_NAME: str = ""
+
     def _google_token_readable(self, encrypted_token: str) -> bool:
         try:
             payload = (
@@ -111,7 +115,11 @@ class Settings(BaseSettings):
                 if await asyncio.to_thread(self._has_readable_google_token, chat_id):
                     return False
             except sqlite3.Error:
-                return False if self.OPERATOR_CHAT_ID is None else chat_id != self.OPERATOR_CHAT_ID
+                return (
+                    False
+                    if self.OPERATOR_CHAT_ID is None
+                    else chat_id != self.OPERATOR_CHAT_ID
+                )
         return (
             self.OPERATOR_CHAT_ID is not None
             and chat_id is not None
@@ -131,4 +139,6 @@ class Settings(BaseSettings):
             return row is not None and self._google_token_readable(str(row[0]))
 
 
-settings = Settings()  # pyright: ignore[reportCallIssue] — required fields are populated from env, not literal args
+settings = (
+    Settings()
+)  # pyright: ignore[reportCallIssue] — required fields are populated from env, not literal args

@@ -34,6 +34,7 @@ def _recovery_error(exc: ValueError) -> HTTPException:
 # GET /api/jobs/stats  — MUST be declared before /{job_id}
 # ---------------------------------------------------------------------------
 
+
 @jobs_router.get("/stats")
 async def get_job_stats(
     request: Request,
@@ -72,7 +73,9 @@ async def get_job_stats(
             (chat_id,),
         )
         rows2 = await cur2.fetchall()
-        by_content_type: dict[str, int] = {row["content_type"]: row["cnt"] for row in rows2}
+        by_content_type: dict[str, int] = {
+            row["content_type"]: row["cnt"] for row in rows2
+        }
 
     return {
         "total": total,
@@ -94,28 +97,40 @@ async def get_recovery_summary(
 
 
 @jobs_router.post("/recovery/retry-pending")
-async def retry_recovery_pending(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+async def retry_recovery_pending(
+    request: Request, body: RecoveryRequest | None = None
+) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.retry_pending(chat_id, body.content_type if body else None)
+        return await job_recovery.retry_pending(
+            chat_id, body.content_type if body else None
+        )
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
 
 @jobs_router.post("/recovery/retry-error")
-async def retry_recovery_error(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+async def retry_recovery_error(
+    request: Request, body: RecoveryRequest | None = None
+) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.retry_error(chat_id, body.content_type if body else None)
+        return await job_recovery.retry_error(
+            chat_id, body.content_type if body else None
+        )
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
 
 @jobs_router.post("/recovery/clear-failed")
-async def clear_recovery_failed(request: Request, body: RecoveryRequest | None = None) -> dict[str, int]:
+async def clear_recovery_failed(
+    request: Request, body: RecoveryRequest | None = None
+) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.clear_failed(chat_id, body.content_type if body else None)
+        return await job_recovery.clear_failed(
+            chat_id, body.content_type if body else None
+        )
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
@@ -123,6 +138,7 @@ async def clear_recovery_failed(request: Request, body: RecoveryRequest | None =
 # ---------------------------------------------------------------------------
 # GET /api/jobs
 # ---------------------------------------------------------------------------
+
 
 def _youtube_video_id(url: str) -> str | None:
     parsed = urlparse(url.strip())
@@ -241,14 +257,17 @@ async def list_jobs(
 
     # First connection released; resolve thumbnails with a single follow-up query.
     short_ids = [
-        r["id"] for r in rows
+        r["id"]
+        for r in rows
         if r["content_type"] == "short" and _is_persistable_short_platform(r["url"])
     ]
     stored_ids = await database.get_thumbnail_job_ids(short_ids)
     items = []
     for row in rows:
         item = dict(row)
-        item["thumbnail_url"], item["thumbnail_kind"] = await _resolve_thumbnail(item, stored_ids)
+        item["thumbnail_url"], item["thumbnail_kind"] = await _resolve_thumbnail(
+            item, stored_ids
+        )
         items.append(item)
 
     return {
@@ -312,7 +331,12 @@ async def attach_tag(job_id: str, tag_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Tag not found")
 
     await database.attach_job_tag(job_id, tag_id)
-    return {"id": tag["id"], "name": tag["name"], "color": tag["color"], "meaning": tag["meaning"]}
+    return {
+        "id": tag["id"],
+        "name": tag["name"],
+        "color": tag["color"],
+        "meaning": tag["meaning"],
+    }
 
 
 @jobs_router.delete("/{job_id}/tags/{tag_id}", status_code=204)
@@ -336,24 +360,38 @@ async def detach_tag(job_id: str, tag_id: str, request: Request) -> Response:
 
 # Fields common to all content types
 _DETAIL_FIELDS_COMMON = (
-    "id", "url", "content_type", "status", "title",
-    "created_at", "updated_at", "completed_at",
-    "error_msg", "drive_url", "telegram_delivery", "sheets_row_id",
+    "id",
+    "url",
+    "content_type",
+    "status",
+    "title",
+    "created_at",
+    "updated_at",
+    "completed_at",
+    "error_msg",
+    "drive_url",
+    "telegram_delivery",
+    "sheets_row_id",
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)
 _DETAIL_FIELDS_LONG = (
-    "ai_topic", "ai_objective", "ai_action_points", "ai_tools",
-    "ai_market_data", "promise_gap", "template_analysis", "template",
+    "ai_topic",
+    "ai_objective",
+    "ai_action_points",
+    "ai_tools",
+    "ai_market_data",
+    "promise_gap",
+    "template_analysis",
+    "template",
 )
 
 # Extra fields for short jobs
 _DETAIL_FIELDS_SHORT = (
-    "summary", "transcript", "links",
+    "summary",
+    "transcript",
+    "links",
 )
-
-# Legacy flat tuple kept for callers that import it directly (e.g. tests)
-_DETAIL_FIELDS = _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
 
 
 def _detail_fields_for(content_type: str) -> tuple[str, ...]:
