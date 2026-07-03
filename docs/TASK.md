@@ -13,7 +13,8 @@ Canonical home for feature ideas, from one-line spark to grill-ready brief.
    `/spec-to-kanban`.
 
 Status markers on a brief: `✅ DONE` · `✅ ISSUED #NNN`. `/pre-grill` never
-touches a marked task.
+fattens a marked task. Once marked, `/pre-grill --mark-a`/`--archive` moves
+its body to `docs/archive/TASK-archive.md`, leaving the title behind here.
 
 ---
 
@@ -39,10 +40,6 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 ## 4. Dashboard URL submission — a second ingest surface
 
-> **Grill together with task 5.** Web submissions need a `chat_id`, which is
-> exactly what #208's `OPERATOR_CHAT_ID` export gate keys on — the ownership
-> decision spans both tasks.
->
 > **Grill together with task 9.** Both add a new caller of the create-job +
 > enqueue core: task 4 from the web surface, task 9 from the post-enrichment
 > repo follow-up. Decide the shape of the one shared service so neither forks it.
@@ -85,7 +82,7 @@ and `/freestyle`).
 - All pipelines (short/long/article/repo/document) on day one, or videos first?
 - Optimistic insert vs. wait-for-`job_id` before showing the row.
 
-## 5. Reconcile the export-isolation PRs (#207, #208) before building on them
+## 5. Reconcile the export-isolation PRs (#207, #208) before building on them ✅ DONE
 
 ## 6. Make the web app an installable PWA
 
