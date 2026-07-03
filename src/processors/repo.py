@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json as _json
 import re as _re
 from datetime import datetime, timezone
@@ -16,6 +15,7 @@ from src.services.gemini import GeminiUnavailableError
 from src.services.github import fetch_repo_bundle
 from src.services.sheets import append_repo_row, update_repo_row
 from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message
+from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
 from src.utils import job_tag
 from src.utils.markdown import _humanize_age
@@ -498,12 +498,12 @@ async def run(job: dict) -> None:
     }
     sheets_row_id = job.get("sheets_row_id")
     if sheets_row_id:
-        asyncio.create_task(_sheets_update_safe(int(sheets_row_id), current_job, analysis, bundle))
+        spawn_background(_sheets_update_safe(int(sheets_row_id), current_job, analysis, bundle))
     else:
-        asyncio.create_task(_sheets_append_safe(job_id, current_job, analysis, bundle))
+        spawn_background(_sheets_append_safe(job_id, current_job, analysis, bundle))
 
     # Brain ingest — fire-and-forget
-    asyncio.create_task(
+    spawn_background(
         _brain_ingest_safe(
             _normalize_repo_url(url),
             topic=analysis.get("tagline", ""),

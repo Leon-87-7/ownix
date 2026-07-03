@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import time
@@ -14,6 +13,7 @@ from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.services.github import enrich_github_links
 from src.telegram.sender import edit_message_text, send_document, send_message, send_photo
+from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
 from src.utils.markdown import build_enriched_links_message
 from src.utils import job_tag
@@ -252,7 +252,7 @@ async def run(job: dict) -> None:
 
     # 8. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job
-    asyncio.create_task(
+    spawn_background(
         sheets.append_short_row(
             {
                 **refreshed,
@@ -270,9 +270,7 @@ async def run(job: dict) -> None:
     if links and settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         from src import brain
 
-        asyncio.create_task(
-            brain.ingest_links(links, topic=vision.get("summary", ""), source_job_id=job_id)
-        )
+        spawn_background(brain.ingest_links(links, topic=vision.get("summary", ""), source_job_id=job_id))
 
     log.info("short_video_complete", job_id=job_id, duration_ms=elapsed_ms)
 

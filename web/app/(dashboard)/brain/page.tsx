@@ -37,6 +37,10 @@ type LinksView = {
 
 const DEFAULT_LINKS_VIEW: LinksView = { sort: 'last_seen', order: 'desc', size: 25 };
 const LINKS_PAGE_SIZES: LinksView['size'][] = [25, 50, 100];
+const BRAIN_TABS = [
+  { label: 'Search', value: 'search' },
+  { label: 'Links', value: 'links', dividerBefore: true },
+] as const;
 
 function IdleBanner() {
   return (
@@ -421,10 +425,7 @@ export default function BrainPage() {
         label="Brain sections"
         value={activeTab}
         onChange={(v) => setActiveTab(v as BrainTab)}
-        tabs={[
-          { label: 'Search', value: 'search' },
-          { label: 'Links', value: 'links', dividerBefore: true },
-        ]}
+        tabs={BRAIN_TABS}
       />
 
       {activeTab === 'search' && (

@@ -2142,6 +2142,10 @@ async def list_context_blobs(space_id: str) -> list[dict]:
     )
 
 
+# Ownership note: none of the four functions below take chat_id — the caller
+# (src/api/spaces.py's route handlers) is responsible for verifying the blob's
+# parent space is owned by request.state.user["id"] BEFORE calling any of these.
+# If you add a new caller, verify ownership first; these functions trust the caller.
 async def get_context_blob(blob_id: str) -> dict | None:
     """Return a single context blob by PK, or None."""
     row = await _fetch_one(

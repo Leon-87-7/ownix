@@ -1,7 +1,6 @@
 """Mini-PRD auto slot — slice #6."""
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from datetime import datetime, timezone
@@ -9,6 +8,7 @@ from typing import Callable
 
 from src import database
 from src.config import settings
+from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
 from src.services.gemini import extract_json
 
@@ -433,7 +433,7 @@ async def _deliver_prd(
     if brain_links and settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         from src import brain
 
-        asyncio.create_task(
+        spawn_background(
             brain.ingest_links(
                 brain_links, topic=prd_data.get("project", ""), source_job_id=job_id
             )

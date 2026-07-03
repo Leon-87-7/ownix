@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+# Scoping note (confirmed): /search, /graph, /links, and /rebuild intentionally
+# return the single shared Second Brain link graph, not a per-user view — the
+# Second Brain is one operator-wide knowledge graph (see docs/seed/PRD.md §5).
+# Only /links/view (display preferences, not data) is scoped per-user.
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 

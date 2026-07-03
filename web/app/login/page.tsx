@@ -78,7 +78,7 @@ export default function LoginPage() {
         <p className="mt-4 text-sm text-body">
           Video Intelligence Gateway
         </p>
-        <p className="mt-10 text-xs uppercase tracking-widest text-muted">
+        <p className="mt-10 text-sm text-body">
           Sign in to your console
         </p>
         <div

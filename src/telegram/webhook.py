@@ -36,6 +36,7 @@ from src.telegram.sender import (
 )
 from src.templates import PROMPT_TEMPLATES
 from src.utils import job_tag
+from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
 from src.utils.validators import (
     detect_pipeline,
@@ -120,8 +121,7 @@ async def _report_photo_links(
         await send_message(chat_id, build_enriched_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
-
-            asyncio.create_task(
+            spawn_background(
                 brain.ingest_links(links, topic=summary, source_job_id=source_job_id)
             )
     else:
@@ -694,7 +694,7 @@ async def _cmd_rebuild_graph(ctx: SlashCtx) -> None:
         except Exception:
             await send_message(ctx.chat_id, "Rebuild failed. Check logs.")
 
-    asyncio.create_task(_do_rebuild())
+    spawn_background(_do_rebuild())
 
 
 async def _cmd_template(ctx: SlashCtx) -> None:
@@ -1795,7 +1795,7 @@ async def _handle_document_update(chat_id: int, message: dict, document: dict) -
         )
         return
     # Heavy download/upload runs off the webhook request, mirroring the photo path.
-    asyncio.create_task(_ingest_document(chat_id, document, message.get("message_id")))
+    spawn_background(_ingest_document(chat_id, document, message.get("message_id")))
 
 
 async def _enqueue_document_job(
@@ -1840,7 +1840,7 @@ async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None
     if media_group_id:
         await _accumulate_media_group(chat_id, media_group_id, file_id)
     else:
-        asyncio.create_task(_handle_single_photo(chat_id, file_id, caption))
+        spawn_background(_handle_single_photo(chat_id, file_id, caption))
 
 
 async def _route_text(

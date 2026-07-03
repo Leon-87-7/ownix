@@ -76,8 +76,7 @@ export default function MiniAppPage() {
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.04em] text-muted">Telegram Mini App</p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-balance">Connect Google inside VIG</h1>
+              <h1 className="text-2xl font-semibold tracking-[-0.02em] text-balance">Connect Google inside VIG</h1>
             </div>
             <span className="rounded-md border border-telegram-blue/40 bg-telegram-blue/10 px-2 py-1 font-mono text-[11px] text-telegram-blue">TG</span>
           </div>
