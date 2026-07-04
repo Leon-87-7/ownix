@@ -23,6 +23,21 @@ export function useSessionUser(): InviteUser | null {
   return useContext(SessionUserContext);
 }
 
+const MOCK_SESSION_USER: InviteUser = {
+  id: 0,
+  first_name: "Mock Operator",
+  username: "mock_operator",
+  photo_url: null,
+  email: "mock@example.com",
+  status: "approved",
+};
+
+function mockModeEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_API_MOCK === "1"
+  );
+}
 
 function GateScreen({ status }: { status: Exclude<UserStatus, 'approved'> }) {
   const blocked = status === 'blocked';
@@ -166,6 +181,12 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mockModeEnabled()) {
+      setUser(MOCK_SESSION_USER);
+      setLoading(false);
+      return;
+    }
+
     let alive = true;
     fetch("/api/auth/me")
       .then(async (res) => {

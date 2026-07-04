@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@/test/render";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteGate, useSessionUser } from "./invite-gate";
 
 const navigationMock = vi.hoisted(() => ({
@@ -17,7 +17,26 @@ beforeEach(() => {
   navigationMock.replace.mockClear();
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("InviteGate", () => {
+  it("bypasses the auth fetch in local mock mode", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_MOCK", "1");
+    vi.stubGlobal("fetch", vi.fn());
+
+    render(
+      <InviteGate>
+        <div>Dashboard feed</div>
+      </InviteGate>,
+    );
+
+    expect(await screen.findByText("Dashboard feed")).toBeTruthy();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(navigationMock.replace).not.toHaveBeenCalledWith("/login");
+  });
+
   it("renders dashboard children for approved users with an email", async () => {
     vi.stubGlobal(
       "fetch",
