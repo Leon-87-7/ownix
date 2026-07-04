@@ -36,6 +36,21 @@ describe('splitPipes', () => {
   it('returns empty array for a blank string', () => {
     expect(splitPipes('   ')).toEqual([])
   })
+
+  it('parses a JSON array string into items (repo jobs)', () => {
+    expect(splitPipes('["Build a CLI", "Write a dashboard"]')).toEqual([
+      'Build a CLI',
+      'Write a dashboard',
+    ])
+  })
+
+  it('falls back to pipe splitting on malformed JSON', () => {
+    expect(splitPipes('[broken | json')).toEqual(['[broken', 'json'])
+  })
+
+  it('ignores a JSON array with items containing pipes', () => {
+    expect(splitPipes('["a | b"]')).toEqual(['a | b'])
+  })
 })
 
 // --- humanizeKey ---

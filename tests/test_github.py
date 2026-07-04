@@ -21,6 +21,7 @@ from src.services.github import (
     fetch_tree,
     fetch_manifest,
     _detect_manifests,
+    _detect_sub_readmes,
     fetch_repo_bundle,
 )
 
@@ -187,6 +188,69 @@ def test_detect_manifests_depth3_excluded() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _detect_sub_readmes (#311)
+# ---------------------------------------------------------------------------
+
+def test_detect_sub_readmes_depth2_only() -> None:
+    tree = ["README.md", "okf/README.md", "okf/deep/README.md", "toolbox/readme.md", "src/main.py"]
+    assert _detect_sub_readmes(tree) == ["okf/README.md", "toolbox/readme.md"]
+
+
+def test_detect_sub_readmes_capped_at_4() -> None:
+    tree = [f"dir{i}/README.md" for i in range(6)]
+    assert len(_detect_sub_readmes(tree)) == 4
+
+
+@pytest.mark.asyncio
+async def test_fetch_repo_bundle_includes_sub_readmes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Monorepo sub-READMEs land in bundle['sub_readmes'], truncated and preprocessed."""
+    fake_redis = FakeRedis()
+    import src.queue as q
+    monkeypatch.setattr(q, "_redis", fake_redis)
+
+    meta = {"stars": 5, "forks": 1, "language": "Go", "pushed_at": None,
+            "description": None, "archived": False, "default_branch": "main", "topics": []}
+
+    with (
+        patch("src.services.github._fetch_bundle_meta_sync", return_value=meta),
+        patch("src.services.github._readme_sync", return_value=b"# Root"),
+        patch("src.services.github._tree_sync", return_value=["README.md", "okf/README.md"]),
+        patch("src.services.github._manifest_sync", return_value="# OKF sub-project\n" + "x" * 10_000),
+    ):
+        result = await fetch_repo_bundle("octocat", "monorepo", "tok")
+
+    assert "okf/README.md" in result["sub_readmes"]
+    assert len(result["sub_readmes"]["okf/README.md"]) <= 4_000
+
+
+@pytest.mark.asyncio
+async def test_fetch_repo_bundle_survives_optional_fetch_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A transient error on a sub-README (or manifest) fetch must not abort the bundle."""
+    fake_redis = FakeRedis()
+    import src.queue as q
+    monkeypatch.setattr(q, "_redis", fake_redis)
+
+    meta = {"stars": 5, "forks": 1, "language": "Go", "pushed_at": None,
+            "description": None, "archived": False, "default_branch": "main", "topics": []}
+
+    def flaky_manifest_sync(owner, repo, path, token):
+        if path == "okf/README.md":
+            raise RuntimeError("503 from GitHub")
+        return "module x"
+
+    with (
+        patch("src.services.github._fetch_bundle_meta_sync", return_value=meta),
+        patch("src.services.github._readme_sync", return_value=b"# Root"),
+        patch("src.services.github._tree_sync", return_value=["README.md", "go.mod", "okf/README.md"]),
+        patch("src.services.github._manifest_sync", side_effect=flaky_manifest_sync),
+    ):
+        result = await fetch_repo_bundle("octocat", "monorepo", "tok")
+
+    assert result["manifests"] == {"go.mod": "module x"}
+    assert result["sub_readmes"] == {}
+
+
+# ---------------------------------------------------------------------------
 # fetch_readme
 # ---------------------------------------------------------------------------
 
@@ -278,7 +342,7 @@ _SAMPLE_BUNDLE = {
 async def test_fetch_repo_bundle_cache_hit_no_api_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cache hit: bundle returned from Redis, no GitHub API calls made."""
     fake_redis = TrackingRedis()
-    fake_redis._store["github_repo_bundle:v2:octocat/Hello-World"] = json.dumps(_SAMPLE_BUNDLE)
+    fake_redis._store["github_repo_bundle:v3:octocat/Hello-World"] = json.dumps(_SAMPLE_BUNDLE)
 
     import src.queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
@@ -311,9 +375,9 @@ async def test_fetch_repo_bundle_cold_cache_written_with_7day_ttl(monkeypatch: p
         result = await fetch_repo_bundle("octocat", "myrepo", "tok")
 
     assert "go.mod" in result["manifests"]
-    cached_raw = fake_redis._store.get("github_repo_bundle:v2:octocat/myrepo")
+    cached_raw = fake_redis._store.get("github_repo_bundle:v3:octocat/myrepo")
     assert cached_raw is not None
-    assert fake_redis._ttls.get("github_repo_bundle:v2:octocat/myrepo") == 86_400 * 7
+    assert fake_redis._ttls.get("github_repo_bundle:v3:octocat/myrepo") == 86_400 * 7
 
 
 @pytest.mark.asyncio
@@ -401,8 +465,8 @@ def test_fetch_bundle_meta_sync_topics_defaults_to_empty_list() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_repo_bundle_uses_v2_cache_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A bundle pre-seeded under the v2 key must be returned as a cache hit."""
+async def test_fetch_repo_bundle_uses_v3_cache_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bundle pre-seeded under the v3 key must be returned as a cache hit."""
     fake_redis = FakeRedis()
     bundle_data = {
         "owner": "owner", "repo": "repo",
@@ -412,7 +476,7 @@ async def test_fetch_repo_bundle_uses_v2_cache_key(monkeypatch: pytest.MonkeyPat
         "default_branch": "main", "readme": "", "readme_raw_bytes": 0,
         "tree": [], "manifests": {}, "no_readme": True,
     }
-    fake_redis._store["github_repo_bundle:v2:owner/repo"] = json.dumps(bundle_data)
+    fake_redis._store["github_repo_bundle:v3:owner/repo"] = json.dumps(bundle_data)
 
     import src.queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
