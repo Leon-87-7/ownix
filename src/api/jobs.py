@@ -11,7 +11,9 @@ from pydantic import BaseModel
 from src import database
 from src.api.deps import get_owned_job
 from src.services import job_recovery
+from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
+from src.templates import PROMPT_TEMPLATES
 from src.utils.validators import detect_pipeline, normalize_repo_url
 
 log = get_logger(__name__)
@@ -134,6 +136,60 @@ async def clear_recovery_failed(
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
+
+
+class JobCreateRequest(BaseModel):
+    url: str
+    template: str | None = None
+    freestyle_prompt: str | None = None
+
+
+@jobs_router.post("")
+async def create_job(request: Request, body: JobCreateRequest) -> dict:
+    """Create a dashboard-submitted job using the shared Telegram ingest core."""
+    chat_id: int = request.state.user["id"]
+    url = body.url.strip()
+    pipeline = detect_pipeline(
+        url, frozenset(await database.list_allowed_domains(chat_id))
+    )
+    if pipeline == "rejected":
+        raise HTTPException(status_code=422, detail="Unsupported URL")
+    if pipeline == "document":
+        raise HTTPException(
+            status_code=422, detail="Document URLs belong in the Doc Parser"
+        )
+    if pipeline not in {"short", "long", "article", "repo"}:
+        raise HTTPException(status_code=422, detail="Unsupported URL")
+
+    template = body.template.strip() if body.template else None
+    freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
+    if pipeline == "repo":
+        template = None
+        freestyle_prompt = None
+    elif template:
+        if template == "freestyle":
+            if not freestyle_prompt:
+                raise HTTPException(
+                    status_code=422, detail="freestyle_prompt is required for freestyle"
+                )
+        elif template not in PROMPT_TEMPLATES:
+            raise HTTPException(status_code=422, detail="Unknown template")
+    url_for_job = normalize_repo_url(url) if pipeline == "repo" else url
+    job = await create_and_enqueue_job(
+        chat_id,
+        url_for_job,
+        pipeline,
+        template=template,
+        freestyle_prompt=freestyle_prompt if template == "freestyle" else None,
+    )
+    return {
+        "id": job["id"],
+        "job_id": job["id"],
+        "url": job.get("url", url_for_job),
+        "content_type": job.get("content_type", pipeline),
+        "status": job.get("status", "pending"),
+        "title": job.get("title"),
+    }
 
 # ---------------------------------------------------------------------------
 # GET /api/jobs

@@ -10,12 +10,12 @@ from datetime import datetime, timezone
 from json_repair import repair_json
 
 from src import database
-from src.brain import EMBEDDING_DIM
 from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES, validate_template_choice
 from src.utils import job_tag
 from src.utils.logger import get_logger
+from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
 
@@ -530,5 +530,6 @@ async def run(job_id: str) -> None:
         f"{tag}\nWhat's next?",
         buttons=[[{"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"}]],
     )
+    await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, enrichment.tools_raw)
 
     log.info("enrichment_complete", job_id=job_id, category=enrichment.category)

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useFeedData } from "@/lib/hooks/useFeedData";
 import { useFuseSearch } from "@/lib/hooks/useFuseSearch";
@@ -20,8 +21,18 @@ import { RecoveryPanel } from "@/components/feed/recovery-panel";
 import { PageShell } from "@/components/page-shell";
 import { useGoogleStatus } from "@/components/google-status";
 import { FileCode2 } from "lucide-react";
+import type { JobSummary } from "@/components/job-card";
 
 const CONTENT_TYPES = new Set(["short", "long", "article", "repo"]);
+
+const TEMPLATE_OPTIONS = [
+  { label: "Method", value: "method" },
+  { label: "Review", value: "review" },
+  { label: "Technical", value: "technical" },
+  { label: "Narrative", value: "narrative" },
+  { label: "Summary", value: "summary" },
+  { label: "Freestyle", value: "freestyle" },
+];
 
 const CONTENT_TYPE_FILTERS = [
   { label: "All", value: "" },
@@ -72,7 +83,14 @@ function FeedPageContent() {
     error,
     reload,
   } = useFeedData(urlContentType);
-  const { query, setQuery, displayedJobs } = useFuseSearch(jobs);
+  const [submitUrl, setSubmitUrl] = useState("");
+  const [submitTemplate, setSubmitTemplate] = useState("summary");
+  const [freestylePrompt, setFreestylePrompt] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>([]);
+  const mergedJobs = useMemo(() => [...optimisticJobs, ...jobs], [optimisticJobs, jobs]);
+  const { query, setQuery, displayedJobs } = useFuseSearch(mergedJobs);
   const { connected: googleConnected } = useGoogleStatus();
   useInFlightPolling(jobs, reload);
   useBackgroundFreshness(reload);
@@ -165,6 +183,46 @@ function FeedPageContent() {
     total,
   );
 
+
+  const submitJob = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const url = submitUrl.trim();
+    if (!url || submitting) return;
+    const tempId = `pending-${Date.now()}`;
+    const placeholder: JobSummary = {
+      id: tempId,
+      title: "Submitting…",
+      url,
+      content_type: ctFilter || "short",
+      status: "pending",
+      created_at: new Date().toISOString(),
+    };
+    setSubmitError(null);
+    setSubmitting(true);
+    setOptimisticJobs((current) => [placeholder, ...current]);
+    try {
+      const payload: Record<string, string> = { url, template: submitTemplate };
+      if (submitTemplate === "freestyle") payload.freestyle_prompt = freestylePrompt.trim();
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Could not submit job");
+      setSubmitUrl("");
+      setFreestylePrompt("");
+      await reload();
+      setOptimisticJobs((current) => current.filter((job) => job.id !== tempId));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Could not submit job";
+      setSubmitError(message);
+      setOptimisticJobs((current) => current.filter((job) => job.id !== tempId));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [ctFilter, freestylePrompt, reload, submitTemplate, submitUrl, submitting]);
+
   const clearAll = () => {
     setContentType("");
     setStFilter("");
@@ -242,6 +300,53 @@ function FeedPageContent() {
       )}
 
       {stats && <StatsOverview stats={stats} contentType={ctFilter} />}
+
+      <section className="rounded-lg border border-line bg-surface p-4">
+        <form onSubmit={submitJob} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end">
+          <label className="grid gap-1.5 text-sm text-body">
+            Submit URL
+            <input
+              value={submitUrl}
+              onChange={(event) => setSubmitUrl(event.target.value)}
+              placeholder="Paste a video, article, or repo URL…"
+              className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
+            />
+          </label>
+          <label className="grid gap-1.5 text-sm text-body">
+            Template
+            <select
+              value={submitTemplate}
+              onChange={(event) => setSubmitTemplate(event.target.value)}
+              className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui focus:border-signal"
+            >
+              {TEMPLATE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={submitting || !submitUrl.trim()}
+            className="h-10 rounded-md bg-signal px-4 text-sm font-semibold text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? "Submitting…" : "Submit"}
+          </button>
+          {submitTemplate === "freestyle" && (
+            <label className="grid gap-1.5 text-sm text-body lg:col-span-3">
+              Freestyle prompt
+              <textarea
+                value={freestylePrompt}
+                onChange={(event) => setFreestylePrompt(event.target.value)}
+                placeholder="Tell Gemini exactly how to analyze this job…"
+                className="min-h-20 rounded-md border border-line bg-base px-3 py-2 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
+              />
+            </label>
+          )}
+        </form>
+        {submitError && <p className="mt-3 text-sm text-status-error">{submitError}</p>}
+      </section>
 
       <FilterBar
         tabs={contentTypeTabs}
