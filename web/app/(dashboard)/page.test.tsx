@@ -365,7 +365,8 @@ describe('FeedPage', () => {
     }));
 
     render(<FeedPage />);
-    fireEvent.click(screen.getByRole('button', { name: /submit url/i }));
+    // Two triggers (header + tabs-row action slot) open the same dialog; either works.
+    fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
@@ -412,7 +413,7 @@ describe('FeedPage', () => {
     }));
 
     const { rerender } = render(<FeedPage />);
-    fireEvent.click(screen.getByRole('button', { name: /submit url/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
