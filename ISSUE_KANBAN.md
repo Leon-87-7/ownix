@@ -59,6 +59,10 @@
 | [#300](https://github.com/Leon-87-7/vig/issues/300) | feat(web): replace in-content spinners with content-shaped skeletons (6 views + skeleton primitives)       | Web                      | Merged; PR #304 (council chunk 5); closed on GH                                           |
 | [#301](https://github.com/Leon-87-7/vig/issues/301) | fix(webhook): skip invite-gate email-parsing branch on callback button presses (via_callback)              | Webhook                  | Merged; PR #304 (council chunk 5); closed on GH                                           |
 | [#302](https://github.com/Leon-87-7/vig/issues/302) | fix(webhook): message-copy hygiene sweep (trailing spaces, _HELP_TEXT backticks, capitalize waiting message) | Webhook                | Merged; PR #304 (council chunk 5); closed on GH                                           |
+| [#311](https://github.com/Leon-87-7/vig/issues/311) | feat(github): fetch sub-project READMEs for monorepos into the repo bundle                                 | Repo / GitHub            | Merged; PR #315; closed on GH                                                             |
+| [#312](https://github.com/Leon-87-7/vig/issues/312) | feat(repo): key_components field — what's actually in this repo                                            | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
+| [#313](https://github.com/Leon-87-7/vig/issues/313) | fix(web): job detail renders ai_action_points/ai_tools as raw JSON strings                                 | Web / Jobs               | Merged; PR #315; closed on GH                                                             |
+| [#314](https://github.com/Leon-87-7/vig/issues/314) | feat(repo): tighten prompt field guidance — tagline, tech_stack cap, when_to_use, concepts_taught          | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
 
 ---
 
@@ -67,6 +71,7 @@
 |                                                   # | Title                                                                                       | Area             | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------- | ---------------- | ---------- |
 | [#275](https://github.com/Leon-87-7/vig/issues/275) | tests/test_sheets.py: 6 tests fail on main — mocks predate _append_sync chat_id signature change (#264) | Tests / Sheets | —  |
+| [#317](https://github.com/Leon-87-7/vig/issues/317) | fix(telegram): .md documents preview as mojibake (â€”) — UTF-8 BOM + strip Gemini em-dashes | Telegram / Gemini | — |
 
 ---
 
@@ -397,6 +402,13 @@ Sidebar footer + Brain Links + job navigation (grill 2026-07-03 — tasks #7/#10
 #309 Job details previous/next navigation (independent)
 #310 Feed Docs tab → Doc Parser (independent)
 Critical path: #305 → #306; #307, #308, #309, #310 are independent — no dependency between them
+
+Repo analysis "more informational" (job 20260703_211658 review 2026-07-04 — prompt tweaks driven from GoogleCloudPlatform/knowledge-catalog output)
+#311 sub-project READMEs into repo bundle (independent) ✅-Done (PR #315) ◄── extends #67 bundle ✅
+#312 key_components schema field + rendering (root) ✅-Done (PR #315)
+└── #314 prompt field-guidance tightening ◄── #312 (same region of repo.py — conflict-avoidance ordering, not logical) ✅-Done (PR #315)
+#313 job detail raw-JSON render fix (web — independent) ✅-Done (PR #315)
+Critical path: #312 → #314; #311, #313 parallel (all ✅-Done via PR #315)
 ```
 
 ---
