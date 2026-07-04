@@ -1,56 +1,57 @@
-"use client";
+'use client';
 
 import {
   Suspense,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
-} from "react";
-import type { FormEvent } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useFeedData } from "@/lib/hooks/useFeedData";
-import { useFuseSearch } from "@/lib/hooks/useFuseSearch";
-import { useInFlightPolling } from "@/lib/hooks/useInFlightPolling";
-import { useBackgroundFreshness } from "@/lib/hooks/useBackgroundFreshness";
-import { JobCard } from "@/components/job-card";
-import { StatsOverview } from "@/components/feed/stats-overview";
-import { FilterBar } from "@/components/filter-bar";
+} from 'react';
+import type { FormEvent } from 'react';
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation';
+import { useFeedData } from '@/lib/hooks/useFeedData';
+import { useFuseSearch } from '@/lib/hooks/useFuseSearch';
+import { useInFlightPolling } from '@/lib/hooks/useInFlightPolling';
+import { useBackgroundFreshness } from '@/lib/hooks/useBackgroundFreshness';
+import { JobCard } from '@/components/job-card';
+import { StatsOverview } from '@/components/feed/stats-overview';
+import { FilterBar } from '@/components/filter-bar';
 import {
   SkeletonGrid,
   SkeletonList,
   ErrorBanner,
   EmptyState,
-} from "@/components/feed/feed-states";
-import { PreviewGrid } from "@/components/feed/preview-grid";
-import { RecoveryPanel } from "@/components/feed/recovery-panel";
-import { PageShell } from "@/components/page-shell";
-import { useGoogleStatus } from "@/components/google-status";
-import { FileCode2, Plus } from "lucide-react";
-import type { JobSummary } from "@/components/job-card";
+} from '@/components/feed/feed-states';
+import { PreviewGrid } from '@/components/feed/preview-grid';
+import { RecoveryPanel } from '@/components/feed/recovery-panel';
+import { PageShell } from '@/components/page-shell';
+import { useGoogleStatus } from '@/components/google-status';
+import { SubmitUrlForm } from '@/components/submit-url-form';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { FileCode2, Plus } from 'lucide-react';
+import type { JobSummary } from '@/components/job-card';
 
-const CONTENT_TYPES = new Set(["short", "long", "article", "repo"]);
-
-const TEMPLATE_OPTIONS = [
-  { label: "Method", value: "method" },
-  { label: "Review", value: "review" },
-  { label: "Technical", value: "technical" },
-  { label: "Narrative", value: "narrative" },
-  { label: "Summary", value: "summary" },
-  { label: "Freestyle", value: "freestyle" },
-];
+const CONTENT_TYPES = new Set(['short', 'long', 'article', 'repo']);
 
 const CONTENT_TYPE_FILTERS = [
-  { label: "All", value: "" },
-  { label: "Short", value: "short" },
-  { label: "Long", value: "long" },
-  { label: "Article", value: "article" },
-  { label: "Repo", value: "repo" },
+  { label: 'All', value: '' },
+  { label: 'Short', value: 'short' },
+  { label: 'Long', value: 'long' },
+  { label: 'Article', value: 'article' },
+  { label: 'Repo', value: 'repo' },
   {
-    label: "Docs",
-    value: "docs",
-    href: "/doc-parser",
+    label: 'Docs',
+    value: 'docs',
+    href: '/doc-parser',
     dividerBefore: true,
     icon: FileCode2,
   },
@@ -63,21 +64,23 @@ function jobCountLabel(
   shown: number,
   total: number,
 ): string {
-  if (firstLoad) return "loading…";
-  if (loading) return "syncing…";
-  if (query.trim()) return `${shown} result${shown === 1 ? "" : "s"}`;
-  return `${total} job${total === 1 ? "" : "s"}`;
+  if (firstLoad) return 'loading…';
+  if (loading) return 'syncing…';
+  if (query.trim()) return `${shown} result${shown === 1 ? '' : 's'}`;
+  return `${total} job${total === 1 ? '' : 's'}`;
 }
 
 function normalizeContentType(value: string | null): string {
-  return value && CONTENT_TYPES.has(value) ? value : "";
+  return value && CONTENT_TYPES.has(value) ? value : '';
 }
 
 function FeedPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const urlContentType = normalizeContentType(searchParams.get("type"));
+  const urlContentType = normalizeContentType(
+    searchParams.get('type'),
+  );
   const {
     ctFilter,
     setCtFilter,
@@ -90,20 +93,24 @@ function FeedPageContent() {
     error,
     reload,
   } = useFeedData(urlContentType);
-  const [submitUrl, setSubmitUrl] = useState("");
-  const [submitTemplate, setSubmitTemplate] = useState("summary");
-  const [freestylePrompt, setFreestylePrompt] = useState("");
+  const [submitUrl, setSubmitUrl] = useState('');
+  const [submitTemplate, setSubmitTemplate] = useState('summary');
+  const [freestylePrompt, setFreestylePrompt] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>([]);
-  const [submitOpen, setSubmitOpen] = useState(false);
-  const submitPanelRef = useRef<HTMLDivElement>(null);
-  const submitTriggerRef = useRef<HTMLButtonElement>(null);
+  const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>(
+    [],
+  );
+  const [dialogOpen, setDialogOpen] = useState(false);
   const mergedJobs = useMemo(() => {
     const feedIds = new Set(jobs.map((job) => job.id));
-    return [...optimisticJobs.filter((job) => !feedIds.has(job.id)), ...jobs];
+    return [
+      ...optimisticJobs.filter((job) => !feedIds.has(job.id)),
+      ...jobs,
+    ];
   }, [optimisticJobs, jobs]);
-  const { query, setQuery, displayedJobs } = useFuseSearch(mergedJobs);
+  const { query, setQuery, displayedJobs } =
+    useFuseSearch(mergedJobs);
   const { connected: googleConnected } = useGoogleStatus();
   // Poll on mergedJobs, not jobs: an accepted submission held as an optimistic
   // row keeps the poll hot, so a failed post-submit refresh retries until the
@@ -125,24 +132,26 @@ function FeedPageContent() {
   // ?google= OAuth result into state (CONTEXT.md `Account affordance`) and drop
   // an unsupported ?type=, in a single replace so the two never race each other
   // back into the address bar.
-  const [oauthResult, setOauthResult] = useState<"connected" | "denied" | null>(
-    null,
-  );
+  const [oauthResult, setOauthResult] = useState<
+    'connected' | 'denied' | null
+  >(null);
   useEffect(() => {
-    const google = searchParams.get("google");
-    const rawType = searchParams.get("type");
-    const oauthReturn = google === "connected" || google === "denied";
+    const google = searchParams.get('google');
+    const rawType = searchParams.get('type');
+    const oauthReturn = google === 'connected' || google === 'denied';
     const badType = Boolean(rawType && !CONTENT_TYPES.has(rawType));
     if (!oauthReturn && !badType) return;
-    if (oauthReturn) setOauthResult(google as "connected" | "denied");
+    if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
     const params = new URLSearchParams(searchParams.toString());
-    params.delete("google");
+    params.delete('google');
     if (badType) {
-      params.delete("type");
-      setCtFilter("");
+      params.delete('type');
+      setCtFilter('');
     }
     const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    router.replace(qs ? `${pathname}?${qs}` : pathname, {
+      scroll: false,
+    });
   }, [searchParams, pathname, router, setCtFilter]);
 
   const refreshFeed = useCallback(async () => {
@@ -153,23 +162,13 @@ function FeedPageContent() {
     setCtFilter(urlContentType);
   }, [urlContentType, setCtFilter]);
 
-  // A collapsed grid-rows panel still leaves its inputs in the tab order; toggle
-  // `inert` imperatively so React 18 (no typed `inert` prop) keeps the hidden
-  // form out of keyboard/AT reach.
-  useEffect(() => {
-    const el = submitPanelRef.current;
-    if (!el) return;
-    if (submitOpen) el.removeAttribute("inert");
-    else el.setAttribute("inert", "");
-  }, [submitOpen]);
-
   const setContentType = useCallback(
     (value: string) => {
       const params = new URLSearchParams(searchParams.toString());
       if (value) {
-        params.set("type", value);
+        params.set('type', value);
       } else {
-        params.delete("type");
+        params.delete('type');
       }
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, {
@@ -227,10 +226,10 @@ function FeedPageContent() {
       const tempId = `pending-${Date.now()}`;
       const placeholder: JobSummary = {
         id: tempId,
-        title: "Submitting…",
+        title: 'Submitting…',
         url,
-        content_type: ctFilter || "short",
-        status: "pending",
+        content_type: ctFilter || 'short',
+        status: 'pending',
         created_at: new Date().toISOString(),
       };
       setSubmitError(null);
@@ -241,15 +240,16 @@ function FeedPageContent() {
           url,
           template: submitTemplate,
         };
-        if (submitTemplate === "freestyle")
+        if (submitTemplate === 'freestyle')
           payload.freestyle_prompt = freestylePrompt.trim();
-        const res = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || "Could not submit job");
+        if (!res.ok)
+          throw new Error(data.detail || 'Could not submit job');
         // The submit is accepted at this point. reload() swallows fetch errors
         // (it is shared with background polling), so the accepted job must not
         // depend on the refresh landing: promote the placeholder to the real
@@ -257,7 +257,7 @@ function FeedPageContent() {
         // the reconcile effect on `jobs` removes it, and in-flight polling
         // retries the refresh for as long as the row reads as pending.
         const acceptedId =
-          typeof data.id === "string" && data.id ? data.id : null;
+          typeof data.id === 'string' && data.id ? data.id : null;
         if (acceptedId) {
           setOptimisticJobs((current) =>
             current.map((job) =>
@@ -265,13 +265,16 @@ function FeedPageContent() {
                 ? {
                     ...job,
                     id: acceptedId,
-                    title: typeof data.title === "string" ? data.title : null,
+                    title:
+                      typeof data.title === 'string'
+                        ? data.title
+                        : null,
                     content_type:
-                      typeof data.content_type === "string"
+                      typeof data.content_type === 'string'
                         ? data.content_type
                         : job.content_type,
                     status:
-                      typeof data.status === "string"
+                      typeof data.status === 'string'
                         ? data.status
                         : job.status,
                   }
@@ -279,10 +282,9 @@ function FeedPageContent() {
             ),
           );
         }
-        setSubmitUrl("");
-        setFreestylePrompt("");
-        submitTriggerRef.current?.focus();
-        setSubmitOpen(false);
+        setSubmitUrl('');
+        setFreestylePrompt('');
+        setDialogOpen(false);
         await reload();
         if (!acceptedId) {
           // No job id in the response — nothing to reconcile against, so fall
@@ -292,7 +294,8 @@ function FeedPageContent() {
           );
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Could not submit job";
+        const message =
+          e instanceof Error ? e.message : 'Could not submit job';
         setSubmitError(message);
         setOptimisticJobs((current) =>
           current.filter((job) => job.id !== tempId),
@@ -301,13 +304,20 @@ function FeedPageContent() {
         setSubmitting(false);
       }
     },
-    [ctFilter, freestylePrompt, reload, submitTemplate, submitUrl, submitting],
+    [
+      ctFilter,
+      freestylePrompt,
+      reload,
+      submitTemplate,
+      submitUrl,
+      submitting,
+    ],
   );
 
   const clearAll = () => {
-    setContentType("");
-    setStFilter("");
-    setQuery("");
+    setContentType('');
+    setStFilter('');
+    setQuery('');
   };
 
   return (
@@ -323,9 +333,15 @@ function FeedPageContent() {
         {/* Two voices: Inter italic motto over the machine's mono echo, each
             Latin word column-aligned above its English state. */}
         <div className="grid grid-cols-[repeat(3,auto)] gap-x-6 gap-y-1.5">
-          <span className="text-sm font-medium italic text-body">Servavi.</span>
-          <span className="text-sm font-medium italic text-body">Ditavi.</span>
-          <span className="text-sm font-medium italic text-body">Inveni.</span>
+          <span className="text-sm font-medium italic text-body">
+            Servavi.
+          </span>
+          <span className="text-sm font-medium italic text-body">
+            Ditavi.
+          </span>
+          <span className="text-sm font-medium italic text-body">
+            Inveni.
+          </span>
           <span className="font-mono text-[11px] tracking-wide text-muted">
             Saved.
           </span>
@@ -336,20 +352,54 @@ function FeedPageContent() {
             Found.
           </span>
         </div>
+
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+        >
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="ml-auto hidden h-9 items-center gap-2 rounded-md border border-line border-b-2 border-b-signal bg-surface px-3.5 text-sm font-medium text-body transition-ui hover:text-ink active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:inline-flex motion-reduce:active:scale-100"
+            >
+              <Plus
+                aria-hidden="true"
+                className="h-4 w-4"
+              />
+              Submit URL
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogTitle>Submit URL</DialogTitle>
+            <div className="mt-4">
+              <SubmitUrlForm
+                url={submitUrl}
+                onUrlChange={setSubmitUrl}
+                template={submitTemplate}
+                onTemplateChange={setSubmitTemplate}
+                freestylePrompt={freestylePrompt}
+                onFreestylePromptChange={setFreestylePrompt}
+                submitting={submitting}
+                error={submitError}
+                onSubmit={submitJob}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </header>
 
       {oauthResult && (
         <div
           role="status"
           className={`rounded-md border px-4 py-3 text-sm ${
-            oauthResult === "connected"
-              ? "border-status-done/40 bg-status-done-tint text-status-done"
-              : "border-status-error/40 bg-status-error-tint text-status-error"
+            oauthResult === 'connected'
+              ? 'border-status-done/40 bg-status-done-tint text-status-done'
+              : 'border-status-error/40 bg-status-error-tint text-status-error'
           }`}
         >
-          {oauthResult === "connected"
-            ? "Google connected — exports will land in your Drive."
-            : "Google connection was denied — you can try again anytime."}
+          {oauthResult === 'connected'
+            ? 'Google connected — exports will land in your Drive.'
+            : 'Google connection was denied — you can try again anytime.'}
         </div>
       )}
 
@@ -366,8 +416,8 @@ function FeedPageContent() {
                 Connect Google
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-body">
-                Authorize Drive + Sheets so your jobs export into a vig-owned
-                /vig folder in your own Google Drive.
+                Authorize Drive + Sheets so your jobs export into a
+                vig-owned /vig folder in your own Google Drive.
               </p>
             </div>
             <a
@@ -380,90 +430,12 @@ function FeedPageContent() {
         </section>
       )}
 
-      {stats && <StatsOverview stats={stats} contentType={ctFilter} />}
-
-      {/* Submit is a deliberate act, not the page's headline (the feed is) — so it
-          collapses to a neutral trigger. Orange stays on Submit inside; the trigger
-          is neutral. Reuses the stats-strip collapse mechanic (grid-rows 0fr→1fr). */}
-      <div>
-        <button
-          ref={submitTriggerRef}
-          type="button"
-          onClick={() => setSubmitOpen((o) => !o)}
-          aria-expanded={submitOpen}
-          aria-controls="submit-panel"
-          className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-body transition-ui hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-        >
-          <Plus
-            aria-hidden="true"
-            className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${submitOpen ? "rotate-45" : ""}`}
-          />
-          Submit URL
-        </button>
-
-        <div
-          id="submit-panel"
-          className={`grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
-            submitOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          }`}
-        >
-          <div ref={submitPanelRef} className="min-h-0 overflow-hidden">
-            <section className="mt-3 rounded-lg border border-line bg-surface p-4">
-              <form
-                onSubmit={submitJob}
-                className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end"
-              >
-                <label className="grid gap-1.5 text-sm text-body">
-                  Submit URL
-                  <input
-                    value={submitUrl}
-                    onChange={(event) => setSubmitUrl(event.target.value)}
-                    placeholder="Paste a video, article, or repo URL…"
-                    className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
-                  />
-                </label>
-                <label className="grid gap-1.5 text-sm text-body">
-                  Template
-                  <select
-                    value={submitTemplate}
-                    onChange={(event) => setSubmitTemplate(event.target.value)}
-                    className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui focus:border-signal"
-                  >
-                    {TEMPLATE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  type="submit"
-                  disabled={submitting || !submitUrl.trim()}
-                  className="h-10 rounded-md bg-signal px-4 text-sm font-semibold text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submitting ? "Submitting…" : "Submit"}
-                </button>
-                {submitTemplate === "freestyle" && (
-                  <label className="grid gap-1.5 text-sm text-body lg:col-span-3">
-                    Freestyle prompt
-                    <textarea
-                      value={freestylePrompt}
-                      onChange={(event) =>
-                        setFreestylePrompt(event.target.value)
-                      }
-                      placeholder="Tell Gemini exactly how to analyze this job…"
-                      className="min-h-20 rounded-md border border-line bg-base px-3 py-2 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
-                    />
-                  </label>
-                )}
-              </form>
-              {submitError && (
-                <p className="mt-3 text-sm text-status-error">{submitError}</p>
-              )}
-            </section>
-          </div>
-        </div>
-      </div>
+      {stats && (
+        <StatsOverview
+          stats={stats}
+          contentType={ctFilter}
+        />
+      )}
 
       <FilterBar
         tabs={contentTypeTabs}
@@ -476,7 +448,30 @@ function FeedPageContent() {
         statusValue={stFilter}
         onStatusChange={setStFilter}
         recoveryPanel={
-          <RecoveryPanel contentType={ctFilter} onRecovered={refreshFeed} />
+          <RecoveryPanel
+            contentType={ctFilter}
+            onRecovered={refreshFeed}
+          />
+        }
+        actionSlot={
+          /* Mobile-only (<sm): the submit trigger lives in the first slot of the
+             chip wrap grid so it flows with the filters instead of floating alone.
+             Signal underline + signal text mark it as the row's one action without
+             matching the active chip's full signal fill (The Signal Rule). Opens
+             the same dialog as the sm+ header trigger. */
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            aria-label="Submit URL"
+            aria-haspopup="dialog"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
+          >
+            <Plus
+              aria-hidden="true"
+              className="h-4 w-4"
+            />
+            Submit
+          </button>
         }
       />
 
@@ -491,9 +486,20 @@ function FeedPageContent() {
           </span>
         </div>
 
-        {error && <ErrorBanner message={error} onRetry={() => reload()} />}
-        {firstLoad && (showPreviewGrid ? <SkeletonGrid /> : <SkeletonList />)}
-        {empty && <EmptyState hasFilters={hasFilters} onClear={clearAll} />}
+        {error && (
+          <ErrorBanner
+            message={error}
+            onRetry={() => reload()}
+          />
+        )}
+        {firstLoad &&
+          (showPreviewGrid ? <SkeletonGrid /> : <SkeletonList />)}
+        {empty && (
+          <EmptyState
+            hasFilters={hasFilters}
+            onClear={clearAll}
+          />
+        )}
 
         {!firstLoad &&
           (showPreviewGrid ? (

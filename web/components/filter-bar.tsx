@@ -1,13 +1,19 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type React from "react";
-import type { LucideIcon } from "lucide-react";
+import Link from 'next/link';
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import type React from 'react';
+import type { LucideIcon } from 'lucide-react';
 
 // useLayoutEffect on the server warns; fall back to useEffect there (no DOM to measure anyway).
 const useIsoLayoutEffect =
-  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export interface FilterTab {
   label: string;
@@ -27,11 +33,11 @@ export interface StatusOption {
 
 // Shared default: feed and doc-parser both filter on the same job statuses.
 export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
-  { label: "All", value: "" },
-  { label: "Done", value: "done" },
-  { label: "Pending", value: "pending" },
-  { label: "Processing", value: "processing" },
-  { label: "Error", value: "error" },
+  { label: 'All', value: '' },
+  { label: 'Done', value: 'done' },
+  { label: 'Pending', value: 'pending' },
+  { label: 'Processing', value: 'processing' },
+  { label: 'Error', value: 'error' },
 ];
 
 // Segmented control (motion-primitives "animated background"): one signal-orange
@@ -44,16 +50,22 @@ export function SegmentedTabs({
   value,
   onChange,
   label,
+  leadingItem,
 }: {
   tabs: readonly FilterTab[];
   value: string;
   onChange: (value: string) => void;
   label: string;
+  /** Rendered as the first item inside the wrap grid, before the tabs — for a
+   * page-level action that should flow with the chips on mobile (e.g. the feed's
+   * Submit trigger). Not a tab: it never participates in value/thumb logic. */
+  leadingItem?: React.ReactNode;
 }) {
   const refs = useRef<(HTMLElement | null)[]>([]);
-  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
-    null,
-  );
+  const [thumb, setThumb] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
   const activeIndex = tabs.findIndex((t) => t.value === value);
 
   // Measure before paint so the orange thumb shows on first frame (no flash of no selection).
@@ -69,15 +81,15 @@ export function SegmentedTabs({
       );
     };
     update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, [activeIndex, tabs]);
 
   return (
     <div
       role="group"
       aria-label={label}
-      className="relative flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:gap-1 sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1"
+      className="relative grid w-full grid-cols-4 gap-2 px-1 sm:flex sm:w-auto sm:flex-nowrap sm:gap-1 sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1 sm:px-0"
     >
       {thumb && (
         <span
@@ -89,22 +101,28 @@ export function SegmentedTabs({
           }}
         />
       )}
+      {leadingItem}
       {tabs.map((tab, i) => {
         const active = !tab.href && tab.value === value;
         const Icon = tab.icon;
         const labelText = tab.badge
           ? `${tab.label} (${tab.badge})`
-          : `${tab.label} ${tab.count ?? ""}`.trim();
-        const className = `relative z-10 flex h-9 items-center justify-center gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors disabled:cursor-default sm:border-0 ${
+          : `${tab.label} ${tab.count ?? ''}`.trim();
+        const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-[13px] font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${
           active
-            ? "border-signal bg-signal text-onsignal sm:bg-transparent"
+            ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
             : tab.disabled
-              ? "border-line bg-surface text-muted"
-              : "border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none"
+              ? 'border-line bg-surface text-muted'
+              : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
         }`;
         const content = (
           <>
-            {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
+            {Icon && (
+              <Icon
+                className="h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
+            )}
             <span>{tab.label}</span>
             {tab.badge ? (
               <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
@@ -112,7 +130,7 @@ export function SegmentedTabs({
               </span>
             ) : tab.count !== undefined ? (
               <span
-                className={`rounded border px-1.5 py-0.5 font-mono text-[11px] tabular-nums ${active ? "border-onsignal/30 text-onsignal" : "border-line text-muted"}`}
+                className={`rounded border px-1 py-0.5 font-mono text-[11px] tabular-nums sm:px-1.5 ${active ? 'border-onsignal/30 text-onsignal' : 'border-line text-muted'}`}
               >
                 {tab.count}
               </span>
@@ -178,8 +196,8 @@ function FilterButton({
       aria-pressed={active}
       className={`h-7 rounded-md px-3 text-[13px] font-medium transition-ui ${
         active
-          ? "bg-signal text-onsignal hover:bg-signal-bright"
-          : "border border-line bg-surface text-body hover:bg-raised hover:text-ink"
+          ? 'bg-signal text-onsignal hover:bg-signal-bright'
+          : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
       }`}
     >
       {label}
@@ -191,15 +209,16 @@ export function FilterBar({
   tabs,
   tabValue,
   onTabChange,
-  tabsLabel = "Content type",
+  tabsLabel = 'Content type',
   query,
   setQuery,
-  searchPlaceholder = "Search…",
-  searchLabel = "Search",
+  searchPlaceholder = 'Search…',
+  searchLabel = 'Search',
   statusFilters = DEFAULT_STATUS_FILTERS,
   statusValue,
   onStatusChange,
   recoveryPanel,
+  actionSlot,
 }: {
   tabs: readonly FilterTab[];
   tabValue: string;
@@ -213,6 +232,9 @@ export function FilterBar({
   statusValue: string;
   onStatusChange: (v: string) => void;
   recoveryPanel?: React.ReactNode;
+  /** Page-level action rendered as the first slot in the tabs wrap grid (see
+   * SegmentedTabs.leadingItem). */
+  actionSlot?: React.ReactNode;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed; component remounts on navigation so it resets naturally.
@@ -223,12 +245,12 @@ export function FilterBar({
   // Guarded for non-browser/jsdom envs → stays on the desktop (always-open) path.
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(max-width: 639px)");
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(max-width: 639px)');
     const update = () => setIsMobile(mq.matches);
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
   }, []);
 
   const collapsed = isMobile && !filtersOpen;
@@ -245,6 +267,7 @@ export function FilterBar({
             value={tabValue}
             onChange={onTabChange}
             label={tabsLabel}
+            leadingItem={actionSlot}
           />
         </div>
         <input
@@ -263,14 +286,17 @@ export function FilterBar({
         aria-controls="status-filter-bar"
         className="self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
       >
-        Filters <span aria-hidden="true">{filtersOpen ? "▴" : "▾"}</span>
+        Filters{' '}
+        <span aria-hidden="true">{filtersOpen ? '▴' : '▾'}</span>
       </button>
       <div
         id="status-filter-bar"
         aria-hidden={collapsed || undefined}
-        {...(collapsed ? ({ inert: "" } as Record<string, unknown>) : {})}
+        {...(collapsed
+          ? ({ inert: '' } as Record<string, unknown>)
+          : {})}
         className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
-          collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+          collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
         }`}
       >
         <div className="min-h-0 overflow-hidden">

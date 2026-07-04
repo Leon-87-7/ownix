@@ -16,6 +16,7 @@
     "@milkdown/crepe": "^7.21.2",
     "@milkdown/ctx": "^7.21.1",
     "@milkdown/transformer": "^7.21.1",
+    "@radix-ui/react-dialog": "^1.1.18",
     "@radix-ui/react-dropdown-menu": "^2.1.18",
     "@radix-ui/react-tooltip": "^1.2.9",
     "fuse.js": "^7.4.0",
