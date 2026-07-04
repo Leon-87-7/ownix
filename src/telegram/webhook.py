@@ -23,6 +23,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from src import database, queue
 from src.config import settings
 from src.services import storage
+from src.services.jobs import create_and_enqueue_job
+from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
     download_file,
@@ -479,6 +481,19 @@ _cb_invite_block = functools.partial(
 )
 
 
+async def _cb_repo_pick(ctx: CallbackCtx) -> None:
+    _, _, rest = ctx.data.partition(":")
+    source_job_id, _, idx = rest.partition(":")
+    job = await enqueue_repo_pick(source_job_id, idx)
+    if job is None:
+        await answer_callback_query(
+            ctx.cq_id, text="Repo choice expired. Run the source job again."
+        )
+        return
+    await answer_callback_query(ctx.cq_id, text="Repo analysis queued.")
+    await send_message(ctx.chat_id, f"📥 Repo analysis queued\njob_{job['id'][-4:]}")
+
+
 _CALLBACK_TABLE: dict[str, Callable[[CallbackCtx], Awaitable[None]]] = {
     "gemini_no": _cb_gemini_no,
     "gemini_yes": _cb_gemini_yes,
@@ -496,6 +511,7 @@ _CALLBACK_TABLE: dict[str, Callable[[CallbackCtx], Awaitable[None]]] = {
     "document_md": _cb_document_md,
     "invite_approve": _cb_invite_approve,
     "invite_block": _cb_invite_block,
+    "repo_pick": _cb_repo_pick,
 }
 
 
@@ -1470,25 +1486,24 @@ async def _handle_user_template_shortcut(
             "Instagram Reels, TikTok videos, and allowlisted article domains.",
         )
         return True
-    cached = await database.find_recent_job_by_url(chat_id, url)
-    if cached:
-        await _reply_cached_job(chat_id, cached)
-        return True
     extra_instructions = (tmpl_row.get("extra_instructions") or "").strip()
-    job_id = await database.create_job(
-        chat_id=chat_id,
-        url=url,
-        content_type=pipeline,
+    job = await create_and_enqueue_job(
+        chat_id,
+        normalize_repo_url(url) if pipeline == "repo" else url,
+        pipeline,
         message_id=message_id,
         template="freestyle" if extra_instructions else None,
+        freestyle_prompt=extra_instructions or None,
     )
+    if job.get("_deduped"):
+        await _reply_cached_job(chat_id, job)
+        return True
+    job_id = job["id"]
     await database.set_job_template_prompt(
         job_id,
         freestyle_prompt=extra_instructions or None,
         template_detection_method=f"user_template:{tmpl_name}",
     )
-    task_type = _task_for(pipeline)
-    await queue.enqueue({"task": task_type, "job_id": job_id})
     await send_message(
         chat_id,
         f"📥 Received\n✨ Kicking off analysis ({tmpl_name})\njob_{job_id[-4:]}",
@@ -1504,16 +1519,16 @@ async def _handle_user_template_shortcut(
 
 async def _enqueue_simple_job(
     chat_id: int, url: str, content_type: str, message_id: int
-) -> None:
+) -> dict:
     """Create + enqueue an article/repo job and ack the user."""
-    job_id = await database.create_job(
-        chat_id=chat_id,
-        url=url,
-        content_type=content_type,
-        message_id=message_id,
+    job = await create_and_enqueue_job(
+        chat_id, url, content_type, message_id=message_id
     )
-    await queue.enqueue({"task": content_type, "job_id": job_id})
-    await send_message(chat_id, f"📥 Received!\njob_{job_id[-4:]}")
+    if job.get("_deduped"):
+        await _reply_cached_job(chat_id, job)
+    else:
+        await send_message(chat_id, f"📥 Received!\njob_{job['id'][-4:]}")
+    return job
 
 
 async def _reject_url(chat_id: int, text: str) -> None:
@@ -1576,26 +1591,17 @@ async def _route_video(
         await _handle_freestyle_url(chat_id, text, pipeline, message_id)
         return
 
-    if not pending_template:
-        cached = await database.find_recent_job_by_url(chat_id, text)
-        if cached:
-            await _reply_cached_job(chat_id, cached)
-            return
-
-    job_id = await database.create_job(
-        chat_id=chat_id,
-        url=text,
-        content_type=pipeline,
-        message_id=message_id,
+    job = await create_and_enqueue_job(
+        chat_id,
+        text,
+        pipeline,
         template=pending_template,
+        message_id=message_id,
     )
-    if pending_template:
-        await database.update_job_status(
-            job_id,
-            "pending",
-            template_detection_method="explicit_command",
-        )
-    await queue.enqueue({"task": "video", "job_id": job_id})
+    job_id = job["id"]
+    if job.get("_deduped"):
+        await _reply_cached_job(chat_id, job)
+        return
     if pending_template:
         await send_message(
             chat_id,

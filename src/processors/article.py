@@ -17,6 +17,7 @@ from src.telegram.sender import edit_message_text, send_document, send_inline_ke
 from src.services.gemini import extract_json
 from src.utils import job_tag
 from src.utils.logger import get_logger
+from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
 
@@ -339,6 +340,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
         f"{tag}\nWhat's next?",
         buttons=[[{"text": "✍️ Freestyle", "callback_data": f"template_freestyle:{job_id}"}]],
     )
+    await offer_repo_followups(refreshed or job, tools)
 
     # 9. Brain ingest (fire-and-forget — article URL only, no body links)
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:

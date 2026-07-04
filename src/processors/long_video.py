@@ -12,6 +12,7 @@ from src.services.github import enrich_github_links
 from src.utils.markdown import build_enriched_links_message, build_transcript_markdown
 from src.utils import job_tag
 from src.utils.validators import extract_description_links, slugify
+from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
 
@@ -148,6 +149,7 @@ async def run(job: dict) -> None:
 
     if description_links:
         await send_message(chat_id, f"{tag}\n{build_enriched_links_message(description_links)}")
+        await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, description_links)
 
     # 7. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job
