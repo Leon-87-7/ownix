@@ -329,6 +329,118 @@ describe('FeedPage', () => {
     expect(reload).toHaveBeenCalled();
   });
 
+  it('keeps an accepted submission visible when the post-submit refresh fails', async () => {
+    // Pass the merged feed through so optimistic rows actually render.
+    mockUseFuseSearch.mockImplementation(
+      (jobs: JobSummary[]) =>
+        ({ query: '', setQuery: vi.fn(), displayedJobs: jobs }) as ReturnType<typeof useFuseSearch>,
+    );
+    // reload resolves without delivering the new job — useFeedData swallows
+    // background fetch errors, so a failed refresh looks exactly like this.
+    const reload = vi.fn(async () => {});
+    mockUseFeedData.mockReturnValue({
+      ctFilter: '',
+      setCtFilter: vi.fn(),
+      stFilter: '',
+      setStFilter: vi.fn(),
+      stats: STATS,
+      jobs: JOBS,
+      total: JOBS.length,
+      loading: false,
+      error: null,
+      reload,
+    } as ReturnType<typeof useFeedData>);
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          id: 'accepted-1',
+          job_id: 'accepted-1',
+          url: 'https://example.com/new',
+          content_type: 'short',
+          status: 'pending',
+          title: null,
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+
+    render(<FeedPage />);
+    fireEvent.click(screen.getByRole('button', { name: /submit url/i }));
+    fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
+      target: { value: 'https://example.com/new' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    // The accepted job survives the stale refresh (title is null → card shows the URL)…
+    expect(screen.getByText('https://example.com/new')).toBeTruthy();
+    // …and it feeds the in-flight poll so the refresh keeps retrying.
+    const polled = vi.mocked(useInFlightPolling).mock.calls.at(-1)?.[0] ?? [];
+    expect(polled.some((j) => j.id === 'accepted-1' && j.status === 'pending')).toBe(true);
+  });
+
+  it('drops the optimistic copy once the refreshed feed carries the job', async () => {
+    mockUseFuseSearch.mockImplementation(
+      (jobs: JobSummary[]) =>
+        ({ query: '', setQuery: vi.fn(), displayedJobs: jobs }) as ReturnType<typeof useFuseSearch>,
+    );
+    const reload = vi.fn(async () => {});
+    const feedState = {
+      ctFilter: '',
+      setCtFilter: vi.fn(),
+      stFilter: '',
+      setStFilter: vi.fn(),
+      stats: STATS,
+      jobs: JOBS,
+      total: JOBS.length,
+      loading: false,
+      error: null,
+      reload,
+    } as ReturnType<typeof useFeedData>;
+    mockUseFeedData.mockReturnValue(feedState);
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({
+          id: 'accepted-1',
+          url: 'https://example.com/new',
+          content_type: 'short',
+          status: 'pending',
+          title: null,
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+
+    const { rerender } = render(<FeedPage />);
+    fireEvent.click(screen.getByRole('button', { name: /submit url/i }));
+    fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
+      target: { value: 'https://example.com/new' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+    await waitFor(() => expect(screen.getByText('https://example.com/new')).toBeTruthy());
+
+    // Feed catches up: the server list now carries the accepted job.
+    const acceptedJob: JobSummary = {
+      id: 'accepted-1',
+      url: 'https://example.com/new',
+      title: null,
+      content_type: 'short',
+      status: 'pending',
+      created_at: '2024-01-02T00:00:00Z',
+    };
+    mockUseFeedData.mockReturnValue({
+      ...feedState,
+      jobs: [acceptedJob, ...JOBS],
+      total: JOBS.length + 1,
+    } as ReturnType<typeof useFeedData>);
+    rerender(<FeedPage />);
+
+    // Exactly one row — no optimistic duplicate alongside the server copy.
+    await waitFor(() =>
+      expect(screen.getAllByText('https://example.com/new')).toHaveLength(1),
+    );
+  });
+
   it('clears every filter from the empty-state Clear button', () => {
     const setStFilter = vi.fn();
     const setQuery = vi.fn();
