@@ -98,6 +98,7 @@ function FeedPageContent() {
   const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>([]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const submitPanelRef = useRef<HTMLDivElement>(null);
+  const submitTriggerRef = useRef<HTMLButtonElement>(null);
   const mergedJobs = useMemo(
     () => [...optimisticJobs, ...jobs],
     [optimisticJobs, jobs],
@@ -238,6 +239,7 @@ function FeedPageContent() {
         if (!res.ok) throw new Error(data.detail || "Could not submit job");
         setSubmitUrl("");
         setFreestylePrompt("");
+        submitTriggerRef.current?.focus();
         setSubmitOpen(false);
         await reload();
         setOptimisticJobs((current) =>
@@ -339,6 +341,7 @@ function FeedPageContent() {
           is neutral. Reuses the stats-strip collapse mechanic (grid-rows 0fr→1fr). */}
       <div>
         <button
+          ref={submitTriggerRef}
           type="button"
           onClick={() => setSubmitOpen((o) => !o)}
           aria-expanded={submitOpen}
