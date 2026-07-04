@@ -181,6 +181,17 @@ def test_build_repo_prompt_contains_tree_and_manifests() -> None:
     assert "a.py" in prompt or "file tree" in prompt.lower()
 
 
+def test_prompt_tech_stack_cap_in_strict_rules() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    strict = prompt.split("STRICT RULES:")[1]
+    assert "max 10 items" in strict
+
+
+def test_prompt_tagline_guidance_bans_description_reuse() -> None:
+    prompt = _build_repo_prompt(_BUNDLE)
+    assert "Do not reuse phrasing from the Description field" in prompt
+
+
 def test_build_repo_prompt_includes_sub_readmes() -> None:
     bundle = {**_BUNDLE, "sub_readmes": {"okf/README.md": "OKF framework docs"}}
     prompt = _build_repo_prompt(bundle)
