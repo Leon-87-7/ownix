@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useFeedData } from "@/lib/hooks/useFeedData";
@@ -20,7 +27,7 @@ import { PreviewGrid } from "@/components/feed/preview-grid";
 import { RecoveryPanel } from "@/components/feed/recovery-panel";
 import { PageShell } from "@/components/page-shell";
 import { useGoogleStatus } from "@/components/google-status";
-import { FileCode2 } from "lucide-react";
+import { FileCode2, Plus } from "lucide-react";
 import type { JobSummary } from "@/components/job-card";
 
 const CONTENT_TYPES = new Set(["short", "long", "article", "repo"]);
@@ -89,7 +96,12 @@ function FeedPageContent() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>([]);
-  const mergedJobs = useMemo(() => [...optimisticJobs, ...jobs], [optimisticJobs, jobs]);
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const submitPanelRef = useRef<HTMLDivElement>(null);
+  const mergedJobs = useMemo(
+    () => [...optimisticJobs, ...jobs],
+    [optimisticJobs, jobs],
+  );
   const { query, setQuery, displayedJobs } = useFuseSearch(mergedJobs);
   const { connected: googleConnected } = useGoogleStatus();
   useInFlightPolling(jobs, reload);
@@ -126,6 +138,16 @@ function FeedPageContent() {
   useEffect(() => {
     setCtFilter(urlContentType);
   }, [urlContentType, setCtFilter]);
+
+  // A collapsed grid-rows panel still leaves its inputs in the tab order; toggle
+  // `inert` imperatively so React 18 (no typed `inert` prop) keeps the hidden
+  // form out of keyboard/AT reach.
+  useEffect(() => {
+    const el = submitPanelRef.current;
+    if (!el) return;
+    if (submitOpen) el.removeAttribute("inert");
+    else el.setAttribute("inert", "");
+  }, [submitOpen]);
 
   const setContentType = useCallback(
     (value: string) => {
@@ -183,45 +205,56 @@ function FeedPageContent() {
     total,
   );
 
-
-  const submitJob = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const url = submitUrl.trim();
-    if (!url || submitting) return;
-    const tempId = `pending-${Date.now()}`;
-    const placeholder: JobSummary = {
-      id: tempId,
-      title: "Submitting…",
-      url,
-      content_type: ctFilter || "short",
-      status: "pending",
-      created_at: new Date().toISOString(),
-    };
-    setSubmitError(null);
-    setSubmitting(true);
-    setOptimisticJobs((current) => [placeholder, ...current]);
-    try {
-      const payload: Record<string, string> = { url, template: submitTemplate };
-      if (submitTemplate === "freestyle") payload.freestyle_prompt = freestylePrompt.trim();
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Could not submit job");
-      setSubmitUrl("");
-      setFreestylePrompt("");
-      await reload();
-      setOptimisticJobs((current) => current.filter((job) => job.id !== tempId));
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Could not submit job";
-      setSubmitError(message);
-      setOptimisticJobs((current) => current.filter((job) => job.id !== tempId));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ctFilter, freestylePrompt, reload, submitTemplate, submitUrl, submitting]);
+  const submitJob = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const url = submitUrl.trim();
+      if (!url || submitting) return;
+      const tempId = `pending-${Date.now()}`;
+      const placeholder: JobSummary = {
+        id: tempId,
+        title: "Submitting…",
+        url,
+        content_type: ctFilter || "short",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      };
+      setSubmitError(null);
+      setSubmitting(true);
+      setOptimisticJobs((current) => [placeholder, ...current]);
+      try {
+        const payload: Record<string, string> = {
+          url,
+          template: submitTemplate,
+        };
+        if (submitTemplate === "freestyle")
+          payload.freestyle_prompt = freestylePrompt.trim();
+        const res = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Could not submit job");
+        setSubmitUrl("");
+        setFreestylePrompt("");
+        setSubmitOpen(false);
+        await reload();
+        setOptimisticJobs((current) =>
+          current.filter((job) => job.id !== tempId),
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Could not submit job";
+        setSubmitError(message);
+        setOptimisticJobs((current) =>
+          current.filter((job) => job.id !== tempId),
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [ctFilter, freestylePrompt, reload, submitTemplate, submitUrl, submitting],
+  );
 
   const clearAll = () => {
     setContentType("");
@@ -301,52 +334,87 @@ function FeedPageContent() {
 
       {stats && <StatsOverview stats={stats} contentType={ctFilter} />}
 
-      <section className="rounded-lg border border-line bg-surface p-4">
-        <form onSubmit={submitJob} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end">
-          <label className="grid gap-1.5 text-sm text-body">
-            Submit URL
-            <input
-              value={submitUrl}
-              onChange={(event) => setSubmitUrl(event.target.value)}
-              placeholder="Paste a video, article, or repo URL…"
-              className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm text-body">
-            Template
-            <select
-              value={submitTemplate}
-              onChange={(event) => setSubmitTemplate(event.target.value)}
-              className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui focus:border-signal"
-            >
-              {TEMPLATE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            disabled={submitting || !submitUrl.trim()}
-            className="h-10 rounded-md bg-signal px-4 text-sm font-semibold text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting ? "Submitting…" : "Submit"}
-          </button>
-          {submitTemplate === "freestyle" && (
-            <label className="grid gap-1.5 text-sm text-body lg:col-span-3">
-              Freestyle prompt
-              <textarea
-                value={freestylePrompt}
-                onChange={(event) => setFreestylePrompt(event.target.value)}
-                placeholder="Tell Gemini exactly how to analyze this job…"
-                className="min-h-20 rounded-md border border-line bg-base px-3 py-2 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
-              />
-            </label>
-          )}
-        </form>
-        {submitError && <p className="mt-3 text-sm text-status-error">{submitError}</p>}
-      </section>
+      {/* Submit is a deliberate act, not the page's headline (the feed is) — so it
+          collapses to a neutral trigger. Orange stays on Submit inside; the trigger
+          is neutral. Reuses the stats-strip collapse mechanic (grid-rows 0fr→1fr). */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setSubmitOpen((o) => !o)}
+          aria-expanded={submitOpen}
+          aria-controls="submit-panel"
+          className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-body transition-ui hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+        >
+          <Plus
+            aria-hidden="true"
+            className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${submitOpen ? "rotate-45" : ""}`}
+          />
+          Submit URL
+        </button>
+
+        <div
+          id="submit-panel"
+          className={`grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${
+            submitOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div ref={submitPanelRef} className="min-h-0 overflow-hidden">
+            <section className="mt-3 rounded-lg border border-line bg-surface p-4">
+              <form
+                onSubmit={submitJob}
+                className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end"
+              >
+                <label className="grid gap-1.5 text-sm text-body">
+                  Submit URL
+                  <input
+                    value={submitUrl}
+                    onChange={(event) => setSubmitUrl(event.target.value)}
+                    placeholder="Paste a video, article, or repo URL…"
+                    className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm text-body">
+                  Template
+                  <select
+                    value={submitTemplate}
+                    onChange={(event) => setSubmitTemplate(event.target.value)}
+                    className="h-10 rounded-md border border-line bg-base px-3 text-sm text-ink outline-none transition-ui focus:border-signal"
+                  >
+                    {TEMPLATE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  disabled={submitting || !submitUrl.trim()}
+                  className="h-10 rounded-md bg-signal px-4 text-sm font-semibold text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? "Submitting…" : "Submit"}
+                </button>
+                {submitTemplate === "freestyle" && (
+                  <label className="grid gap-1.5 text-sm text-body lg:col-span-3">
+                    Freestyle prompt
+                    <textarea
+                      value={freestylePrompt}
+                      onChange={(event) =>
+                        setFreestylePrompt(event.target.value)
+                      }
+                      placeholder="Tell Gemini exactly how to analyze this job…"
+                      className="min-h-20 rounded-md border border-line bg-base px-3 py-2 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal"
+                    />
+                  </label>
+                )}
+              </form>
+              {submitError && (
+                <p className="mt-3 text-sm text-status-error">{submitError}</p>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
 
       <FilterBar
         tabs={contentTypeTabs}
