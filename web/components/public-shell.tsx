@@ -26,7 +26,7 @@ export function PublicShell({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/vig_logo_lockup.svg"
-              alt="vig"
+              alt=""
               className="h-9 w-auto"
             />
             <span className="sr-only">VIG console</span>
