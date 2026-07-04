@@ -51,6 +51,18 @@ export function linksToMarkdown(raw: string): string {
 }
 
 export function splitPipes(value: string): string[] {
+  // Repo jobs store list fields as JSON arrays; video jobs as ' | '-joined strings.
+  const trimmed = value.trim()
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean)
+      }
+    } catch {
+      // fall through to pipe splitting
+    }
+  }
   return value.split(' | ').map((s) => s.trim()).filter(Boolean)
 }
 
