@@ -63,6 +63,13 @@
 | [#312](https://github.com/Leon-87-7/vig/issues/312) | feat(repo): key_components field — what's actually in this repo                                            | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
 | [#313](https://github.com/Leon-87-7/vig/issues/313) | fix(web): job detail renders ai_action_points/ai_tools as raw JSON strings                                 | Web / Jobs               | Merged; PR #315; closed on GH                                                             |
 | [#314](https://github.com/Leon-87-7/vig/issues/314) | feat(repo): tighten prompt field guidance — tagline, tech_stack cap, when_to_use, concepts_taught          | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
+| [#305](https://github.com/Leon-87-7/vig/issues/305) | Links table — truncate & expand the title · topic description                                              | Web / Brain              | Merged; PR #316; closed on GH                                                              |
+| [#306](https://github.com/Leon-87-7/vig/issues/306) | Links table — mobile TableCard stacked layout                                                               | Web / Brain              | Merged; PR #316; closed on GH                                                              |
+| [#307](https://github.com/Leon-87-7/vig/issues/307) | Sidebar footer — Terms/Privacy links + Sign out icon                                                        | Web / Sidebar            | Merged; PR #316; closed on GH                                                              |
+| [#308](https://github.com/Leon-87-7/vig/issues/308) | Sidebar footer — Google-connect row redesign                                                                | Web / Account            | Merged; PR #316; closed on GH                                                              |
+| [#309](https://github.com/Leon-87-7/vig/issues/309) | Job details — previous/next navigation                                                                      | Web / Jobs               | Merged; PR #316; closed on GH                                                              |
+| [#310](https://github.com/Leon-87-7/vig/issues/310) | Feed — Docs tab linking to Doc Parser                                                                       | Web / Feed               | Merged; PR #316; closed on GH                                                              |
+| [#117](https://github.com/Leon-87-7/vig/issues/117) | ExportModal: restore PDF fallback when Google Drive is not configured                                       | Web / Export             | Closed via commit 507e284; no PR; backfilled                                               |
 
 ---
 
@@ -81,12 +88,6 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                                                            | Area                     | Depends On       |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------------ | ------------------------ | ---------------- |
-| [#305](https://github.com/Leon-87-7/vig/issues/305) | Links table — truncate & expand the title · topic description                                    | Web / Brain              | —                |
-| [#307](https://github.com/Leon-87-7/vig/issues/307) | Sidebar footer — Terms/Privacy links + Sign out icon                                              | Web / Sidebar            | —                |
-| [#308](https://github.com/Leon-87-7/vig/issues/308) | Sidebar footer — Google-connect row redesign                                                      | Web / Account            | —                |
-| [#309](https://github.com/Leon-87-7/vig/issues/309) | Job details — previous/next navigation                                                            | Web / Jobs               | —                |
-| [#310](https://github.com/Leon-87-7/vig/issues/310) | Feed — Docs tab linking to Doc Parser                                                             | Web / Feed               | —                |
-| [#306](https://github.com/Leon-87-7/vig/issues/306) | Links table — mobile TableCard stacked layout                                                     | Web / Brain              | #305             |
 
 ---
 
@@ -395,13 +396,13 @@ Account affordance — Google connection + Telegram identity (grill 2026-07-02 �
 Critical path: {#292, #293} → #295; #294 parallel (all ✅-Done via PR #296)
 
 Sidebar footer + Brain Links + job navigation (grill 2026-07-03 — tasks #7/#10/#15/#18/#20 from docs/TASK.md)
-#305 Links table — truncate & expand title · topic description (root)
-└── #306 Links table — mobile TableCard stacked layout ◄── #305
-#307 Sidebar Terms/Privacy links + Sign out icon (independent)
-#308 Sidebar Google-connect row redesign (independent)
-#309 Job details previous/next navigation (independent)
-#310 Feed Docs tab → Doc Parser (independent)
-Critical path: #305 → #306; #307, #308, #309, #310 are independent — no dependency between them
+#305 Links table — truncate & expand title · topic description (root) ✅-Done (PR #316)
+└── #306 Links table — mobile TableCard stacked layout ◄── #305 ✅-Done (PR #316)
+#307 Sidebar Terms/Privacy links + Sign out icon (independent) ✅-Done (PR #316)
+#308 Sidebar Google-connect row redesign (independent) ✅-Done (PR #316)
+#309 Job details previous/next navigation (independent) ✅-Done (PR #316)
+#310 Feed Docs tab → Doc Parser (independent) ✅-Done (PR #316)
+Critical path: #305 → #306; #307, #308, #309, #310 are independent — no dependency between them (all ✅-Done via PR #316)
 
 Repo analysis "more informational" (job 20260703_211658 review 2026-07-04 — prompt tweaks driven from GoogleCloudPlatform/knowledge-catalog output)
 #311 sub-project READMEs into repo bundle (independent) ✅-Done (PR #315) ◄── extends #67 bundle ✅
@@ -422,6 +423,8 @@ Critical path: #312 → #314; #311, #313 parallel (all ✅-Done via PR #315)
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#316](https://github.com/Leon-87-7/vig/pull/316) | feat: job prev/next navigation, links mobile cards, Docs tab, sidebar footer (#305-#310) | codex/resolve-305-310→main | #305, #306, #307, #308, #309, #310 | ✅ Merged |
+| [#315](https://github.com/Leon-87-7/vig/pull/315) | feat(repo): more informational repo analysis — sub-READMEs, key_components, tighter prompt guidance + web JSON render fix | worktree-repo-informational-311-314→main | #311, #312, #313, #314 | ✅ Merged |
 | [#304](https://github.com/Leon-87-7/vig/pull/304) | Replace in-content spinners with skeletons; webhook callback & copy fixes | codex/resolve-issues-#300-to-#302→main | — | ✅ Merged |
 | [#303](https://github.com/Leon-87-7/vig/pull/303) | fix(web): sidebar rail tooltip omits Google status while it is still unknown | fix/sidebar-tooltip-null-status→main | — | ✅ Merged |
 | [#299](https://github.com/Leon-87-7/vig/pull/299) | Council fixes — chunk 4/5: background-task tracking, tabs hoisting, eyebrow sweep, scoping docs | worktree-codex-apply→main | — | ✅ Merged |
