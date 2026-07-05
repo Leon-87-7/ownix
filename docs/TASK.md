@@ -440,6 +440,15 @@ addition.
 
 ## 21. Lightweight CRM for invite-gate contacts + two-way email under leondev.xyz
 
+> **Resolved 2026-07-05** — decision in `docs/headless CRM.md`. Operator
+> constraints: manage contacts (email + chat_id), address + real receiving
+> mailbox under leondev.xyz, broadcast newsletter, **outside the dashboard**
+> (contact data must never reach the `web/` client), **$0 only**. Pick:
+> **Brevo free** (hosted contacts + campaigns; one-way push from
+> `_cb_invite_decision` on approve — the only vig code) + **Zoho Mail free**
+> (real leondev.xyz inbox). Approval stays Telegram one-tap; no CRM/contacts
+> surface in `web/`. Remaining open: the mailbox name.
+
 The invite gate (ADR-0031, `docs/adr/0031-invite-gate-and-onboarding.md`) captures
 one email per user into `users.email` (`src/database.py:141`) with
 `status IN ('pending','approved','blocked')`, via the bot's `awaiting_email`
@@ -484,21 +493,19 @@ receive* email with them — likely from a new address under `leondev.xyz`.
   docs at `docs/handoff/VPS to prebuilt docker images via GHCR.md` describe the
   VPS but not DNS).
 
-**Open questions** (resolve in grill)
+**Open questions** — resolved 2026-07-05 (full rationale in `docs/headless CRM.md`)
 
-- Buy vs. thin-build: an external hosted lightweight CRM (with vig syncing
-  contacts into it) vs. a minimal "Contacts" admin page inside the existing
-  dashboard plus a plain hosted mailbox? "Don't build from scratch" pulls one
-  way; "wired to `users.status`" pulls the other — where is the line?
-- Receiving email is the discriminator: a real mailbox (e.g. Google
-  Workspace/Zoho/Migadu on `leondev.xyz`) vs. a transactional email API (e.g.
-  Resend/Postmark) which sends natively but only "receives" via inbound-parse
-  webhooks. Which model fits "small without overhead"?
-- Does approving/blocking from the CRM surface actually flip `users.status` in
-  vig (requires an authenticated API or shared DB access), or does approval
-  stay Telegram-one-tap and the CRM is outreach + records only?
-- Scope of "customers": exactly the invite-gate users (emails captured at
-  onboarding), or a broader contact list that outlives/exceeds the `users`
-  table?
-- The new address itself: which mailbox name under `leondev.xyz`, and is one
-  address enough (support + outreach + approval notifications all in one)?
+- ~~Buy vs. thin-build~~ → **buy hosted-free, build only a one-way push.** No
+  Contacts page in the dashboard (violates the never-client-side constraint);
+  Brevo's console is the management surface. vig-side code is a single Brevo
+  contact-upsert added to the approve path.
+- ~~Mailbox vs. transactional API~~ → **real mailbox (Zoho Mail free).**
+  Inbound-parse webhooks deliver events, not an inbox, and Postmark's inbound
+  is paid-tier anyway — fails the receive and $0 requirements.
+- ~~Does the CRM flip `users.status`?~~ → **No.** Approval stays Telegram
+  one-tap (`_cb_invite_decision`); Brevo is a read-mostly mirror, so
+  ADR-0031's state machine cannot diverge.
+- ~~Scope of "customers"~~ → invite-gate users (`users` rows pushed on
+  approval); Brevo can hold a broader list later without vig changes.
+- **Still open:** the mailbox name under `leondev.xyz` (one address is enough
+  to start; Zoho free allows 5).

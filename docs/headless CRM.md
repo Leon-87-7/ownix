@@ -1,34 +1,86 @@
-If you want a free **headless CRM**, the strongest open-source options I found are [Twenty](https://twenty.com), [iDempiere micro / erpjs](https://idempiere-micro.github.io/), and [IDURAR](https://github.com/avinashhubale/crm). Twenty exposes GraphQL and REST APIs and is MIT-licensed for self-hosting, while erpjs is an open-source “headless serverless ERP and CRM” in TypeScript, and IDURAR is a free fair-code ERP/CRM with a cloud demo and self-hosting option.[1][2][3]
+# CRM + email for invite-gate contacts — decision (task 21)
 
-## Best fits
+> Resolves the "buy vs thin-build" and "mailbox vs transactional API" open
+> questions of `docs/TASK.md` brief 21. Supersedes the earlier research dump
+> that lived in this file (self-hosted headless CRMs — see git history).
 
-- **Twenty**: Best if you want a modern CRM data model and API-first workflow. It is described as self-hostable, open source, and built for technical teams that want a customizable CRM with GraphQL and REST APIs.[3]
-- **erpjs / iDempiere micro**: Best if you want something explicitly branded as headless CRM/ERP and are comfortable with a more enterprise-style architecture. It is open source, TypeScript-based, and designed for custom frontend applications.[2][4]
-- **IDURAR**: Best if you want a broader ERP/CRM system with free use and a ready-made demo. Its repository says it is free for personal or commercial use and includes CRM, invoicing, inventory, accounting, and HR features.[1]
+## Operator requirements (2026-07-05)
 
-## What “free” usually means
+1. A place to manage contacts — email address + Telegram `chat_id` per user.
+2. An email address under `leondev.xyz`.
+3. A real mailbox that can **receive** email.
+4. Broadcast the same email to all contacts (changelog / newsletter style).
+5. **Outside the dashboard** — contact data must never be able to leak into
+   the `web/` client side.
+6. **$0** — free tiers only, no paid plans.
 
-Most genuinely free headless CRM options are **self-hosted open source**, so software cost is free but you still pay for hosting, backups, and maintenance. If you want a hosted free tier, the options are usually more limited and often come with usage caps or trial-style constraints; the clearest “free with no API call limits” claim I found was for self-hosting Twenty, not for a managed hosted plan.[2][3][1]
+## Decision — three free pieces, almost no code
 
-## My pick for your stack
+| Concern | Pick | Cost |
+| --- | --- | --- |
+| Contact management + newsletter broadcast (reqs 1, 4, 5) | **Brevo free plan** (hosted) | $0 |
+| Mailbox `…@leondev.xyz`, send + receive (reqs 2, 3) | **Zoho Mail free plan** (1 custom domain, 5 users) | $0 |
+| Approve / block flow | **Unchanged** — Telegram one-tap (`_cb_invite_decision`, `src/telegram/webhook.py:448`) | — |
 
-Given your Python/React/API-first background, **Twenty** is the cleanest starting point if you want a developer-friendly CRM you can extend into a custom app. If you want something closer to a full ERP/CRM bundle and don’t mind heavier customization, **IDURAR** is the more all-in-one option.[3][1]
+### Brevo (contacts + broadcast)
 
-Would you like a shortlist ranked by **self-hosting ease**, **API quality**, and **license strictness**?
+- Hosted console, entirely outside `web/` — contact data never enters the
+  dashboard bundle, satisfying req 5 by construction.
+- Free plan: up to 100k stored contacts, **300 email sends/day**, unsubscribe
+  links, bounce/suppression handling, templates, campaign editor — the
+  compliance plumbing (CAN-SPAM/GDPR opt-out, `List-Unsubscribe`) that a
+  hand-rolled SMTP loop would have to rebuild from scratch.
+- Newsletter is composed and sent **in Brevo**, not via a bot command — real
+  subject line, HTML, preview, drafts.
+- **vig-side integration (the only code in this task):** a one-way push. When
+  the Operator taps ✅ Approve, the existing `_cb_invite_decision` path
+  additionally upserts the contact into Brevo via its REST API (email,
+  first_name, and `tg_id` as a contact attribute). One httpx call + one
+  `BREVO_API_KEY` env setting. No two-way sync: Brevo is a read-mostly mirror
+  of `users`; `users.status` stays the single source of truth and approval
+  stays in Telegram, so ADR-0031's flow cannot diverge.
+- Known tradeoffs (accepted for $0): 300 sends/day cap (requeue spreads a
+  larger campaign across days — irrelevant at invite-gate scale) and a
+  "Sent with Brevo" badge in the email footer (removable only on paid plans).
 
-Sources
-[1] GitHub - avinashhubale/crm: Open Source Headless ERP CRM E-Commerce Accounting Software | Node Js React https://github.com/avinashhubale/crm
-[2] iDempiere micro - open source headless serverless ERP and CRM microservices compatible with iDempiere https://idempiere-micro.github.io/
-[3] Twenty CRM API - Assay https://assay.tools/packages/twenty-crm-api
-[4] GitHub - iDempiere-micro/erpjs: erpjs - open source serverless headless ERP&CRM in JavaScript/TypeScript https://github.com/iDempiere-micro/erpjs
-[5] iDempiere micro ERP CRM headless serverless microservices https://github.com/orgs/iDempiere-micro/repositories
-[6] Headless 360 for SaaS Founders: Skip, Wait, or Buy? - DEMG.ai https://demg.ai/blog/salesforce-headless-360-saas-founders-smb/
-[7] Introducing LeadCMS: Open Source Headless CMS and CRM with AI https://leadcms.ai/blog/introducing-leadcms/
-[8] Twenty | #1 Open Source CRM https://twenty.com
-[9] KoalixSwitzerland/koalixcrm 578 - Django.WTF https://django.wtf/repo/KoalixSwitzerland/koalixcrm
-[10] GitHub - auroravirtuoso/erp-crm: Open Source Headless ERP CRM E-Commerce Accounting Software | Node Js React https://github.com/auroravirtuoso/erp-crm
-[11] Strapi - Open-Source TypeScript Headless CMS for Next.js, Astro ... https://strapi.io
-[12] Horilla CRM: A Free, Open Source, Self-Hosted CRM Built on Django https://dev.to/horilla_support_8e7ce9908/horilla-crm-a-free-open-source-self-hosted-crm-built-on-django-3k60
-[13] Open-Source headless CMS suggestions : r/selfhosted - Reddit https://www.reddit.com/r/selfhosted/comments/1hrucxw/opensource_headless_cms_suggestions/
-[14] Headless CMS - Top Content Management Systems - Jamstack https://jamstack.org/headless-cms/
-[15] Directus | Collaborative Backend & Headless CMS https://directus.com
+### Zoho Mail (the leondev.xyz mailbox)
+
+- Free plan: 1 custom domain, up to 5 users, 5 GB/user — a real inbox for
+  two-way personal correspondence (approval follow-ups, replies), which
+  transactional APIs' inbound-parse webhooks are not.
+- Known tradeoffs (accepted for $0): webmail + Zoho mobile app only — **no
+  IMAP/POP3 and no forwarding** on the free tier. If desktop-client (IMAP)
+  access ever becomes a hard need, the cheapest escape hatches are Zoho Mail
+  Lite (~$1/user/mo) or Migadu (~$19/yr) — both paid, so out of scope now.
+
+## Rejected
+
+- **Self-hosted CRMs (Twenty, IDURAR, erpjs/iDempiere micro)** — the original
+  candidates in this file. Real ops overhead (Docker/Postgres to run, back up,
+  patch), a forked copy of the `users` contact data, and none of them do
+  email send/receive. They solve a generic-contact-database problem vig
+  doesn't have and skip the email problem it does.
+- **Google Workspace** (~$7/user/mo) and **Migadu** — fail req 6 (paid).
+- **Transactional email APIs (Postmark, Resend, Mailgun)** — Postmark's
+  inbound parse is the best of the class but it delivers webhook *events*,
+  not an inbox (fails req 3), and inbound requires a paid tier (fails req 6).
+- **Raw SMTP broadcast loop from the backend** (earlier draft of this
+  decision) — no unsubscribe/bounce handling (compliance risk), poor
+  authoring UX (composing a newsletter in a Telegram message), and cold-domain
+  deliverability risk. Superseded by Brevo campaigns.
+- **A "Contacts" admin page in the dashboard** — violates req 5.
+
+## Ops — DNS for leondev.xyz
+
+Managed wherever `app.` / `api.` DNS lives today (outside this repo):
+
+- **Zoho:** domain-verification TXT, MX records, SPF include, DKIM key.
+- **Brevo:** sender-domain authentication (Brevo DKIM + DMARC records) so
+  campaigns sent as `…@leondev.xyz` pass alignment.
+- SPF must accommodate both senders in the single `leondev.xyz` SPF record
+  (one TXT with both includes, not two TXT records).
+
+## Remaining open question
+
+- The mailbox name itself (`hello@`, `leon@`, `vig@`…) — one address is
+  enough to start; Zoho free allows up to 5 if roles split later.
