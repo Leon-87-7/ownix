@@ -438,34 +438,45 @@ addition.
 
 ## 20. Feed — a Docs tab that redirects to the Doc Parser page ✅ ISSUED TO GITHUB #310
 
-## 21. Lightweight CRM for invite-gate contacts + two-way email under leondev.xyz
+## 21. Off-dashboard contacts CRM + two-way mailbox + newsletter broadcast under leondev.xyz
 
 The invite gate (ADR-0031, `docs/adr/0031-invite-gate-and-onboarding.md`) captures
 one email per user into `users.email` (`src/database.py:141`) with
 `status IN ('pending','approved','blocked')`, via the bot's `awaiting_email`
 chat state (`src/database.py:124`) or the dashboard modal
 (`web/components/invite-gate.tsx` → `PUT /api/auth/email`, `src/api/auth.py:151`).
-Approval is a one-shot Telegram push to `OPERATOR_CHAT_ID` with inline
-✅ Approve / 🚫 Block buttons (`_notify_operator_invite`,
-`src/telegram/webhook.py:1384`; `_cb_invite_decision`, `webhook.py:448`).
-There is **no management surface**: `list_pending_users`
-(`src/database.py:1773`) has zero production callers (tests only), no
-`/api/users` admin endpoint exists, and if the operator misses the push there
-is no way to see or act on pending users. ADR-0031 explicitly deferred email
-infra ("no SMTP infra; email is for Operator outreach, not authentication") —
-the outreach channel was never built. The `leondev.xyz` domain already carries
-`app.` and `api.` subdomains (`docs/ops/oauth-verification.md:25-28`); no
-mailbox or MX/SPF/DKIM records exist for it anywhere in the repo.
+Both contact fields the operator needs already live on the `users` table:
+`tg_id` (`src/database.py:136` — the Telegram chat id for private chats) and
+`email` (`database.py:141`). Approval is a one-shot Telegram push to
+`OPERATOR_CHAT_ID` with inline ✅ Approve / 🚫 Block buttons
+(`_notify_operator_invite`, `src/telegram/webhook.py:1384`;
+`_cb_invite_decision`, `webhook.py:448`). There is **no management surface**:
+`list_pending_users` (`src/database.py:1773`) has zero production callers
+(tests only), no `/api/users` admin endpoint exists, and if the operator misses
+the push there is no way to see or act on pending users. ADR-0031 explicitly
+deferred email infra ("no SMTP infra; email is for Operator outreach, not
+authentication") — the outreach channel was never built. The `leondev.xyz`
+domain already carries `app.` and `api.` subdomains
+(`docs/ops/oauth-verification.md:25-28`); no mailbox or MX/SPF/DKIM records
+exist for it anywhere in the repo.
 
-**Wanted:** a small, low-overhead, not-built-from-scratch CRM-like place to see
-and manage invite-gate contacts (pending/approved/blocked) and to send *and
-receive* email with them — likely from a new address under `leondev.xyz`.
+**Wanted:** one operator-only place — explicitly **outside the `web/`
+dashboard** — to (a) manage contacts with their reach-out info (email address +
+Telegram chat id), (b) own a real email address under `leondev.xyz`, (c) receive
+mail into a mailbox at that address, and (d) broadcast one email to all contacts
+at once (an email-blog / changelog newsletter).
+
+**Hard constraint (user-set):** contact data must never be servable to the
+client side. That rules out a "Contacts" page in the `web/` dashboard and any
+`/api/users`-style endpoint the browser could hit — whatever surface manages
+contacts must live off the Next.js app entirely (external hosted tool, bot
+commands, CLI, or a separate operator-only service).
 
 **Backend / Data**
 
-- The contact source of truth is the `users` table (`tg_id`, `first_name`,
-  `username`, `email`, `status`, timestamps — `src/database.py:1743`). Any CRM
-  must mirror or read these rows; primitives already exist and are unused:
+- The contact source of truth is the `users` table (`tg_id`, `username`,
+  `first_name`, `email`, `status`, timestamps — `src/database.py:135-146`). Any
+  CRM must mirror or read these rows; primitives already exist and are unused:
   `list_pending_users` (`database.py:1773`), `get_user` (`database.py:1739`),
   `set_user_status` (`database.py:1752`). **Reuse, don't fork.**
 - If the CRM can flip approval, it must converge on the same state machine the
@@ -476,29 +487,46 @@ receive* email with them — likely from a new address under `leondev.xyz`.
   smtplib/an email SDK, and there is no inbound-mail webhook. Provider choice
   (full mailbox vs. transactional API + inbound parse) drives the whole shape —
   resolve in grill with docs search.
+- Broadcast ("same email to all contacts") is a bulk-send, not N manual sends —
+  it needs either a provider with list/broadcast support (e.g. an audiences/
+  broadcast API) or a vig-side loop over `users` rows through a send API. No
+  bulk primitive exists anywhere in `src/` today.
 
 **Ops**
 
 - A new address under `leondev.xyz` needs MX/SPF/DKIM/DMARC DNS records —
   managed wherever `app.`/`api.` DNS lives today (outside this repo; deploy
   docs at `docs/handoff/VPS to prebuilt docker images via GHCR.md` describe the
-  VPS but not DNS).
+  VPS but not DNS). Bulk/newsletter sending raises the deliverability bar
+  (DMARC alignment, unsubscribe handling) beyond what one-off outreach needs.
 
 **Open questions** (resolve in grill)
 
-- Buy vs. thin-build: an external hosted lightweight CRM (with vig syncing
-  contacts into it) vs. a minimal "Contacts" admin page inside the existing
-  dashboard plus a plain hosted mailbox? "Don't build from scratch" pulls one
-  way; "wired to `users.status`" pulls the other — where is the line?
+- Given the off-dashboard constraint, what *is* the management surface: an
+  external hosted lightweight CRM/newsletter tool that vig syncs contacts into,
+  operator-only Telegram bot commands (the bot already talks solely to
+  `OPERATOR_CHAT_ID` for invites), a CLI, or a separate self-hosted admin app?
+  "Don't build from scratch" pulls toward hosted; "wired to `users.status`"
+  pulls toward vig-side.
 - Receiving email is the discriminator: a real mailbox (e.g. Google
   Workspace/Zoho/Migadu on `leondev.xyz`) vs. a transactional email API (e.g.
   Resend/Postmark) which sends natively but only "receives" via inbound-parse
-  webhooks. Which model fits "small without overhead"?
+  webhooks. Newsletter broadcast adds a third pull: newsletter platforms (e.g.
+  Buttondown/Listmonk/Resend Broadcasts) do (d) natively but aren't mailboxes.
+  One provider for all of (b)+(c)+(d), or a mailbox for receive + an API for
+  broadcast?
 - Does approving/blocking from the CRM surface actually flip `users.status` in
-  vig (requires an authenticated API or shared DB access), or does approval
-  stay Telegram-one-tap and the CRM is outreach + records only?
-- Scope of "customers": exactly the invite-gate users (emails captured at
+  vig (requires shared DB access or an operator-authed non-public API), or does
+  approval stay Telegram-one-tap and the CRM is outreach + records only?
+- Newsletter audience: all `users` rows, `approved` only, or an opt-in subset?
+  Do newsletters need an unsubscribe mechanism (legally: yes for bulk mail —
+  where does the unsubscribe state live if contacts mirror `users`)?
+- Is the Telegram chat id purely a stored contact field, or should a broadcast
+  optionally also go out via the bot to each `tg_id` (a second channel for the
+  same changelog post)?
+- Scope of "contacts": exactly the invite-gate users (emails captured at
   onboarding), or a broader contact list that outlives/exceeds the `users`
   table?
 - The new address itself: which mailbox name under `leondev.xyz`, and is one
-  address enough (support + outreach + approval notifications all in one)?
+  address enough (support + outreach + newsletter + approval notifications all
+  in one)?
