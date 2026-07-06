@@ -2,6 +2,10 @@
 
 Video Intelligence Gateway — a Python (FastAPI + SQLite + Redis) service replacing a 60+ node n8n workflow. Telegram bot that processes short videos (Instagram Reels, YouTube Shorts, TikTok) and long videos (YouTube), runs them through Gemini Vision / Text enrichment, stores results in Google Drive + Sheets, and accumulates a semantic link graph (Second Brain). See `docs/seed/PRD.md`, `docs/seed/ARCHITECTURE.md`, `docs/seed/TECHSTACK.md` for full spec.
 
+## Task lookup
+
+When the user mentions a "task" or "TASK" by number (e.g. "task 14"), look it up first in `docs/TASK.md` — briefs are numbered `## N. <title>` headings. If the number doesn't match a brief there (or the match looks wrong for what the user described), ask for clarification instead of guessing another source.
+
 ## Navigating the PRD
 
 `docs/seed/PRD.md` is ~3900 lines. Never read it top-to-bottom. Use the two-step lookup:
