@@ -113,7 +113,7 @@ export function SegmentedTabs({
             ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
             : tab.disabled
               ? 'border-line bg-surface text-muted'
-              : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
+              : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-contrasignal/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
         }`;
         const content = (
           <>
@@ -284,10 +284,10 @@ export function FilterBar({
         onClick={() => setFiltersOpen((o) => !o)}
         aria-expanded={filtersOpen}
         aria-controls="status-filter-bar"
-        className="self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
+        className="mx-auto self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
       >
         Filters{' '}
-        <span aria-hidden="true">{filtersOpen ? '▴' : '▾'}</span>
+        <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
       </button>
       <div
         id="status-filter-bar"
