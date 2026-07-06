@@ -36,7 +36,16 @@ const SubmitJobContext = createContext<SubmitJobContextValue | null>(
   null,
 );
 
-function isEditableShortcutTarget(target: EventTarget | null) {
+function hasActiveDialog() {
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).some(
+    (dialog) =>
+      dialog.getAttribute('aria-hidden') !== 'true' &&
+      dialog.dataset.state !== 'closed',
+  );
+}
+
+function shouldIgnoreGlobalShortcut(target: EventTarget | null) {
+  if (hasActiveDialog()) return true;
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
   return (
@@ -103,7 +112,7 @@ export function SubmitJobProvider({
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
-        isEditableShortcutTarget(event.target)
+        shouldIgnoreGlobalShortcut(event.target)
       ) {
         return;
       }

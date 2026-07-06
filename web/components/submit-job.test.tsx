@@ -73,6 +73,24 @@ describe('SubmitJobProvider', () => {
     expect(screen.getByText('submit closed')).toBeTruthy();
   });
 
+  it('does not open Submit URL while another dialog is visible and focus is outside it', () => {
+    render(
+      <SubmitJobProvider>
+        <button type="button">Outside opener</button>
+        <div role="dialog">
+          <button type="button">Dialog action</button>
+        </div>
+        <ShortcutProbe />
+      </SubmitJobProvider>,
+    );
+
+    const opener = screen.getByRole('button', { name: 'Outside opener' });
+    opener.focus();
+    fireEvent.keyDown(opener, { key: 'n' });
+
+    expect(screen.getByText('submit closed')).toBeTruthy();
+  });
+
   it('infers an optimistic article type when the accepted response omits content_type', async () => {
     vi.stubGlobal(
       'fetch',
