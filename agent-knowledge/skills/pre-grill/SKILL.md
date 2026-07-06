@@ -56,6 +56,8 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 ```md
 ## N. <clear, specific title>
 
+> **Grill:** `/<grill skill>` — <one-clause reason it fits (see Handoff mapping)>
+
 > **Grill together with task X.** <the shared decision>   ← only if entangled
 
 <Context: where this lives today, in 1-3 sentences, with real file refs
@@ -87,6 +89,10 @@ like `src/telegram/webhook.py` and the function/symbol names.>
 
 After writing, print a short summary: which tasks are now briefed, which are
 flagged **grill-together**, and which grill skill fits each — then stop.
+
+The recommendation is **also stamped on each brief** as its `> **Grill:**`
+callout (see the house structure) so it survives the chat session — the
+summary echoes it, TASK.md records it. Pick via this mapping:
 
 - Leans on a third-party API/SDK/integration → **`/grill-with-search-docs`**
 - Leans on this repo's domain model / ADRs / terminology → **`/grill-with-docs`**

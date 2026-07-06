@@ -82,6 +82,9 @@ and `/freestyle`).
 
 ## 6. Make the web app an installable PWA
 
+> **Grill:** `/grill-with-search-docs` — hinges on manifest/service-worker
+> specifics and the `next-pwa`/Workbox dependency call.
+
 Scope is the `web/` Next.js app (app router).
 
 **Wanted:** the dashboard is installable and has an offline app shell.
@@ -104,6 +107,9 @@ Scope is the `web/` Next.js app (app router).
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306
 
 ## 8. Controls UI on the Brain search graph
+
+> **Grill:** `/grilling` — pure product/UX; the ForceGraph ref methods are
+> already pinned in the brief.
 
 `web/components/brain-graph.tsx` renders `react-force-graph-2d` from
 `/api/brain/graph`, highlighting search matches in signal orange. There are no
@@ -181,6 +187,9 @@ three trigger sites feeding the same offer + enqueue mechanism.
 
 ## 11. Tags should follow the URL, not the job (many-to-many)
 
+> **Grill:** `/grill-with-docs` — domain-model/schema call (`link_tags` join +
+> URL canonicalization must match the repo's existing rules).
+
 Tags today attach to **jobs**: the `job_tags` join table
 (`src/database.py:205`, `job_id ↔ tag_id`, issue #88 / S5) keyed off a single job,
 with the `tags` vocabulary in the `tags` table (`src/database.py:171`, issue #87).
@@ -213,6 +222,9 @@ independent of how many jobs a URL appears in.
   tags start empty?
 
 ## 12. Repalette: new signal orange + dark plate tokens
+
+> **Grill:** `/grilling` — pure design decisions (which plate `#2A2312`
+> replaces, ramp re-derivation, WCAG re-verification).
 
 The design tokens have a single source: `web/tailwind.config.ts` defines
 `signal.DEFAULT: '#f6921e'` plus the cool plate ladder `canvas: '#0b0c0f'` →
@@ -252,6 +264,9 @@ the change without edits. `DESIGN.md` also pins a derived signal ramp:
 ## 13. Brand the /privacy and /terms pages ✅ DONE
 
 ## 14. Public home page — fix Google OAuth branding verification rejection
+
+> **Grill:** `/grilling` — product/UX + Google's branding checklist; no
+> repo-domain-model hinge.
 
 > **Grill together with task 13.** Both reuse the login page's
 > background+logo treatment — a public home page makes it four consumers, so
@@ -313,6 +328,9 @@ satisfying Google's homepage requirements so branding verification passes.
 
 ## 16. Link pipeline — bare URLs get a native Telegram preview + a Brain Links row
 
+> **Grill:** `/grill-with-docs` — domain-model call (extending the `Pipeline`
+> enum and the `ingest_links` contract).
+
 `detect_pipeline` (`src/utils/validators.py:50`) only recognizes short/long/article/repo/document
 (`Pipeline = Literal[...]`, `validators.py:8`) — anything else is `"rejected"`, and `_route_url`
 (`src/telegram/webhook.py:1348`) sends every rejected URL straight to `_reject_url`
@@ -363,6 +381,9 @@ enrichment job.
 ## 18. Job details page — previous/next navigation buttons ✅ ISSUED TO GITHUB #309
 
 ## 19. Delete button for jobs — DB + Telegram message, with confirm/"don't show again", swipe-to-delete on mobile
+
+> **Grill:** `/grilling` — UX semantics (swipe, confirm, undo); no external or
+> domain-model hinge.
 
 > Touches the same job-card real estate as task 7's dense-table thinking and task 11's per-URL
 > tagging — no shared decision, just adjacent surface area.
@@ -513,6 +534,8 @@ receive* email with them — likely from a new address under `leondev.xyz`.
 
 ## 22. Operator-only `/pending` bot command — re-surface missed invite approvals
 
+> **Grill:** `/grill-with-docs` — hinges on ADR-0031's invite-gate flow.
+
 Closes the missed-push gap recorded in task 21 / `docs/headless CRM.md`: when a
 `pending` user submits their email, `_notify_operator_invite`
 (`src/telegram/webhook.py:1384`) pushes the Operator **one** message with inline
@@ -554,6 +577,9 @@ re-sent for every user still awaiting a decision.
   undocumented Operator command?
 
 ## 23. Gemini resilience — model downgrade, 429 requeue-with-backoff, second provider
+
+> **Grill:** `/grill-with-search-docs` — hinges on google-genai SDK error
+> types and OpenRouter/Groq API docs.
 
 Every Gemini call funnels through `_call_with_fallback`
 (`src/services/gemini.py:164`): it tries `GEMINI_FREE_API_KEY` then
