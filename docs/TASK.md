@@ -25,6 +25,7 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 
 - Operator-only `/pending` bot command that lists pending invite-gate users and re-sends the approve/block keyboard (closes the missed-push gap noted in task 21 / `docs/headless CRM.md`)
+- Gemini resilience: extend `_call_with_fallback` (`src/services/gemini.py`) with a model-downgrade rung (pro → flash → flash-lite, separate quota pools — today only the key swaps), honor 429 retry-after by requeueing the job with backoff instead of failing, and add a non-Google OpenAI-compatible fallback provider (OpenRouter/Groq) behind the same `generate()` interface for text (vision stays Gemini)
 ---
 
 ## Briefs
