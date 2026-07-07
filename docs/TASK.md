@@ -87,16 +87,24 @@ and `/freestyle`).
 
 Scope is the `web/` Next.js app (app router).
 
-**Wanted:** the dashboard is installable and has an offline app shell.
+**Wanted:** the dashboard is installable, has an offline app shell, and can be
+selected from the OS share sheet as a URL intake target where the platform
+supports PWA share targets.
 
 - Add a web app manifest (name, maskable icons, `theme_color`/`background_color`
   from DESIGN.md `#0b0c0f` + signal, `display: standalone`) and wire it via
   `web/app/layout.tsx` metadata. `start_url` points at `/feed` — per task 14's
   resolved routing (`/` is the public landing; authenticated visits 307 to
   `/feed`), the PWA opens the Feed directly and sidesteps the redirect.
+- Add a manifest `share_target` so supported browsers can send shared URLs/text
+  directly into the dashboard instead of requiring the Telegram bot forward
+  flow.
 - Add a service worker for installability + offline shell: precache the static
   shell/assets, network-first for `/api/*` so live data isn't served stale.
 - Provide the required icon set (incl. maskable).
+- Add the receiving route/UI handoff for shared URLs: capture the shared URL,
+  prefill the dashboard submission flow, and let the operator choose the same
+  template/freestyle options as task 4's submit surface before creating a job.
 
 **Open questions**
 
@@ -104,6 +112,8 @@ Scope is the `web/` Next.js app (app router).
   for offline read?
 - Hand-rolled SW vs. a dependency (`next-pwa`/Workbox) — prefer the minimum that
   makes it installable.
+- Share-target platform scope: rely on PWA `share_target` only where supported,
+  or also plan a native iOS Share Extension / Shortcut path for iPhone parity?
 - Are web push notifications in scope, or explicitly out for now?
 
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306

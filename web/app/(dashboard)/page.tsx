@@ -7,7 +7,6 @@ import {
   useMemo,
   useState,
 } from 'react';
-import type { FormEvent } from 'react';
 import {
   usePathname,
   useRouter,
@@ -30,13 +29,7 @@ import { PreviewGrid } from '@/components/feed/preview-grid';
 import { RecoveryPanel } from '@/components/feed/recovery-panel';
 import { PageShell } from '@/components/page-shell';
 import { useGoogleStatus } from '@/components/google-status';
-import { SubmitUrlForm } from '@/components/submit-url-form';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { useSubmitJob } from '@/components/submit-job';
 import { FileCode2, Plus } from 'lucide-react';
 import type { JobSummary } from '@/components/job-card';
 
@@ -93,15 +86,10 @@ function FeedPageContent() {
     error,
     reload,
   } = useFeedData(urlContentType);
-  const [submitUrl, setSubmitUrl] = useState('');
-  const [submitTemplate, setSubmitTemplate] = useState('summary');
-  const [freestylePrompt, setFreestylePrompt] = useState('');
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { setOpen: setSubmitOpen, lastAccepted } = useSubmitJob();
   const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>(
     [],
   );
-  const [dialogOpen, setDialogOpen] = useState(false);
   const mergedJobs = useMemo(() => {
     const feedIds = new Set(jobs.map((job) => job.id));
     return [
@@ -218,101 +206,33 @@ function FeedPageContent() {
     total,
   );
 
-  const submitJob = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const url = submitUrl.trim();
-      if (!url || submitting) return;
-      const tempId = `pending-${Date.now()}`;
-      const placeholder: JobSummary = {
-        id: tempId,
-        title: 'Submitting…',
-        url,
-        content_type: ctFilter || 'short',
-        status: 'pending',
-        created_at: new Date().toISOString(),
-      };
-      setSubmitError(null);
-      setSubmitting(true);
-      setOptimisticJobs((current) => [placeholder, ...current]);
-      try {
-        const payload: Record<string, string> = {
-          url,
-          template: submitTemplate,
-        };
-        if (submitTemplate === 'freestyle')
-          payload.freestyle_prompt = freestylePrompt.trim();
-        const res = await fetch('/api/jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok)
-          throw new Error(data.detail || 'Could not submit job');
-        // The submit is accepted at this point. reload() swallows fetch errors
-        // (it is shared with background polling), so the accepted job must not
-        // depend on the refresh landing: promote the placeholder to the real
-        // job from the response and keep it until the feed carries that id —
-        // the reconcile effect on `jobs` removes it, and in-flight polling
-        // retries the refresh for as long as the row reads as pending.
-        const acceptedId =
-          typeof data.id === 'string' && data.id ? data.id : null;
-        if (acceptedId) {
-          setOptimisticJobs((current) =>
-            current.map((job) =>
-              job.id === tempId
-                ? {
-                    ...job,
-                    id: acceptedId,
-                    title:
-                      typeof data.title === 'string'
-                        ? data.title
-                        : null,
-                    content_type:
-                      typeof data.content_type === 'string'
-                        ? data.content_type
-                        : job.content_type,
-                    status:
-                      typeof data.status === 'string'
-                        ? data.status
-                        : job.status,
-                  }
-                : job,
-            ),
-          );
-        }
-        setSubmitUrl('');
-        setFreestylePrompt('');
-        setDialogOpen(false);
-        await reload();
-        if (!acceptedId) {
-          // No job id in the response — nothing to reconcile against, so fall
-          // back to dropping the placeholder after the refresh attempt.
-          setOptimisticJobs((current) =>
-            current.filter((job) => job.id !== tempId),
-          );
-        }
-      } catch (e) {
-        const message =
-          e instanceof Error ? e.message : 'Could not submit job';
-        setSubmitError(message);
-        setOptimisticJobs((current) =>
-          current.filter((job) => job.id !== tempId),
-        );
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [
-      ctFilter,
-      freestylePrompt,
-      reload,
-      submitTemplate,
-      submitUrl,
-      submitting,
-    ],
-  );
+  // The global dialog (SubmitJobProvider) owns the mutation; the Feed only
+  // reacts to an accepted job — insert an optimistic row so the submission is
+  // visible immediately, and refresh. The row stays until the feed carries the
+  // same id (the reconcile effect on `jobs`), and in-flight polling keeps
+  // retrying the refresh for as long as it reads as pending.
+  useEffect(() => {
+    if (!lastAccepted) return;
+    const { id, url, title, content_type, status } = lastAccepted;
+    if (id) {
+      setOptimisticJobs((current) =>
+        current.some((job) => job.id === id)
+          ? current
+          : [
+              {
+                id,
+                url,
+                title,
+                content_type,
+                status,
+                created_at: new Date().toISOString(),
+              },
+              ...current,
+            ],
+      );
+    }
+    void reload();
+  }, [lastAccepted, reload]);
 
   const clearAll = () => {
     setContentType('');
@@ -322,72 +242,6 @@ function FeedPageContent() {
 
   return (
     <PageShell>
-      <header className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <h1 className="text-5xl font-semibold leading-none tracking-tight text-ink">
-          VIG
-        </h1>
-        <div
-          aria-hidden="true"
-          className="my-1 hidden w-px self-stretch bg-line-strong sm:block"
-        />
-        {/* Two voices: Inter italic motto over the machine's mono echo, each
-            Latin word column-aligned above its English state. */}
-        <div className="grid grid-cols-[repeat(3,auto)] gap-x-6 gap-y-1.5">
-          <span className="text-sm font-medium italic text-body">
-            Servavi.
-          </span>
-          <span className="text-sm font-medium italic text-body">
-            Ditavi.
-          </span>
-          <span className="text-sm font-medium italic text-body">
-            Inveni.
-          </span>
-          <span className="font-mono text-[11px] tracking-wide text-muted">
-            Saved.
-          </span>
-          <span className="font-mono text-[11px] tracking-wide text-muted">
-            Enriched.
-          </span>
-          <span className="font-mono text-[11px] tracking-wide text-muted">
-            Found.
-          </span>
-        </div>
-
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-        >
-          <DialogTrigger asChild>
-            <button
-              type="button"
-              className="ml-auto hidden h-9 items-center gap-2 rounded-md border border-line border-b-2 border-b-signal bg-surface px-3.5 text-sm font-medium text-body transition-ui hover:text-ink active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:inline-flex motion-reduce:active:scale-100"
-            >
-              <Plus
-                aria-hidden="true"
-                className="h-4 w-4"
-              />
-              Submit URL
-            </button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogTitle>Submit URL</DialogTitle>
-            <div className="mt-4">
-              <SubmitUrlForm
-                url={submitUrl}
-                onUrlChange={setSubmitUrl}
-                template={submitTemplate}
-                onTemplateChange={setSubmitTemplate}
-                freestylePrompt={freestylePrompt}
-                onFreestylePromptChange={setFreestylePrompt}
-                submitting={submitting}
-                error={submitError}
-                onSubmit={submitJob}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-      </header>
-
       {oauthResult && (
         <div
           role="status"
@@ -461,9 +315,10 @@ function FeedPageContent() {
              the same dialog as the sm+ header trigger. */
           <button
             type="button"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => setSubmitOpen(true)}
             aria-label="Submit URL"
             aria-haspopup="dialog"
+            aria-keyshortcuts="N"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
           >
             <Plus

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AuthShell } from '@/components/auth-shell';
 
 interface TelegramUser {
   id: number;
@@ -13,25 +14,70 @@ interface TelegramUser {
   hash: string;
 }
 
+type AuthState = 'idle' | 'pending' | 'error';
+type WidgetState = 'loading' | 'ready' | 'error';
+
 export default function LoginPage() {
   const router = useRouter();
+  const lastAuthUser = useRef<TelegramUser | null>(null);
+  const [authState, setAuthState] = useState<AuthState>('idle');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [widgetState, setWidgetState] = useState<WidgetState>('loading');
 
-  useEffect(() => {
-    (window as unknown as Record<string, unknown>).onTelegramAuth =
-      async (user: TelegramUser) => {
+  const authenticate = useCallback(
+    async (user: TelegramUser) => {
+      lastAuthUser.current = user;
+      setAuthState('pending');
+      setAuthError(null);
+
+      try {
         const res = await fetch('/api/auth/telegram', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(user),
         });
+
         if (res.ok) {
           router.replace('/');
+          return;
         }
+
+        setAuthState('error');
+        setAuthError(
+          res.status === 401
+            ? 'Telegram could not verify this sign-in. Use the Telegram button again.'
+            : 'We could not complete sign-in. Try again.',
+        );
+      } catch {
+        setAuthState('error');
+        setAuthError(
+          'We could not reach the login service. Check your connection and try again.',
+        );
+      }
+    },
+    [router],
+  );
+
+  function retryAuth() {
+    if (lastAuthUser.current) {
+      void authenticate(lastAuthUser.current);
+      return;
+    }
+
+    setAuthState('idle');
+    setAuthError(null);
+  }
+
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).onTelegramAuth =
+      async (user: TelegramUser) => {
+        await authenticate(user);
       };
 
     const container = document.getElementById('tg-login-container');
     if (!container) return;
 
+    let cancelled = false;
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
     script.setAttribute(
@@ -42,50 +88,74 @@ export default function LoginPage() {
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
     script.setAttribute('data-request-access', 'write');
     script.async = true;
+    script.onload = () => {
+      if (!cancelled) setWidgetState('ready');
+    };
+    script.onerror = () => {
+      if (!cancelled) setWidgetState('error');
+    };
     container.appendChild(script);
 
     return () => {
+      cancelled = true;
       delete (window as unknown as Record<string, unknown>)
         .onTelegramAuth;
       script.remove();
     };
-  }, [router]);
+  }, [authenticate]);
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-canvas px-6">
-      {/* Layered waves, anchored to the bottom. Muted to dusty tones + dropped
-          opacity so the motif recedes into the dark plate (matching the
-          dashboard's PageBackground treatment) — DESIGN.md keeps orange as the
-          one rationed signal, so the bg never competes with it. The top-fading
-          mask melts the crest into the canvas, regardless of image height.
-          Decorative → AT-hidden. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/backgrounds/layered-waves-log.svg"
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 w-full select-none opacity-50 [filter:saturate(0.5)] [mask-image:linear-gradient(to_top,black_55%,transparent)]"
-      />
-
-      <div className="relative z-10 flex -translate-y-[55px] flex-col items-center text-center">
-        <h1 className="sr-only">vig — Video Intelligence Gateway</h1>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/images/vig_logo_lockup.svg"
-          alt="vig"
-          className="h-16 w-auto"
-        />
-        <p className="mt-4 text-sm text-body">
-          Video Intelligence Gateway
-        </p>
-        <p className="mt-10 text-sm text-body">
+    <AuthShell>
+      <div className="mt-10 flex w-full max-w-[360px] flex-col items-center rounded-lg border border-line bg-surface px-8 py-7">
+        <h2 className="text-balance text-2xl font-semibold tracking-[-0.02em] text-ink">
           Sign in to your console
-        </p>
+        </h2>
+
         <div
-          id="tg-login-container"
-          className="mt-4 flex justify-center"
-        />
+          className="mt-6 flex min-h-12 w-full flex-col items-center justify-center gap-3"
+          aria-busy={authState === 'pending'}
+        >
+          {widgetState === 'loading' && (
+            <div
+              role="status"
+              className="h-10 w-[238px] animate-pulse rounded-md border border-line bg-raised motion-reduce:animate-none"
+            >
+              <span className="sr-only">Loading Telegram sign-in</span>
+            </div>
+          )}
+          <div
+            id="tg-login-container"
+            className={widgetState === 'error' ? 'hidden' : 'flex justify-center'}
+          />
+          {widgetState === 'error' && (
+            <p role="alert" className="text-sm leading-6 text-status-error">
+              Telegram sign-in is unavailable right now. Refresh the page or check your connection.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-5 min-h-6" aria-live="polite">
+          {authState === 'pending' && (
+            <p role="status" className="text-sm text-body">
+              Signing you in...
+            </p>
+          )}
+          {authError && (
+            <div role="alert" className="flex flex-col items-center gap-3">
+              <p className="text-sm leading-6 text-status-error">
+                {authError}
+              </p>
+              <button
+                type="button"
+                onClick={retryAuth}
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-signal px-5 text-sm font-medium text-onsignal transition-[background-color,transform] duration-150 ease-out-quart hover:bg-signal-bright active:scale-[0.96] focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
+              >
+                Retry Telegram sign-in
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </main>
+    </AuthShell>
   );
 }

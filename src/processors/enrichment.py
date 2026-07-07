@@ -530,6 +530,14 @@ async def run(job_id: str) -> None:
         f"{tag}\nWhat's next?",
         buttons=[[{"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"}]],
     )
-    await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, enrichment.tools_raw)
+    # Best-effort UX add-on — a follow-up failure must not block completion.
+    try:
+        await offer_repo_followups(
+            {**job, "id": job_id, "chat_id": chat_id},
+            enrichment.tools_raw,
+            text=job.get("transcript") or "",
+        )
+    except Exception:
+        log.warning("repo_followup_offer_failed", job_id=job_id, exc_info=True)
 
     log.info("enrichment_complete", job_id=job_id, category=enrichment.category)

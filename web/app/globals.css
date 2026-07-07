@@ -140,7 +140,7 @@
   animation: chev-step-3 3s ease-in-out infinite;
 }
 
-@keyframes logout-card-enter {
+@keyframes auth-card-enter {
   from {
     opacity: 0;
     transform: translateY(10px);

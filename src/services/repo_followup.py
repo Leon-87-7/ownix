@@ -11,7 +11,7 @@ from src.services.jobs import create_and_enqueue_job
 from src.telegram.sender import send_inline_keyboard
 from src.utils import job_tag
 from src.utils.logger import get_logger
-from src.utils.validators import detect_pipeline, normalize_repo_url
+from src.utils.validators import detect_pipeline, extract_description_links, normalize_repo_url
 
 log = get_logger(__name__)
 
@@ -29,11 +29,20 @@ def _candidate_name(item: dict[str, Any], normalized_url: str) -> str:
     return normalized_url.removeprefix("https://")[:40]
 
 
-def extract_repo_candidates(items: list[dict[str, Any]] | None) -> list[dict[str, str]]:
-    """Filter arbitrary tool/link items to normalized GitHub repo candidates."""
+def extract_repo_candidates(
+    items: list[dict[str, Any]] | None, text: str | None = None
+) -> list[dict[str, str]]:
+    """Filter arbitrary tool/link items to normalized GitHub repo candidates.
+
+    ``text`` (transcript / article body) is scanned for URLs Gemini's tools
+    list missed; explicit items win the dedupe, so their names take priority.
+    """
+    merged = list(items or [])
+    if text:
+        merged += extract_description_links(text)
     candidates: list[dict[str, str]] = []
     seen: set[str] = set()
-    for item in items or []:
+    for item in merged:
         url = str(item.get("url") or "").strip()
         if not url or detect_pipeline(url) != "repo":
             continue
@@ -48,11 +57,22 @@ def extract_repo_candidates(items: list[dict[str, Any]] | None) -> list[dict[str
     return candidates
 
 
+def _job_links(job: dict) -> list[dict[str, Any]]:
+    """The job's persisted extracted-links list (JSON column or already-parsed list)."""
+    raw = job.get("links")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+    return raw if isinstance(raw, list) else []
+
+
 async def offer_repo_followups(
-    job: dict, items: list[dict[str, Any]] | None
+    job: dict, items: list[dict[str, Any]] | None, text: str | None = None
 ) -> list[dict[str, str]]:
     """Cache repo candidates and send a one-tap follow-up keyboard."""
-    candidates = extract_repo_candidates(items)
+    candidates = extract_repo_candidates(list(items or []) + _job_links(job), text=text)
     if not candidates:
         return []
     job_id = job["id"]

@@ -15,6 +15,18 @@ import type { LucideIcon } from 'lucide-react';
 const useIsoLayoutEffect =
   typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
+function isEditableShortcutTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  return (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    target.isContentEditable ||
+    Boolean(target.closest('[role="dialog"]'))
+  );
+}
+
 export interface FilterTab {
   label: string;
   value: string;
@@ -113,7 +125,7 @@ export function SegmentedTabs({
             ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
             : tab.disabled
               ? 'border-line bg-surface text-muted'
-              : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-ink/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
+              : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-contrasignal/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
         }`;
         const content = (
           <>
@@ -196,7 +208,7 @@ function FilterButton({
       aria-pressed={active}
       className={`h-7 rounded-md px-3 text-[13px] font-medium transition-ui ${
         active
-          ? 'bg-signal text-onsignal hover:bg-signal-bright'
+          ? 'bg-contrasignal-deep text-onsignal hover:bg-contrasignal'
           : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
       }`}
     >
@@ -239,6 +251,7 @@ export function FilterBar({
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed; component remounts on navigation so it resets naturally.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Track the < sm (640px) breakpoint in JS so the collapsed panel is also
   // removed from the tab order / AT tree (inert), not just hidden visually.
@@ -254,6 +267,25 @@ export function FilterBar({
   }, []);
 
   const collapsed = isMobile && !filtersOpen;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== '/' ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        isEditableShortcutTarget(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <section
@@ -271,10 +303,12 @@ export function FilterBar({
           />
         </div>
         <input
+          ref={searchRef}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label={searchLabel}
+          aria-keyshortcuts="/"
           placeholder={searchPlaceholder}
           className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
         />
@@ -284,10 +318,10 @@ export function FilterBar({
         onClick={() => setFiltersOpen((o) => !o)}
         aria-expanded={filtersOpen}
         aria-controls="status-filter-bar"
-        className="self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
+        className="mx-auto self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
       >
         Filters{' '}
-        <span aria-hidden="true">{filtersOpen ? '▴' : '▾'}</span>
+        <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
       </button>
       <div
         id="status-filter-bar"

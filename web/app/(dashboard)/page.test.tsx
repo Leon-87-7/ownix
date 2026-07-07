@@ -2,7 +2,20 @@
 import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobSummary } from '@/components/job-card';
+import { AppHeader } from '@/components/app-header';
+import { SubmitJobProvider } from '@/components/submit-job';
 import FeedPage from './page';
+
+// FeedPage now consumes the global submit dialog + header the (dashboard)
+// layout provides; render the same tree here so both triggers stay covered.
+function FeedTree() {
+  return (
+    <SubmitJobProvider>
+      <AppHeader />
+      <FeedPage />
+    </SubmitJobProvider>
+  );
+}
 
 const navigationMock = vi.hoisted(() => {
   const replace = vi.fn();
@@ -90,6 +103,10 @@ function setupMocks(overrides: Partial<ReturnType<typeof useFeedData>> = {}) {
   vi.mocked(useInFlightPolling).mockReturnValue(undefined);
 }
 
+async function openRecoveryActions() {
+  fireEvent.click(await screen.findByRole('button', { name: /4 need attention/i }));
+}
+
 beforeEach(() => {
   navigationMock.replace.mockClear();
   navigationMock.searchParams = new URLSearchParams();
@@ -111,55 +128,55 @@ beforeEach(() => {
 
 describe('FeedPage', () => {
   it('renders VIG heading', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('VIG')).toBeTruthy();
   });
 
   it('renders Jobs section', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('Jobs')).toBeTruthy();
   });
 
   it('shows the Connect Google nudge only while disconnected', () => {
     googleStatusMock.connected = false;
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByRole('link', { name: /connect google/i })).toBeTruthy();
   });
 
   it('hides the Connect Google nudge when connected', () => {
     googleStatusMock.connected = true;
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
   });
 
   it('hides the Connect Google nudge while status is unknown', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
   });
 
   it('shows a one-time success banner on ?google=connected and strips the param', () => {
     navigationMock.searchParams = new URLSearchParams('google=connected');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText(/google connected/i)).toBeTruthy();
     expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
   });
 
   it('shows a denied banner on ?google=denied and strips the param', () => {
     navigationMock.searchParams = new URLSearchParams('google=denied');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText(/connection was denied/i)).toBeTruthy();
     expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
   });
 
   it('preserves other query params when stripping ?google=', () => {
     navigationMock.searchParams = new URLSearchParams('type=short&google=connected');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(navigationMock.replace).toHaveBeenCalledWith('/?type=short', { scroll: false });
   });
 
   it('strips ?google= and an unsupported ?type= in a single replace', () => {
     navigationMock.searchParams = new URLSearchParams('type=bogus&google=connected');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText(/google connected/i)).toBeTruthy();
     expect(navigationMock.replace).toHaveBeenCalledTimes(1);
     expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
@@ -169,47 +186,47 @@ describe('FeedPage', () => {
     const setCtFilter = vi.fn();
     setupMocks({ setCtFilter });
     navigationMock.searchParams = new URLSearchParams('type=bogus');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });
     expect(setCtFilter).toHaveBeenCalledWith('');
   });
 
   it('shows job count when loaded', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('1 job')).toBeTruthy();
   });
 
   it('shows skeleton during first load (loading=true, no jobs, no error)', () => {
     setupMocks({ loading: true, jobs: [], total: 0, stats: undefined, error: null });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('loading…')).toBeTruthy();
   });
 
   it('shows syncing label while loading with existing jobs', () => {
     setupMocks({ loading: true, jobs: JOBS, total: 1 });
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('syncing…')).toBeTruthy();
   });
 
   it('shows error banner on error', () => {
     setupMocks({ error: 'Failed to load jobs', jobs: [], total: 0, stats: undefined });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText(/failed to load jobs/i)).toBeTruthy();
   });
 
   it('shows result count when query is present', () => {
     setupMocks();
     mockUseFuseSearch.mockReturnValue({ query: 'test', setQuery: vi.fn(), displayedJobs: JOBS } as ReturnType<typeof useFuseSearch>);
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('1 result')).toBeTruthy();
   });
 
   it('shows empty state when no jobs match and no filters', () => {
     setupMocks({ jobs: [], total: 0, stats: undefined });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
-    render(<FeedPage />);
+    render(<FeedTree />);
     // empty state renders something when displayedJobs.length === 0 and no first load
     expect(screen.getByText('0 jobs')).toBeTruthy();
   });
@@ -221,18 +238,18 @@ describe('FeedPage', () => {
     ];
     setupMocks({ jobs: multiJobs, total: 2 });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: multiJobs } as ReturnType<typeof useFuseSearch>);
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByText('2 jobs')).toBeTruthy();
   });
 
   it('initializes content type from the URL type param', () => {
     navigationMock.searchParams = new URLSearchParams('type=short');
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(mockUseFeedData).toHaveBeenCalledWith('short');
   });
 
   it('renders content-type tabs with counts', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     expect(screen.getByRole('button', { name: /all 5/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /short 3/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /long 2/i })).toBeTruthy();
@@ -244,7 +261,7 @@ describe('FeedPage', () => {
     const setCtFilter = vi.fn();
     setupMocks({ setCtFilter });
 
-    render(<FeedPage />);
+    render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /long 2/i }));
 
     expect(navigationMock.replace).toHaveBeenCalledWith('/?type=long', { scroll: false });
@@ -252,7 +269,7 @@ describe('FeedPage', () => {
   });
 
   it('renders the all tab as the existing job list', () => {
-    render(<FeedPage />);
+    render(<FeedTree />);
     // JobCard uses an overlay link inside a styled wrapper; assert on the wrapper.
     const card = screen.getByRole('link', { name: /job one/i }).parentElement;
 
@@ -263,7 +280,7 @@ describe('FeedPage', () => {
   it('renders typed tabs as preview cards', () => {
     setupMocks({ ctFilter: 'short' });
 
-    render(<FeedPage />);
+    render(<FeedTree />);
     // Preview cards use a stretched overlay link; flex/p-3 and the date text live
     // on the card container, the link's parent.
     const card = screen.getByRole('link', { name: /job one/i }).parentElement;
@@ -276,7 +293,8 @@ describe('FeedPage', () => {
   it('renders the recovery panel from the active tab summary', async () => {
     setupMocks({ ctFilter: 'short' });
 
-    render(<FeedPage />);
+    render(<FeedTree />);
+    await openRecoveryActions();
 
     expect(await screen.findByRole('button', { name: /retry pending \(2\)/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry failed \(2\)/i })).toBeTruthy();
@@ -291,7 +309,8 @@ describe('FeedPage', () => {
     const reload = vi.fn();
     setupMocks({ ctFilter: 'short', reload });
 
-    render(<FeedPage />);
+    render(<FeedTree />);
+    await openRecoveryActions();
     fireEvent.click(await screen.findByRole('button', { name: /retry pending \(2\)/i }));
 
     await waitFor(() => {
@@ -310,7 +329,8 @@ describe('FeedPage', () => {
     const confirmMock = vi.fn(() => true);
     vi.stubGlobal('confirm', confirmMock);
 
-    render(<FeedPage />);
+    render(<FeedTree />);
+    await openRecoveryActions();
     fireEvent.click(await screen.findByRole('button', { name: /clear failed \(1\)/i }));
 
     expect(confirmMock).toHaveBeenCalledWith(
@@ -323,7 +343,7 @@ describe('FeedPage', () => {
     setupMocks({ error: 'Failed to load jobs', jobs: [], total: 0, stats: undefined, reload });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
 
-    render(<FeedPage />);
+    render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /^retry$/i }));
 
     expect(reload).toHaveBeenCalled();
@@ -364,7 +384,7 @@ describe('FeedPage', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     }));
 
-    render(<FeedPage />);
+    render(<FeedTree />);
     // Two triggers (header + tabs-row action slot) open the same dialog; either works.
     fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
@@ -412,7 +432,7 @@ describe('FeedPage', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     }));
 
-    const { rerender } = render(<FeedPage />);
+    const { rerender } = render(<FeedTree />);
     fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
@@ -434,7 +454,7 @@ describe('FeedPage', () => {
       jobs: [acceptedJob, ...JOBS],
       total: JOBS.length + 1,
     } as ReturnType<typeof useFeedData>);
-    rerender(<FeedPage />);
+    rerender(<FeedTree />);
 
     // Exactly one row — no optimistic duplicate alongside the server copy.
     await waitFor(() =>
@@ -448,7 +468,7 @@ describe('FeedPage', () => {
     setupMocks({ stFilter: 'error', jobs: [], total: 0, stats: undefined, setStFilter });
     mockUseFuseSearch.mockReturnValue({ query: '', setQuery, displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
 
-    render(<FeedPage />);
+    render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
 
     expect(navigationMock.replace).toHaveBeenCalledWith('/', { scroll: false });

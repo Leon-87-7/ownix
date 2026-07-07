@@ -342,7 +342,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     )
     # Best-effort UX add-on — a follow-up failure must not block Brain ingest.
     try:
-        await offer_repo_followups(refreshed or job, tools)
+        await offer_repo_followups(refreshed or job, tools, text=body)
     except Exception:
         log.warning("repo_followup_offer_failed", job_id=job_id, exc_info=True)
 

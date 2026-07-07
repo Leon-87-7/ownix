@@ -103,6 +103,7 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
     loading,
     acting,
     error,
+    reload: () => load(),
     retryPending: () => act('pending', '/api/jobs/recovery/retry-pending'),
     retryError: () => act('error', '/api/jobs/recovery/retry-error'),
     clearFailed: () => act('clear', '/api/jobs/recovery/clear-failed'),
