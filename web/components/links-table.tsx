@@ -292,6 +292,17 @@ export function LinksTable() {
             setQuery(e.target.value);
             setPage(0);
           }}
+          onKeyDown={(e) => {
+            // Escape clears the filter if any, else blurs out of the field.
+            if (e.key === "Escape") {
+              if (query) {
+                setQuery("");
+                setPage(0);
+              } else {
+                e.currentTarget.blur();
+              }
+            }
+          }}
           placeholder="Filter links by URL, title, or topic…"
           aria-label="Filter extracted links"
           className="h-10 w-full rounded-lg border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"

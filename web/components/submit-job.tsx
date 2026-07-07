@@ -128,8 +128,8 @@ export function useSubmitJobOptional(): SubmitJobContextValue | null {
   return useContext(SubmitJobContext);
 }
 
-// Space-separated keys render as individual right-aligned kbd chips, so "R P"
-// and "L /" read as chords.
+// Space-separated keys render as individual right-aligned kbd chips so a
+// chord like "R P" reads as two keys.
 function CommandShortcut({ keys }: { keys: string }) {
   return (
     <span className="ml-auto flex items-center gap-1">
@@ -183,7 +183,7 @@ function CommandAction({
       className="flex w-full items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm text-ink transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal disabled:cursor-not-allowed disabled:text-muted disabled:hover:bg-surface"
     >
       <Icon
-        className="h-4 w-4 text-muted"
+        className="h-4 w-4 text-contrasignal-deep"
         aria-hidden="true"
       />
       <span>{label}</span>
@@ -229,6 +229,8 @@ export function SubmitJobProvider({
   // handler without re-binding the listener on every summary change.
   const feedRecoveryRef = useRef(feedRecovery);
   feedRecoveryRef.current = feedRecovery;
+  const feedSearchRef = useRef(feedSearch);
+  feedSearchRef.current = feedSearch;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -278,6 +280,34 @@ export function SubmitJobProvider({
           event.preventDefault();
           if (window.confirm(CLEAR_FAILED_CONFIRM))
             recovery.clearFailed();
+        }
+        return;
+      }
+      if (
+        key === '/' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !shouldIgnoreGlobalShortcut(event.target)
+      ) {
+        const search = feedSearchRef.current;
+        if (search) {
+          event.preventDefault();
+          search.focusSearch();
+        }
+        return;
+      }
+      if (
+        key === '*' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !shouldIgnoreGlobalShortcut(event.target)
+      ) {
+        const search = feedSearchRef.current;
+        if (search) {
+          event.preventDefault();
+          search.focusLinkSearch();
         }
         return;
       }
@@ -484,7 +514,7 @@ export function SubmitJobProvider({
                 <CommandAction
                   icon={Search}
                   label="Search Links"
-                  shortcut="L /"
+                  shortcut="*"
                   onSelect={() => {
                     const search = feedSearch;
                     setCommandOpen(false);
