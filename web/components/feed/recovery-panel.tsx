@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 
 import { useRecovery } from '@/lib/hooks/useRecovery';
@@ -51,10 +51,21 @@ export function RecoveryPanel({
     clearFailed,
   } = useRecovery(contentType, onRecovered);
 
+  const failedActionCount = summary.error_jobs + summary.stale_in_flight;
+  const canRetryPending = summary.stale_pending > 0;
+  const canClearFailed = summary.error_jobs > 0;
+
   // Mirror the recovery actions into the command launcher (when mounted inside
   // SubmitJobProvider) so its scope + availability stay in sync with this panel.
+  // useRecovery hands back fresh action closures every render, so the launcher
+  // commands call through a ref and the effect re-runs only when availability
+  // flips — depending on the closures directly would loop (register → setState →
+  // re-render → new closures → register …).
   const registerFeedRecovery =
     useSubmitJobOptional()?.registerFeedRecovery;
+  const actionsRef = useRef({ retryPending, retryError, clearFailed });
+  actionsRef.current = { retryPending, retryError, clearFailed };
+  const canRetryFailed = failedActionCount > 0;
   useEffect(() => {
     if (!registerFeedRecovery) return;
     if (!active) {
@@ -62,24 +73,22 @@ export function RecoveryPanel({
       return;
     }
     registerFeedRecovery({
-      canRetryPending: summary.stale_pending > 0,
-      canRetryFailed: summary.error_jobs + summary.stale_in_flight > 0,
-      canClearFailed: summary.error_jobs > 0,
-      retryPending,
-      retryFailed: retryError,
-      clearFailed,
+      canRetryPending,
+      canRetryFailed,
+      canClearFailed,
+      retryPending: () => actionsRef.current.retryPending(),
+      retryFailed: () => actionsRef.current.retryError(),
+      clearFailed: () => actionsRef.current.clearFailed(),
     });
     return () => registerFeedRecovery(null);
   }, [
     active,
-    summary,
-    retryPending,
-    retryError,
-    clearFailed,
+    canRetryPending,
+    canRetryFailed,
+    canClearFailed,
     registerFeedRecovery,
   ]);
 
-  const failedActionCount = summary.error_jobs + summary.stale_in_flight;
   const attentionCount =
     summary.stale_pending + summary.error_jobs + summary.stale_in_flight;
   const disabled = loading || acting !== null;
