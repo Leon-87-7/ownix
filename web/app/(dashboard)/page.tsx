@@ -153,7 +153,9 @@ function FeedPageContent() {
   }, [urlContentType, setCtFilter]);
 
   useEffect(() => {
-    setFeedView(searchParams.get('view') === 'links' ? 'links' : 'jobs');
+    setFeedView(
+      searchParams.get('view') === 'links' ? 'links' : 'jobs',
+    );
   }, [searchParams]);
 
   const setContentType = useCallback(
@@ -224,7 +226,12 @@ function FeedPageContent() {
         count: value ? (contentTypeCounts[value] ?? 0) : totalCount,
         dividerBefore: i > 0,
       })),
-      { label: 'Links', value: 'links', dividerBefore: true, icon: Link2 },
+      {
+        label: 'Links',
+        value: 'links',
+        dividerBefore: true,
+        icon: Link2,
+      },
     ],
     [contentTypeCounts, totalCount],
   );
@@ -355,18 +362,19 @@ function FeedPageContent() {
         }
         actionSlot={
           <>
-            {/* Mobile-only (<sm): the submit trigger lives in the first slot of the
-             chip wrap grid so it flows with the filters instead of floating alone.
-             Signal underline + signal text mark it as the row's one action without
-             matching the active chip's full signal fill (The Signal Rule). Opens
-             the same dialog as the sm+ header trigger. */}
+            {/* Mobile-only (<sm): Submit + Docs stack in the grid's first column
+             (Submit top, Docs bottom) via explicit col/row placement; the six
+             content-type tabs then auto-flow into columns 2–4 across both rows.
+             Signal underline + signal text mark them as the row's actions without
+             matching the active chip's full signal fill (The Signal Rule). They
+             open the same dialogs as the sm+ header triggers. */}
             <button
               type="button"
               onClick={() => setSubmitOpen(true)}
               aria-label="Submit URL"
               aria-haspopup="dialog"
               aria-keyshortcuts="N"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
+              className="col-start-1 row-start-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
             >
               <Plus
                 aria-hidden="true"
@@ -380,13 +388,15 @@ function FeedPageContent() {
               aria-label="Ingest docs"
               aria-haspopup="dialog"
               aria-keyshortcuts="D"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
+              className="col-start-1 row-start-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
             >
-              <FileCode2
-                aria-hidden="true"
-                className="h-4 w-4"
-              />
-              Docs
+              <span className="flex items-center gap-2.5">
+                <FileCode2
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                />
+                <span>Docs</span>
+              </span>
             </button>
           </>
         }

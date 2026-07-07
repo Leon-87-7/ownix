@@ -142,7 +142,7 @@ export function SegmentedTabs({
               </span>
             ) : tab.count !== undefined ? (
               <span
-                className={`rounded border px-1 py-0.5 font-mono text-[11px] tabular-nums sm:px-1.5 ${active ? 'border-onsignal/30 text-onsignal' : 'border-line text-muted'}`}
+                className={`rounded border bg-on-signal px-1 py-0.5 font-mono text-[11px] tabular-nums text-contrasignal-deep sm:px-1.5 ${active ? 'border-onsignal/30' : 'border-line'}`}
               >
                 {tab.count}
               </span>
