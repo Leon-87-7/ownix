@@ -5,7 +5,8 @@ import type React from 'react';
 
 import { useRecovery } from '@/lib/hooks/useRecovery';
 
-const CLEAR_CONFIRM_COPY = 'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.';
+const CLEAR_CONFIRM_COPY =
+  'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.';
 
 function RecoveryButton({
   children,
@@ -46,9 +47,12 @@ export function RecoveryPanel({
     clearFailed,
   } = useRecovery(contentType, onRecovered);
 
-  const failedActionCount = summary.error_jobs + summary.stale_in_flight;
+  const failedActionCount =
+    summary.error_jobs + summary.stale_in_flight;
   const attentionCount =
-    summary.stale_pending + summary.error_jobs + summary.stale_in_flight;
+    summary.stale_pending +
+    summary.error_jobs +
+    summary.stale_in_flight;
   const disabled = loading || acting !== null;
   const [open, setOpen] = useState(false);
 
@@ -70,7 +74,7 @@ export function RecoveryPanel({
           type="button"
           disabled={disabled}
           onClick={() => void reload()}
-          className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:border-line disabled:bg-canvas disabled:text-muted"
+          className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
         >
           Retry
         </button>
@@ -93,44 +97,42 @@ export function RecoveryPanel({
         id="recovery-actions"
         role="group"
         aria-label="Recovery"
-        hidden={!open}
-        className="flex flex-wrap items-center gap-2"
+        className={`flex flex-wrap items-center gap-2 ${open ? '' : 'hidden'}`}
       >
-        {open && (
-          <>
-          {summary.stale_in_flight > 0 && (
-            <span className="font-mono text-[11px] text-muted">
-              {summary.stale_in_flight} stale in-flight
-            </span>
-          )}
-          {summary.stale_pending > 0 && (
-            <RecoveryButton
-              disabled={disabled}
-              onClick={() => void retryPending()}
-            >
-              {acting === 'pending'
-                ? 'Retrying...'
-                : `Retry pending (${summary.stale_pending})`}
-            </RecoveryButton>
-          )}
-          {failedActionCount > 0 && (
-            <RecoveryButton
-              disabled={disabled}
-              onClick={() => void retryError()}
-            >
-              {acting === 'error'
-                ? 'Retrying...'
-                : `Retry failed (${failedActionCount})`}
-            </RecoveryButton>
-          )}
-          {summary.error_jobs > 0 && (
-            <RecoveryButton disabled={disabled} onClick={onClear}>
-              {acting === 'clear'
-                ? 'Clearing...'
-                : `Clear failed (${summary.error_jobs})`}
-            </RecoveryButton>
-          )}
-          </>
+        {summary.stale_in_flight > 0 && (
+          <span className="font-mono text-[11px] text-muted">
+            {summary.stale_in_flight} stale in-flight
+          </span>
+        )}
+        {summary.stale_pending > 0 && (
+          <RecoveryButton
+            disabled={disabled}
+            onClick={() => void retryPending()}
+          >
+            {acting === 'pending'
+              ? 'Retrying...'
+              : `Retry pending (${summary.stale_pending})`}
+          </RecoveryButton>
+        )}
+        {failedActionCount > 0 && (
+          <RecoveryButton
+            disabled={disabled}
+            onClick={() => void retryError()}
+          >
+            {acting === 'error'
+              ? 'Retrying...'
+              : `Retry failed (${failedActionCount})`}
+          </RecoveryButton>
+        )}
+        {summary.error_jobs > 0 && (
+          <RecoveryButton
+            disabled={disabled}
+            onClick={onClear}
+          >
+            {acting === 'clear'
+              ? 'Clearing...'
+              : `Clear failed (${summary.error_jobs})`}
+          </RecoveryButton>
         )}
       </div>
       {error && (
@@ -140,7 +142,7 @@ export function RecoveryPanel({
             type="button"
             disabled={disabled}
             onClick={() => void reload()}
-            className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:border-line disabled:bg-canvas disabled:text-muted"
+            className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             Retry
           </button>

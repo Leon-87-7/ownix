@@ -118,6 +118,7 @@ Respond ONLY with a valid JSON object. No markdown, no backticks, no text before
 
 def _extract_json(raw: str) -> dict:
     from src.services.gemini import extract_json
+
     try:
         parsed = extract_json(raw)
     except (json.JSONDecodeError, ValueError):
@@ -530,7 +531,7 @@ async def run(job_id: str) -> None:
         f"{tag}\nWhat's next?",
         buttons=[[{"text": "📐 Build Spec", "callback_data": f"prd_build_spec:{job_id}"}]],
     )
-    # Best-effort UX add-on — a follow-up failure must not mark a done job failed.
+    # Best-effort UX add-on — a follow-up failure must not block completion.
     try:
         await offer_repo_followups(
             {**job, "id": job_id, "chat_id": chat_id},

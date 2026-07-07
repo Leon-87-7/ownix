@@ -6,21 +6,22 @@ p1_count: 0
 timestamp: 2026-07-06T22-12-09Z
 slug: web-app-login-logout
 ---
+
 ## Design Health Score
 
-| # | Heuristic | Score | Key Issue |
-|---|-----------|-------|-----------|
-| 1 | Visibility of System Status | 4 | Pending state, widget skeleton, aria-live all present |
-| 2 | Match System / Real World | 4 | Specific 401 vs network error copy |
-| 3 | User Control and Freedom | 4 | Retry preserves last attempt; clear path back |
-| 4 | Consistency and Standards | 3 | Shared AuthShell unifies the pair; Telegram widget still can't inherit button vocab |
-| 5 | Error Prevention | 3 | Single-action screens |
-| 6 | Recognition Rather Than Recall | 3 | Self-evident |
-| 7 | Flexibility and Efficiency | 3 | One-tap auth, auto-redirect |
-| 8 | Aesthetic and Minimalist Design | 4 | Nested card + glass gone; redundancy cut to one beat |
-| 9 | Error Recovery | 4 | Plain-language errors + retry, keeps lastAuthUser |
-| 10 | Help and Documentation | 2 | Still no "why Telegram?" for a true first-timer |
-| **Total** | | **34/40** | **Good — top of band, polish territory** |
+| #         | Heuristic                       | Score     | Key Issue                                                                           |
+| --------- | ------------------------------- | --------- | ----------------------------------------------------------------------------------- |
+| 1         | Visibility of System Status     | 4         | Pending state, widget skeleton, aria-live all present                               |
+| 2         | Match System / Real World       | 4         | Specific 401 vs network error copy                                                  |
+| 3         | User Control and Freedom        | 4         | Retry preserves last attempt; clear path back                                       |
+| 4         | Consistency and Standards       | 3         | Shared AuthShell unifies the pair; Telegram widget still can't inherit button vocab |
+| 5         | Error Prevention                | 3         | Single-action screens                                                               |
+| 6         | Recognition Rather Than Recall  | 3         | Self-evident                                                                        |
+| 7         | Flexibility and Efficiency      | 3         | One-tap auth, auto-redirect                                                         |
+| 8         | Aesthetic and Minimalist Design | 4         | Nested card + glass gone; redundancy cut to one beat                                |
+| 9         | Error Recovery                  | 4         | Plain-language errors + retry, keeps lastAuthUser                                   |
+| 10        | Help and Documentation          | 2         | Still no "why Telegram?" for a true first-timer                                     |
+| **Total** |                                 | **34/40** | **Good — top of band, polish territory**                                            |
 
 ## Anti-Patterns Verdict
 
