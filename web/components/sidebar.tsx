@@ -518,7 +518,7 @@ export function Sidebar() {
             <LogoMark className="h-8 w-8" />
             VIG
           </span>
-          <button
+          {/* <button
             ref={closeButtonRef}
             type="button"
             onClick={() => setOpen(false)}
@@ -530,7 +530,7 @@ export function Sidebar() {
               strokeWidth={2}
               aria-hidden="true"
             />
-          </button>
+          </button> */}
         </div>
 
         <nav

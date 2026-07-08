@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
 
 type LinkRow = {
   url: string;
@@ -19,8 +19,8 @@ type LinksResponse = {
   total: number;
 };
 
-type LinksSort = "last_seen" | "appearances";
-type LinksOrder = "asc" | "desc";
+type LinksSort = 'last_seen' | 'appearances';
+type LinksOrder = 'asc' | 'desc';
 
 type LinksView = {
   sort: LinksSort;
@@ -29,11 +29,11 @@ type LinksView = {
 };
 
 const DEFAULT_LINKS_VIEW: LinksView = {
-  sort: "last_seen",
-  order: "desc",
+  sort: 'last_seen',
+  order: 'desc',
   size: 25,
 };
-const LINKS_PAGE_SIZES: LinksView["size"][] = [25, 50, 100];
+const LINKS_PAGE_SIZES: LinksView['size'][] = [25, 50, 100];
 function LinksErrorBanner({ message }: { message: string }) {
   return (
     <p className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
@@ -45,7 +45,7 @@ function LinksErrorBanner({ message }: { message: string }) {
 function safeUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:"
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
       ? url
       : undefined;
   } catch {
@@ -56,8 +56,8 @@ function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+    dateStyle: 'medium',
+    timeStyle: 'short',
   }).format(date);
 }
 
@@ -69,8 +69,8 @@ function TruncatedDescription({ text }: { text: string }) {
         title={text}
         className={`min-w-0 text-xs text-body ${
           expanded
-            ? "whitespace-normal break-words"
-            : "max-w-[40ch] truncate sm:max-w-[60ch]"
+            ? 'whitespace-normal break-words'
+            : 'max-w-[40ch] truncate sm:max-w-[60ch]'
         }`}
       >
         {text}
@@ -81,7 +81,7 @@ function TruncatedDescription({ text }: { text: string }) {
         onClick={() => setExpanded((value) => !value)}
         className="relative shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-ui before:absolute before:-inset-x-2 before:-inset-y-2.5 hover:bg-raised hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]"
       >
-        {expanded ? "Less" : "More"}
+        {expanded ? 'Less' : 'More'}
       </button>
     </span>
   );
@@ -110,8 +110,12 @@ function LinkUrl({ link }: { link: LinkRow }) {
 }
 
 function LinkDescription({ link }: { link: LinkRow }) {
-  const description = [link.title, link.topic].filter(Boolean).join(" · ");
-  return description ? <TruncatedDescription text={description} /> : null;
+  const description = [link.title, link.topic]
+    .filter(Boolean)
+    .join(' · ');
+  return description ? (
+    <TruncatedDescription text={description} />
+  ) : null;
 }
 
 function TableCard({ link }: { link: LinkRow }) {
@@ -121,9 +125,12 @@ function TableCard({ link }: { link: LinkRow }) {
         <LinkUrl link={link} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] tabular-nums text-muted">
-        <span>Last seen {formatDate(link.last_seen ?? link.first_seen)}</span>
         <span>
-          {link.seen_count} appearance{link.seen_count === 1 ? "" : "s"}
+          Last seen {formatDate(link.last_seen ?? link.first_seen)}
+        </span>
+        <span>
+          {link.seen_count} appearance
+          {link.seen_count === 1 ? '' : 's'}
         </span>
       </div>
       {Boolean(link.title || link.topic) && (
@@ -135,16 +142,27 @@ function TableCard({ link }: { link: LinkRow }) {
   );
 }
 
-function SortIcon({ active, order }: { active: boolean; order: LinksOrder }) {
+function SortIcon({
+  active,
+  order,
+}: {
+  active: boolean;
+  order: LinksOrder;
+}) {
   if (!active) return null;
-  const Icon = order === "desc" ? ArrowDown : ArrowUp;
-  return <Icon className="h-3.5 w-3.5" aria-hidden="true" />;
+  const Icon = order === 'desc' ? ArrowDown : ArrowUp;
+  return (
+    <Icon
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    />
+  );
 }
 
 export function LinksTable() {
   const [page, setPage] = useState(0);
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [view, setView] = useState<LinksView>(DEFAULT_LINKS_VIEW);
   const [viewLoaded, setViewLoaded] = useState(false);
   const [data, setData] = useState<LinksResponse>({
@@ -153,16 +171,19 @@ export function LinksTable() {
     offset: 0,
     total: 0,
   });
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [message, setMessage] = useState("");
-  const [jumpPage, setJumpPage] = useState("1");
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>(
+    'loading',
+  );
+  const [message, setMessage] = useState('');
+  const [jumpPage, setJumpPage] = useState('1');
 
   useEffect(() => {
     let cancelled = false;
     const loadView = async () => {
       try {
-        const res = await fetch("/api/brain/links/view");
-        if (!res.ok) throw new Error(`View request failed (${res.status})`);
+        const res = await fetch('/api/brain/links/view');
+        if (!res.ok)
+          throw new Error(`View request failed (${res.status})`);
         // GET returns server-normalized values only; no need to re-coerce here.
         const payload = (await res.json()) as LinksView;
         if (!cancelled) setView(payload);
@@ -188,28 +209,32 @@ export function LinksTable() {
     if (!viewLoaded) return;
     let cancelled = false;
     const load = async () => {
-      setState("loading");
-      setMessage("");
+      setState('loading');
+      setMessage('');
       const params = new URLSearchParams({
         limit: String(view.size),
         offset: String(page * view.size),
         sort: view.sort,
         order: view.order,
       });
-      if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+      if (debouncedQuery.trim())
+        params.set('q', debouncedQuery.trim());
       try {
         const res = await fetch(`/api/brain/links?${params}`);
-        if (!res.ok) throw new Error(`Links request failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(`Links request failed (${res.status})`);
         const payload = (await res.json()) as LinksResponse;
         if (!cancelled) {
           setData(payload);
-          setState("ready");
+          setState('ready');
         }
       } catch (err) {
         if (!cancelled) {
-          setState("error");
+          setState('error');
           setMessage(
-            err instanceof Error ? err.message : "Unable to load links.",
+            err instanceof Error
+              ? err.message
+              : 'Unable to load links.',
           );
         }
       }
@@ -228,9 +253,9 @@ export function LinksTable() {
       skipFirstPut.current = false;
       return;
     }
-    void fetch("/api/brain/links/view", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
+    void fetch('/api/brain/links/view', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(view),
     }).catch(() => {
       // Preference persistence is best-effort.
@@ -256,7 +281,8 @@ export function LinksTable() {
   const toggleSort = (sort: LinksSort) => {
     updateView({
       sort,
-      order: view.sort === sort && view.order === "desc" ? "asc" : "desc",
+      order:
+        view.sort === sort && view.order === 'desc' ? 'asc' : 'desc',
     });
   };
 
@@ -271,14 +297,16 @@ export function LinksTable() {
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-ink">Extracted links</h2>
+          <h2 className="text-base font-semibold text-ink">
+            Extracted links
+          </h2>
           <p className="mt-1 text-pretty text-sm text-body">
             Deduplicated canonical URLs discovered by enrichment runs.
           </p>
         </div>
         <p className="font-mono text-xs tabular-nums text-muted">
-          {state === "loading"
-            ? "Loading…"
+          {state === 'loading'
+            ? 'Loading…'
             : `${start}-${end} of ${data.total}`}
         </p>
       </div>
@@ -294,9 +322,9 @@ export function LinksTable() {
           }}
           onKeyDown={(e) => {
             // Escape clears the filter if any, else blurs out of the field.
-            if (e.key === "Escape") {
+            if (e.key === 'Escape') {
               if (query) {
-                setQuery("");
+                setQuery('');
                 setPage(0);
               } else {
                 e.currentTarget.blur();
@@ -313,12 +341,17 @@ export function LinksTable() {
             value={view.size}
             disabled={!viewLoaded}
             onChange={(e) =>
-              updateView({ size: Number(e.target.value) as LinksView["size"] })
+              updateView({
+                size: Number(e.target.value) as LinksView['size'],
+              })
             }
-            className="h-10 rounded-lg border border-line bg-canvas px-3 font-mono text-xs tabular-nums text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none disabled:opacity-50"
+            className="h-10 rounded-lg border border-line bg-canvas pl-2 font-mono text-xs text-contrasignal transition-ui hover:border-line-strong focus:border-signal focus:outline-none disabled:opacity-50"
           >
             {LINKS_PAGE_SIZES.map((size) => (
-              <option key={size} value={size}>
+              <option
+                key={size}
+                value={size}
+              >
                 {size}
               </option>
             ))}
@@ -326,24 +359,29 @@ export function LinksTable() {
         </label>
       </div>
 
-      {state === "error" && <LinksErrorBanner message={message} />}
+      {state === 'error' && <LinksErrorBanner message={message} />}
 
       {/* Same 639px breakpoint as the table's `hidden sm:block` — CSS gates both. */}
       <div className="space-y-2 sm:hidden">
-        {state === "loading" && (
+        {state === 'loading' && (
           <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-body">
             Loading extracted links…
           </p>
         )}
-        {state === "ready" && data.items.length === 0 && (
+        {state === 'ready' && data.items.length === 0 && (
           <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-body">
             {query.trim()
-              ? "No links match your search."
-              : "No extracted links have been saved yet."}
+              ? 'No links match your search.'
+              : 'No extracted links have been saved yet.'}
           </p>
         )}
-        {state === "ready" &&
-          data.items.map((link) => <TableCard key={link.url} link={link} />)}
+        {state === 'ready' &&
+          data.items.map((link) => (
+            <TableCard
+              key={link.url}
+              link={link}
+            />
+          ))}
       </div>
 
       <div className="hidden overflow-hidden rounded-xl border border-line bg-surface shadow-[0_1px_0_rgba(255,255,255,0.03)] sm:block">
@@ -351,29 +389,32 @@ export function LinksTable() {
           <table className="min-w-full divide-y divide-line text-left text-sm">
             <thead className="sticky top-0 z-10 bg-raised text-xs text-muted shadow-[0_1px_0_rgba(255,255,255,0.06)]">
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th
+                  scope="col"
+                  className="px-4 py-3 font-medium"
+                >
                   URL
                 </th>
                 <th
                   scope="col"
                   aria-sort={
-                    view.sort === "last_seen"
-                      ? view.order === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
+                    view.sort === 'last_seen'
+                      ? view.order === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
                   }
                   className="px-4 py-3 font-medium"
                 >
                   <button
                     type="button"
                     disabled={!viewLoaded}
-                    onClick={() => toggleSort("last_seen")}
+                    onClick={() => toggleSort('last_seen')}
                     className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-left transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
                   >
-                    Last seen{" "}
+                    Last seen{' '}
                     <SortIcon
-                      active={view.sort === "last_seen"}
+                      active={view.sort === 'last_seen'}
                       order={view.order}
                     />
                   </button>
@@ -381,23 +422,23 @@ export function LinksTable() {
                 <th
                   scope="col"
                   aria-sort={
-                    view.sort === "appearances"
-                      ? view.order === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
+                    view.sort === 'appearances'
+                      ? view.order === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
                   }
                   className="px-4 py-3 text-right font-medium"
                 >
                   <button
                     type="button"
                     disabled={!viewLoaded}
-                    onClick={() => toggleSort("appearances")}
+                    onClick={() => toggleSort('appearances')}
                     className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
                   >
-                    Appearances{" "}
+                    Appearances{' '}
                     <SortIcon
-                      active={view.sort === "appearances"}
+                      active={view.sort === 'appearances'}
                       order={view.order}
                     />
                   </button>
@@ -405,23 +446,29 @@ export function LinksTable() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {state === "loading" && (
+              {state === 'loading' && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-body">
+                  <td
+                    colSpan={3}
+                    className="px-4 py-8 text-center text-body"
+                  >
                     Loading extracted links…
                   </td>
                 </tr>
               )}
-              {state === "ready" && data.items.length === 0 && (
+              {state === 'ready' && data.items.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-body">
+                  <td
+                    colSpan={3}
+                    className="px-4 py-8 text-center text-body"
+                  >
                     {query.trim()
-                      ? "No links match your search."
-                      : "No extracted links have been saved yet."}
+                      ? 'No links match your search.'
+                      : 'No extracted links have been saved yet.'}
                   </td>
                 </tr>
               )}
-              {state === "ready" &&
+              {state === 'ready' &&
                 data.items.map((link) => (
                   <tr
                     key={link.url}
@@ -467,7 +514,7 @@ export function LinksTable() {
           </label>
           <button
             type="submit"
-            disabled={state === "loading"}
+            disabled={state === 'loading'}
             className="h-10 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
           >
             Go
@@ -476,7 +523,7 @@ export function LinksTable() {
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={!hasPrevious || state === "loading"}
+            disabled={!hasPrevious || state === 'loading'}
             onClick={() => setPage((value) => Math.max(0, value - 1))}
             className="h-10 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
           >
@@ -484,7 +531,7 @@ export function LinksTable() {
           </button>
           <button
             type="button"
-            disabled={!hasNext || state === "loading"}
+            disabled={!hasNext || state === 'loading'}
             onClick={() => setPage((value) => value + 1)}
             className="h-10 rounded-lg bg-signal px-3 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:scale-[0.96] disabled:bg-surface disabled:text-muted"
           >
