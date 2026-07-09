@@ -58,9 +58,9 @@ function setupMocks(
 beforeEach(() => { setupMocks(); });
 
 describe('SpacesPage', () => {
-  it('renders Spaces heading', () => {
+  it('renders Collections heading', () => {
     render(<SpacesPage />);
-    expect(screen.getByText('Spaces')).toBeTruthy();
+    expect(screen.getByText('Collections')).toBeTruthy();
   });
 
   it('shows loading skeleton when loading', () => {
@@ -84,12 +84,12 @@ describe('SpacesPage', () => {
   it('shows empty message when no spaces and no form', () => {
     setupMocks({ spaces: [] });
     render(<SpacesPage />);
-    expect(screen.getByText(/no spaces yet/i)).toBeTruthy();
+    expect(screen.getByText(/no collections yet/i)).toBeTruthy();
   });
 
-  it('shows New Space button', () => {
+  it('shows New Collection button', () => {
     render(<SpacesPage />);
-    expect(screen.getByRole('button', { name: /new space/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /new collection/i })).toBeTruthy();
   });
 
   it('shows Cancel button when showForm is true', () => {
@@ -103,7 +103,7 @@ describe('SpacesPage', () => {
   it('shows form when showForm is true', () => {
     setupMocks({}, { showForm: true });
     render(<SpacesPage />);
-    expect(screen.getByText('Create Space')).toBeTruthy();
+    expect(screen.getByText('Create Collection')).toBeTruthy();
   });
 
   it('shows form error when formError is set', () => {

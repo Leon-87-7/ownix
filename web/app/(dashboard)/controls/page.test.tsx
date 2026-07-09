@@ -75,9 +75,9 @@ function domainColumn(name: 'Allowed' | 'Ignored') {
 }
 
 describe('ControlsPage', () => {
-  it('renders Controls heading', () => {
+  it('renders Settings heading', () => {
     render(<ControlsPage />);
-    expect(screen.getByText('Controls')).toBeTruthy();
+    expect(screen.getByText('Settings')).toBeTruthy();
   });
 
   it('renders section headers', () => {
@@ -206,7 +206,7 @@ describe('ControlsPage', () => {
   it('shows the recovery Telegram notification preference', async () => {
     render(<ControlsPage />);
     const checkbox = await screen.findByRole('checkbox', {
-      name: /dashboard recovery telegram notifications/i,
+      name: /feed recovery telegram notifications/i,
     });
     expect(checkbox).toBeChecked();
   });
@@ -214,7 +214,7 @@ describe('ControlsPage', () => {
   it('persists the recovery Telegram notification preference', async () => {
     render(<ControlsPage />);
     const checkbox = await screen.findByRole('checkbox', {
-      name: /dashboard recovery telegram notifications/i,
+      name: /feed recovery telegram notifications/i,
     });
     fireEvent.click(checkbox);
 

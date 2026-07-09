@@ -127,9 +127,9 @@ beforeEach(() => {
 });
 
 describe('FeedPage', () => {
-  it('renders VIG heading', () => {
+  it('renders Ownix heading', () => {
     render(<FeedTree />);
-    expect(screen.getByText('VIG')).toBeTruthy();
+    expect(screen.getByText('Ownix')).toBeTruthy();
   });
 
   it('renders Jobs section', () => {

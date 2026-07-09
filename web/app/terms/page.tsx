@@ -10,7 +10,7 @@ import {
 } from '@/components/public-shell';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — vig',
+  title: 'Terms of Service — Ownix',
 };
 
 export default function TermsPage() {
@@ -19,30 +19,30 @@ export default function TermsPage() {
       <LegalLayout active="terms">
         <LegalArticle>
           <LegalTitle
-            title="Terms of Service — VIG (Video Intelligence Gateway)"
+            title="Terms of Service — Ownix"
             updated="Last updated: July 1, 2026"
           />
 
           <p>
-            By using the VIG Telegram bot or dashboard, you agree to
-            these terms.
+            By using Ownix, you agree to these terms.
           </p>
 
           <LegalSection title="The service">
             <p>
-              VIG processes video links you send it (Instagram Reels,
-              YouTube Shorts, TikTok, YouTube), runs them through AI
-              enrichment, and stores/returns the results to you. It is
-              provided as-is, without warranty, and may change or
-              become unavailable at any time.
+              Ownix collects the internet you care about: videos,
+              links, articles, repos, documents, and ideas. Saved
+              items become part of your personal Index, organized into
+              a Feed you own and can return to. Some items may also
+              contribute signal to the shared Brain if you choose to
+              share them.
             </p>
           </LegalSection>
 
           <LegalSection title="Invite-only access">
             <p>
-              VIG is invite-only. After you sign in with Telegram, you
-              may be asked for an email address so the operator can
-              review and approve your access. Providing an email does
+              Ownix is invite-only while it is young. After you sign in with Telegram, you
+              may be asked for an email address so your request can
+              be reviewed and approved. Providing an email does
               not guarantee access; your account may stay pending, be
               approved, be blocked, or have access revoked later.
             </p>
@@ -52,11 +52,9 @@ export default function TermsPage() {
               that accurately identifies you for approval purposes.
             </p>
             <p>
-              VIG is built in public, with the public. The approval
-              email may also be used to contact you about improving
-              VIG, gathering product feedback, and building a community
-              of devs, engineers, and builders who want more clarity
-              from the videos, articles, repos, and ideas they save.
+              The approval email may also be used to contact you about
+              improving Ownix, gathering product feedback, and shaping
+              the product with real workflows and honest feedback.
             </p>
           </LegalSection>
 
@@ -75,10 +73,11 @@ export default function TermsPage() {
 
           <LegalSection title="Google account connection">
             <p>
-              If you connect a Google account, VIG creates files (a{' '}
-              <code>/vig</code> folder, spreadsheet, and uploads) in
-              your own Drive using the <code>drive.file</code> and{' '}
-              <code>spreadsheets</code> scopes. VIG only ever touches
+              If you connect a Google account, Ownix creates files (a
+              folder currently named <code>/vig</code>, spreadsheet,
+              and uploads) in your own Drive using the{' '}
+              <code>drive.file</code> and{' '}
+              <code>spreadsheets</code> scopes. Ownix only ever touches
               files it created. You can disconnect at any time by
               sending <code>/disconnect</code>.
             </p>
@@ -86,7 +85,7 @@ export default function TermsPage() {
 
           <LegalSection title="Limitation of liability">
             <p>
-              VIG is a personal project, provided without warranty of
+              Ownix is a personal project, provided without warranty of
               any kind. We are not liable for any loss or damage
               arising from its use.
             </p>
@@ -105,7 +104,6 @@ export default function TermsPage() {
               <LegalLink href="mailto:leoneidelman09@gmail.com">
                 leon
               </LegalLink>
-              🩵
             </p>
           </LegalSection>
         </LegalArticle>

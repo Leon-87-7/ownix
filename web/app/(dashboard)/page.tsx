@@ -307,15 +307,15 @@ function FeedPageContent() {
         <section className="rounded-lg border border-line bg-surface p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-widest text-muted">
-                Google export
+              <p className="font-mono text-[11px] font-medium text-muted">
+                Connected service
               </p>
               <h2 className="mt-1 text-lg font-semibold text-ink">
                 Connect Google
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-body">
-                Authorize Drive + Sheets so your jobs export into a
-                vig-owned /vig folder in your own Google Drive.
+                Authorize Drive + Sheets so saved items can export into
+                the app folder in your own Google Drive.
               </p>
             </div>
             <a
@@ -365,8 +365,8 @@ function FeedPageContent() {
             {/* Mobile-only (<sm): Submit + Docs stack in the grid's first column
              (Submit top, Docs bottom) via explicit col/row placement; the six
              content-type tabs then auto-flow into columns 2–4 across both rows.
-             Signal underline + signal text mark them as the row's actions without
-             matching the active chip's full signal fill (The Signal Rule). They
+             Index amber underline + text mark them as the row's actions without
+             matching the active chip's full signal fill. They
              open the same dialogs as the sm+ header triggers. */}
             <button
               type="button"

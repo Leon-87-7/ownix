@@ -174,7 +174,7 @@ export default function DocParserPage() {
     <PageShell>
       <PageHeader
         icon={FileCode2}
-        title="Doc Parser"
+        title="Docs"
         description={
           <>
             Upload PDFs, Microsoft Office formats and Images.

@@ -25,7 +25,7 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
   const [deleteFailed, setDeleteFailed] = useState(false);
 
   const handleDelete = useCallback(async () => {
-    if (!window.confirm("Delete this space? Jobs will not be deleted.")) return;
+    if (!window.confirm("Delete this collection? Saved items will not be deleted.")) return;
     setDeleting(true);
     setDeleteFailed(false);
     try {
@@ -52,14 +52,14 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
       </PageShell>
     );
   }
-  if (fetchState === "not_found") return <div className="text-sm text-body">Space not found. <Link href="/spaces" className="text-signal hover:underline">Back to spaces</Link></div>;
-  if (fetchState === "forbidden") return <div className="text-sm text-body">Access denied. <Link href="/spaces" className="text-signal hover:underline">Back to spaces</Link></div>;
-  if (fetchState === "error" || !space) return <div className="text-sm text-body">Failed to load space. <Link href="/spaces" className="text-signal hover:underline">Back to spaces</Link></div>;
+  if (fetchState === "not_found") return <div className="text-sm text-body">Collection not found. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
+  if (fetchState === "forbidden") return <div className="text-sm text-body">Access denied. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
+  if (fetchState === "error" || !space) return <div className="text-sm text-body">Failed to load collection. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
 
   return (
     <PageShell width="narrow">
       <Link href="/spaces" className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink">
-        <span aria-hidden="true">&#8592;</span> Back to spaces
+        <span aria-hidden="true">&#8592;</span> Back to collections
       </Link>
 
       {!editing ? (
@@ -79,7 +79,7 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
         </div>
       ) : (
         <form onSubmit={handleEditSave} className="space-y-4">
-          <h2 className="text-sm font-semibold text-ink">Edit Space</h2>
+          <h2 className="text-sm font-semibold text-ink">Edit Collection</h2>
           {editError && <p className="text-sm text-status-error">{editError}</p>}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">

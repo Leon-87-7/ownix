@@ -18,7 +18,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "vig — Video Intelligence Gateway",
+  title: "Ownix — Your internet, indexed",
+  description:
+    "Collect what matters. Own your Index. Shape the Brain.",
   icons: {
     icon: "/icon0.svg",
   },

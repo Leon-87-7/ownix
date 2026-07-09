@@ -85,7 +85,7 @@ describe('SpaceDetailPage', () => {
   it('shows not found message', () => {
     setupMocks({ fetchState: 'not_found', space: null });
     render(<SpaceDetailPage params={{ id: 's1' }} />);
-    expect(screen.getByText(/space not found/i)).toBeTruthy();
+    expect(screen.getByText(/collection not found/i)).toBeTruthy();
   });
 
   it('shows forbidden message', () => {
@@ -97,7 +97,7 @@ describe('SpaceDetailPage', () => {
   it('shows error message on error fetch state', () => {
     setupMocks({ fetchState: 'error', space: null });
     render(<SpaceDetailPage params={{ id: 's1' }} />);
-    expect(screen.getByText(/failed to load space/i)).toBeTruthy();
+    expect(screen.getByText(/failed to load collection/i)).toBeTruthy();
   });
 
   it('renders space name when loaded', () => {
@@ -137,7 +137,7 @@ describe('SpaceDetailPage', () => {
   it('shows edit form when editing is true', () => {
     setupMocks({}, { editing: true });
     render(<SpaceDetailPage params={{ id: 's1' }} />);
-    expect(screen.getByText('Edit Space')).toBeTruthy();
+    expect(screen.getByText('Edit Collection')).toBeTruthy();
   });
 
   it('shows edit error when editError is set', () => {

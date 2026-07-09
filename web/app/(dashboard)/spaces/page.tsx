@@ -48,13 +48,13 @@ export default function SpacesPage() {
     <PageShell>
       <PageHeader
         icon={LayoutGrid}
-        title="Spaces"
+        title="Collections"
         action={
           <button
             onClick={showForm ? resetForm : openForm}
             className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
           >
-            {showForm ? 'Cancel' : 'New Space'}
+            {showForm ? 'Cancel' : 'New Collection'}
           </button>
         }
       />
@@ -65,7 +65,7 @@ export default function SpacesPage() {
           className="space-y-4 rounded-lg border border-line bg-surface p-4"
         >
           <h2 className="text-sm font-semibold text-ink">
-            Create Space
+            Create Collection
           </h2>
           {formError && (
             <p className="text-sm text-status-error">{formError}</p>
@@ -155,10 +155,10 @@ export default function SpacesPage() {
       {spaces.length === 0 && !showForm && (
         <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
           <p className="text-sm font-medium text-ink">
-            No spaces yet
+            No collections yet
           </p>
           <p className="mt-1 text-sm text-body">
-            Create one to start organizing your jobs.
+            Create one to start organizing your saved items.
           </p>
         </div>
       )}

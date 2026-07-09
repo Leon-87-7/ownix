@@ -33,7 +33,7 @@ describe('LoginPage', () => {
   it('reserves space while the Telegram widget loads', () => {
     render(<LoginPage />);
 
-    expect(screen.getByText('Sign in to your console')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to your Index')).toBeInTheDocument();
     expect(screen.getByText('Loading Telegram sign-in')).toBeInTheDocument();
   });
 

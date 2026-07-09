@@ -502,12 +502,12 @@ function RecoveryTab() {
           className="h-4 w-4 accent-signal"
         />
         <span className="font-medium">
-          Dashboard recovery Telegram notifications
+          Feed recovery Telegram notifications
         </span>
       </label>
       <p className="ml-7 mt-1.5 text-xs text-muted">
         Send a Telegram message when a stuck job is recovered from the
-        dashboard.
+        Feed.
       </p>
       {error && (
         <p className="ml-7 mt-2 text-sm text-status-error">{error}</p>
@@ -544,7 +544,7 @@ function Section({
 export default function ControlsPage() {
   return (
     <PageShell>
-      <PageHeader icon={SlidersHorizontal} title="Controls" />
+      <PageHeader icon={SlidersHorizontal} title="Settings" />
       <div className="space-y-3">
         <Section
           title="Tags"

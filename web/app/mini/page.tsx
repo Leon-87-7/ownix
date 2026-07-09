@@ -24,7 +24,7 @@ export default function MiniAppPage() {
     window.Telegram?.WebApp?.ready?.();
     if (!initData) {
       setState('error');
-      setMessage('Open this from the Telegram bot button so VIG can verify your account.');
+      setMessage('Open this from the Telegram bot button so Ownix can verify your account.');
       return;
     }
 
@@ -41,7 +41,7 @@ export default function MiniAppPage() {
         if (!cancelled) {
           setConnectUrl(body.google_connect_url || '/api/google/connect');
           setState('ready');
-          setMessage('Telegram verified. Connect Google to let VIG create Drive and Sheets outputs for your jobs.');
+          setMessage('Telegram verified. Connect Google to let Ownix create Drive and Sheets outputs for your Index.');
         }
       })
       .catch((error: Error) => {
@@ -76,7 +76,7 @@ export default function MiniAppPage() {
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold tracking-[-0.02em] text-balance">Connect Google inside VIG</h1>
+              <h1 className="text-balance text-2xl font-semibold tracking-[-0.02em]">Connect Google inside Ownix</h1>
             </div>
             <span className="rounded-md border border-telegram-blue/40 bg-telegram-blue/10 px-2 py-1 font-mono text-[11px] text-telegram-blue">TG</span>
           </div>

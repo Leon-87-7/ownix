@@ -19,11 +19,16 @@ export default function DashboardLayout({
           <SubmitJobProvider>
             <div className="flex h-screen overflow-hidden">
               <Sidebar />
-              <main className="relative isolate flex-1 overflow-auto">
+              <main className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden">
                 <PageBackground />
                 <AppHeader />
-                <div className="relative z-10 p-4 sm:p-6">{children}</div>
-                <ScrollToTop />
+                <div
+                  data-dashboard-scroll
+                  className="relative z-10 flex-1 overflow-auto p-4 sm:p-6"
+                >
+                  {children}
+                  <ScrollToTop />
+                </div>
               </main>
             </div>
           </SubmitJobProvider>

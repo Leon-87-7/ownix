@@ -25,8 +25,8 @@ export function useSessionUser(): InviteUser | null {
 
 const MOCK_SESSION_USER: InviteUser = {
   id: 0,
-  first_name: "Mock Operator",
-  username: "mock_operator",
+  first_name: "Mock User",
+  username: "mock_user",
   photo_url: null,
   email: "mock@example.com",
   status: "approved",
@@ -49,8 +49,8 @@ function GateScreen({ status }: { status: Exclude<UserStatus, 'approved'> }) {
         </h1>
         <p className="mt-2 text-sm leading-6 text-body">
           {blocked
-            ? "This Telegram account cannot access VIG."
-            : "Pending approval — ask the operator for access."}
+            ? "This Telegram account cannot access Ownix."
+            : "Your request is waiting for approval. Ownix is invite-only while it is young."}
         </p>
       </section>
     </div>
@@ -134,8 +134,8 @@ function EmailModal({
       >
         <h2 id="invite-email-title" className="text-lg font-semibold text-ink">Email required</h2>
         <p className="mt-2 text-sm leading-6 text-body">
-          VIG is invite-only. Add the email the operator should approve for
-          this Telegram account.
+          Ownix is invite-only while it is young. Add the email we should use
+          to review this Telegram account and follow up for feedback.
         </p>
         <form className="mt-4 space-y-3" onSubmit={submit}>
           <label

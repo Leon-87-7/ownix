@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">VIG locked-play logo mark</title>
-  <desc id="desc">A simple orange play triangle locked into a tilted cyan V-shaped gateway.</desc>
+  <title id="title">Ownix logo mark</title>
+  <desc id="desc">A simple amber play triangle locked into a tilted cyan index mark.</desc>
   <defs>
     <style>
       .frame { fill: none; stroke: #bdf8ff; stroke-width: 30; stroke-linecap: round; stroke-linejoin: round; }
-      .line { fill: none; stroke: #0b0c0f; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
-      .signal { fill: #f6921e; }
-      .signal-shadow { fill: #b96a06; opacity: 0.32; }
+      .line { fill: none; stroke: #0d0e10; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+      .signal { fill: #d99a45; }
+      .signal-shadow { fill: #a57534; opacity: 0.32; }
     </style>
   </defs>
   <path class="frame" d="M80 50 76 208 214 128"/>

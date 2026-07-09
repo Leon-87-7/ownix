@@ -302,7 +302,7 @@ export default function PromptsPage() {
 
   return (
     <PageShell>
-      <PageHeader icon={MessageSquareText} title="Prompts" />
+      <PageHeader icon={MessageSquareText} title="Recipes" />
 
       {loading && (
         <p className="text-sm text-body">Loading templates…</p>
@@ -315,14 +315,14 @@ export default function PromptsPage() {
         <>
           <section className="mb-8">
             <h2 className="mb-3 text-sm font-semibold text-ink">
-              Built-in templates{' '}
+              Built-in recipes{' '}
               <span className="font-normal text-muted">
                 (read-only, use as /name)
               </span>
             </h2>
             {builtins.length === 0 ? (
               <p className="text-sm text-muted">
-                No built-in templates.
+                No built-in recipes.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -352,20 +352,20 @@ export default function PromptsPage() {
 
           <section>
             <h2 className="mb-3 text-sm font-semibold text-ink">
-              Your templates{' '}
+              Your recipes{' '}
               <span className="font-normal text-muted">
                 (use as -name &lt;url&gt; in Telegram)
               </span>
             </h2>
             <div className="mb-4 rounded-lg border border-line bg-surface p-4">
               <h3 className="mb-3 text-sm font-medium text-ink">
-                Create template
+                Create recipe
               </h3>
               <CreateForm onCreated={createTemplate} />
             </div>
             {userTemplates.length === 0 ? (
               <p className="text-sm text-muted">
-                No custom templates yet. Create one above.
+                No custom recipes yet. Create one above.
               </p>
             ) : (
               <ul className="space-y-2">

@@ -10,7 +10,7 @@ import {
 } from '@/components/public-shell';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — vig',
+  title: 'Privacy Policy — Ownix',
 };
 
 export default function PrivacyPage() {
@@ -19,15 +19,15 @@ export default function PrivacyPage() {
       <LegalLayout active="privacy">
         <LegalArticle>
           <LegalTitle
-            title="Privacy Policy — VIG (Video Intelligence Gateway)"
+            title="Privacy Policy — Ownix"
             updated="Last updated: July 1, 2026"
           />
 
           <p>
-            VIG is a Telegram bot and dashboard that processes video
-            links (Instagram Reels, YouTube Shorts, TikTok, YouTube),
-            runs them through AI enrichment, and stores the results
-            for you.
+            Ownix is a quiet tool for collecting the internet you care
+            about. Saved videos, links, articles, repos, documents, and
+            ideas become part of your personal Index and may contribute
+            signal to the shared Brain if you choose to share them.
           </p>
 
           <LegalSection title="What we collect">
@@ -42,38 +42,37 @@ export default function PrivacyPage() {
                 <code>approved</code>, or <code>blocked</code>).
               </li>
               <li>
-                Links/videos you send us, and the AI-generated
-                analysis of them (transcripts, descriptions, tags).
+                Links and documents you save, plus generated analysis
+                such as transcripts, descriptions, tags, and summaries.
               </li>
               <li>
                 If you connect your Google account: an OAuth token
                 scoped to Google Drive (<code>drive.file</code>) and
                 Google Sheets (<code>spreadsheets</code>). This lets
-                VIG create a <code>/vig</code> folder and spreadsheet
-                in your Drive and write your results there. VIG can
-                only see or edit files it creates itself — it cannot
-                access any other file already in your Drive.
+                Ownix create a folder currently named <code>/vig</code>{' '}
+                and a spreadsheet in your Drive and write your results
+                there. Ownix can only see or edit files it creates
+                itself — it cannot access any other file already in
+                your Drive.
               </li>
             </LegalList>
           </LegalSection>
 
           <LegalSection title="How we use approval email">
             <p>
-              VIG is invite-only. We use the approval email to review
+              Ownix is invite-only while it is young. We use the approval email to review
               access requests, associate the request with your
               Telegram account, and contact you about access if
               needed.
             </p>
             <p>
               <span className="border-b border-dashed border-muted pb-0.5 font-medium text-body">
-                VIG is a build-in-public project, shaped with the
-                people using it.
+                Ownix is shaped with the people using it.
               </span>{' '}
               We may use this email to ask for feedback, discuss
-              feature improvements, share relevant VIG updates, and
-              build a community around helping devs, engineers, and
-              builders get more clarity from the videos, articles,
-              repos, and ideas they save.
+              feature improvements, share relevant Ownix updates, and
+              understand how people collect, return to, and share the
+              internet they care about.
             </p>
             <p>
               We do not sell your email or share it with third
@@ -124,7 +123,6 @@ export default function PrivacyPage() {
               <LegalLink href="mailto:leoneidelman09@gmail.com">
                 leon
               </LegalLink>
-              🩵
             </p>
           </LegalSection>
         </LegalArticle>

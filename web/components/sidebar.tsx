@@ -35,11 +35,11 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'Feed', icon: Rss },
-  { href: '/doc-parser', label: 'Doc Parser', icon: FileCode2 },
+  { href: '/doc-parser', label: 'Docs', icon: FileCode2 },
   { href: '/brain', label: 'Brain', icon: Brain },
-  { href: '/spaces', label: 'Spaces', icon: LayoutGrid },
-  { href: '/prompts', label: 'Prompts', icon: MessageSquareText },
-  { href: '/controls', label: 'Controls', icon: SlidersHorizontal },
+  { href: '/spaces', label: 'Collections', icon: LayoutGrid },
+  { href: '/prompts', label: 'Recipes', icon: MessageSquareText },
+  { href: '/controls', label: 'Settings', icon: SlidersHorizontal },
 ];
 
 function LogoMark({ className }: { className?: string }) {
@@ -47,9 +47,9 @@ function LogoMark({ className }: { className?: string }) {
   // toggled by CSS not unmount), so hardcoded gradient/filter ids collide across
   // them — useId namespaces each instance's defs to its own url(#...) refs.
   const uid = useId();
-  const plateId = `vig-logo-plate-${uid}`;
-  const aquaId = `vig-logo-aqua-${uid}`;
-  const liftId = `vig-logo-lift-${uid}`;
+  const plateId = `ownix-logo-plate-${uid}`;
+  const aquaId = `ownix-logo-aqua-${uid}`;
+  const liftId = `ownix-logo-lift-${uid}`;
   return (
     <svg
       viewBox="0 0 256 256"
@@ -68,11 +68,11 @@ function LogoMark({ className }: { className?: string }) {
         >
           <stop
             offset="0"
-            stopColor="#1c1f25"
+            stopColor="#202329"
           />
           <stop
             offset="0.58"
-            stopColor="#0b0c0f"
+            stopColor="#0d0e10"
           />
           <stop
             offset="1"
@@ -114,8 +114,8 @@ function LogoMark({ className }: { className?: string }) {
             dx="0"
             dy="0"
             stdDeviation="7"
-            floodColor="#f6921e"
-            floodOpacity="0.28"
+            floodColor="#d99a45"
+            floodOpacity="0.18"
           />
         </filter>
       </defs>
@@ -165,12 +165,12 @@ function LogoMark({ className }: { className?: string }) {
         />
         <path
           d="M100 80 100 178 189 128Z"
-          fill="#b96a06"
+          fill="#a57534"
           opacity="0.35"
         />
         <path
           d="M106 72 106 184 202 128Z"
-          fill="#f6921e"
+          fill="#d99a45"
         />
       </g>
     </svg>
@@ -296,9 +296,9 @@ function NavLink({
 }
 
 /**
- * Collapsible navigation (DESIGN.md "Operator's Console").
+ * Collapsible navigation for the Ownix product shell.
  * Collapsed: a slim rail showing the favicon logo + per-page icons (active in signal).
- * Expanded: a slide-in drawer with the "vig" wordmark + icon-and-label rows.
+ * Expanded: a slide-in drawer with the Ownix wordmark + icon-and-label rows.
  * The wordmark only appears when expanded; collapsed shows the logo alone.
  */
 export function Sidebar() {
@@ -386,7 +386,7 @@ export function Sidebar() {
         onClick={() => setOpen(true)}
         aria-label="Open navigation"
         aria-expanded={open}
-        aria-controls="vig-nav-panel"
+        aria-controls="ownix-nav-panel"
         tabIndex={open ? -1 : undefined}
         className={`fixed left-0 top-1/2 z-30 flex h-14 w-6 -translate-y-1/2 items-center justify-center rounded-r-xl border border-l-2 border-line bg-raised text-muted shadow-overlay transition-opacity hover:text-ink sm:hidden ${
           open ? 'pointer-events-none opacity-0' : 'opacity-100'
@@ -406,7 +406,7 @@ export function Sidebar() {
           onClick={() => setOpen(true)}
           aria-label="Open navigation"
           aria-expanded={open}
-          aria-controls="vig-nav-panel"
+          aria-controls="ownix-nav-panel"
           className="mb-6 flex h-9 w-9 items-center justify-center rounded-md transition-ui hover:bg-raised"
         >
           <LogoMark className="h-8 w-8" />
@@ -476,7 +476,7 @@ export function Sidebar() {
               tabIndex={open ? -1 : undefined}
               aria-label="Expand navigation"
               aria-expanded={open}
-              aria-controls="vig-nav-panel"
+              aria-controls="ownix-nav-panel"
               className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
             >
               <ChevronRight
@@ -498,9 +498,9 @@ export function Sidebar() {
         }`}
       />
 
-      {/* Expanded panel — slide-in drawer with the "vig" wordmark + icon-and-label rows. */}
+      {/* Expanded panel — slide-in drawer with the Ownix wordmark + icon-and-label rows. */}
       <aside
-        id="vig-nav-panel"
+        id="ownix-nav-panel"
         aria-label="Primary navigation"
         aria-hidden={!open}
         // ponytail: close on clicks in the drawer's dead space; links/buttons
@@ -516,7 +516,7 @@ export function Sidebar() {
         <div className="mb-6 flex items-center justify-between px-1">
           <span className="flex items-center gap-2 text-lg font-semibold tracking-tight text-ink">
             <LogoMark className="h-8 w-8" />
-            VIG
+            Ownix
           </span>
           <button
             ref={closeButtonRef}

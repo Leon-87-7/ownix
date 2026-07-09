@@ -1,19 +1,19 @@
 ---
-name: vig — Video Intelligence Gateway
-description: A dark operator's console — cool near-black chassis, mono technical voice, one rationed orange signal, status as the loudest layer.
+name: Ownix
+description: A quiet premium system for collecting the internet you care about — a private Index, an owned Feed, and an optional contribution layer to the public Brain.
 colors:
-  canvas: '#0b0c0f'
-  surface: '#14161a'
-  surface-raised: '#1c1f25'
-  hairline: '#262a31'
+  canvas: '#0d0e10'
+  surface: '#16181c'
+  surface-raised: '#202329'
+  hairline: '#30343d'
   hairline-strong: '#343a44'
-  ink: '#f5f6f8'
-  body: '#b3b9c4'
-  muted: '#8a919e'
-  signal: '#f6921e'
-  signal-bright: '#ffa83d'
-  signal-deep: '#b96a06'
-  on-signal: '#16100a'
+  ink: '#f4f1eb'
+  body: '#c6c1b8'
+  muted: '#948e84'
+  signal: '#d99a45'
+  signal-bright: '#efb566'
+  signal-deep: '#a57534'
+  on-signal: '#1b1309'
   contrasignal: '#94e6ee'
   contrasignal-bright: '#9ec9ff'
   contrasignal-deep: '#649ca1'
@@ -205,205 +205,235 @@ components:
     padding: '8px 12px'
 ---
 
-# Design System: vig — Video Intelligence Gateway
+# Design System: Ownix
 
 ## 1. Overview
 
-**Creative North Star: "The Operator's Console"**
+**Creative North Star: "The Personal Index"**
 
-The vig dashboard is the faceplate of a machine you command. Every panel is a
-control surface; every glow is a state. The system synthesizes three lineages
-into one dark console: **Vercel's stark ink discipline** supplies the chassis —
-cool near-black surfaces, hairline borders, negative-tracked display type, and a
-monospace voice for everything the machine says; **Nintendo 2001's signal
-doctrine** supplies the energy — warm color is rationed strictly to mean _act
-here_, and never decorates; **Expo's restraint** supplies the ceiling — weights
-stop at 600, depth stays at hairlines and plates, and decoration is spent on
-exactly one signature moment (the Brain gradient).
+Ownix is a calm, durable place for the internet a person wants to keep. It is
+not a command surface or a novelty archive; it is a premium product for saving
+videos, links, articles, repos, documents, and ideas into a personal Index,
+returning to them through an owned Feed, and choosing what contributes signal to
+the public Brain.
 
-The result is bold through commitment, not noise. The chassis is so disciplined
-— cool, dark, quiet — that the rationed orange signal and the semantic status
-hues become the loudest things on screen, which is exactly the point:
-PRODUCT.md's first principle is _state at a glance_. This system explicitly
-rejects its two failure modes: the **cluttered enterprise admin** (gray-on-gray
-density with no hierarchy — the fate of the current monochrome shell if left
-alone) and the **toy / consumer-cute** (rounded-everything, bouncy, jokey).
-The console is a sharp instrument an operator trusts daily and a future
-customer would pay for.
+The system should feel quiet, precise, and private. Dark premium surfaces carry
+the product with very little decoration. Amber is restrained and meaningful: it
+marks the moments where a person saves, selects, contributes, retries, or
+continues. The Brain is the shared layer, so its violet-to-cyan gradient is the
+only expressive visual moment in the system and belongs only where collective
+knowledge is visible.
+
+Ownix is invite-only while it is young, but the tone is conversational rather
+than exclusive. The interface should feel like a product shaped with real users,
+real workflows, and honest feedback.
 
 **Key Characteristics:**
 
-- Cool near-black plate ladder (`#0b0c0f` → `#14161a` → `#1c1f25`) with 1px hairlines — depth is structural, not floating.
-- One warm signal: orange `#f6921e` appears _only_ on things the operator can act on (primary actions, active selections, focus, active nav).
-- Status is the loudest layer: filled tint badges in semantic hues, always paired with a text label.
-- Two voices: Inter (human language) and JetBrains Mono (machine facts — job IDs, timestamps, URLs, statuses, counts).
-- Flat by default; shadows exist only for overlays (modals, dropdowns, toasts).
-- One decorative moment in the whole product: the violet→cyan Brain gradient, hero-scale, `/brain` only.
-- Density is welcome — the console is an information tool — but every element must earn its place.
+- Quiet near-black plate ladder (`#0d0e10` → `#16181c` → `#202329`) with 1px hairlines — depth is structural, not decorative.
+- One warm action color: Index amber `#d99a45` appears only on actions, active selections, focus, and current navigation.
+- Ownership state is explicit: private Index, owned Feed, optional contribution to the Brain.
+- Status remains clear: filled tint badges in semantic hues, always paired with a text label.
+- Two voices: Inter for human language and JetBrains Mono for machine facts such as IDs, timestamps, URLs, statuses, and counts.
+- Flat by default; shadows exist only for overlays such as dialogs, menus, and toasts.
+- One expressive moment: the violet-to-cyan Brain gradient, used at meaningful scale only on Brain surfaces.
+- Density is welcome, but every element must help someone collect, understand, return to, or share what matters.
 
-## 2. Colors: The Console Palette
+## 2. Colors: The Ownix Palette
 
-A cool dark chassis with one rationed warm signal and a semantic status vocabulary — warmth always means _action_, hue always means _state_.
+A restrained dark product palette with one warm amber for action and a semantic
+vocabulary for state. Warmth means a person can do something; hue means state or
+content type.
 
 ### Primary
 
-- **Signal Orange** (`#f6921e`): The single action color. Fills the primary button, the active filter chip, the focus ring, and tints the active nav item's text. If it glows signal orange, the operator can act on it — submit, retry, select, navigate. It never appears in a status badge, never as decoration, and never on a disabled control.
-- **Signal Bright** (`#ffa83d`): Hover state of signal surfaces.
-- **Signal Deep** (`#b96a06`): Pressed state.
-- **On Signal** (`#16100a`): Near-black text on signal fills — the Nintendo amber-chip move; dark-on-orange reads sharper than white-on-orange and holds ≥7:1.
+- **Index Amber** (`#d99a45`): The single action color. It fills the primary button, active filter chip, focus ring, and active nav text. If it glows amber, the user can act: add to Index, save, retry, select, navigate, invite, or contribute to the Brain. It never appears in status badges, decorative fills, inactive states, or disabled controls.
+- **Index Amber Bright** (`#efb566`): Hover state of amber surfaces.
+- **Index Amber Deep** (`#a57534`): Pressed state.
+- **On Amber** (`#1b1309`): Near-black text on amber fills. Dark-on-amber is sharper than white-on-amber and keeps contrast high.
 
 ### Secondary
 
-- **Brain Gradient** (`#7c3aed` → `#22d3ee`): The one decorative system. A violet-to-cyan atmospheric wash representing the semantic link graph, used at hero scale on the `/brain` surface only. Never miniaturized to an icon, never on buttons, never as text fill.
+- **Brain Gradient** (`#7c3aed` → `#22d3ee`): The shared-knowledge layer. Use it at meaningful scale on Brain surfaces only. Never miniaturize it to an icon, use it on buttons, or apply it as text fill.
+- **Contrasignal** (`#94e6ee`, `#9ec9ff`, `#649ca1`): A cool supporting accent for secondary informational emphasis. It must not compete with Index Amber for action.
 
 ### Neutral
 
-- **Canvas** (`#0b0c0f`): The page floor — near-black with a cool cast. Inputs are inset to this level.
-- **Surface** (`#14161a`): The working plate — cards, job rows, sidebar, stat tiles.
-- **Surface Raised** (`#1c1f25`): Hover plates and the active nav plate — one step toward the light.
-- **Hairline** (`#262a31`): Default 1px border on every plate and input.
-- **Hairline Strong** (`#343a44`): Emphasized borders (hover on inputs, table header rules).
-- **Ink** (`#f5f6f8`): Headings and primary content text.
-- **Body** (`#b3b9c4`): Secondary text — descriptions, nav labels at rest (≈9:1 on surface).
-- **Muted** (`#8a919e`): Meta text — timestamps, counts, placeholders. Held at ≥4.5:1 on both canvas and surface; this token exists precisely to retire the failing `gray-500`.
+- **Canvas** (`#0d0e10`): The page floor — near-black with a restrained premium cast.
+- **Surface** (`#16181c`): The working layer — cards, rows, sidebars, panels, and tiles.
+- **Surface Raised** (`#202329`): Hover plates, active nav plates, and one-step-raised surfaces.
+- **Hairline** (`#30343d`): Default 1px border on plates and inputs.
+- **Hairline Strong** (`#343a44`): Emphasized borders such as input hover and table header rules.
+- **Ink** (`#f4f1eb`): Headings and primary content text.
+- **Body** (`#c6c1b8`): Secondary text — descriptions, nav labels at rest, and supporting copy.
+- **Muted** (`#948e84`): Meta text — timestamps, counts, captions, and placeholders. It must remain WCAG AA on dark surfaces.
 
 ### Semantic — Status (filled badges: tint background + hue text)
 
-- **Done** (`#4ade80` on `#122b1c`): Job complete.
-- **Pending** (`#eab308` on `#2b240e`): Queued, waiting.
-- **Processing** (`#60a5fa` on `#14233b`): Actively running.
-- **Enriching** (`#a78bfa` on `#221a3d`): Gemini enrichment phase (also covers `transcript_done`).
-- **Error** (`#f87171` on `#371717`): Failed — pairs with a signal-orange retry action.
-- **Cancelled** (`#9aa1ad` on `#23262c`): Terminated, inert.
+- **Done** (`#4ade80` on `#122b1c`): Item processed, indexed, or complete.
+- **Pending** (`#eab308` on `#2b240e`): Waiting, queued, or not yet reviewed.
+- **Processing** (`#60a5fa` on `#14233b`): Active work in progress.
+- **Enriching** (`#a78bfa` on `#221a3d`): Analysis, summary, transcript, or enrichment phase.
+- **Error** (`#f87171` on `#371717`): Failed; pair with an amber retry action when retry is available.
+- **Cancelled** (`#9aa1ad` on `#23262c`): Stopped or inert.
 
-### Semantic — Content type (outlined badges: transparent background + hue text + hairline)
+### Semantic — Content Type (outlined badges: transparent background + hue text + hairline)
 
 - **Short** (`#c084fc`): Reels / Shorts / TikTok.
-- **Long** (`#38bdf8`): Full YouTube videos.
-- **Article** (`#2dd4bf`): Article pipeline.
-- **Repo** (`#fb7185`): GitHub repo pipeline.
+- **Long** (`#38bdf8`): Full-length videos.
+- **Article** (`#2dd4bf`): Article or document pipeline.
+- **Repo** (`#fb7185`): Repository pipeline.
 
 ### Named Rules
 
-**The Signal Rule.** Signal orange means _the operator can act here_ — nothing else. It is forbidden in status badges, decorative fills, illustrations, and inactive states. Pending-yellow, its nearest hue, is forbidden on interactive controls. The two never trade places.
+**The Amber Rule.** Index Amber means action, selection, or contribution. It is
+forbidden in status badges, decorative fills, inactive states, and disabled
+controls. Pending yellow is a status color and must never stand in for action.
 
-**The Two-Dialect Badge Rule.** Statuses are _filled_ (tint background + hue text); content types are _outlined_ (transparent + hairline + hue text). Hues may repeat across the two dialects because the fill style disambiguates at a glance — and every badge always carries its text label (color is never the only signal).
+**The Ownership Rule.** Surfaces should make ownership legible. Users should be
+able to tell whether an item is in their private Index, visible in their Feed,
+or contributing signal to the Brain. Do not rely on color alone; use text labels
+and clear affordances.
 
-**The One Gradient Rule.** The Brain gradient is the product's entire decoration budget. One surface, hero scale, full stops. Everywhere else the console is chassis and signal.
+**The Two-Dialect Badge Rule.** Statuses are filled: tint background + hue text.
+Content types are outlined: transparent background + hairline + hue text. Every
+badge carries a text label.
+
+**The One Gradient Rule.** The Brain gradient is the product's entire decoration
+budget. Use it only where the shared Brain itself is the subject.
 
 ## 3. Typography
 
 **Display Font:** Inter (with system-ui fallback)
-**Body Font:** Inter (same family — single-sans product discipline)
+**Body Font:** Inter
 **Label/Mono Font:** JetBrains Mono (with ui-monospace fallback)
 
-**Character:** A two-voice system. Inter speaks for humans — headings, body, buttons, navigation — at modest weights with gently negative tracking on display sizes. JetBrains Mono speaks for the machine — job IDs, timestamps, URLs, statuses, counts — so generated facts are typographically distinct from human language at a glance.
+**Character:** A two-voice system. Inter speaks for people: headings, body,
+buttons, navigation, and product copy. JetBrains Mono speaks for generated or
+system facts: IDs, timestamps, URLs, statuses, counts, and compact metadata.
 
 ### Hierarchy
 
 - **Display** (600, 24px, 1.2, -0.5px): Page titles. One per screen.
 - **Headline** (600, 20px, 1.25, -0.25px): Section heads inside a page.
-- **Title** (600, 16px, 1.4): Card and panel titles, job titles in detail view.
-- **Body** (400, 14px, 1.5): Default UI text. Prose blocks (enrichment output) cap at 65–75ch; data surfaces may run denser.
+- **Title** (600, 16px, 1.4): Card and panel titles, item titles in detail view.
+- **Body** (400, 14px, 1.5): Default UI text. Long prose caps at 65–75ch; data surfaces may run denser.
 - **Body Strong** (500, 14px): Nav items, emphasized inline text, table-row emphasis.
-- **Label** (500, 12px): Form labels, filter group labels — sentence case, never tracked-uppercase.
-- **Stat Value** (600, 28px, tabular-nums): Overview stat tiles. Always `tnum` so counts align.
-- **Mono Meta** (400, 12px, JetBrains Mono): Timestamps, job IDs, URLs.
-- **Mono Label** (500, 11px, +0.4px, JetBrains Mono, uppercase permitted): Badge text and table headers only — the machine's silkscreen voice, used narrowly.
+- **Label** (500, 12px): Form labels and filter group labels — sentence case, never tracked-uppercase.
+- **Stat Value** (600, 28px, tabular-nums): Summary tiles. Always `tnum` so counts align.
+- **Mono Meta** (400, 12px, JetBrains Mono): Timestamps, IDs, URLs, counts, and compact generated facts.
+- **Mono Label** (500, 11px, +0.4px, JetBrains Mono, uppercase permitted): Badge text and table headers only.
 
 ### Named Rules
 
-**The Mono Voice Rule.** If the machine produced it — an ID, a timestamp, a URL, a status word, a count — it renders in JetBrains Mono. If a human wrote it or reads it as language, it renders in Inter. No exceptions; this single rule does more "technical instrument" work than any decoration could.
+**The Mono Fact Rule.** If a system generated it — an ID, timestamp, URL,
+status, count, or filename — render it in JetBrains Mono. If a person reads it
+as language, render it in Inter.
 
-**The 600 Ceiling.** No weight above 600 anywhere. Boldness comes from the dark chassis and rationed color, not from heavier type.
+**The 600 Ceiling.** No weight above 600. Premium restraint comes from spacing,
+contrast, and disciplined color, not heavy type.
 
 ## 4. Elevation
 
-The console is **flat by default** — depth is the plate ladder, not shadow. A surface communicates its level through background step (canvas → surface → raised) plus a 1px hairline; nothing at rest floats. Shadows are reserved exclusively for surfaces that genuinely sit _above_ the console: modals, dropdown menus, and toasts, which use a stacked pair of small offsets rather than a single heavy drop.
+Ownix is flat by default. Depth comes from the plate ladder (canvas → surface →
+raised) plus 1px hairlines, not decorative shadows. Shadows are reserved for
+surfaces that genuinely sit above the product: dialogs, dropdown menus, and
+toasts.
 
 ### Shadow Vocabulary
 
-- **Overlay** (`box-shadow: 0px 2px 4px rgba(0,0,0,0.4), 0px 12px 24px -8px rgba(0,0,0,0.5)`): Modals, dropdowns, toasts — the only shadow in the system.
+- **Overlay** (`box-shadow: 0px 2px 4px rgba(0,0,0,0.4), 0px 12px 24px -8px rgba(0,0,0,0.5)`): Dialogs, dropdowns, and toasts only.
 
 ### Named Rules
 
-**The Plate Rule.** Depth is stacked plates and hairlines. If a card at rest has a shadow, it's wrong. If a modal doesn't, it's wrong. There is no third case.
+**The Plate Rule.** Depth is stacked plates and hairlines. Resting cards do not
+float. Overlays do.
 
 ## 5. Components
 
 ### Buttons
 
-- **Shape:** Compact console radius (6px), 32px tall, 13px/500 Inter labels.
-- **Signal (primary):** Signal orange fill (`#f6921e`) with near-black text (`#16100a`) — the highest-voltage element on any screen, so at most one or two per view. Hover brightens to `#ffa83d`; pressed deepens to `#b96a06`.
-- **Ghost (secondary):** Transparent with 1px hairline border, ink text; hover raises the plate (`#1c1f25`). The workhorse for everything that isn't the primary action.
-- **Hover / Focus:** All interactive elements share one focus treatment — a 2px signal-orange ring (`outline: 2px solid #f6921e; outline-offset: 2px`). Transitions 150ms ease-out.
-- **Disabled:** Surface fill, muted text, no hairline glow — never a dimmed signal orange.
+- **Shape:** Compact product radius (6px), 32px tall, 13px/500 Inter labels.
+- **Primary:** Index Amber fill (`#d99a45`) with near-black text (`#1b1309`). Use for the main action on a surface: add to Index, save, submit, retry, invite, or contribute.
+- **Secondary / Ghost:** Transparent with 1px hairline border and ink text; hover raises the plate (`#202329`).
+- **Hover / Focus:** All interactive elements share a 2px Index Amber focus ring (`outline: 2px solid #d99a45; outline-offset: 2px`). Transitions run 150ms ease-out.
+- **Disabled:** Surface fill, muted text, no amber glow, and no dimmed amber.
 
 ### Chips (filters)
 
 - **Style:** 28px tall, 6px radius, surface fill with body text at rest.
-- **State:** Active chip flips to signal orange fill + near-black text — selection is an act, so it earns the signal. Hover on inactive chips raises the plate.
+- **State:** Active chip flips to Index Amber fill + near-black text. Selection is an action, so it earns amber. Hover on inactive chips raises the plate.
 
 ### Badges
 
-- **Status (filled):** Tint background + hue text + mono-label type (11px JetBrains Mono). E.g. done = `#4ade80` on `#122b1c`.
-- **Content type (outlined):** Transparent + 1px hairline + hue text, same type. The two dialects never mix.
-- **Rule:** Every badge carries its text label. Color is reinforcement, never the sole channel.
+- **Status (filled):** Tint background + hue text + mono-label type.
+- **Content type (outlined):** Transparent + 1px hairline + hue text.
+- **Ownership / Brain contribution:** Use labeled badges such as `Private`, `Indexed`, or `Shared to Brain`. Prefer neutral or cool treatments unless the badge itself is an action.
+- **Rule:** Every badge carries its text label. Color reinforces meaning; it is never the only channel.
 
 ### Cards / Containers
 
 - **Corner Style:** 8px radius.
-- **Background:** Surface (`#14161a`) on canvas floor.
-- **Shadow Strategy:** None at rest (The Plate Rule); hover raises background to `#1c1f25`.
-- **Border:** 1px hairline (`#262a31`) on every plate.
-- **Internal Padding:** 16px default; job rows 12px × 16px.
+- **Background:** Surface (`#16181c`) on the canvas floor.
+- **Shadow Strategy:** None at rest; hover raises background to `#202329`.
+- **Border:** 1px hairline (`#30343d`) on every plate.
+- **Internal Padding:** 16px default; compact item rows may use 12px × 16px.
 
 ### Inputs / Fields
 
-- **Style:** Inset to canvas (`#0b0c0f`) — one step _below_ the surface plates, so fields read as slots in the console. 1px hairline, 6px radius, 36px tall.
-- **Focus:** Border shifts to signal orange; no glow, no shadow.
-- **Placeholder:** Muted (`#8a919e`) — passes 4.5:1, never lighter.
+- **Style:** Inset to canvas (`#0d0e10`) so fields read as durable slots in the product. 1px hairline, 6px radius, 36px tall.
+- **Focus:** Border or outline shifts to Index Amber; no decorative glow or shadow.
+- **Placeholder:** Muted (`#948e84`) and WCAG AA.
 - **Error:** Border and message in status-error (`#f87171`).
 
 ### Navigation
 
-- **Style:** 208px sidebar on the surface plate with a 1px hairline edge; wordmark top, sign-out pinned bottom.
+- **Style:** Sidebar or rail on the surface plate with a 1px hairline edge; Ownix wordmark in the expanded state.
 - **Items:** 14px/500 Inter, body color at rest, 6px radius, 8px × 12px padding.
-- **Hover:** Plate raise (`#1c1f25`), ink text.
-- **Active:** Raised plate + **signal orange text** — the one place signal appears as text color, marking "you are here" as an actionable state.
-- **Mobile:** Sidebar collapses to a top bar with a disclosure menu; nav items keep identical styling.
+- **Hover:** Plate raise (`#202329`), ink text.
+- **Active:** Raised plate + Index Amber text. This marks current location as the active place to continue.
+- **Mobile:** Collapse to a top bar or disclosure drawer. Keep styling identical across viewports.
 
-### Stat Tiles (signature component)
+### Summary Tiles
 
-The Overview row that answers "state at a glance." Surface plate, 8px radius, 12px × 16px padding: an 11px mono-label caption (muted) over a 28px/600 tabular-nums value (ink). Status-filtered tiles may tint their value with the matching status hue. Never the hero-metric template — no trend arrows, no sparkline decoration, no gradient accents; the number and its label are the entire design.
+Summary tiles answer “what changed in my Index?” without becoming hero metrics.
+Use a surface plate, 8px radius, 12px × 16px padding, an 11px mono-label caption
+over a 28px/600 tabular-nums value. Status-filtered tiles may tint values with
+semantic status hues. No trend-arrow template, no sparkline decoration, and no
+gradient accents.
 
-### Brain Surface (signature moment)
+### Brain Surface
 
-The `/brain` page carries the product's single decorative gesture: the violet→cyan gradient (`#7c3aed` → `#22d3ee`) as an atmospheric backdrop behind the semantic-search hero area, full stops, never cropped to a swatch. All controls on top of it follow the standard console vocabulary. Honors `prefers-reduced-motion`: if the gradient animates, it freezes to a static wash.
+The Brain is the product's shared layer: a collective map shaped by what people
+choose to contribute. Its violet-to-cyan gradient may appear at meaningful scale
+on Brain surfaces only. Controls on top of it must still use the standard Ownix
+vocabulary. If the gradient animates, it must freeze to a static wash under
+`prefers-reduced-motion: reduce`.
 
 ## 6. Do's and Don'ts
 
 ### Do:
 
-- **Do** reserve signal orange (`#f6921e`) for actionable elements: primary buttons, active selections, focus rings, active nav. One or two signal elements per screen, maximum.
-- **Do** render every machine fact — job IDs, timestamps, URLs, statuses, counts — in JetBrains Mono (The Mono Voice Rule).
-- **Do** keep the two badge dialects distinct: statuses filled with tints, content types outlined with hairlines, every badge labeled with text.
-- **Do** build depth from the plate ladder (`#0b0c0f` → `#14161a` → `#1c1f25`) + 1px hairlines; reserve the one overlay shadow for modals, dropdowns, toasts.
-- **Do** use `tabular-nums` on every count and stat so numbers align as they tick.
-- **Do** hold meta text at `#8a919e` or lighter-on-dark — ≥4.5:1 always (WCAG AA per PRODUCT.md).
-- **Do** give every interactive component its full state set: default, hover, focus (2px signal ring), active, disabled, loading — skeleton plates for loading, not spinners in content.
-- **Do** provide a `prefers-reduced-motion: reduce` fallback for every animation; transitions run 150–250ms ease-out.
+- **Do** reserve Index Amber (`#d99a45`) for actionable elements: primary buttons, active selections, focus rings, active nav, retry, invite, and contribution actions.
+- **Do** make privacy and contribution state legible: private Index, Feed, Indexed, Shared to Brain.
+- **Do** render generated facts — IDs, timestamps, URLs, statuses, counts, filenames — in JetBrains Mono.
+- **Do** keep badge dialects distinct: statuses filled, content types outlined, ownership/contribution labeled.
+- **Do** build depth from the plate ladder (`#0d0e10` → `#16181c` → `#202329`) + 1px hairlines.
+- **Do** use `tabular-nums` on counts and stats.
+- **Do** keep meta text at `#948e84` or lighter-on-dark so it remains WCAG AA.
+- **Do** provide full states for interactive components: default, hover, focus, active, disabled, loading, and error.
+- **Do** provide `prefers-reduced-motion: reduce` fallbacks for every animation.
 
 ### Don't:
 
-- **Don't** drift into the **cluttered enterprise admin** PRODUCT.md names: gray-on-gray noise, toolbars stuffed with controls, everything visible at once. Density must have hierarchy — chassis quiet, signal loud.
-- **Don't** go **toy / consumer-cute**: no mascots, no rounded-everything (radius caps at 12px), no bouncy or elastic motion, no jokey copy.
-- **Don't** use signal orange decoratively, on inactive states, or in status badges — and don't put pending-yellow on anything clickable (The Signal Rule).
-- **Don't** use gradient text (`background-clip: text`) anywhere; the Brain gradient is a backdrop, never a text fill or icon (The One Gradient Rule).
-- **Don't** ship the hero-metric template: no big-number-with-trend-arrow-and-gradient-accent stat cards. Stat tiles are label + number, nothing else.
-- **Don't** use side-stripe borders (`border-left` > 1px as a colored accent) on cards, rows, or alerts — status is carried by badges, not stripes.
-- **Don't** lay out identical icon+heading+text card grids; vary structure by content or don't use cards.
-- **Don't** put a tracked-uppercase eyebrow above sections. Uppercase mono is permitted only inside badges and table headers — the machine's voice, not section scaffolding.
-- **Don't** exceed weight 600, use display type in UI labels, or float resting cards on shadows.
-- **Don't** reach for a modal as the first thought — exhaust inline and progressive disclosure first (the operator stays in flow).
-- **Don't** reintroduce the dead `gray-750` hovers or `gray-500` meta text from the legacy shell; both are retired by this spec's tokens.
+- **Don't** make Ownix feel like a cluttered admin panel. Density needs hierarchy: quiet surfaces, clear ownership state, restrained amber.
+- **Don't** make it toy-like: no mascots, oversized emoji, bouncy motion, jokey copy, or rounded-everything.
+- **Don't** use Index Amber decoratively, on inactive states, in status badges, or on disabled controls.
+- **Don't** put pending yellow on clickable controls.
+- **Don't** use gradient text. The Brain gradient is a backdrop for Brain surfaces, never text fill or button treatment.
+- **Don't** ship hero-metric stat cards. Summary tiles are label + number.
+- **Don't** use side-stripe borders as colored accents. Use full borders, labeled badges, or background tints instead.
+- **Don't** lay out identical icon + heading + text card grids unless the content truly needs repeated cards.
+- **Don't** put tracked-uppercase eyebrows above sections. Uppercase mono is permitted only inside badges and table headers.
+- **Don't** exceed font weight 600, use display type in UI labels, or float resting cards on shadows.
+- **Don't** reach for a modal first. Prefer inline and progressive disclosure when it keeps the user in flow.

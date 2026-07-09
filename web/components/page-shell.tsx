@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
- * The one page container (DESIGN.md "Operator's Console"). Every dashboard page
+ * The one page container. Every dashboard page
  * roots in this so width, vertical rhythm, and header treatment are decided once
  * instead of re-typed nine times. The (dashboard) layout already owns the mobile
  * gutter (p-4 sm:p-6); this owns everything inside it.

@@ -1,32 +1,32 @@
 import type { Config } from 'tailwindcss';
 
-// Console tokens — normative source: DESIGN.md frontmatter.
+// Ownix tokens — normative source: DESIGN.md frontmatter.
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        canvas: '#0b0c0f',
-        surface: '#14161a',
-        raised: '#1c1f25',
+        canvas: '#0d0e10',
+        surface: '#16181c',
+        raised: '#202329',
         line: {
-          DEFAULT: '#262a31',
+          DEFAULT: '#30343d',
           strong: '#343a44',
         },
-        ink: '#f5f6f8',
-        body: '#b3b9c4',
-        muted: '#8a919e',
+        ink: '#f4f1eb',
+        body: '#c6c1b8',
+        muted: '#948e84',
         signal: {
-          DEFAULT: '#f6921e',
-          bright: '#ffa83d',
-          deep: '#b96a06',
+          DEFAULT: '#d99a45',
+          bright: '#efb566',
+          deep: '#a57534',
         },
         contrasignal: {
           DEFAULT: '#94e6ee',
           bright: '#9ec9ff',
           deep: '#649ca1',
         },
-        onsignal: '#16100a',
+        onsignal: '#1b1309',
         status: {
           done: '#4ade80',
           'done-tint': '#122b1c',
@@ -42,10 +42,10 @@ const config: Config = {
           'cancelled-tint': '#23262c',
         },
         type: {
-          short: '#f6017d',
-          long: '#ff0100',
+          short: '#c084fc',
+          long: '#38bdf8',
           article: '#2dd4bf',
-          repo: '#8957e5',
+          repo: '#fb7185',
         },
         'telegram-blue': '#26A5E4',
         'telegram-ring': '#145b7d',

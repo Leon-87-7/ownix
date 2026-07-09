@@ -13,15 +13,11 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
       <section className="relative z-10 flex w-full -translate-y-[55px] flex-col items-center text-center">
         <div className="flex w-full animate-[auth-card-enter_480ms_cubic-bezier(0.25,1,0.5,1)_both] flex-col items-center motion-reduce:animate-none">
-          <h1 className="sr-only">vig — Video Intelligence Gateway</h1>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/vig_logo_lockup.svg"
-            alt="vig"
-            className="h-16 w-auto"
-          />
-          <p className="mt-4 text-sm text-body">
-            Video Intelligence Gateway
+          <h1 className="text-5xl font-semibold tracking-tight text-ink">
+            Ownix
+          </h1>
+          <p className="mt-3 text-sm font-medium text-body">
+            Your internet, indexed.
           </p>
           {children}
         </div>

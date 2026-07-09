@@ -48,7 +48,7 @@ describe('BrainPage', () => {
 
   it('shows idle banner by default', () => {
     render(<BrainPage />);
-    expect(screen.getByText(/search your second brain/i)).toBeTruthy();
+    expect(screen.getByText(/search the brain/i)).toBeTruthy();
   });
 
   it('shows loading spinner when searchState is loading', () => {

@@ -23,13 +23,10 @@ export function PublicShell({
             href="/"
             className="flex items-center gap-3 rounded-md transition-ui hover:text-signal focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/images/vig_logo_lockup.svg"
-              alt=""
-              className="h-9 w-auto"
-            />
-            <span className="sr-only">VIG console</span>
+            <span className="text-xl font-semibold tracking-tight text-ink">
+              Ownix
+            </span>
+            <span className="sr-only">Ownix home</span>
           </Link>
 
           <nav className="flex items-center gap-1" aria-label="Public">
@@ -101,8 +98,8 @@ export function LegalLayout({
           })}
         </nav>
         <p className="mt-6 text-sm leading-6 text-muted">
-          Public terms for VIG&apos;s Telegram bot, dashboard, and Google
-          connection.
+          Public terms for Ownix, your personal Index, the shared Brain, and
+          connected services.
         </p>
       </aside>
     </div>
@@ -127,7 +124,7 @@ export function LegalTitle({
   return (
     <header className="mb-8 border-b border-line pb-7">
       <p className="mb-3 font-mono text-[11px] font-medium text-muted">
-        Public legal
+        Ownix legal
       </p>
       <h1 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         {title}

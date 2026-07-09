@@ -10,7 +10,7 @@ import { PageShell, PageHeader } from "@/components/page-shell";
 function IdleBanner() {
   return (
     <div className="rounded-lg border border-line bg-surface px-6 py-12 text-center">
-      <p className="text-lg font-medium text-ink">Search your Second Brain</p>
+      <p className="text-lg font-medium text-ink">Search the Brain</p>
       <p className="mt-1 text-pretty text-sm text-body">
         Type a query above to find semantically similar videos and articles you
         have saved.
@@ -110,7 +110,7 @@ export default function BrainPage() {
       <PageHeader
         icon={Brain}
         title="Brain"
-        description="Semantic search across everything saved to your Second Brain."
+        description="Semantic search across everything saved to the Brain."
       />
 
       <section className="flex gap-2">

@@ -47,9 +47,9 @@ function setupMocks(overrides: Partial<ReturnType<typeof useTemplateList>> = {})
 beforeEach(() => { setupMocks(); });
 
 describe('PromptsPage', () => {
-  it('renders Prompts heading', () => {
+  it('renders Recipes heading', () => {
     render(<PromptsPage />);
-    expect(screen.getByText('Prompts')).toBeTruthy();
+    expect(screen.getByText('Recipes')).toBeTruthy();
   });
 
   it('shows loading message when loading', () => {
@@ -66,12 +66,12 @@ describe('PromptsPage', () => {
 
   it('renders built-in template section', () => {
     render(<PromptsPage />);
-    expect(screen.getByText(/built-in templates/i)).toBeTruthy();
+    expect(screen.getByText(/built-in recipes/i)).toBeTruthy();
   });
 
   it('renders user template section', () => {
     render(<PromptsPage />);
-    expect(screen.getByText(/your templates/i)).toBeTruthy();
+    expect(screen.getByText(/your recipes/i)).toBeTruthy();
   });
 
   it('renders built-in template name', () => {
@@ -92,19 +92,18 @@ describe('PromptsPage', () => {
   it('shows no built-in templates message when none', () => {
     setupMocks({ templates: [USER_TEMPLATE] });
     render(<PromptsPage />);
-    expect(screen.getByText(/no built-in templates/i)).toBeTruthy();
+    expect(screen.getByText(/no built-in recipes/i)).toBeTruthy();
   });
 
   it('shows no custom templates message when none', () => {
     setupMocks({ templates: [BUILTIN_TEMPLATE] });
     render(<PromptsPage />);
-    expect(screen.getByText(/no custom templates yet/i)).toBeTruthy();
+    expect(screen.getByText(/no custom recipes yet/i)).toBeTruthy();
   });
 
-  it('shows Create template form', () => {
+  it('shows Create recipe form', () => {
     render(<PromptsPage />);
-    // "Create template" appears as h4 heading and button label
-    expect(screen.getAllByText('Create template').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Create recipe')).toBeTruthy();
   });
 
   it('shows user template description', () => {

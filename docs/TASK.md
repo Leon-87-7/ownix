@@ -23,6 +23,7 @@ its body to `docs/archive/TASK-archive.md`, leaving the title behind here.
 _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 <!-- - e.g. the feed should have a saved-filters dropdown -->
+- Migrate the canonical app URL from `app.leondev.xyz` to `ownix.leondev.xyz` across DNS, hosting, OAuth callbacks, env vars, and docs.
 
 ---
 

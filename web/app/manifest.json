@@ -1,6 +1,6 @@
 {
-  "name": "vig — Video Intelligence Gateway",
-  "short_name": "VIG",
+  "name": "Ownix — Your internet, indexed",
+  "short_name": "Ownix",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -15,7 +15,7 @@
       "purpose": "any maskable"
     }
   ],
-  "theme_color": "#030712",
-  "background_color": "#030712",
+  "theme_color": "#0d0e10",
+  "background_color": "#0d0e10",
   "display": "standalone"
 }

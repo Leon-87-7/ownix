@@ -1,4 +1,4 @@
-// Small shared console primitives (DESIGN.md "Operator's Console").
+// Small shared product primitives (DESIGN.md).
 
 export function Spinner({ size = 4 }: { size?: 3 | 4 }) {
   const dim = size === 3 ? "h-3 w-3" : "h-4 w-4";

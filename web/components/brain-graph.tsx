@@ -26,7 +26,7 @@ type GraphLink = GraphEdge;
 type RenderNode = GraphNode & { x?: number; y?: number; id?: string | number };
 type RenderLink = GraphLink & { source?: string | number | RenderNode; target?: string | number | RenderNode };
 
-// Cool topic palette — signal orange (#f6921e) is reserved for search matches and active controls.
+// Cool topic palette — Index amber is reserved for search matches and active controls.
 const TOPIC_COLORS = ['#4f9cff', '#34d399', '#a78bfa', '#f472b6', '#7dd3fc', '#facc15', '#fb7185'];
 function topicColor(topic: string): string {
   let hash = 0;
@@ -35,7 +35,7 @@ function topicColor(topic: string): string {
 }
 
 const DIM = 'rgba(140,148,160,0.28)';
-const MATCH = '#f6921e';
+const MATCH = '#d99a45';
 const GRAPH_HEIGHT = 448;
 const FIT_PADDING = 56;
 const MOTION_MS = 450;
@@ -195,7 +195,7 @@ export function BrainGraph({ results, searchState }: { results: SearchResult[]; 
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-ink">Brain map</h2>
-          <p className="text-xs text-body">Semantic links grouped by topic. Search matches are highlighted in signal orange.</p>
+          <p className="text-xs text-body">Semantic links grouped by topic. Search matches are highlighted in Index amber.</p>
         </div>
         <span className="font-mono text-xs text-muted tabular-nums">
           {graph.nodes.length} nodes · {graph.edges.length} edges

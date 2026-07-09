@@ -108,7 +108,7 @@ export default function LoginPage() {
     <AuthShell>
       <div className="mt-10 flex w-full max-w-[360px] flex-col items-center rounded-lg border border-line bg-surface px-8 py-7">
         <h2 className="text-balance text-2xl font-semibold tracking-[-0.02em] text-ink">
-          Sign in to your console
+          Sign in to your Index
         </h2>
 
         <div
