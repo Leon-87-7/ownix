@@ -33,7 +33,9 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - test a new user approval workflow.
 
-- add tags to the individual link in the links table. on mobile tags are color badges (should redesign the colors for the tags)
+- add tags to the individual link in the links table. on mobile tags are color badges (should redesign the colors for the tags).
+
+- in links table redesign the options drop down to radio btns in a line (on mobile)
 ---
 
 ## Briefs
