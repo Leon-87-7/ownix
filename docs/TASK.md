@@ -25,7 +25,15 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 - Migrate the canonical app URL from `app.leondev.xyz` to `ownix.leondev.xyz` across DNS, hosting, OAuth callbacks, env vars, and docs.
 
-- replace VIG as an internal repository/backend/service. migrate explicitly rename code, packages, deployment names, API paths, or GitHub metadata.
+- replace VIG as an internal repository/backend/service. migrate explicitly rename code, packages, deployment names, API paths, GitHub metadata and telegram bot.
+
+-build new telegram bot to match Ownix brand name to increase alignment. 
+
+- build a page in Ownix that mimic/mirror the telegram bot flow for seamless web workflow. 
+
+- test a new user approval workflow.
+
+- add tags to the individual link in the links table. on mobile tags are color badges (should redesign the colors for the tags)
 ---
 
 ## Briefs
