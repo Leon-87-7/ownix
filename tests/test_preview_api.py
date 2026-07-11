@@ -390,8 +390,10 @@ class TestPreviewCookieLifecycle:
         # Deletion = expired cookie on the same path.
         assert 'Max-Age=0' in preview_cookies[0] or "expires" in preview_cookies[0].lower()
 
-    def test_pending_login_keeps_preview_cookie(
+    def test_pending_login_deletes_preview_cookie(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cookies = self._login(monkeypatch, "pending")
-        assert not any(c.startswith("ownix_preview=") for c in cookies)
+        preview_cookies = [c for c in cookies if c.startswith("ownix_preview=")]
+        assert len(preview_cookies) == 1
+        assert 'Max-Age=0' in preview_cookies[0] or "expires" in preview_cookies[0].lower()

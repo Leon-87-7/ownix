@@ -38,6 +38,20 @@ describe("InviteGate", () => {
     expect(navigationMock.replace).not.toHaveBeenCalledWith("/login");
   });
 
+  it("bypasses the auth fetch in restricted mode", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    render(
+      <InviteGate restricted>
+        <div>Dashboard feed</div>
+      </InviteGate>,
+    );
+
+    expect(await screen.findByText("Dashboard feed")).toBeTruthy();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(navigationMock.replace).not.toHaveBeenCalledWith("/login");
+  });
+
   it("renders dashboard children for approved users with an email", async () => {
     vi.stubGlobal(
       "fetch",

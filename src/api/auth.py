@@ -122,8 +122,8 @@ async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
         path="/",
     )
     try:
-        if await database.get_user_status(payload.id) == "approved":
-            response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+        await database.get_user_status(payload.id)
+        response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
     except Exception:
         # A stale preview cookie is recoverable; failing the login is not.
         log.warning("auth.telegram_login.preview_cookie_check_failed", tg_id=payload.id)

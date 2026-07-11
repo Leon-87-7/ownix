@@ -186,6 +186,10 @@ export function InviteGate({ children, restricted = false }: { children: React.R
       setLoading(false);
       return;
     }
+    if (restricted) {
+      setLoading(false);
+      return;
+    }
 
     let alive = true;
     fetch("/api/auth/me")
@@ -209,7 +213,7 @@ export function InviteGate({ children, restricted = false }: { children: React.R
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, restricted]);
 
   if (restricted) {
     return (
