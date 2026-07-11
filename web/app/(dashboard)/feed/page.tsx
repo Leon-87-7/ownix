@@ -416,6 +416,7 @@ function FeedPageContent() {
             </div>
             <a
               href="/api/google/connect"
+              aria-label="Connect Google"
               className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
             >
               Connect to <GoogleIcon className="ml-2 h-4 w-4" />

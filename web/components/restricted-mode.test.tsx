@@ -53,7 +53,7 @@ describe('AppHeader in Restricted mode (ADR-0035 §6)', () => {
     );
     expect(screen.getByText('Restricted mode on')).toBeTruthy();
     expect(
-      screen.getByText("You're viewing a read-only sample of Leon's Index"),
+      screen.getByText("Now viewing a read-only sample of Leon's Index"),
     ).toBeTruthy();
     const getAccess = screen.getByRole('link', { name: 'Get access' });
     expect(getAccess.getAttribute('href')).toBe('/login?from=restricted');
