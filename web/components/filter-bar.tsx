@@ -352,7 +352,11 @@ export function FilterBar({
           <div
             id="status-filter-bar"
             aria-hidden={collapsed || undefined}
-            inert={collapsed || undefined}
+            {...(collapsed
+              ? ({
+                  inert: '',
+                } as React.HTMLAttributes<HTMLDivElement> & { inert?: string })
+              : {})}
             className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
               collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
             }`}
