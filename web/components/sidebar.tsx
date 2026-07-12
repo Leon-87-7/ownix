@@ -575,7 +575,7 @@ export function Sidebar() {
               />
             </button>
             <form
-              action="/logout"
+              action="/api/auth/logout"
               method="POST"
               className="flex-1"
             >
