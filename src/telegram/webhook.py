@@ -58,9 +58,7 @@ def _admin_label() -> str:
     return settings.ADMIN_CONTACT_NAME or "the operator"
 
 
-_INVITE_EMAIL_PROMPT_TEMPLATE = (
-    "VIG is invite-only — what's your email so {admin} can approve you?"
-)
+_INVITE_EMAIL_PROMPT_TEMPLATE = "VIG is invite-only — what's your email so {admin} can approve you?"
 _INVITE_WAITING_MESSAGE_TEMPLATE = "Still waiting on {admin}."
 _INVITE_APPROVED_MESSAGE = "You're in, send a link."
 _INVITE_BLOCKED_MESSAGE = "Access blocked."
@@ -72,9 +70,7 @@ class CallbackCtx:
     job_id: str  # payload after ":" in callback data
     cq_id: str
     data: str  # full raw data string
-    message_id: int | None = (
-        None  # message_id of the message containing the inline keyboard
-    )
+    message_id: int | None = None  # message_id of the message containing the inline keyboard
 
 
 @dataclass
@@ -84,14 +80,10 @@ class SlashCtx:
     message_id: int | None
 
 
-async def _accumulate_media_group(
-    chat_id: int, media_group_id: str, file_id: str
-) -> None:
+async def _accumulate_media_group(chat_id: int, media_group_id: str, file_id: str) -> None:
     """Append file_id to the Redis list for this media group, then reset the debounce task."""
     client = queue._client()
-    await client.rpush(
-        f"photo_group_files:{media_group_id}", file_id
-    )  # pyright: ignore[reportGeneralTypeIssues]
+    await client.rpush(f"photo_group_files:{media_group_id}", file_id)  # pyright: ignore[reportGeneralTypeIssues]
     await client.expire(f"photo_group_files:{media_group_id}", 60)
 
     # Cancel any existing debounce task for this group and start a fresh 1-second one.
@@ -123,9 +115,8 @@ async def _report_photo_links(
         await send_message(chat_id, build_enriched_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
-            spawn_background(
-                brain.ingest_links(links, topic=summary, source_job_id=source_job_id)
-            )
+
+            spawn_background(brain.ingest_links(links, topic=summary, source_job_id=source_job_id))
     else:
         noun = "these images" if plural else "this image"
         await send_message(
@@ -151,9 +142,7 @@ async def _process_media_group(chat_id: int, media_group_id: str) -> None:
     from src.services.gemini import call_gemini_photo_links
 
     client = queue._client()
-    file_ids: list[str] = await client.lrange(
-        f"photo_group_files:{media_group_id}", 0, -1
-    )  # pyright: ignore[reportGeneralTypeIssues]
+    file_ids: list[str] = await client.lrange(f"photo_group_files:{media_group_id}", 0, -1)  # pyright: ignore[reportGeneralTypeIssues]
     await client.delete(f"photo_group_files:{media_group_id}")
     if not file_ids:
         return
@@ -163,9 +152,7 @@ async def _process_media_group(chat_id: int, media_group_id: str) -> None:
         b, mt = await download_photo(fid)
         images.append({"bytes": b, "mime_type": mt})
     result = await call_gemini_photo_links(images, caption=None)
-    await _report_photo_links(
-        chat_id, result, f"photo_group_{media_group_id}", plural=True
-    )
+    await _report_photo_links(chat_id, result, f"photo_group_{media_group_id}", plural=True)
 
 
 async def _cb_gemini_no(ctx: CallbackCtx) -> None:
@@ -176,9 +163,7 @@ async def _cb_gemini_no(ctx: CallbackCtx) -> None:
 async def _cb_gemini_yes(ctx: CallbackCtx) -> None:
     job = await database.get_job(ctx.job_id)
     if not job or job.get("status") != "transcript_done":
-        await answer_callback_query(
-            ctx.cq_id, text="This job is not ready for enrichment."
-        )
+        await answer_callback_query(ctx.cq_id, text="This job is not ready for enrichment.")
         return
     await answer_callback_query(ctx.cq_id)
     await send_inline_keyboard(
@@ -236,9 +221,7 @@ async def _cb_template_pick(ctx: CallbackCtx) -> None:
         )
         await conn.commit()
     if ctx.message_id:
-        await edit_message_text(
-            ctx.chat_id, ctx.message_id, f"You chose {template.capitalize()}"
-        )
+        await edit_message_text(ctx.chat_id, ctx.message_id, f"You chose {template.capitalize()}")
     await queue.enqueue({"task": "enrichment", "job_id": actual_job_id})
     await answer_callback_query(ctx.cq_id)
     log.info(
@@ -315,9 +298,7 @@ async def _cb_prd_intent_prompt(ctx: CallbackCtx) -> None:
     if existing and existing["job_id"] == ctx.job_id:
         await answer_callback_query(ctx.cq_id)
         return
-    await database.set_chat_state(
-        chat_id=ctx.chat_id, mode="awaiting_intent", job_id=ctx.job_id
-    )
+    await database.set_chat_state(chat_id=ctx.chat_id, mode="awaiting_intent", job_id=ctx.job_id)
     log.info("prd.chat_state.armed", chat_id=ctx.chat_id, job_id=ctx.job_id)
     await send_force_reply(
         ctx.chat_id,
@@ -330,9 +311,7 @@ async def _cb_prd_intent_prompt(ctx: CallbackCtx) -> None:
 async def _cb_prd_retry_intent(ctx: CallbackCtx) -> None:
     job = await database.get_job(ctx.job_id)
     if not job or not (job.get("prd_intent_text") or "").strip():
-        await answer_callback_query(
-            ctx.cq_id, text="No prior intent to retry — use ✍️ New Intent."
-        )
+        await answer_callback_query(ctx.cq_id, text="No prior intent to retry — use ✍️ New Intent.")
         return
     await answer_callback_query(ctx.cq_id)
     await send_message(ctx.chat_id, "📐 Generating PRD, hang tight...")
@@ -347,9 +326,7 @@ async def _cb_enrichment_retry(ctx: CallbackCtx) -> None:
     status = job.get("status")
     if status not in ("error", "transcript_done"):
         log.warning("enrichment_retry_rejected", job_id=ctx.job_id, status=status)
-        await answer_callback_query(
-            ctx.cq_id, text=f"Can't retry — job is in status '{status}'."
-        )
+        await answer_callback_query(ctx.cq_id, text=f"Can't retry — job is in status '{status}'.")
         return
     await answer_callback_query(ctx.cq_id)
     await database.update_job_status(ctx.job_id, "enriching")
@@ -365,19 +342,13 @@ async def _cb_article_retry(ctx: CallbackCtx) -> None:
         return
     status = job.get("status")
     if status != "error":
-        await answer_callback_query(
-            ctx.cq_id, text=f"Can't retry — job is in status '{status}'."
-        )
+        await answer_callback_query(ctx.cq_id, text=f"Can't retry — job is in status '{status}'.")
         return
     await answer_callback_query(ctx.cq_id)
     await database.update_job_status(ctx.job_id, "pending")
-    await queue.enqueue(
-        {"task": "article", "job_id": ctx.job_id, "skip_document": True}
-    )
+    await queue.enqueue({"task": "article", "job_id": ctx.job_id, "skip_document": True})
     log.info("article_retry_enqueued", job_id=ctx.job_id)
-    await send_message(
-        ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying article analysis..."
-    )
+    await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying article analysis...")
 
 
 def _task_for(pipeline: str | None) -> str:
@@ -393,9 +364,7 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
     """
     job = await database.get_job(ctx.job_id)
     if not job:
-        await answer_callback_query(
-            ctx.cq_id, text="Job not found — please resend the link."
-        )
+        await answer_callback_query(ctx.cq_id, text="Job not found — please resend the link.")
         return
     await answer_callback_query(ctx.cq_id)
     new_job_id = await database.create_job(
@@ -450,9 +419,7 @@ async def _cb_invite_decision(
 ) -> None:
     """Shared handler for the operator's ✅ Approve / 🚫 Block invite buttons."""
     if settings.OPERATOR_CHAT_ID is None or ctx.chat_id != settings.OPERATOR_CHAT_ID:
-        log.warning(
-            "invite_decision.unauthorized", chat_id=ctx.chat_id, action=log_action
-        )
+        log.warning("invite_decision.unauthorized", chat_id=ctx.chat_id, action=log_action)
         await answer_callback_query(ctx.cq_id, text="Not authorized.")
         return
     try:
@@ -581,19 +548,13 @@ async def _handle_freestyle_url(
         "✍️ Reply with your Gemini prompt (reply within 10 min; /cancel to abandon)",
         input_field_placeholder="Your Gemini prompt...",
     )
-    log.info(
-        "freestyle.url.received", chat_id=chat_id, job_id=job_id, pipeline=pipeline
-    )
+    log.info("freestyle.url.received", chat_id=chat_id, job_id=job_id, pipeline=pipeline)
 
 
 async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
-        await queue._client().set(
-            f"pending_template:{ctx.chat_id}", "freestyle", ex=120
-        )
-        await send_message(
-            ctx.chat_id, "📥 `/freestyle` ready — send the URL now (2 min window)."
-        )
+        await queue._client().set(f"pending_template:{ctx.chat_id}", "freestyle", ex=120)
+        await send_message(ctx.chat_id, "📥 `/freestyle` ready — send the URL now (2 min window).")
         return
     url = ctx.parts[1]
     extra_domains = await database.list_allowed_domains(ctx.chat_id)
@@ -669,21 +630,19 @@ async def _cmd_find(ctx: SlashCtx) -> None:
             short_url = (parsed.netloc + parsed.path).rstrip("/")
             short_url = short_url.removeprefix("www.")
             entry = (
-                f'🔗 <b>{html.escape(r["title"])}</b>\n'
+                f"🔗 <b>{html.escape(r['title'])}</b>\n"
                 f'   <a href="{html.escape(r["url"], quote=True)}">{html.escape(short_url)}</a>'
             )
             if r.get("_enriched"):
                 desc = (r.get("_gh_description") or "").strip()
                 language = r.get("_language") or "N/A"
-                meta = f'⭐ {r["_stars"]} | 🔀 {r["_forks"]} | 💻 {language} | 📅 {_humanize_age(r["_days_ago"])}'
+                meta = f"⭐ {r['_stars']} | 🔀 {r['_forks']} | 💻 {language} | 📅 {_humanize_age(r['_days_ago'])}"
                 if desc:
                     entry += f"\n   {html.escape(desc)}"
                 entry += f"\n   {meta}"
             else:
                 topic = (r.get("topic") or "").strip()
-                if topic.lower().startswith(
-                    ("the image", "the screenshot", "the photo")
-                ):
+                if topic.lower().startswith(("the image", "the screenshot", "the photo")):
                     topic_line = "📷 from a photo"
                 elif topic:
                     topic_line = topic[:70].rstrip() + ("…" if len(topic) > 70 else "")
@@ -755,12 +714,8 @@ async def _reply_cached_job(chat_id: int, job: dict) -> None:
     status = job.get("status", "")
     if status in ("done", "transcript_done"):
         sheet_id = settings.GOOGLE_SHEETS_ID
-        sheet_url = (
-            f"https://docs.google.com/spreadsheets/d/{sheet_id}" if sheet_id else None
-        )
-        drive_line = (
-            f'\n📊 <a href="{sheet_url}">Open in Sheets</a>' if sheet_url else ""
-        )
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}" if sheet_id else None
+        drive_line = f'\n📊 <a href="{sheet_url}">Open in Sheets</a>' if sheet_url else ""
         title_line = f"\n🎬 {html.escape(job['title'])}" if job.get("title") else ""
         body = f"⚡ Already processed ({job_tag}){title_line}{drive_line}\n\nUse /force &lt;url&gt; to reprocess."
         if job.get("bot_message_id"):
@@ -899,9 +854,7 @@ async def _cmd_download_md(ctx: SlashCtx) -> None:
     try:
         title, body = await fetch_markdown(url)
     except JinaFetchError as exc:
-        await send_message(
-            ctx.chat_id, f"❌ Failed to fetch URL (HTTP {exc.status_code})."
-        )
+        await send_message(ctx.chat_id, f"❌ Failed to fetch URL (HTTP {exc.status_code}).")
         return
 
     # 3. Build document content and persist
@@ -928,9 +881,7 @@ def _normalize_domain(raw: str) -> str:
 def _format_domain_report(*sections: tuple[str, list[str]]) -> str:
     """Join non-empty '<label> `d1`, `d2`' lines for a domain-command reply."""
     return "\n".join(
-        f"{label} " + ", ".join(f"`{d}`" for d in domains)
-        for label, domains in sections
-        if domains
+        f"{label} " + ", ".join(f"`{d}`" for d in domains) for label, domains in sections if domains
     )
 
 
@@ -987,9 +938,7 @@ async def _cmd_allowlist(ctx: SlashCtx) -> None:
         domain = _normalize_domain(raw)
         await database.add_allowed_domain(ctx.chat_id, domain)
         added.append(domain)
-    await send_message(
-        ctx.chat_id, "✅ Allowlisted: " + ", ".join(f"`{d}`" for d in added)
-    )
+    await send_message(ctx.chat_id, "✅ Allowlisted: " + ", ".join(f"`{d}`" for d in added))
 
 
 async def _cmd_unallowlist(ctx: SlashCtx) -> None:
@@ -1005,35 +954,30 @@ async def _cmd_unallowlist(ctx: SlashCtx) -> None:
             missing.append(domain)
     await send_message(
         ctx.chat_id,
-        _format_domain_report(
-            ("✅ Removed:", removed), ("⚠️ Not in your allowlist:", missing)
-        ),
+        _format_domain_report(("✅ Removed:", removed), ("⚠️ Not in your allowlist:", missing)),
     )
 
 
 async def _cmd_allowlist_list(ctx: SlashCtx) -> None:
     domains = sorted(await database.list_allowed_domains(ctx.chat_id))
     if not domains:
-        await send_message(
-            ctx.chat_id, "No custom allowlist entries yet. Use /allowlist <domain>."
-        )
+        await send_message(ctx.chat_id, "No custom allowlist entries yet. Use /allowlist <domain>.")
         return
     lines = "\n".join(f"• `{d}`" for d in domains)
-    await send_message(
-        ctx.chat_id, f"✅ Allowlisted domains ({len(domains)}):\n{lines}"
-    )
+    await send_message(ctx.chat_id, f"✅ Allowlisted domains ({len(domains)}):\n{lines}")
 
 
 _START_TEXT = (
-    "👋 *vig — Video Intelligence Gateway*\n\n"
-    "Send me a link and I'll process it:\n"
+    "👋 *Ownix — your internet, indexed.*\n\n"
+    "Send me something worth keeping and I’ll turn it into a searchable entry:\n"
     "• YouTube video or Short\n"
     "• Instagram Reel\n"
     "• TikTok video\n"
     "• Article URL (use /allowlist to add domains)\n"
     "• GitHub repo URL\n"
     "• PDF file or link\n\n"
-    "Type /help for available commands."
+    "Type /help for available commands.\n\n"
+    "Visit [app.leondev.xyz](https://app.leondev.xyz) for the web app."
 )
 
 _HELP_TEXT = (
@@ -1060,11 +1004,8 @@ async def _cmd_start(ctx: SlashCtx) -> None:
     if settings.MINI_APP_URL:
         await send_inline_keyboard(
             ctx.chat_id,
-            _START_TEXT
-            + "\n\nOpen the Mini App to connect Google without leaving Telegram.",
-            buttons=[
-                [{"text": "Open Mini App", "web_app": {"url": settings.MINI_APP_URL}}]
-            ],
+            _START_TEXT + "\n\nOpen the Mini App to connect Google without leaving Telegram.",
+            buttons=[[{"text": "Open Mini App", "web_app": {"url": settings.MINI_APP_URL}}]],
             parse_mode="Markdown",
         )
         return
@@ -1095,9 +1036,7 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
 }
 
 
-async def _dispatch_slash(
-    chat_id: int, text: str, message_id: int | None = None
-) -> None:
+async def _dispatch_slash(chat_id: int, text: str, message_id: int | None = None) -> None:
     """Slash command dispatch. Clears chat_state as a side effect (except /cancel reads first)."""
     parts = text.split()
     cmd = parts[0].lower()
@@ -1129,9 +1068,7 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
             chat_id=chat_id, url=url_to_store, content_type=pipeline
         )
         task_type = (
-            "repo"
-            if pipeline == "repo"
-            else ("article" if pipeline == "article" else "video")
+            "repo" if pipeline == "repo" else ("article" if pipeline == "article" else "video")
         )
         await queue.enqueue({"task": task_type, "job_id": new_job_id})
         await send_message(chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
@@ -1242,9 +1179,7 @@ async def _handle_awaiting_freestyle(chat_id: int, text: str, state: dict) -> No
         )
 
 
-async def _parse_spec_args(
-    chat_id: int, parts: list[str]
-) -> tuple[str, str | None] | None:
+async def _parse_spec_args(chat_id: int, parts: list[str]) -> tuple[str, str | None] | None:
     """Validate /spec args; message the user and return None on bad input."""
     if len(parts) < 2:
         await send_message(
@@ -1433,9 +1368,7 @@ async def _invite_gate_allows(
         await database.set_user_email(chat_id, email)
         await _notify_operator_invite(chat_id, email)
         await database.clear_chat_state(chat_id)
-        await send_message(
-            chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label())
-        )
+        await send_message(chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label()))
         return False
 
     if via_callback:
@@ -1448,20 +1381,14 @@ async def _invite_gate_allows(
             job_id=f"invite:{chat_id}",
             expires_minutes=60 * 24 * 30,
         )
-        await send_message(
-            chat_id, _INVITE_EMAIL_PROMPT_TEMPLATE.format(admin=_admin_label())
-        )
+        await send_message(chat_id, _INVITE_EMAIL_PROMPT_TEMPLATE.format(admin=_admin_label()))
         return False
 
-    await send_message(
-        chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label())
-    )
+    await send_message(chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label()))
     return False
 
 
-async def _handle_user_template_shortcut(
-    chat_id: int, text: str, message_id: int
-) -> bool:
+async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: int) -> bool:
     if not re.match(r"^-[a-zA-Z0-9][a-zA-Z0-9_-]*$", text.split()[0]):
         return False
     parts = text.split()
@@ -1489,9 +1416,7 @@ async def _handle_user_template_shortcut(
     # Repo jobs run the standard repo prompt — template inputs are cleared,
     # matching the dashboard path.
     is_repo = pipeline == "repo"
-    extra_instructions = (
-        "" if is_repo else (tmpl_row.get("extra_instructions") or "").strip()
-    )
+    extra_instructions = "" if is_repo else (tmpl_row.get("extra_instructions") or "").strip()
     job = await create_and_enqueue_job(
         chat_id,
         normalize_repo_url(url) if is_repo else url,
@@ -1525,7 +1450,11 @@ async def _handle_user_template_shortcut(
 
 
 async def _enqueue_simple_job(
-    chat_id: int, url: str, content_type: str, message_id: int, *,
+    chat_id: int,
+    url: str,
+    content_type: str,
+    message_id: int,
+    *,
     skip_cache: bool = False,
 ) -> dict:
     """Create + enqueue an article/repo job and ack the user."""
@@ -1545,16 +1474,12 @@ async def _reject_url(chat_id: int, text: str) -> None:
     except Exception:
         _host = ""
     _github_hint = (
-        f"\n{_REPO_HINT}"
-        if _host == "github.com" or _host.endswith(".github.com")
-        else ""
+        f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
     )
     await send_message(
         chat_id,
         "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-        "Instagram Reels (not /p/ carousels), and TikTok videos.\n"
-        + _ARTICLE_HINT
-        + _github_hint,
+        "Instagram Reels (not /p/ carousels), and TikTok videos.\n" + _ARTICLE_HINT + _github_hint,
     )
     log.info("url_rejected", chat_id=chat_id, url=text)
 
@@ -1692,9 +1617,7 @@ async def _safe_get_pdf(url: str) -> bytes | None:
                 buf = bytearray()
                 async for chunk in resp.aiter_bytes():
                     buf += chunk
-                    if (
-                        len(buf) > _MAX_DOC_BYTES
-                    ):  # streamed cap: trust no Content-Length
+                    if len(buf) > _MAX_DOC_BYTES:  # streamed cap: trust no Content-Length
                         log.warning("document_url_too_large", host=parsed.hostname)
                         return None
                 return bytes(buf)
@@ -1709,9 +1632,7 @@ async def _route_document_url(chat_id: int, url: str, message_id: int | None) ->
         data = None
     if data is None:
         log.info("document_url_fetch_failed", chat_id=chat_id, url=url)
-        await send_message(
-            chat_id, "📄 Couldn't download that PDF. Check the link and try again."
-        )
+        await send_message(chat_id, "📄 Couldn't download that PDF. Check the link and try again.")
         return
     if not data.startswith(b"%PDF"):
         await send_message(chat_id, "📄 That link didn't return a PDF.")
@@ -1725,9 +1646,7 @@ async def webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
 ) -> dict[str, bool]:
-    if not compare_digest(
-        x_telegram_bot_api_secret_token or "", settings.TELEGRAM_WEBHOOK_SECRET
-    ):
+    if not compare_digest(x_telegram_bot_api_secret_token or "", settings.TELEGRAM_WEBHOOK_SECRET):
         log.warning("webhook_invalid_secret")
         raise HTTPException(status_code=403, detail="invalid secret")
 
@@ -1757,9 +1676,7 @@ async def webhook(
         "username": sender.get("username") or chat.get("username"),
     }
 
-    log.info(
-        "webhook_received", chat_id=chat_id, message_id=message_id, text_len=len(text)
-    )
+    log.info("webhook_received", chat_id=chat_id, message_id=message_id, text_len=len(text))
 
     # Photo path
     photo = message.get("photo")
@@ -1797,8 +1714,7 @@ async def webhook(
 
 _MAX_DOC_BYTES = 20 * 1024 * 1024  # Telegram bot getFile cap (ADR-0023)
 _DOC_TOO_LARGE_MSG = (
-    "📄 File too large for Telegram (max 20MB). Upload via the web "
-    "dashboard — feature coming soon."
+    "📄 File too large for Telegram (max 20MB). Upload via the web dashboard — feature coming soon."
 )
 
 
@@ -1813,17 +1729,13 @@ async def _handle_document_update(chat_id: int, message: dict, document: dict) -
         return
     if (document.get("file_size") or 0) > _MAX_DOC_BYTES:
         await send_message(chat_id, _DOC_TOO_LARGE_MSG)
-        log.info(
-            "document_rejected_size", chat_id=chat_id, size=document.get("file_size")
-        )
+        log.info("document_rejected_size", chat_id=chat_id, size=document.get("file_size"))
         return
     # Heavy download/upload runs off the webhook request, mirroring the photo path.
     spawn_background(_ingest_document(chat_id, document, message.get("message_id")))
 
 
-async def _enqueue_document_job(
-    chat_id: int, data: bytes, message_id: int | None
-) -> None:
+async def _enqueue_document_job(chat_id: int, data: bytes, message_id: int | None) -> None:
     """Store PDF bytes content-addressed, create + enqueue the job, ack the user."""
     sha = hashlib.sha256(data).hexdigest()
     key = storage.object_key("documents", sha, "pdf")
@@ -1838,15 +1750,11 @@ async def _enqueue_document_job(
     await send_message(chat_id, f"📥 Received!\njob_{job_id[-4:]}")
 
 
-async def _ingest_document(
-    chat_id: int, document: dict, message_id: int | None
-) -> None:
+async def _ingest_document(chat_id: int, document: dict, message_id: int | None) -> None:
     # Runs unawaited via create_task, so swallow nothing silently: catch and tell the user.
     try:
         data = await download_file(document["file_id"])
-        if not data.startswith(
-            b"%PDF"
-        ):  # parity with the URL path; skip wasted upload+job
+        if not data.startswith(b"%PDF"):  # parity with the URL path; skip wasted upload+job
             await send_message(chat_id, "📄 That file isn't a valid PDF.")
             log.info("document_rejected_magic", chat_id=chat_id)
             return
