@@ -21,15 +21,15 @@ const CLIENT_MODE_LIMIT = 1000;
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
-async function fetchAllJobs(): Promise<{ jobs: JobSummary[]; total: number }> {
-  const res = await fetch(`/api/jobs?limit=${CLIENT_MODE_LIMIT}`);
+async function fetchAllJobs(restricted = false): Promise<{ jobs: JobSummary[]; total: number }> {
+  const res = await fetch(`${restricted ? '/api/preview/jobs' : '/api/jobs'}?limit=${CLIENT_MODE_LIMIT}`);
   if (!res.ok) throw new Error('Failed to load jobs');
   const data = (await res.json()) as JobsResponse;
   return { jobs: data.items, total: data.total };
 }
 
-async function fetchStats(): Promise<FeedStats> {
-  const res = await fetch('/api/jobs/stats');
+async function fetchStats(restricted = false): Promise<FeedStats> {
+  const res = await fetch(restricted ? '/api/preview/jobs/stats' : '/api/jobs/stats');
   if (!res.ok) throw new Error('Failed to load stats');
   return (await res.json()) as FeedStats;
 }
@@ -38,6 +38,7 @@ async function fetchStats(): Promise<FeedStats> {
 async function fetchFeedServerMode(
   ct: string,
   st: string,
+  restricted = false,
 ): Promise<{ stats: FeedStats; jobs: JobSummary[]; total: number }> {
   const params = new URLSearchParams();
   if (ct) params.set('content_type', ct);
@@ -51,8 +52,8 @@ async function fetchFeedServerMode(
   const statsQuery = statsParams.toString();
 
   const [statsRes, jobsRes] = await Promise.all([
-    fetch(statsQuery ? `/api/jobs/stats?${statsQuery}` : '/api/jobs/stats'),
-    fetch(`/api/jobs?${params}`),
+    fetch(statsQuery ? `${restricted ? '/api/preview/jobs/stats' : '/api/jobs/stats'}?${statsQuery}` : (restricted ? '/api/preview/jobs/stats' : '/api/jobs/stats')),
+    fetch(`${restricted ? '/api/preview/jobs' : '/api/jobs'}?${params}`),
   ]);
   if (!statsRes.ok) throw new Error('Failed to load stats');
   if (!jobsRes.ok) throw new Error('Failed to load jobs');
@@ -106,7 +107,7 @@ function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useFeedData(initialContentType = '') {
+export function useFeedData(initialContentType = '', restricted = false) {
   const [ctFilter, setCtFilter] = useState(initialContentType);
   const [stFilter, setStFilter] = useState('');
 
@@ -156,8 +157,8 @@ export function useFeedData(initialContentType = '') {
 
     try {
       const [{ jobs, total }, stats] = await Promise.all([
-        fetchAllJobs(),
-        fetchStats(),
+        fetchAllJobs(restricted),
+        fetchStats(restricted),
       ]);
 
       if (reqId !== reqIdRef.current) return;
@@ -179,7 +180,7 @@ export function useFeedData(initialContentType = '') {
     } finally {
       if (loadId === loadIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [restricted]);
 
   // -------------------------------------------------------------------------
   // Server-mode filter fetch (called on filter change when in server mode)
@@ -193,7 +194,7 @@ export function useFeedData(initialContentType = '') {
     setError(null);
 
     try {
-      const { stats, jobs, total } = await fetchFeedServerMode(ct, st);
+      const { stats, jobs, total } = await fetchFeedServerMode(ct, st, restricted);
       if (reqId !== reqIdRef.current) return;
 
       const filtered = ct ? jobs.filter((j) => j.content_type === ct) : jobs;
@@ -206,7 +207,7 @@ export function useFeedData(initialContentType = '') {
     } finally {
       if (loadId === loadIdRef.current) setLoading(false);
     }
-  }, []);
+  }, [restricted]);
 
   // -------------------------------------------------------------------------
   // reload() — called by polling (issue #177 background poll triggers this)
@@ -223,6 +224,7 @@ export function useFeedData(initialContentType = '') {
         const { stats, jobs, total } = await fetchFeedServerMode(
           ctRef.current,
           stRef.current,
+          restricted,
         );
         if (reqId !== reqIdRef.current) return;
         const ct = ctRef.current;
@@ -233,14 +235,14 @@ export function useFeedData(initialContentType = '') {
       } else {
         // Client mode: silently re-fetch the full list, swap allJobs.
         // No loading flag flip — no skeleton, active filter/search survive.
-        const { jobs } = await fetchAllJobs();
+        const { jobs } = await fetchAllJobs(restricted);
         if (reqId !== reqIdRef.current) return;
         setAllJobs(jobs);
       }
     } catch {
       // swallow during background polling
     }
-  }, []);
+  }, [restricted]);
 
   // -------------------------------------------------------------------------
   // Effects

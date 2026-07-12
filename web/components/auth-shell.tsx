@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import Footer from '@/components/ui/footer';
-import Header from '@/components/ui/public-header';
 
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
@@ -13,7 +12,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         className="pointer-events-none absolute inset-x-0 bottom-0 w-full select-none opacity-50 [filter:saturate(0.5)] [mask-image:linear-gradient(to_top,black_55%,transparent)]"
       />
 
-      <section className="relative z-10 flex w-full -translate-y-[55px] flex-col items-center text-center">
+      <section className="relative z-10 flex w-full pb-8 flex-col items-center text-center">
         <div className="flex w-full animate-[auth-card-enter_480ms_cubic-bezier(0.25,1,0.5,1)_both] flex-col items-center motion-reduce:animate-none">
           <h1 className="text-5xl font-semibold tracking-tight text-ink">
             Ownix

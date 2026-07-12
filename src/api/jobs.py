@@ -225,12 +225,12 @@ def _stored_thumbnail_url(job_id: str) -> str:
     return f"/api/jobs/{job_id}/thumbnail"
 
 
-def _is_persistable_short_platform(url: str) -> bool:
+def is_persistable_short_platform(url: str) -> bool:
     host = (urlparse(url.strip()).hostname or "").lower().removeprefix("www.")
     return host.endswith("instagram.com") or host.endswith("tiktok.com")
 
 
-async def _resolve_thumbnail(
+async def resolve_thumbnail(
     job: dict, stored_ids: set[str] | None = None
 ) -> tuple[str | None, ThumbnailKind | None]:
     """Return the server-resolved thumbnail URL and aspect hint for a list item."""
@@ -254,7 +254,7 @@ async def _resolve_thumbnail(
         video_id = _youtube_video_id(url)
         if video_id:
             return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "portrait"
-        if _is_persistable_short_platform(url):
+        if is_persistable_short_platform(url):
             has_stored = (
                 job["id"] in stored_ids
                 if stored_ids is not None
@@ -321,13 +321,13 @@ async def list_jobs(
     short_ids = [
         r["id"]
         for r in rows
-        if r["content_type"] == "short" and _is_persistable_short_platform(r["url"])
+        if r["content_type"] == "short" and is_persistable_short_platform(r["url"])
     ]
     stored_ids = await database.get_thumbnail_job_ids(short_ids)
     items = []
     for row in rows:
         item = dict(row)
-        item["thumbnail_url"], item["thumbnail_kind"] = await _resolve_thumbnail(
+        item["thumbnail_url"], item["thumbnail_kind"] = await resolve_thumbnail(
             item, stored_ids
         )
         items.append(item)
@@ -503,7 +503,7 @@ _DETAIL_FIELDS_SHORT = (
 )
 
 
-def _detail_fields_for(content_type: str) -> tuple[str, ...]:
+def detail_fields_for(content_type: str) -> tuple[str, ...]:
     """Return the full set of detail field names for a given content_type."""
     if content_type == "short":
         return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
@@ -532,5 +532,5 @@ async def get_job(job_id: str, request: Request) -> dict:
     """Return full job detail for a job the caller owns."""
     job = await get_owned_job(job_id, request)
 
-    fields = _detail_fields_for(job.get("content_type", ""))
+    fields = detail_fields_for(job.get("content_type", ""))
     return {k: job.get(k) for k in fields}

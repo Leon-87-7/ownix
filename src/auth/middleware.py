@@ -16,6 +16,7 @@ _OPEN_PATHS = frozenset(["/webhook", "/health"])
 
 # /api/auth/telegram is the login endpoint — must be reachable without a session
 _OPEN_API_PATHS = frozenset(["/api/auth/telegram", "/api/auth/miniapp/session", "/api/google/callback"])
+_OPEN_API_PREFIXES = ("/api/preview/",)
 
 _PRE_APPROVAL_AUTH_PATHS = frozenset([
     "/api/auth/me",
@@ -34,7 +35,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         path = request.url.path
 
-        if path in _OPEN_PATHS or path in _OPEN_API_PATHS:
+        if path in _OPEN_PATHS or path in _OPEN_API_PATHS or path.startswith(_OPEN_API_PREFIXES):
             return await call_next(request)
 
         if not path.startswith("/api/"):

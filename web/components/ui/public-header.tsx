@@ -25,19 +25,19 @@ export default function PublicHeader() {
       >
         <Link
           href="/privacy"
-          className={`rounded-md px-3 py-2 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink ${focusRing}`}
+          className={`hidden rounded-md px-3 py-2 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink sm:inline-flex ${focusRing}`}
         >
           Privacy
         </Link>
         <Link
           href="/terms"
-          className={`rounded-md px-3 py-2 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink ${focusRing}`}
+          className={`hidden rounded-md px-3 py-2 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink sm:inline-flex ${focusRing}`}
         >
           Terms
         </Link>
         <Link
           href="/login"
-          className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui duration-200 hover:bg-signal-deep hover:text-onsignal ${focusRing}`}
+          className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${focusRing}`}
         >
           Sign in
         </Link>

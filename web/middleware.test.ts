@@ -34,14 +34,37 @@ describe('middleware routing cutover', () => {
     expect(response.status).toBe(200);
   });
 
-  it('redirects authenticated root visits to the Feed', () => {
+  it('lets authenticated root visits reach the public landing route', () => {
     const response = middleware(requestFor('/', 'vig_session=abc'));
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('https://ownix.test/feed');
+    expect(response.status).toBe(200);
   });
 
   it('keeps /feed behind the session gate', () => {
     const response = middleware(requestFor('/feed'));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://ownix.test/login');
+  });
+});
+
+describe('middleware restricted mode (ADR-0035)', () => {
+  it('lets the preview cookie through the dashboard gate', () => {
+    const response = middleware(requestFor('/feed', 'ownix_preview=1'));
+    expect(response.status).toBe(200);
+  });
+
+  it('preview cookie grants navigation to any dashboard route', () => {
+    for (const path of ['/brain', '/spaces', '/controls', '/prompts']) {
+      expect(middleware(requestFor(path, 'ownix_preview=1')).status).toBe(200);
+    }
+  });
+
+  it('keeps /restricted itself public so the cookie can be minted', () => {
+    const response = middleware(requestFor('/restricted'));
+    expect(response.status).toBe(200);
+  });
+
+  it('still bounces cookie-less visitors from dashboard routes', () => {
+    const response = middleware(requestFor('/jobs/20260711_010101_ab12'));
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('https://ownix.test/login');
   });

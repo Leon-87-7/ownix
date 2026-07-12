@@ -6,34 +6,48 @@ import { InviteGate } from '@/components/invite-gate';
 import { GoogleStatusProvider } from '@/components/google-status';
 import { SubmitJobProvider } from '@/components/submit-job';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { RestrictedModeProvider } from '@/lib/restricted/context';
+import { cookies } from 'next/headers';
 
-export default function DashboardLayout({
+// Private user data — never indexable. The middleware session gate keeps
+// crawlers out; this covers any gap.
+export const metadata = { robots: { index: false, follow: false } };
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  // The /restricted entry route only mints this cookie for visitors who are
+  // NOT approved (ADR-0035 §1), and approved sign-in deletes it — so cookie
+  // presence alone is the restricted signal. A pending/blocked user's
+  // vig_session must not outrank it.
+  const restricted = cookieStore.get('ownix_preview')?.value === '1';
   return (
     <TooltipProvider>
-      <InviteGate>
-        <GoogleStatusProvider>
-          <SubmitJobProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <main className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden">
-                <PageBackground />
-                <AppHeader />
-                <div
-                  data-dashboard-scroll
-                  className="relative z-10 flex-1 overflow-auto p-4 sm:p-6"
-                >
-                  {children}
-                  <ScrollToTop />
-                </div>
-              </main>
-            </div>
-          </SubmitJobProvider>
-        </GoogleStatusProvider>
-      </InviteGate>
+      <RestrictedModeProvider restricted={restricted}>
+        <InviteGate restricted={restricted}>
+          <GoogleStatusProvider>
+            <SubmitJobProvider>
+              <div className="flex h-screen overflow-hidden">
+                <Sidebar />
+                <main className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden">
+                  <PageBackground />
+                  <AppHeader />
+                  <div
+                    data-dashboard-scroll
+                    className="relative z-10 flex-1 overflow-auto p-4 sm:p-6"
+                  >
+                    {children}
+                    <ScrollToTop />
+                  </div>
+                </main>
+              </div>
+            </SubmitJobProvider>
+          </GoogleStatusProvider>
+        </InviteGate>
+      </RestrictedModeProvider>
     </TooltipProvider>
   );
 }

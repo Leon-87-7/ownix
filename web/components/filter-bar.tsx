@@ -232,6 +232,8 @@ export function FilterBar({
   onStatusChange,
   recoveryPanel,
   actionSlot,
+  hideSearchAndFilters = false,
+  searchSlot,
 }: {
   tabs: readonly FilterTab[];
   tabValue: string;
@@ -250,6 +252,14 @@ export function FilterBar({
   /** Page-level action rendered as the first slot in the tabs wrap grid (see
    * SegmentedTabs.leadingItem). */
   actionSlot?: React.ReactNode;
+  /** Drops the status-filter/recovery row, keeping only the tab row (plus the
+   * search input or searchSlot, if any) — for views (e.g. Links) that have no
+   * use for the job-status filters. */
+  hideSearchAndFilters?: boolean;
+  /** Renders in place of the built-in search input, in the same slot next to
+   * the tabs — for views (e.g. Links) whose search bar carries extra controls
+   * (a page-size picker) and filters through its own state, not `query`. */
+  searchSlot?: React.ReactNode;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed; component remounts on navigation so it resets naturally.
@@ -305,56 +315,70 @@ export function FilterBar({
             leadingItem={actionSlot}
           />
         </div>
-        <input
-          ref={searchRef}
-          id={searchInputId}
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            // Escape exits the search (mirrors the `/` shortcut to enter it).
-            if (e.key === 'Escape') e.currentTarget.blur();
-          }}
-          aria-label={searchLabel}
-          aria-keyshortcuts="/ Escape"
-          placeholder={searchPlaceholder}
-          className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
-        />
+        {searchSlot ? (
+          <div className="min-w-0 sm:flex-1">{searchSlot}</div>
+        ) : (
+          !hideSearchAndFilters && (
+            <input
+              ref={searchRef}
+              id={searchInputId}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // Escape exits the search (mirrors the `/` shortcut to enter it).
+                if (e.key === 'Escape') e.currentTarget.blur();
+              }}
+              aria-label={searchLabel}
+              aria-keyshortcuts="/ Escape"
+              placeholder={searchPlaceholder}
+              className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
+            />
+          )
+        )}
       </div>
-      <button
-        type="button"
-        onClick={() => setFiltersOpen((o) => !o)}
-        aria-expanded={filtersOpen}
-        aria-controls="status-filter-bar"
-        className="mx-auto self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
-      >
-        Filters{' '}
-        <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
-      </button>
-      <div
-        id="status-filter-bar"
-        aria-hidden={collapsed || undefined}
-        {...(collapsed ? ({ inert: '' } as Record<string, unknown>) : {})}
-        className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
-          collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
-        }`}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
-            <div className="flex flex-wrap items-center gap-1">
-              {statusFilters.map(({ label, value }) => (
-                <FilterButton
-                  key={value}
-                  label={label}
-                  active={statusValue === value}
-                  onClick={() => onStatusChange(value)}
-                />
-              ))}
+      {!hideSearchAndFilters && (
+        <>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((o) => !o)}
+            aria-expanded={filtersOpen}
+            aria-controls="status-filter-bar"
+            className="mx-auto self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
+          >
+            Filters{' '}
+            <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
+          </button>
+          <div
+            id="status-filter-bar"
+            aria-hidden={collapsed || undefined}
+            {...(collapsed
+              ? ({
+                  inert: '',
+                } as React.HTMLAttributes<HTMLDivElement> & { inert?: string })
+              : {})}
+            className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
+              collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+            }`}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
+                <div className="flex flex-wrap items-center gap-1">
+                  {statusFilters.map(({ label, value }) => (
+                    <FilterButton
+                      key={value}
+                      label={label}
+                      active={statusValue === value}
+                      onClick={() => onStatusChange(value)}
+                    />
+                  ))}
+                </div>
+                {recoveryPanel}
+              </div>
             </div>
-            {recoveryPanel}
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </section>
   );
 }

@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # Falls back to generic phrasing when unset so a fresh deploy is not stuck with a specific name.
     ADMIN_CONTACT_NAME: str = ""
 
+    # Comma-separated proxy peer CIDRs whose forwarded client-IP headers may be
+    # trusted for anonymous preview rate limiting. Keep narrow unless the API is
+    # only reachable through that proxy network.
+    PREVIEW_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
+
     def _google_token_readable(self, encrypted_token: str) -> bool:
         try:
             payload = (

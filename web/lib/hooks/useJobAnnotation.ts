@@ -8,19 +8,21 @@ interface Annotation {
   updated_at: string | null;
 }
 
-export function useJobAnnotation(jobId: string, fetchState: FetchState) {
+export function useJobAnnotation(jobId: string, fetchState: FetchState, disabled = false) {
   const [annotation, setAnnotation] = useState<Annotation>({ notes: '', updated_at: null });
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (disabled) { setLoaded(true); return; }
     if (fetchState !== 'ok') return;
     fetch(`/api/jobs/${jobId}/annotations`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (data) setAnnotation(data); setLoaded(true); })
       .catch(() => { setLoaded(true); });
-  }, [fetchState, jobId]);
+  }, [fetchState, jobId, disabled]);
 
   const handleSave = useCallback(async (md: string) => {
+    if (disabled) return;
     try {
       const res = await fetch(`/api/jobs/${jobId}/annotations`, {
         method: 'PUT',
@@ -35,7 +37,7 @@ export function useJobAnnotation(jobId: string, fetchState: FetchState) {
     } catch {
       // silently ignore network errors during auto-save
     }
-  }, [jobId]);
+  }, [jobId, disabled]);
 
   return { annotation, loaded, handleSave };
 }

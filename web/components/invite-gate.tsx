@@ -174,7 +174,7 @@ function EmailModal({
   );
 }
 
-export function InviteGate({ children }: { children: React.ReactNode }) {
+export function InviteGate({ children, restricted = false }: { children: React.ReactNode; restricted?: boolean }) {
   const router = useRouter();
   const [user, setUser] = useState<InviteUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,6 +183,10 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (mockModeEnabled()) {
       setUser(MOCK_SESSION_USER);
+      setLoading(false);
+      return;
+    }
+    if (restricted) {
       setLoading(false);
       return;
     }
@@ -209,7 +213,15 @@ export function InviteGate({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, restricted]);
+
+  if (restricted) {
+    return (
+      <SessionUserContext.Provider value={null}>
+        {children}
+      </SessionUserContext.Provider>
+    );
+  }
 
   if (loading) {
     return (

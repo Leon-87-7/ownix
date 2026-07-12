@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/logout", "/privacy", "/terms"];
+const PUBLIC_PATHS = ["/login", "/logout", "/privacy", "/terms", "/restricted"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,24 +16,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = request.cookies.get("vig_session");
-
-  // Public landing: authed visitors forward to /feed, everyone else sees it.
+  // Public landing stays reachable for everyone (ADR-0035 §1); the CTA is
+  // session-aware via the /restricted entry route.
   if (pathname === "/") {
-    return session?.value
-      ? NextResponse.redirect(new URL("/feed", request.url), 307)
-      : NextResponse.next();
-  }
-
-  if (
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-  ) {
     return NextResponse.next();
   }
 
-  if (!session?.value) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.next();
+  }
+
+  // The preview cookie grants navigation only — data access is enforced
+  // server-side by the /api/preview corpus, and crawler noindex comes from the
+  // dashboard layout's robots metadata.
+  const session = request.cookies.get("vig_session");
+  const preview = request.cookies.get("ownix_preview");
+  if (!session?.value && preview?.value !== "1") {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();

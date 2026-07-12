@@ -26,6 +26,7 @@ import {
 import { PageShell } from "@/components/page-shell";
 import { SkeletonBlock } from "@/components/feed/feed-states";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useRestrictedMode } from "@/lib/restricted/context";
 
 const MarkdownEditor = dynamic(() => import("@/components/MarkdownEditor"), {
   ssr: false,
@@ -327,6 +328,7 @@ function AdjacentNavLink({
 }
 
 function JobHeader({ job, tags }: { job: JobDetail; tags?: ReactNode }) {
+  const { restricted } = useRestrictedMode();
   const router = useRouter();
   const searchParams = useSearchParams();
   const contentType = searchParams.get("content_type") ?? undefined;
@@ -346,6 +348,9 @@ function JobHeader({ job, tags }: { job: JobDetail; tags?: ReactNode }) {
     `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ""}`;
 
   useEffect(() => {
+    // Adjacent nav is session-gated (/api/jobs/*) — in Restricted mode the
+    // request would just 401, so skip it and leave the pager links hidden.
+    if (restricted) return;
     let cancelled = false;
     const qs = scopeQuery ? `?${scopeQuery}` : "";
     void fetch(`/api/jobs/${job.id}/adjacent${qs}`)
@@ -363,7 +368,7 @@ function JobHeader({ job, tags }: { job: JobDetail; tags?: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [job.id, scopeQuery]);
+  }, [job.id, scopeQuery, restricted]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -473,14 +478,17 @@ function JobActionsBar({
 }
 
 export default function JobDetailPage({ params }: { params: { id: string } }) {
-  const { job, fetchState } = useJobDetail(params.id);
+  const { restricted } = useRestrictedMode();
+  const { job, fetchState } = useJobDetail(params.id, restricted);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     params.id,
     fetchState,
+    restricted,
   );
   const { jobTags, allTags, toggleTag, createTag } = useJobTags(
     params.id,
     fetchState,
+    restricted,
   );
 
   if (fetchState === "loading") {
@@ -569,12 +577,22 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
         ))}
       </div>
 
-      {loaded && (
-        <MarkdownEditor
-          initialMarkdown={annotation.notes}
-          onSave={handleSave}
-        />
-      )}
+      {loaded &&
+        (restricted ? (
+          <Tooltip content="Restricted mode on">
+            <div
+              aria-disabled="true"
+              className="rounded-lg border border-line bg-surface p-4 text-sm text-muted"
+            >
+              Notes stay with your own Index — sign in to write them.
+            </div>
+          </Tooltip>
+        ) : (
+          <MarkdownEditor
+            initialMarkdown={annotation.notes}
+            onSave={handleSave}
+          />
+        ))}
     </PageShell>
   );
 }

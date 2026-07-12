@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -16,9 +17,10 @@ import { useFeedData } from '@/lib/hooks/useFeedData';
 import { useFuseSearch } from '@/lib/hooks/useFuseSearch';
 import { useInFlightPolling } from '@/lib/hooks/useInFlightPolling';
 import { useBackgroundFreshness } from '@/lib/hooks/useBackgroundFreshness';
+import { useLinksTable } from '@/lib/hooks/useLinksTable';
 import { JobCard } from '@/components/job-card';
 import { StatsOverview } from '@/components/feed/stats-overview';
-import { FilterBar } from '@/components/filter-bar';
+import { FilterBar, type FilterTab } from '@/components/filter-bar';
 import {
   SkeletonGrid,
   SkeletonList,
@@ -31,8 +33,16 @@ import { PageShell } from '@/components/page-shell';
 import { useGoogleStatus } from '@/components/google-status';
 import { useSubmitJob } from '@/components/submit-job';
 import { FileCode2, Link2, Plus } from 'lucide-react';
+import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/job-card';
-import { LinksTable } from '@/components/links-table';
+import { LinksSearchBar, LinksTable } from '@/components/links-table';
+import { useRestrictedMode } from '@/lib/restricted/context';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const CONTENT_TYPES = new Set(['short', 'long', 'article', 'repo']);
 
@@ -61,6 +71,64 @@ function normalizeContentType(value: string | null): string {
   return value && CONTENT_TYPES.has(value) ? value : '';
 }
 
+const INTRO_SEEN_COOKIE = 'ownix_preview_intro_seen';
+
+function RestrictedIntroModal() {
+  const router = useRouter();
+  const { restricted } = useRestrictedMode();
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!restricted) return;
+    // Session cookie, not sessionStorage: "once per browser session" has to
+    // hold across tabs, and sessionStorage is per-tab.
+    if (
+      document.cookie.split('; ').includes(`${INTRO_SEEN_COOKIE}=1`)
+    )
+      return;
+    setShow(true);
+  }, [restricted]);
+  const dismiss = () => {
+    document.cookie = `${INTRO_SEEN_COOKIE}=1; path=/; samesite=lax`;
+    setShow(false);
+  };
+  return (
+    <Dialog
+      open={show}
+      onOpenChange={(next) => {
+        if (!next) dismiss();
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        <DialogTitle>Restricted mode on</DialogTitle>
+        <DialogDescription>
+          This preview uses a read-only sample from Leon&apos;s Index,
+          balanced across Feed tabs so you can see videos, articles,
+          repos, and links. Actions are locked until you get access.
+        </DialogDescription>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              dismiss();
+              router.push('/login?from=restricted');
+            }}
+            className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised"
+          >
+            Get access
+          </button>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-canvas px-3 text-sm font-medium text-body hover:bg-raised"
+          >
+            Keep looking
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FeedPageContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -68,6 +136,7 @@ function FeedPageContent() {
   const urlContentType = normalizeContentType(
     searchParams.get('type'),
   );
+  const { restricted, showRestrictedToast } = useRestrictedMode();
   const {
     ctFilter,
     setCtFilter,
@@ -79,7 +148,7 @@ function FeedPageContent() {
     loading,
     error,
     reload,
-  } = useFeedData(urlContentType);
+  } = useFeedData(urlContentType, restricted);
   const {
     setOpen: setSubmitOpen,
     openDocs,
@@ -87,7 +156,7 @@ function FeedPageContent() {
     registerFeedSearch,
   } = useSubmitJob();
   const [feedView, setFeedView] = useState<'jobs' | 'links'>(
-    searchParams.get('view') === 'links' ? 'links' : 'jobs',
+    !restricted && searchParams.get('view') === 'links' ? 'links' : 'jobs',
   );
   const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>(
     [],
@@ -128,12 +197,14 @@ function FeedPageContent() {
   useEffect(() => {
     const google = searchParams.get('google');
     const rawType = searchParams.get('type');
+    const restrictedLinksView = restricted && searchParams.get('view') === 'links';
     const oauthReturn = google === 'connected' || google === 'denied';
     const badType = Boolean(rawType && !CONTENT_TYPES.has(rawType));
-    if (!oauthReturn && !badType) return;
+    if (!oauthReturn && !badType && !restrictedLinksView) return;
     if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
     const params = new URLSearchParams(searchParams.toString());
     params.delete('google');
+    if (restrictedLinksView) params.delete('view');
     if (badType) {
       params.delete('type');
       setCtFilter('');
@@ -142,7 +213,7 @@ function FeedPageContent() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, {
       scroll: false,
     });
-  }, [searchParams, pathname, router, setCtFilter]);
+  }, [searchParams, pathname, router, setCtFilter, restricted]);
 
   const refreshFeed = useCallback(async () => {
     await reload();
@@ -154,9 +225,9 @@ function FeedPageContent() {
 
   useEffect(() => {
     setFeedView(
-      searchParams.get('view') === 'links' ? 'links' : 'jobs',
+      !restricted && searchParams.get('view') === 'links' ? 'links' : 'jobs',
     );
-  }, [searchParams]);
+  }, [searchParams, restricted]);
 
   const setContentType = useCallback(
     (value: string) => {
@@ -177,22 +248,45 @@ function FeedPageContent() {
   );
 
   const switchToLinks = useCallback(() => {
+    if (restricted) {
+      showRestrictedToast('Links are available after sign-in.');
+      setFeedView('jobs');
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete('type');
     params.set('view', 'links');
     router.replace(`${pathname}?${params}`, { scroll: false });
     setFeedView('links');
-  }, [pathname, router, searchParams]);
+  }, [pathname, router, searchParams, restricted, showRestrictedToast]);
 
   // Expose the Feed search focus to the command launcher. focusLinkSearch
   // switches to Links first, then focuses LinksTable's own search input — not
   // #feed-search, which drives the Jobs query and would leave a stale filter.
-  // LinksTable mounts only after the view switch, so retry across frames until
-  // its input exists.
+  // focusSearch does the reverse: #feed-search is unmounted while Links is
+  // active (FilterBar hides it there), so hitting `/` on that tab backs out
+  // to the All tab first, then retries the focus across frames until the
+  // input remounts. Both read showingLinksRef instead of `showingLinks`
+  // directly so this effect doesn't need to re-register on every tab switch.
   useEffect(() => {
     registerFeedSearch({
-      focusSearch: () =>
-        document.getElementById('feed-search')?.focus(),
+      focusSearch: () => {
+        if (!showingLinksRef.current) {
+          document.getElementById('feed-search')?.focus();
+          return;
+        }
+        setContentType('');
+        let attempts = 0;
+        const focusJobsSearch = () => {
+          const input = document.getElementById('feed-search');
+          if (input) {
+            input.focus();
+          } else if (attempts++ < 10) {
+            requestAnimationFrame(focusJobsSearch);
+          }
+        };
+        requestAnimationFrame(focusJobsSearch);
+      },
       focusLinkSearch: () => {
         switchToLinks();
         let attempts = 0;
@@ -208,7 +302,7 @@ function FeedPageContent() {
       },
     });
     return () => registerFeedSearch(null);
-  }, [registerFeedSearch, switchToLinks]);
+  }, [registerFeedSearch, switchToLinks, setContentType]);
 
   const contentTypeCounts = useMemo(
     () => stats?.by_content_type ?? {},
@@ -218,25 +312,33 @@ function FeedPageContent() {
     () => Object.values(contentTypeCounts).reduce((a, b) => a + b, 0),
     [contentTypeCounts],
   );
-  const contentTypeTabs = useMemo(
-    () => [
-      ...CONTENT_TYPE_FILTERS.map(({ label, value }, i) => ({
-        label,
-        value,
-        count: value ? (contentTypeCounts[value] ?? 0) : totalCount,
-        dividerBefore: i > 0,
-      })),
-      {
+  const contentTypeTabs = useMemo(() => {
+    const tabs: FilterTab[] = CONTENT_TYPE_FILTERS.map(({ label, value }, i) => ({
+      label,
+      value,
+      count: value ? (contentTypeCounts[value] ?? 0) : totalCount,
+      dividerBefore: i > 0,
+    }));
+    if (!restricted) {
+      tabs.push({
         label: 'Links',
         value: 'links',
         dividerBefore: true,
         icon: Link2,
-      },
-    ],
-    [contentTypeCounts, totalCount],
-  );
+      });
+    }
+    return tabs;
+  }, [contentTypeCounts, totalCount, restricted]);
   const firstLoad = loading && jobs.length === 0 && !error;
   const showingLinks = feedView === 'links';
+  // Read inside the focusSearch closure below without re-registering it on
+  // every tab switch (registerFeedSearch only re-runs on identity changes).
+  const showingLinksRef = useRef(showingLinks);
+  showingLinksRef.current = showingLinks;
+  // Gated by `enabled` so Links data only fetches while its tab is actually
+  // active — mirrors how the Jobs feed already fetches regardless of tab,
+  // except Links has no reason to poll while parked on Jobs.
+  const linksData = useLinksTable({ enabled: showingLinks && !restricted });
   const showPreviewGrid = Boolean(ctFilter);
   const hasFilters = Boolean(ctFilter || stFilter || query.trim());
   const empty = !loading && !error && displayedJobs.length === 0;
@@ -286,6 +388,7 @@ function FeedPageContent() {
 
   return (
     <PageShell>
+      <RestrictedIntroModal />
       {oauthResult && (
         <div
           role="status"
@@ -303,7 +406,7 @@ function FeedPageContent() {
 
       {/* Disconnected-only nudge (CONTEXT.md `Account affordance`) — the
           sidebar owns the persistent state; this panel disappears once connected. */}
-      {googleConnected === false && (
+      {!restricted && googleConnected === false && (
         <section className="rounded-lg border border-line bg-surface p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -314,15 +417,16 @@ function FeedPageContent() {
                 Connect Google
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-body">
-                Authorize Drive + Sheets so saved items can export into
-                the app folder in your own Google Drive.
+                Authorize Drive + Sheets so saved items can export
+                into the app folder in your own Google Drive.
               </p>
             </div>
             <a
               href="/api/google/connect"
+              aria-label="Connect Google"
               className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
             >
-              Connect Google
+              Connect to <GoogleIcon className="ml-2 h-4 w-4" />
             </a>
           </div>
         </section>
@@ -353,6 +457,12 @@ function FeedPageContent() {
         searchLabel="Search by title or URL"
         statusValue={stFilter}
         onStatusChange={setStFilter}
+        hideSearchAndFilters={showingLinks}
+        searchSlot={
+          showingLinks ? (
+            <LinksSearchBar linksData={linksData} />
+          ) : undefined
+        }
         recoveryPanel={
           <RecoveryPanel
             contentType={ctFilter}
@@ -403,7 +513,7 @@ function FeedPageContent() {
       />
 
       {showingLinks ? (
-        <LinksTable />
+        <LinksTable linksData={linksData} />
       ) : (
         <section>
           <div className="mb-3 flex items-center gap-3">

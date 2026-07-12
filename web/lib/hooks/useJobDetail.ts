@@ -28,7 +28,7 @@ export interface JobDetail {
   links: string | null;
 }
 
-export function useJobDetail(jobId: string) {
-  const { data: job, fetchState } = useFetchDetail<JobDetail>(`/api/jobs/${jobId}`);
+export function useJobDetail(jobId: string, restricted = false) {
+  const { data: job, fetchState } = useFetchDetail<JobDetail>(`${restricted ? '/api/preview/jobs' : '/api/jobs'}/${jobId}`);
   return { job, fetchState };
 }

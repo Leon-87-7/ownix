@@ -4,16 +4,19 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobSummary } from '@/components/job-card';
 import { AppHeader } from '@/components/app-header';
 import { SubmitJobProvider } from '@/components/submit-job';
+import { RestrictedModeProvider } from '@/lib/restricted/context';
 import FeedPage from './page';
 
 // FeedPage now consumes the global submit dialog + header the (dashboard)
 // layout provides; render the same tree here so both triggers stay covered.
-function FeedTree() {
+function FeedTree({ restricted = false }: { restricted?: boolean } = {}) {
   return (
-    <SubmitJobProvider>
-      <AppHeader />
-      <FeedPage />
-    </SubmitJobProvider>
+    <RestrictedModeProvider restricted={restricted}>
+      <SubmitJobProvider>
+        <AppHeader />
+        <FeedPage />
+      </SubmitJobProvider>
+    </RestrictedModeProvider>
   );
 }
 
@@ -245,7 +248,7 @@ describe('FeedPage', () => {
   it('initializes content type from the URL type param', () => {
     navigationMock.searchParams = new URLSearchParams('type=short');
     render(<FeedTree />);
-    expect(mockUseFeedData).toHaveBeenCalledWith('short');
+    expect(mockUseFeedData).toHaveBeenCalledWith('short', false);
   });
 
   it('renders content-type tabs with counts', () => {
@@ -293,6 +296,30 @@ describe('FeedPage', () => {
     expect(navigationMock.replace).toHaveBeenCalledWith('/feed?view=links', { scroll: false });
     expect(screen.queryByText('Jobs')).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&sort=last_seen&order=desc');
+  });
+
+  it('omits the Links view and skips authenticated links fetches in restricted mode', async () => {
+    navigationMock.searchParams = new URLSearchParams('view=links');
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({
+        stale_pending: 0,
+        error_jobs: 0,
+        stale_in_flight: 0,
+      }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<FeedTree restricted />);
+
+    expect(screen.queryByRole('button', { name: /^links$/i })).toBeNull();
+    expect(screen.getByText('Jobs')).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/brain/links/view');
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).startsWith('/api/brain/links'),
+      ),
+    ).toBe(false);
   });
 
   it('opens the docs ingest dialog with the D shortcut', async () => {

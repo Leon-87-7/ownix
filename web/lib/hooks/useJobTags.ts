@@ -14,7 +14,7 @@ interface TagSummary {
 // Coerce to array — the UI maps over these, so a non-array body must not crash render.
 const asTags = (d: unknown): TagSummary[] => (Array.isArray(d) ? d : []);
 
-export function useJobTags(jobId: string, fetchState: FetchState) {
+export function useJobTags(jobId: string, fetchState: FetchState, disabled = false) {
   const [jobTags, setJobTags] = useState<TagSummary[]>([]);
   const [allTags, setAllTags] = useState<TagSummary[]>([]);
 
@@ -33,25 +33,27 @@ export function useJobTags(jobId: string, fetchState: FetchState) {
   }, []);
 
   useEffect(() => {
-    if (fetchState !== 'ok') return;
+    if (disabled || fetchState !== 'ok') return;
     refetchTags();
     refetchAll();
-  }, [fetchState, refetchTags, refetchAll]);
+  }, [fetchState, refetchTags, refetchAll, disabled]);
 
   const toggleTag = useCallback(
     async (tagId: string, attached: boolean) => {
+      if (disabled) return;
       const res = await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
         method: attached ? 'DELETE' : 'POST',
         credentials: 'include',
       });
       if (res.ok) refetchTags(); // res.ok covers 200/201/204
     },
-    [jobId, refetchTags],
+    [jobId, refetchTags, disabled],
   );
 
   // Create a tag in the user's library, then attach it to this job.
   const createTag = useCallback(
     async (values: TagFormState) => {
+      if (disabled) return;
       const res = await fetch('/api/controls/tags', {
         method: 'POST',
         credentials: 'include',
@@ -67,7 +69,7 @@ export function useJobTags(jobId: string, fetchState: FetchState) {
       refetchAll();
       refetchTags();
     },
-    [jobId, refetchAll, refetchTags],
+    [jobId, refetchAll, refetchTags, disabled],
   );
 
   return { jobTags, allTags, refetchTags, toggleTag, createTag };

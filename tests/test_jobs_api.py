@@ -4,12 +4,12 @@ from types import SimpleNamespace
 import pytest
 
 from src.api import jobs
-from src.api.jobs import _resolve_thumbnail
+from src.api.jobs import resolve_thumbnail
 
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_long_youtube_watch() -> None:
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://www.youtube.com/watch?v=abc123", "content_type": "long"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://www.youtube.com/watch?v=abc123", "content_type": "long"}) == (
         "https://img.youtube.com/vi/abc123/hqdefault.jpg",
         "landscape",
     )
@@ -17,7 +17,7 @@ async def test_resolve_thumbnail_long_youtube_watch() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_long_youtu_be() -> None:
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://youtu.be/abc123", "content_type": "long"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://youtu.be/abc123", "content_type": "long"}) == (
         "https://img.youtube.com/vi/abc123/hqdefault.jpg",
         "landscape",
     )
@@ -25,7 +25,7 @@ async def test_resolve_thumbnail_long_youtu_be() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_repo() -> None:
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://github.com/owner/repo/issues/1", "content_type": "repo"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://github.com/owner/repo/issues/1", "content_type": "repo"}) == (
         "https://opengraph.githubassets.com/0/owner/repo",
         "landscape",
     )
@@ -33,7 +33,7 @@ async def test_resolve_thumbnail_repo() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_youtube_short() -> None:
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://youtube.com/shorts/short123", "content_type": "short"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://youtube.com/shorts/short123", "content_type": "short"}) == (
         "https://img.youtube.com/vi/short123/hqdefault.jpg",
         "portrait",
     )
@@ -45,8 +45,8 @@ async def test_resolve_thumbnail_ig_and_tiktok_short_placeholder(monkeypatch) ->
         return False
 
     monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (None, None)
-    assert await _resolve_thumbnail({"id": "j2", "url": "https://www.tiktok.com/@user/video/1234567890", "content_type": "short"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (None, None)
+    assert await resolve_thumbnail({"id": "j2", "url": "https://www.tiktok.com/@user/video/1234567890", "content_type": "short"}) == (
         None,
         None,
     )
@@ -59,7 +59,7 @@ async def test_resolve_thumbnail_ig_short_uses_persisted_thumbnail(monkeypatch) 
 
     monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
 
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (
+    assert await resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (
         "/api/jobs/j1/thumbnail",
         "portrait",
     )
@@ -67,7 +67,7 @@ async def test_resolve_thumbnail_ig_short_uses_persisted_thumbnail(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_article_og_image() -> None:
-    assert await _resolve_thumbnail({
+    assert await resolve_thumbnail({
         "id": "j1",
         "url": "https://medium.com/example/post",
         "content_type": "article",
@@ -77,7 +77,7 @@ async def test_resolve_thumbnail_article_og_image() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_article_placeholder() -> None:
-    assert await _resolve_thumbnail({"id": "j1", "url": "https://medium.com/example/post", "content_type": "article"}) == (None, None)
+    assert await resolve_thumbnail({"id": "j1", "url": "https://medium.com/example/post", "content_type": "article"}) == (None, None)
 
 
 class _RecordingCursor:

@@ -104,6 +104,14 @@ export default function PrivacyPage() {
             </p>
           </LegalSection>
 
+
+
+          <LegalSection title="Functional preview cookies">
+            <p>
+              Ownix may set a session cookie named <code>ownix_preview</code> to keep the read-only preview active while you browse. It does not identify you or track you across sites.
+            </p>
+          </LegalSection>
+
           <LegalSection title="Revoking access">
             <p>
               Send <code>/disconnect</code> to the bot at any time to

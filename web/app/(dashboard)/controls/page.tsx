@@ -1,5 +1,8 @@
 'use client';
 
+import { useRestrictedMode } from '@/lib/restricted/context';
+import { RestrictedFacade } from '@/components/restricted-facade';
+
 import { useEffect, useId, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
@@ -542,6 +545,9 @@ function Section({
 }
 
 export default function ControlsPage() {
+  const { restricted } = useRestrictedMode();
+  if (restricted) return <RestrictedFacade icon={SlidersHorizontal} title="Settings">Settings control domains, tags, and workspace behavior for your own Index. Changes are locked in this read-only preview.</RestrictedFacade>;
+
   return (
     <PageShell>
       <PageHeader icon={SlidersHorizontal} title="Settings" />

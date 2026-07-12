@@ -35,7 +35,10 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="bg-canvas font-sans text-ink antialiased">
         <MockProvider>{children}</MockProvider>
-      </body>
+      {/* impeccable-live-start */}
+{process.env.NODE_ENV === 'development' && <script src="http://localhost:8400/live.js"></script>}
+{/* impeccable-live-end */}
+</body>
     </html>
   );
 }

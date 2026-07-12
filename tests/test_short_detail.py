@@ -1,7 +1,7 @@
 """Tests for issues #164/#213: short-pipeline job detail pages.
 
 Covers:
-- _DETAIL_FIELDS_SHORT / _detail_fields_for API selector
+- _DETAIL_FIELDS_SHORT / detail_fields_for API selector
 - GET /api/jobs/{id} returns short fields for short jobs and long fields for long jobs
 - short_video.run() persists the vision summary and enriched links to DB columns
 """
@@ -19,11 +19,11 @@ os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-secret")
 
 
 # ---------------------------------------------------------------------------
-# API: _detail_fields_for selects the right schema
+# API: detail_fields_for selects the right schema
 # ---------------------------------------------------------------------------
 
 from src.api.jobs import (
-    _detail_fields_for,
+    detail_fields_for,
     _DETAIL_FIELDS_COMMON,
     _DETAIL_FIELDS_SHORT,
     _DETAIL_FIELDS_LONG,
@@ -31,7 +31,7 @@ from src.api.jobs import (
 
 
 def test_detail_fields_short_includes_summary_transcript_links() -> None:
-    fields = _detail_fields_for("short")
+    fields = detail_fields_for("short")
     assert "summary" in fields
     assert "transcript" in fields
     assert "links" in fields
@@ -39,7 +39,7 @@ def test_detail_fields_short_includes_summary_transcript_links() -> None:
 
 
 def test_detail_fields_short_excludes_long_enrichment() -> None:
-    fields = _detail_fields_for("short")
+    fields = detail_fields_for("short")
     assert "ai_topic" not in fields
     assert "ai_objective" not in fields
     assert "ai_action_points" not in fields
@@ -48,7 +48,7 @@ def test_detail_fields_short_excludes_long_enrichment() -> None:
 
 
 def test_detail_fields_long_includes_enrichment() -> None:
-    fields = _detail_fields_for("long")
+    fields = detail_fields_for("long")
     assert "ai_topic" in fields
     assert "ai_objective" in fields
     assert "promise_gap" in fields
@@ -56,7 +56,7 @@ def test_detail_fields_long_includes_enrichment() -> None:
 
 
 def test_detail_fields_long_excludes_short_fields() -> None:
-    fields = _detail_fields_for("long")
+    fields = detail_fields_for("long")
     assert "summary" not in fields
     assert "transcript" not in fields
     assert "links" not in fields
@@ -64,12 +64,12 @@ def test_detail_fields_long_excludes_short_fields() -> None:
 
 
 def test_detail_fields_article_matches_long() -> None:
-    assert _detail_fields_for("article") == _detail_fields_for("long")
+    assert detail_fields_for("article") == detail_fields_for("long")
 
 
 def test_detail_fields_common_always_present() -> None:
     for ct in ("short", "long", "article", "repo"):
-        fields = _detail_fields_for(ct)
+        fields = detail_fields_for(ct)
         for common in _DETAIL_FIELDS_COMMON:
             assert common in fields, f"{common!r} missing from {ct!r} fields"
 

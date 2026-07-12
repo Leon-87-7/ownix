@@ -73,6 +73,7 @@ from src.api.google_oauth import google_oauth_router
 from src.api.parsed import parsed_router
 from src.api.spaces import spaces_router
 from src.api.templates import templates_router
+from src.api.preview import preview_router
 
 app.include_router(auth_router)
 app.include_router(brain_router)
@@ -82,6 +83,7 @@ app.include_router(google_oauth_router)
 app.include_router(parsed_router)
 app.include_router(spaces_router)
 app.include_router(templates_router)
+app.include_router(preview_router)
 
 
 @app.get("/health")

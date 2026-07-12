@@ -1,5 +1,8 @@
 'use client';
 
+import { useRestrictedMode } from '@/lib/restricted/context';
+import { RestrictedFacade } from '@/components/restricted-facade';
+
 import Link from 'next/link';
 import {
   useCallback,
@@ -116,6 +119,12 @@ function FormatHelp() {
 }
 
 export default function DocParserPage() {
+  const { restricted } = useRestrictedMode();
+  if (restricted) return <RestrictedFacade icon={FileCode2} title="Docs">Docs ingestion turns PDFs and other files into parsed source material. Uploads and Telegram delivery toggles are locked in this read-only preview.</RestrictedFacade>;
+  return <DocParserWorkspace />;
+}
+
+function DocParserWorkspace() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');

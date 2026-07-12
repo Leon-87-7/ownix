@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { DocUploadPanel } from './doc-upload-panel';
+import { useRestrictedMode } from '@/lib/restricted/context';
 
 /** The job the API accepted, timestamped so consumers can react to repeats. */
 export interface AcceptedJob {
@@ -203,9 +204,23 @@ export function SubmitJobProvider({
 }: {
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
+  const { restricted, showRestrictedToast } = useRestrictedMode();
+  const [open, setOpenRaw] = useState(false);
+  const [docsOpenRaw, setDocsOpenRaw] = useState(false);
+  const setOpen = useCallback((next: boolean) => {
+    if (next && restricted) { showRestrictedToast('Sign in to submit URLs to your own Index.'); return; }
+    setOpenRaw(next);
+  }, [restricted, showRestrictedToast]);
+  const setDocsOpen = useCallback((next: boolean) => {
+    if (next && restricted) { showRestrictedToast('Sign in to parse documents into your own Index.'); return; }
+    setDocsOpenRaw(next);
+  }, [restricted, showRestrictedToast]);
+  const docsOpen = docsOpenRaw;
+  const [commandOpen, setCommandOpenRaw] = useState(false);
+  const setCommandOpen = useCallback((next: boolean) => {
+    if (next && restricted) { showRestrictedToast('Sign in to run commands on your own Index.'); return; }
+    setCommandOpenRaw(next);
+  }, [restricted, showRestrictedToast]);
   const [url, setUrl] = useState('');
   const [template, setTemplate] = useState('summary');
   const [freestylePrompt, setFreestylePrompt] = useState('');
@@ -276,7 +291,7 @@ export function SubmitJobProvider({
         !shouldIgnoreGlobalShortcut(event.target)
       ) {
         const recovery = feedRecoveryRef.current;
-        if (recovery?.canClearFailed) {
+        if (!restricted && recovery?.canClearFailed) {
           event.preventDefault();
           if (window.confirm(CLEAR_FAILED_CONFIRM))
             recovery.clearFailed();
@@ -324,7 +339,7 @@ export function SubmitJobProvider({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [restricted, setCommandOpen]);
 
   const submitJob = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -380,11 +395,11 @@ export function SubmitJobProvider({
     [freestylePrompt, submitting, template, url],
   );
 
-  const openDocs = useCallback(() => setDocsOpen(true), []);
-  const openCommand = useCallback(() => setCommandOpen(true), []);
+  const openDocs = useCallback(() => setDocsOpen(true), [setDocsOpen]);
+  const openCommand = useCallback(() => setCommandOpen(true), [setCommandOpen]);
   const go = useCallback((href: string) => {
-    setCommandOpen(false);
-    setDocsOpen(false);
+    setCommandOpenRaw(false);
+    setDocsOpenRaw(false);
     window.location.assign(href);
   }, []);
 
