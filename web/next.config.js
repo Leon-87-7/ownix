@@ -10,17 +10,6 @@ const nextConfig = {
       },
     ];
   },
-  // SVGR under Turbopack (Next 16 default): `import Logo from './x.svg'`
-  // yields a React component.
-  turbopack: {
-    root: __dirname,
-    rules: {
-      "*.svg": {
-        loaders: ["@svgr/webpack"],
-        as: "*.js",
-      },
-    },
-  },
   // SVGR under webpack (only used with `next --webpack`): reroute Next's
   // default file loader off .svg, then process SVGs as React components.
   webpack(config) {
