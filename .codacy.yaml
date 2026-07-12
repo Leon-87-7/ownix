@@ -1,0 +1,11 @@
+---
+# Codacy configuration.
+#
+# Exclude the test tree from static analysis. Test modules are held to
+# different rules than production code — most notably Bandit B101
+# ("assert used"), which warns that `assert` is stripped under `python -O`.
+# That risk is real for runtime code but irrelevant in tests: pytest is built
+# on `assert` and the suite is never run optimized. The repo already relies on
+# ~1300 test asserts, so gating PRs on this rule is pure noise.
+exclude_paths:
+  - 'tests/**'

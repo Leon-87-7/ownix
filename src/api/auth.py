@@ -137,11 +137,18 @@ async def logout(request: Request) -> RedirectResponse:
 
 
 @auth_router.get("/me")
-async def me(request: Request) -> dict:
+async def me(request: Request, response: Response) -> dict:
     session_user = request.state.user
     tg_id = int(session_user["id"])
     db_user = await database.get_user(tg_id)
     status = await database.get_user_status(tg_id)
+    if status == "approved" and "ownix_preview" in request.cookies:
+        # A stale preview cookie on an approved session would render the
+        # dashboard in Restricted mode (ADR-0035 §1 says approved users get
+        # their own Feed) — clear it whenever we see it.
+        response.delete_cookie(
+            "ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE
+        )
     return {
         **session_user,
         "email": db_user.get("email") if db_user else None,

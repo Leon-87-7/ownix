@@ -7,7 +7,8 @@ import { GoogleStatusProvider } from '@/components/google-status';
 import { SubmitJobProvider } from '@/components/submit-job';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
-import { cookies } from 'next/headers';
+import { isRestrictedRequest } from '@/lib/restricted/server';
+import { cookies, headers } from 'next/headers';
 
 // Private user data — never indexable. The middleware session gate keeps
 // crawlers out; this covers any gap.
@@ -19,11 +20,16 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  // The /restricted entry route only mints this cookie for visitors who are
-  // NOT approved (ADR-0035 §1), and approved sign-in deletes it — so cookie
-  // presence alone is the restricted signal. A pending/blocked user's
-  // vig_session must not outrank it.
-  const restricted = cookieStore.get('ownix_preview')?.value === '1';
+  // Cookie presence alone is NOT the restricted signal: /restricted fails
+  // closed and can mint the cookie for an approved user during a backend
+  // blip, which would swap their Feed for the preview corpus. When both
+  // cookies are present, ask the backend — approved sessions get their own
+  // Feed (ADR-0035 §1), while pending/blocked sessions stay restricted.
+  const restricted = await isRestrictedRequest({
+    hasPreviewCookie: cookieStore.get('ownix_preview')?.value === '1',
+    hasSession: Boolean(cookieStore.get('vig_session')?.value),
+    cookieHeader: (await headers()).get('cookie') ?? '',
+  });
   return (
     <TooltipProvider>
       <RestrictedModeProvider restricted={restricted}>
