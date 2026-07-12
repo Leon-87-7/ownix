@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 OPERATOR = 111
@@ -277,6 +277,56 @@ class TestPreviewCorpus:
         assert first.status_code == 200
         assert second.status_code == 200
         assert limited.status_code == 429
+
+    def test_rate_limit_ignores_spoofed_forwarded_for(
+        self, preview_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.api import preview
+
+        monkeypatch.setattr(preview, "_RATE_LIMIT_MAX_REQUESTS", 1)
+
+        first = preview_client.get(
+            "/api/preview/jobs",
+            cookies=PREVIEW_COOKIE,
+            headers={"x-forwarded-for": "198.51.100.1"},
+        )
+        limited = preview_client.get(
+            "/api/preview/jobs",
+            cookies=PREVIEW_COOKIE,
+            headers={"x-forwarded-for": "198.51.100.2"},
+        )
+
+        assert first.status_code == 200
+        assert limited.status_code == 429
+
+    def test_rate_limit_evicts_stale_client_buckets(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.api import preview
+
+        now = 1000.0
+        monkeypatch.setattr(preview.time, "monotonic", lambda: now)
+        preview._preview_rate_limit.update(
+            {
+                "stale-1": [now - preview._RATE_LIMIT_WINDOW_SECONDS - 1],
+                "stale-2": [now - preview._RATE_LIMIT_WINDOW_SECONDS - 2],
+                "active": [now],
+            }
+        )
+
+        preview._enforce_preview_rate_limit(
+            Request(
+                {
+                    "type": "http",
+                    "client": ("active", 12345),
+                    "headers": [],
+                }
+            )
+        )
+
+        assert "stale-1" not in preview._preview_rate_limit
+        assert "stale-2" not in preview._preview_rate_limit
+        assert "active" in preview._preview_rate_limit
 
 
 # ---------------------------------------------------------------------------

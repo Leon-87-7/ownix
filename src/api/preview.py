@@ -57,9 +57,6 @@ def _require_preview(request: Request) -> None:
 
 
 def _preview_client_key(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip() or "unknown"
     if request.client is not None and request.client.host:
         return request.client.host
     return "unknown"
@@ -68,10 +65,13 @@ def _preview_client_key(request: Request) -> str:
 def _enforce_preview_rate_limit(request: Request) -> None:
     now = time.monotonic()
     cutoff = now - _RATE_LIMIT_WINDOW_SECONDS
+    for stale_key, stale_hits in list(_preview_rate_limit.items()):
+        while stale_hits and stale_hits[0] <= cutoff:
+            stale_hits.pop(0)
+        if not stale_hits:
+            _preview_rate_limit.pop(stale_key, None)
     key = _preview_client_key(request)
     hits = _preview_rate_limit.setdefault(key, [])
-    while hits and hits[0] <= cutoff:
-        hits.pop(0)
     if len(hits) >= _RATE_LIMIT_MAX_REQUESTS:
         raise HTTPException(status_code=429, detail="Preview rate limit exceeded")
     hits.append(now)
