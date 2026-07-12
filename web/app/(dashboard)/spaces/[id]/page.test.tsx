@@ -78,46 +78,46 @@ beforeEach(() => {
 describe('SpaceDetailPage', () => {
   it('shows loading skeleton when fetchState is loading', () => {
     setupMocks({ fetchState: 'loading', space: null });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(document.querySelector('.animate-pulse')).toBeTruthy();
   });
 
   it('shows not found message', () => {
     setupMocks({ fetchState: 'not_found', space: null });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText(/collection not found/i)).toBeTruthy();
   });
 
   it('shows forbidden message', () => {
     setupMocks({ fetchState: 'forbidden', space: null });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText(/access denied/i)).toBeTruthy();
   });
 
   it('shows error message on error fetch state', () => {
     setupMocks({ fetchState: 'error', space: null });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText(/failed to load collection/i)).toBeTruthy();
   });
 
   it('renders space name when loaded', () => {
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText('My Space')).toBeTruthy();
   });
 
   it('renders tab buttons', () => {
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText('URLs')).toBeTruthy();
     expect(screen.getByText('Context')).toBeTruthy();
   });
 
   it('renders URLs tab by default', () => {
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByTestId('urls-tab')).toBeTruthy();
   });
 
   it('renders Edit and Export and Delete buttons', () => {
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByRole('button', { name: /edit/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /export/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /delete/i })).toBeTruthy();
@@ -127,7 +127,7 @@ describe('SpaceDetailPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
     await waitFor(() => expect(screen.getByText(/couldn.t delete/i)).toBeInTheDocument());
@@ -136,19 +136,19 @@ describe('SpaceDetailPage', () => {
 
   it('shows edit form when editing is true', () => {
     setupMocks({}, { editing: true });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText('Edit Collection')).toBeTruthy();
   });
 
   it('shows edit error when editError is set', () => {
     setupMocks({}, { editing: true, editError: 'A space with that name already exists.' });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText('A space with that name already exists.')).toBeTruthy();
   });
 
   it('shows saving state in edit form', () => {
     setupMocks({}, { editing: true, editSaving: true });
-    render(<SpaceDetailPage params={{ id: 's1' }} />);
+    render(<SpaceDetailPage />);
     expect(screen.getByText('Saving…')).toBeTruthy();
   });
 });

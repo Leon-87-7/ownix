@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { TagMenu, TagChips } from "@/components/TagPicker";
 import { StatusBadge, TypeBadge } from "@/components/badges";
@@ -477,16 +477,21 @@ function JobActionsBar({
   );
 }
 
-export default function JobDetailPage({ params }: { params: { id: string } }) {
+export default function JobDetailPage() {
+  // Next 16 passes `params` as a Promise to page props; reading it as a plain
+  // object yields `undefined`, which sent every detail fetch to
+  // /api/jobs/undefined → 404 "Job not found". useParams() is the client-side
+  // hook that resolves the route id synchronously (matches doc-parser/[id]).
+  const { id } = useParams<{ id: string }>();
   const { restricted } = useRestrictedMode();
-  const { job, fetchState } = useJobDetail(params.id, restricted);
+  const { job, fetchState } = useJobDetail(id, restricted);
   const { annotation, loaded, handleSave } = useJobAnnotation(
-    params.id,
+    id,
     fetchState,
     restricted,
   );
   const { jobTags, allTags, toggleTag, createTag } = useJobTags(
-    params.id,
+    id,
     fetchState,
     restricted,
   );

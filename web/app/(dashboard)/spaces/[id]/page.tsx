@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ExportModal from "@/components/ExportModal";
 import { useSpaceDetail } from "@/lib/hooks/useSpaceDetail";
 import { useSpaceEdit } from "@/lib/hooks/useSpaceEdit";
@@ -14,11 +14,14 @@ import { SkeletonBlock } from "@/components/feed/feed-states";
 
 type ActiveTab = "urls" | "context";
 
-export default function SpaceDetailPage({ params }: { params: { id: string } }) {
+export default function SpaceDetailPage() {
+  // Next 16 params are async on page props; useParams() resolves the route id
+  // client-side (see jobs/[id] for the /api/…/undefined failure this avoids).
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { space, setSpace, fetchState } = useSpaceDetail(params.id);
+  const { space, setSpace, fetchState } = useSpaceDetail(id);
   const { editing, editName, setEditName, editColor, setEditColor, editError, editSaving, startEdit, cancelEdit, handleEditSave } =
-    useSpaceEdit(params.id, space, setSpace);
+    useSpaceEdit(id, space, setSpace);
   const [activeTab, setActiveTab] = useState<ActiveTab>("urls");
   const [showExport, setShowExport] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -29,7 +32,7 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
     setDeleting(true);
     setDeleteFailed(false);
     try {
-      const res = await fetch(`/api/spaces/${params.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/spaces/${id}`, { method: "DELETE" });
       if (res.ok || res.status === 204) {
         // Navigating away — skip state updates so nothing fires mid-unmount.
         router.push("/spaces");
@@ -40,7 +43,7 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
       setDeleteFailed(true);
     }
     setDeleting(false);
-  }, [params.id, router]);
+  }, [id, router]);
 
   if (fetchState === "loading") {
     return (
@@ -105,10 +108,10 @@ export default function SpaceDetailPage({ params }: { params: { id: string } }) 
         labels={{ urls: "URLs", context: "Context" }}
       />
 
-      {activeTab === "urls" && <UrlsTab spaceId={params.id} />}
-      {activeTab === "context" && <ContextTab spaceId={params.id} />}
+      {activeTab === "urls" && <UrlsTab spaceId={id} />}
+      {activeTab === "context" && <ContextTab spaceId={id} />}
 
-      {showExport && <ExportModal spaceId={params.id} spaceName={space.name} onClose={() => setShowExport(false)} />}
+      {showExport && <ExportModal spaceId={id} spaceName={space.name} onClose={() => setShowExport(false)} />}
     </PageShell>
   );
 }

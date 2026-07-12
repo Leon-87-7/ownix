@@ -103,7 +103,7 @@ describe('CopyButton', () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
 
     // CopyButton is page-local (Next.js forbids extra page exports); reach it through the page.
-    const { unmount } = render(<JobDetailPage params={{ id: 'j1' }} />);
+    const { unmount } = render(<JobDetailPage />);
     fireEvent.click(screen.getByRole('button', { name: /copy all/i }));
     await waitFor(() => expect(screen.getByText('Copied!')).toBeInTheDocument());
 
@@ -118,57 +118,57 @@ describe('CopyButton', () => {
 describe('JobDetailPage', () => {
   it('shows loading skeleton when fetchState is loading', () => {
     setupMocks({ fetchState: 'loading', job: null });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(document.querySelector('.animate-pulse')).toBeTruthy();
   });
 
   it('shows not found when fetchState is not_found', () => {
     setupMocks({ fetchState: 'not_found', job: null });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText(/job not found/i)).toBeTruthy();
   });
 
   it('shows forbidden message when fetchState is forbidden', () => {
     setupMocks({ fetchState: 'forbidden', job: null });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText(/access denied/i)).toBeTruthy();
   });
 
   it('shows error message when fetchState is error', () => {
     setupMocks({ fetchState: 'error', job: null });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText(/failed to load job/i)).toBeTruthy();
   });
 
   it('renders job title when loaded', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('My Awesome Video')).toBeTruthy();
   });
 
   it('renders content type and status badges', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('long')).toBeTruthy();
     expect(screen.getByText('done')).toBeTruthy();
   });
 
   it('renders job URL', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('https://www.youtube.com/watch?v=test123')).toBeTruthy();
   });
 
   it('renders Open in Drive link', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText(/open in drive/i)).toBeTruthy();
   });
 
   it('renders enrichment field labels', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Topic')).toBeTruthy();
     expect(screen.getByText('Objective')).toBeTruthy();
   });
 
   it('renders enrichment field values', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Machine Learning')).toBeTruthy();
     expect(screen.getByText('Learn ML basics')).toBeTruthy();
   });
@@ -177,45 +177,45 @@ describe('JobDetailPage', () => {
     setupMocks({
       job: { ...JOB, status: 'error', error_msg: 'Processing failed' },
     });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Processing failed')).toBeTruthy();
   });
 
   it('renders tag menu and chips', () => {
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByTestId('tag-menu')).toBeTruthy();
     expect(screen.getByTestId('tag-chips')).toBeTruthy();
   });
 
   it('renders MarkdownEditor when annotation is loaded', () => {
     setupMocks({}, { loaded: true, annotation: { notes: 'My notes', updated_at: null } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     // MarkdownEditor is dynamic - mocked as dynamic component
     expect(screen.getByTestId('dynamic-component')).toBeTruthy();
   });
 
   it('uses URL as title when title is null', () => {
     setupMocks({ job: { ...JOB, title: null } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getAllByText('https://www.youtube.com/watch?v=test123').length).toBeGreaterThan(0);
   });
 
   it('renders template_analysis with JSON content', () => {
     const jsonAnalysis = JSON.stringify({ key_insight: 'This is valuable', action: 'Do something' });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Template Analysis')).toBeTruthy();
   });
 
   it('renders template_analysis with invalid JSON as plain text', () => {
     setupMocks({ job: { ...JOB, template_analysis: 'not json text' } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('not json text')).toBeTruthy();
   });
 
   it('does not render drive link when drive_url is null', () => {
     setupMocks({ job: { ...JOB, drive_url: null } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.queryByText(/open in drive/i)).toBeNull();
   });
 
@@ -226,7 +226,7 @@ describe('JobDetailPage', () => {
       tags: ['AI', 'ML', 'Deep Learning'],
     });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Template Analysis')).toBeTruthy();
     expect(screen.getByText('Overview')).toBeTruthy();
     expect(screen.getByText('Great video')).toBeTruthy();
@@ -235,7 +235,7 @@ describe('JobDetailPage', () => {
   it('renders template_analysis with all-scalar array', () => {
     const jsonAnalysis = JSON.stringify({ points: ['Point 1', 'Point 2', 'Point 3'] });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Point 1')).toBeTruthy();
     expect(screen.getByText('Point 2')).toBeTruthy();
   });
@@ -243,14 +243,14 @@ describe('JobDetailPage', () => {
   it('renders template_analysis with array of objects', () => {
     const jsonAnalysis = JSON.stringify({ steps: [{ name: 'Step 1', desc: 'Do this' }, { name: 'Step 2', desc: 'Do that' }] });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Template Analysis')).toBeTruthy();
   });
 
   it('renders template_analysis with a top-level number value', () => {
     const jsonAnalysis = JSON.stringify({ score: 9.5, label: 'Excellent' });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('9.5')).toBeTruthy();
     expect(screen.getByText('Excellent')).toBeTruthy();
   });
@@ -258,14 +258,14 @@ describe('JobDetailPage', () => {
   it('renders template_analysis with top-level array JSON', () => {
     const jsonAnalysis = JSON.stringify(['item1', 'item2', 'item3']);
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('item1')).toBeTruthy();
   });
 
   it('renders template_analysis with boolean values', () => {
     const jsonAnalysis = JSON.stringify({ is_recommended: true, reviewed: false });
     setupMocks({ job: { ...JOB, template_analysis: jsonAnalysis } });
-    render(<JobDetailPage params={{ id: 'j1' }} />);
+    render(<JobDetailPage />);
     expect(screen.getByText('true')).toBeTruthy();
   });
 });
