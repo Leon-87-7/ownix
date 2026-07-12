@@ -532,3 +532,63 @@ class TestPreviewCookieLifecycle:
         preview_cookies = [c for c in cookies if c.startswith("ownix_preview=")]
         assert len(preview_cookies) == 1
         assert 'Max-Age=0' in preview_cookies[0] or "expires" in preview_cookies[0].lower()
+
+    @staticmethod
+    def _me(
+        monkeypatch: pytest.MonkeyPatch, status: str, cookie_header: str
+    ) -> list[str]:
+        from fastapi import Response
+
+        from src.api import auth as auth_api
+
+        async def fake_get_user(tg_id: int) -> dict | None:
+            return None
+
+        async def fake_get_user_status(tg_id: int) -> str:
+            return status
+
+        monkeypatch.setattr(auth_api.database, "get_user", fake_get_user)
+        monkeypatch.setattr(
+            auth_api.database, "get_user_status", fake_get_user_status
+        )
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/api/auth/me",
+                "query_string": b"",
+                "headers": [(b"cookie", cookie_header.encode())],
+            }
+        )
+        request.state.user = {"id": 87, "first_name": "Lee"}
+        response = Response()
+        result = asyncio.run(auth_api.me(request, response))
+        assert result["status"] == status
+        return response.headers.getlist("set-cookie")
+
+    def test_me_deletes_stale_preview_cookie_for_approved_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A stale preview cookie next to an approved session would lock the
+        # dashboard into Restricted mode — /me self-heals it on sight.
+        cookies = self._me(
+            monkeypatch, "approved", "vig_session=abc; ownix_preview=1"
+        )
+        preview_cookies = [c for c in cookies if c.startswith("ownix_preview=")]
+        assert len(preview_cookies) == 1
+        assert 'Max-Age=0' in preview_cookies[0] or "expires" in preview_cookies[0].lower()
+
+    def test_me_keeps_preview_cookie_for_pending_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cookies = self._me(
+            monkeypatch, "pending", "vig_session=abc; ownix_preview=1"
+        )
+        assert not [c for c in cookies if c.startswith("ownix_preview=")]
+
+    def test_me_sets_no_cookie_without_preview_cookie(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cookies = self._me(monkeypatch, "approved", "vig_session=abc")
+        assert not [c for c in cookies if c.startswith("ownix_preview=")]

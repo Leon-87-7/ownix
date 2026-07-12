@@ -1,29 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-const API_URL = process.env.API_INTERNAL_URL || 'http://localhost:8000';
+import { fetchAuthStatus } from '@/lib/restricted/server';
 
 // "Look inside" is session-aware (ADR-0035 §1): approved users go to their
 // own Feed with no preview cookie; anonymous, pending, and blocked visitors
 // enter Restricted mode. Approval lives server-side, so ask the backend.
-async function isApprovedSession(request: NextRequest): Promise<boolean> {
-  if (!request.cookies.get('vig_session')?.value) return false;
-  try {
-    const res = await fetch(`${API_URL}/api/auth/me`, {
-      headers: { cookie: request.headers.get('cookie') ?? '' },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return false;
-    const me = (await res.json()) as { status?: string };
-    return me.status === 'approved';
-  } catch {
-    // Backend unreachable: fall through to Restricted mode — the safe default
-    // grants less, not more.
-    return false;
-  }
-}
-
+// Backend unreachable falls through to Restricted mode — the safe default
+// grants less, not more — and the dashboard layout re-checks approval on
+// every render, so a cookie minted over a blip can't lock an approved user
+// out of their own Feed.
 export async function GET(request: NextRequest) {
   const url = new URL('/feed', request.url);
   const response = NextResponse.redirect(url, 303);
@@ -34,7 +19,11 @@ export async function GET(request: NextRequest) {
     response.cookies.delete('ownix_preview');
     return response;
   }
-  if (await isApprovedSession(request)) {
+  const hasSession = Boolean(request.cookies.get('vig_session')?.value);
+  const status = hasSession
+    ? await fetchAuthStatus(request.headers.get('cookie') ?? '')
+    : 'unapproved';
+  if (status === 'approved') {
     // Self-heal a stale preview cookie (e.g. approved mid-session).
     response.cookies.delete('ownix_preview');
     return response;
