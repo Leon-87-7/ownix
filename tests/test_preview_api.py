@@ -299,6 +299,46 @@ class TestPreviewCorpus:
         assert first.status_code == 200
         assert limited.status_code == 429
 
+    def test_rate_limit_uses_forwarded_for_from_trusted_proxy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.api import preview
+
+        monkeypatch.setattr(
+            preview.settings,
+            "PREVIEW_TRUSTED_PROXY_CIDRS",
+            "127.0.0.1/32",
+        )
+        request = Request(
+            {
+                "type": "http",
+                "client": ("127.0.0.1", 12345),
+                "headers": [(b"x-forwarded-for", b"203.0.113.10, 127.0.0.1")],
+            }
+        )
+
+        assert preview._preview_client_key(request) == "203.0.113.10"
+
+    def test_rate_limit_uses_real_ip_from_trusted_proxy(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.api import preview
+
+        monkeypatch.setattr(
+            preview.settings,
+            "PREVIEW_TRUSTED_PROXY_CIDRS",
+            "127.0.0.1/32",
+        )
+        request = Request(
+            {
+                "type": "http",
+                "client": ("127.0.0.1", 12345),
+                "headers": [(b"x-real-ip", b"203.0.113.11")],
+            }
+        )
+
+        assert preview._preview_client_key(request) == "203.0.113.11"
+
     def test_rate_limit_evicts_stale_client_buckets(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

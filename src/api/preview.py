@@ -10,6 +10,7 @@ headers on every response.
 from __future__ import annotations
 
 import asyncio
+from ipaddress import ip_address, ip_network
 import time
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
@@ -57,9 +58,34 @@ def _require_preview(request: Request) -> None:
 
 
 def _preview_client_key(request: Request) -> str:
-    if request.client is not None and request.client.host:
-        return request.client.host
+    peer = request.client.host if request.client is not None else None
+    if peer and _trusted_proxy_peer(peer):
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            return forwarded_for.split(",", 1)[0].strip() or peer
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip() or peer
+    if peer:
+        return peer
     return "unknown"
+
+
+def _trusted_proxy_peer(peer: str) -> bool:
+    try:
+        peer_ip = ip_address(peer)
+    except ValueError:
+        return False
+    for raw_network in settings.PREVIEW_TRUSTED_PROXY_CIDRS.split(","):
+        raw_network = raw_network.strip()
+        if not raw_network:
+            continue
+        try:
+            if peer_ip in ip_network(raw_network, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _enforce_preview_rate_limit(request: Request) -> None:
