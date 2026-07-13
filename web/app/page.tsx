@@ -64,7 +64,7 @@ export default function LandingPage() {
             <OwnixLogo
               aria-hidden="true"
               focusable="false"
-              className="h-7 w-7 transition-transform duration-200 ease-out-quart group-hover:scale-110 group-hover:text-signal-bright group-hover:rotate-[-6deg]"
+              className="h-7 w-7 group-hover:text-signal-bright motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart motion-safe:group-hover:scale-110 motion-safe:group-hover:rotate-[-6deg]"
             />
             <span className="group-hover:text-contrasignal">
               Ownix
