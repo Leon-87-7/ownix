@@ -17,7 +17,21 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// new URL() throws on a malformed value (missing protocol, stray whitespace);
+// fall back to Vercel's deployment URL rather than crashing metadata resolution.
+function siteUrl(): URL | undefined {
+  if (!process.env.NEXT_PUBLIC_SITE_URL) return undefined;
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL);
+  } catch {
+    return undefined;
+  }
+}
+
 export const metadata: Metadata = {
+  // Absolute URLs for og:image etc. Vercel falls back to the deployment URL
+  // when this is unset; a custom domain should set NEXT_PUBLIC_SITE_URL.
+  ...(siteUrl() ? { metadataBase: siteUrl() } : {}),
   title: "Ownix — Your internet, indexed",
   description:
     "Collect what matters. Own your Index. Shape the Brain.",

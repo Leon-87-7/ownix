@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { PulsingBorder } from '@paper-design/shaders-react';
 import { Tooltip } from '@/components/ui/tooltip';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import OwnixLogo from '@/app/ownix-logo.svg';
 import {
   Rss,
@@ -27,6 +28,7 @@ import {
   type InviteUser,
 } from '@/components/invite-gate';
 import { useGoogleStatus } from '@/components/google-status';
+import { statusColors } from '@/lib/design-tokens';
 
 interface NavItem {
   href: string;
@@ -42,6 +44,19 @@ const NAV: NavItem[] = [
   { href: '/prompts', label: 'Recipes', icon: MessageSquareText },
   { href: '/controls', label: 'Settings', icon: SlidersHorizontal },
 ];
+
+const AVATAR_BORDER_COLORS = [
+  statusColors.processing,
+  statusColors.pending,
+  statusColors.done,
+  statusColors.error,
+] as const;
+
+const AVATAR_BORDER_SHADER = {
+  trails: 2,
+  brightness: 1.15,
+  scale: 0.95,
+} as const;
 
 // Ownix brand mark (web/app/ownix-logo.svg via SVGR). fill=currentColor, so it
 // tints to the surrounding text color (text-ink) — visible on the dark plate.
@@ -121,6 +136,58 @@ function Avatar({
       className={`flex items-center justify-center rounded-full bg-raised font-mono text-[11px] font-medium text-body ${className ?? ''}`}
     >
       {(user.first_name?.[0] ?? '?').toUpperCase()}
+    </span>
+  );
+}
+
+function useReducedMotionPreference() {
+  const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!window.matchMedia) {
+      setReducedMotion(true);
+      return;
+    }
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return reducedMotion;
+}
+
+function GoogleConnectedAvatar({
+  user,
+  connected,
+  className,
+  avatarClassName,
+}: {
+  user: InviteUser;
+  connected: boolean | null;
+  className?: string;
+  avatarClassName?: string;
+}) {
+  const reducedMotion = useReducedMotionPreference();
+  const colors = useMemo(() => [...AVATAR_BORDER_COLORS], []);
+
+  return (
+    <span
+      className={`relative flex items-center justify-center rounded-full ${className ?? ''}`}
+    >
+      {connected === true && (
+        <PulsingBorder
+          {...AVATAR_BORDER_SHADER}
+          colors={colors}
+          speed={reducedMotion === false ? 1 : 0}
+          className="pointer-events-none absolute inset-0 size-full rounded-full"
+        />
+      )}
+      <Avatar
+        user={user}
+        className={`relative z-10 ${avatarClassName ?? ''}`}
+      />
     </span>
   );
 }
@@ -323,19 +390,12 @@ export function Sidebar() {
               }
             >
               <span className="flex h-9 w-9 items-center justify-center">
-                {/* Static glow — no animation, reduced-motion safe. */}
-                <span
-                  className={`flex rounded-full ${
-                    connected
-                      ? 'ring-2 ring-google/70 shadow-[0_0_10px_rgba(66,133,244,0.45)]'
-                      : ''
-                  }`}
-                >
-                  <Avatar
-                    user={user}
-                    className="h-6 w-6"
-                  />
-                </span>
+                <GoogleConnectedAvatar
+                  user={user}
+                  connected={connected}
+                  className="h-9 w-9"
+                  avatarClassName="h-6 w-6"
+                />
               </span>
             </Tooltip>
           )}
@@ -436,9 +496,11 @@ export function Sidebar() {
           {user && (
             <div className="px-3 py-2">
               <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-body">
-                <Avatar
+                <GoogleConnectedAvatar
                   user={user}
-                  className="relative -top-px -left-1 h-[26px] w-[26px] shrink-0"
+                  connected={connected}
+                  className="relative -left-1 -top-px h-8 w-8 shrink-0"
+                  avatarClassName="h-[26px] w-[26px] shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <span className="block truncate">

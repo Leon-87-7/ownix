@@ -4,14 +4,8 @@ import { ArrowBigUp, Command } from 'lucide-react';
 import { useSubmitJob } from '@/components/submit-job';
 import { Tooltip } from '@/components/ui/tooltip';
 import Link from 'next/link';
-import { useRestrictedMode } from '@/lib/restricted/context';
 
-// Dev/mock builds only (inlined at build time, so this whole branch is dead
-// code in prod): a switch between the two dev personas — mock user and
-// unauthenticated visitor (Restricted mode).
-const DEV_PERSONA_SWITCH =
-  process.env.NODE_ENV !== 'production' &&
-  process.env.NEXT_PUBLIC_API_MOCK === '1';
+import { useRestrictedMode } from '@/lib/restricted/context';
 
 /**
  * The global sticky brand bar, pinned to the top of the scroll area on every
@@ -75,17 +69,6 @@ export function AppHeader() {
               Brain.
             </span>
           </div>
-        )}
-
-        {DEV_PERSONA_SWITCH && (
-          // Plain <a>: the route handler sets/clears the httpOnly preview
-          // cookie, so the switch needs a full navigation, not a client one.
-          <a
-            href={restricted ? '/restricted?exit=1' : '/restricted'}
-            className="rounded border border-dashed border-line px-2 py-1 font-mono text-[11px] tracking-wide text-muted transition-ui hover:text-ink"
-          >
-            {restricted ? 'dev: → mock user' : 'dev: → visitor'}
-          </a>
         )}
 
         <Tooltip
