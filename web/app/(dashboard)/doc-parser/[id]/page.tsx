@@ -27,7 +27,7 @@ function outputFilename(job: Job, output: Output) {
   const stem = (job.title || job.id).replace(FILENAME_FORBIDDEN, '_') || job.id;
   const kind = output.kind.replace(FILENAME_FORBIDDEN, '_');
   const ext = output.kind === 'raw_txt' ? 'txt' : 'md';
-  return `vig-${stem}-${kind}.${ext}`;
+  return `ownix-${stem}-${kind}.${ext}`;
 }
 
 async function fetchOutputContent(output: Output) {
@@ -228,8 +228,12 @@ export default function DocDetail() {
 
       <div className="flex flex-wrap gap-2">
         <TelegramToggle jobId={job.id} value={job.telegram_delivery} />
-        <button onClick={clean} disabled={busy} className="rounded-md bg-signal px-4 py-2 text-sm text-onsignal disabled:opacity-50">Clean</button>
-        <button onClick={() => setOpen(true)} disabled={busy} className="rounded-md border border-line px-4 py-2 text-sm text-ink disabled:opacity-50">Freestyle</button>
+        <Tooltip content="Rewrite the raw parse into a clean, structured markdown version">
+          <button onClick={clean} disabled={busy} className="rounded-md bg-signal px-4 py-2 text-sm text-onsignal disabled:opacity-50">Clean</button>
+        </Tooltip>
+        <Tooltip content="Run your own custom prompt against this document">
+          <button onClick={() => setOpen(true)} disabled={busy} className="rounded-md border border-line px-4 py-2 text-sm text-ink disabled:opacity-50">Freestyle</button>
+        </Tooltip>
         {rawParse && <a href={rawParse.content_url} target="_blank" rel="noopener noreferrer" className="rounded-md border border-line px-4 py-2 text-sm text-ink">Get Markdown</a>}
         {job.url && <DocumentSourceChip source={job.url} />}
       </div>

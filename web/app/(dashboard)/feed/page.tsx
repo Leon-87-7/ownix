@@ -417,8 +417,8 @@ function FeedPageContent() {
                 Connect Google
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-body">
-                Authorize Drive + Sheets so saved items can export
-                into the app folder in your own Google Drive.
+                Authorize Drive + Sheets so saved items export into
+                your Ownix folder in Drive.
               </p>
             </div>
             <a

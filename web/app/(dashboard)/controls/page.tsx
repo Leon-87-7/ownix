@@ -550,7 +550,11 @@ export default function ControlsPage() {
 
   return (
     <PageShell>
-      <PageHeader icon={SlidersHorizontal} title="Settings" />
+      <PageHeader
+        icon={SlidersHorizontal}
+        title="Settings"
+        description="Manage the tags, domain rules, and recovery behavior that shape your Index."
+      />
       <div className="space-y-3">
         <Section
           title="Tags"
@@ -562,6 +566,11 @@ export default function ControlsPage() {
           title="Domains"
           defaultOpen
         >
+          <p className="mb-4 text-sm text-body">
+            Control which link domains Ownix processes automatically —
+            steer around noisy sources without touching individual
+            saves.
+          </p>
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">

@@ -153,7 +153,7 @@ describe('DocDetail', () => {
     expect(fetch).toHaveBeenCalledWith('/api/parsed/job-1/outputs/raw', expect.anything());
     const clickMock = vi.mocked(HTMLAnchorElement.prototype.click);
     const anchor = clickMock.mock.contexts[0] as HTMLAnchorElement;
-    expect(anchor.download).toBe('vig-13 things_ mentally_strong-raw_txt.txt');
+    expect(anchor.download).toBe('ownix-13 things_ mentally_strong-raw_txt.txt');
   });
 
   it('shows the backend load failure detail', async () => {

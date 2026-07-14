@@ -311,7 +311,11 @@ function PromptsWorkspace() {
 
   return (
     <PageShell>
-      <PageHeader icon={MessageSquareText} title="Recipes" />
+      <PageHeader
+        icon={MessageSquareText}
+        title="Recipes"
+        description="Named prompt presets that shape how Gemini analyzes what you save — invoke one by name to change what comes back."
+      />
 
       {loading && (
         <p className="text-sm text-body">Loading templates…</p>

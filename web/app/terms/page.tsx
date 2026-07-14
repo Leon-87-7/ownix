@@ -20,7 +20,7 @@ export default function TermsPage() {
         <LegalArticle>
           <LegalTitle
             title="Terms of Service — Ownix"
-            updated="Last updated: July 1, 2026"
+            updated="Last updated: July 15, 2026"
           />
 
           <p>
@@ -74,7 +74,7 @@ export default function TermsPage() {
           <LegalSection title="Google account connection">
             <p>
               If you connect a Google account, Ownix creates files (a
-              folder currently named <code>/vig</code>, spreadsheet,
+              folder named <code>Ownix</code>, a spreadsheet,
               and uploads) in your own Drive using the{' '}
               <code>drive.file</code> and{' '}
               <code>spreadsheets</code> scopes. Ownix only ever touches

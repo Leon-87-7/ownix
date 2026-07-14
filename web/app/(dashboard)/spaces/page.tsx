@@ -58,6 +58,7 @@ function SpacesWorkspace() {
       <PageHeader
         icon={LayoutGrid}
         title="Collections"
+        description="Group saved items into durable sets you can revisit, add context to, and export together."
         action={
           <button
             onClick={showForm ? resetForm : openForm}
@@ -167,7 +168,8 @@ function SpacesWorkspace() {
             No collections yet
           </p>
           <p className="mt-1 text-sm text-body">
-            Create one to start organizing your saved items.
+            Create one to group related saves, add context, and export
+            them together.
           </p>
         </div>
       )}

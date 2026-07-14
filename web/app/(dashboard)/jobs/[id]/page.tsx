@@ -486,7 +486,7 @@ function JobActionsBar({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
           >
-            Open in Drive &#8599;
+            Open this file in Drive &#8599;
           </a>
         )}
         {folderUrl && (
