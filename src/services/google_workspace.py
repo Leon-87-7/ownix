@@ -69,7 +69,7 @@ def user_sheet_id(chat_id: int | None) -> str | None:
         from src.services.google_auth import build_google_service
 
         sheets = build_google_service("sheets", "v4", ["https://www.googleapis.com/auth/spreadsheets"], chat_id=chat_id)
-        sheet = sheets.spreadsheets().create(body={"properties": {"title": "vig exports"}}, fields="spreadsheetId").execute()
+        sheet = sheets.spreadsheets().create(body={"properties": {"title": "Ownix exports"}}, fields="spreadsheetId").execute()
         sheet_id = sheet["spreadsheetId"]
         # Record the sheet before attempting the folder move: if that call fails
         # (quota, permission, transient network), the sheet is still tracked instead

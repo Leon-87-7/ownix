@@ -71,7 +71,7 @@ export default function LandingPage() {
             <OwnixLogo
               aria-hidden="true"
               focusable="false"
-              className="h-7 w-7 group-hover:text-signal-bright motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart motion-safe:group-hover:scale-110  motion-safe:group-hover:rotate-[-6deg]"
+              className="h-7 w-7 group-hover:text-signal-bright motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart motion-safe:group-hover:scale-110 motion-safe:group-hover:rotate-[-6deg]"
             />
             <span className="group-hover:text-contrasignal">
               Ownix
@@ -509,7 +509,7 @@ export default function LandingPage() {
               <OwnixLogo
                 aria-hidden="true"
                 focusable="false"
-                className="h-10 w-10 transition-transform duration-200 ease-out-quart hover:scale-110 hover:text-contrasignal motion-safe:animate-[ownix-logo-cycle_7s_linear_infinite] hover:rotate-[-6deg]"
+                className="h-10 w-10 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart motion-safe:hover:scale-110 hover:text-contrasignal motion-safe:animate-[ownix-logo-cycle_7s_linear_infinite] motion-safe:hover:rotate-[-6deg]"
               />
             </a>
             <div className="flex flex-col">

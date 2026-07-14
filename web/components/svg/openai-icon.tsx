@@ -6,6 +6,8 @@ export function OpenAIIcon(props: React.SVGProps<SVGSVGElement>) {
       height={260}
       preserveAspectRatio="xMidYMid"
       viewBox="0 0 256 260"
+      aria-hidden="true"
+      focusable="false"
       {...props}
     >
       <path

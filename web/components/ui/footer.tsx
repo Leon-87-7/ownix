@@ -28,7 +28,7 @@ export default function Footer() {
                 <OwnixLogo
                   aria-hidden="true"
                   focusable="false"
-                  className="h-10 w-10 animate-[ownix-logo-cycle_7s_linear_infinite] motion-reduce:animate-none hover:scale-110  motion-safe:hover:rotate-[-6deg]"
+                  className="h-10 w-10 motion-safe:animate-[ownix-logo-cycle_7s_linear_infinite] motion-safe:hover:scale-110 motion-safe:hover:rotate-[-6deg]"
                 />
               </Link>
             </Tooltip>
