@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import PurePath
 from typing import Any
 
 import httpx
@@ -11,6 +12,30 @@ from src.config import settings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+_UTF8_BOM = b"\xef\xbb\xbf"
+_MARKDOWN_EXTENSIONS = {".md", ".markdown"}
+_GEMINI_DASH_TRANSLATION = str.maketrans({"—": "-", "–": "-"})
+
+
+def _telegram_document_payload(file_bytes: bytes, filename: str) -> tuple[bytes, str]:
+    """Return bytes and MIME type for a Telegram document upload.
+
+    Telegram clients preview extensionless text-like document payloads more
+    reliably when Markdown is explicitly marked as UTF-8. Gemini also tends to
+    emit typographic dashes, which have shown up as CP1252 mojibake in Telegram
+    .md previews, so normalize them only for Markdown documents.
+    """
+    mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    if PurePath(filename).suffix.lower() not in _MARKDOWN_EXTENSIONS:
+        return file_bytes, mime
+
+    text = file_bytes.decode("utf-8", errors="replace").translate(_GEMINI_DASH_TRANSLATION)
+    normalized = text.encode("utf-8")
+    if not normalized.startswith(_UTF8_BOM):
+        normalized = _UTF8_BOM + normalized
+    return normalized, "text/markdown; charset=utf-8"
 
 
 _API_BASE = "https://api.telegram.org"
@@ -148,8 +173,8 @@ async def send_document(
         data["caption"] = caption
     if parse_mode:
         data["parse_mode"] = parse_mode
-    mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    files = {"document": (filename, file_bytes, mime)}
+    document_bytes, mime = _telegram_document_payload(file_bytes, filename)
+    files = {"document": (filename, document_bytes, mime)}
     return await _post_and_parse(
         "sendDocument", data=data, files=files, chat_id=chat_id,
         error_event="telegram_document_failed", success_event="telegram_document_sent",

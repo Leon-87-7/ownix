@@ -1,6 +1,7 @@
 """Per-user Google OAuth endpoints."""
 from __future__ import annotations
 
+import asyncio
 import secrets
 from urllib.parse import urlencode
 
@@ -16,6 +17,7 @@ from src.services.google_tokens import (
     store_google_oauth_state,
     store_google_token,
 )
+from src.services.google_workspace import user_folder_id
 
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/spreadsheets"]
 
@@ -66,7 +68,7 @@ async def google_oauth_callback(
     if chat_id is None:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
     if error or not code:
-        return RedirectResponse("/?google=denied", status_code=303)
+        return RedirectResponse("/feed?google=denied", status_code=303)
     async with httpx.AsyncClient(timeout=15) as client:
         res = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -90,13 +92,22 @@ async def google_oauth_callback(
         "client_secret": settings.GOOGLE_OAUTH_CLIENT_SECRET,
         "scopes": GOOGLE_SCOPES,
     })
-    return RedirectResponse("/?google=connected", status_code=303)
+    return RedirectResponse("/feed?google=connected", status_code=303)
 
 
 @google_oauth_router.get("/status")
 async def google_status(request: Request) -> dict:
     chat_id = int(request.state.user["id"])
     return {"connected": await load_google_token(chat_id) is not None}
+
+
+@google_oauth_router.get("/folder")
+async def google_folder(request: Request) -> dict:
+    chat_id = int(request.state.user["id"])
+    folder_id = await asyncio.to_thread(user_folder_id, chat_id)
+    if not folder_id:
+        raise HTTPException(status_code=404, detail="Google not connected")
+    return {"folder_url": f"https://drive.google.com/drive/folders/{folder_id}"}
 
 
 @google_oauth_router.post("/disconnect")

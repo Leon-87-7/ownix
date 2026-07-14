@@ -3,12 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from './page';
 
-const replace = vi.fn();
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace }),
-}));
-
 const telegramUser = {
   id: 87,
   first_name: 'Lee',
@@ -27,7 +21,6 @@ function telegramScript() {
 describe('LoginPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    replace.mockReset();
   });
 
   it('reserves space while the Telegram widget loads', () => {
@@ -59,6 +52,15 @@ describe('LoginPage', () => {
       ),
     );
 
+    // Login must hard-navigate (not router.replace) so the (dashboard)
+    // layout's cookie-derived restricted state is recomputed server-side
+    // instead of reusing a Router Cache entry from a pre-login visit.
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+    });
+
     render(<LoginPage />);
 
     act(() => {
@@ -72,7 +74,12 @@ describe('LoginPage', () => {
       resolveFetch(new Response(JSON.stringify({ ok: true })));
     });
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('/feed'));
+    await waitFor(() => expect(window.location.href).toBe('/feed'));
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
   it('shows an inline retry when Telegram auth is rejected', async () => {

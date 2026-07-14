@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
+import leonAvatar from '@/images/leon-avatar-for-landing.png';
 import { HeroGradient } from '@/components/hero-gradient';
 import { AppSlot } from '@/components/landing/app-slot';
 import { CountUp } from '@/components/landing/count-up';
+import { DemoVideo } from '@/components/landing/demo-video';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
+import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
 import { ChevronsRight } from 'lucide-react';
 
@@ -73,7 +77,7 @@ export default function LandingPage() {
               Ownix
             </span>
           </Link>
-          
+
           <div className="flex items-center gap-2">
             <Link
               href="/login"
@@ -86,7 +90,10 @@ export default function LandingPage() {
       </nav>
 
       <main className="bg-canvas text-body">
-        <header className="relative isolate overflow-hidden py-12">
+        <header
+          className="relative isolate overflow-hidden py-12"
+          id="hero"
+        >
           <HeroGradient />
           {/* Legibility scrim. Below lg the copy spans nearly the full hero
             width, so the left-to-right gradient would leave its right edge
@@ -136,12 +143,12 @@ export default function LandingPage() {
         </header>
 
         <section
-          aria-labelledby="h-capture"
+          aria-labelledby="demo"
           className="border-t border-line py-12"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
-              id="h-capture"
+              id="demo"
               className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Three taps. Nothing new to learn.
@@ -154,42 +161,18 @@ export default function LandingPage() {
             </p>
 
             <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              {/*
-              DROP THE SCREEN RECORDING HERE.
-              Replace the placeholder div with:
-              <video controls preload="metadata" poster="/demo-poster.jpg" className="block w-full">
-                <source src="/demo-capture.mp4" type="video/mp4" />
-              </video>
-              Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed.
-            */}
-              <div className="flex aspect-video flex-col items-center justify-center gap-3 border-b border-line bg-canvas">
-                <div
-                  aria-hidden="true"
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-line-strong text-body"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                  >
-                    <path d="M4 2.5v11l9-5.5z" />
-                  </svg>
-                </div>
-                <p className="text-pretty font-mono text-xs text-muted">
-                  demo-capture.mp4 · share sheet → bot → Index
-                </p>
-              </div>
+              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
+              <DemoVideo
+                src="/demo-capture.mp4"
+                className="block aspect-video w-full border-b border-line bg-canvas"
+              />
               <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
                 <span className="font-mono text-xs text-body">
-                  17:24 shared ·{' '}
+                  11:32 shared ·{' '}
                   <b className="font-medium text-status-done">
-                    17:24 transcript ready
+                    11:32 reel analysis ready
                   </b>{' '}
-                  · 17:30 full analysis
-                </span>
-                <span className="text-xs font-medium text-muted">
-                  Demo film coming - those timestamps are real.
+                  · 11:33 landed in Dashboard
                 </span>
               </div>
             </div>
@@ -212,40 +195,50 @@ export default function LandingPage() {
         </section>
 
         <section
-          aria-labelledby="h-agent"
+          aria-labelledby="showcase"
           className="border-t border-line py-16"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
-              id="h-agent"
+              id="showcase"
               className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Doomscroll in, engineering standards out.
             </h2>
 
-            <div className="grid items-start gap-6 md:grid-cols-2">
-              <div className="text-[15px] leading-relaxed">
-                <p className="text-pretty mb-4">
-                  An Instagram reel about post-launch support was
-                  about to fly past me, like everything does. I shared
-                  it to Ownix, got the full transcript back, and
-                  pasted it into Codex - which turned it into the
-                  support-playbook rules for another project I&apos;m
-                  building.
-                </p>
-                <p className="text-pretty mb-4">
-                  A reel became rules in a production codebase.
-                </p>
-                <p className="text-pretty font-mono text-xs text-muted">
-                  - Leon, building Ownix
-                </p>
-              </div>
+            <div className="mb-8 max-w-[68ch] text-[15px] leading-relaxed">
+              <p className="text-pretty mb-4">
+                &quot;&ensp;An Instagram reel about post-launch
+                support was about to fly past me, like everything
+                does. I shared it to Ownix, got the full transcript
+                back, and pasted it into Codex - which turned it into
+                the support-playbook rules for another project
+                I&apos;m building.&ensp;&quot;
+              </p>
+              <p className="text-pretty mb-4 ml-2 border-l-2 border-line pl-4 text-[15px] leading-relaxed text-muted">
+                A reel became rules in a production codebase.
+              </p>
+              <p className="flex items-center gap-2 font-mono text-xs text-muted">
+                <Image
+                  src={leonAvatar}
+                  alt=""
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+                Leon (me), building Ownix
+              </p>
+            </div>
 
+            <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
               <div
                 role="group"
-                className="overflow-hidden rounded-lg border border-line bg-surface"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
                 aria-label="The actual transcript file"
               >
+                <OwnixLogo
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-line bg-canvas p-1.5 shadow-md"
+                />
+
                 <div className="flex items-center justify-between border-b border-line px-3 py-2">
                   <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.4px] text-muted">
                     20260711_144906_48FB971E_transcript.md
@@ -281,6 +274,48 @@ export default function LandingPage() {
                   build the support system too...
                 </pre>
               </div>
+
+              <ChevronsRight
+                aria-hidden="true"
+                className="mx-auto rotate-90 text-muted md:rotate-0"
+              />
+
+              <div
+                role="group"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
+                aria-label="The agent rules file Codex generated from the transcript"
+              >
+                <OpenAIIcon
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-line bg-canvas p-1.5 shadow-md"
+                />
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.4px] text-muted">
+                    AGENTS.md
+                  </span>
+                  {/* <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-[0.4px] text-status-done">
+                    DONE
+                  </span> */}
+                </div>
+                <pre className="max-h-[280px] overflow-hidden whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-body [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                  <span className="text-muted"># Role & Context</span>
+                  {'\n\n'}
+                  You are an AI-directed full-stack engineer{'\n'}
+                  responsible for both product delivery and{'\n'}
+                  production support readiness.{'\n\n'}A feature is
+                  not complete when its code is{'\n'}
+                  deployed. It is complete only when the team can
+                  {'\n'}
+                  detect, diagnose, support, and safely recover{'\n'}
+                  from failures affecting real users.
+                  {'\n\n---\n\n'}
+                  <span className="text-muted"># Core Principle</span>
+                  {'\n\n'}
+                  Every production feature must include its{'\n'}
+                  support system in the same sprint and{'\n'}
+                  development conversation...
+                </pre>
+              </div>
             </div>
 
             <p className="text-pretty mt-6 max-w-[58ch] text-[15px] leading-relaxed">
@@ -295,12 +330,77 @@ export default function LandingPage() {
         </section>
 
         <section
-          aria-labelledby="h-compounds"
+          aria-labelledby="features"
+          className="border-t border-line py-16"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
+              <div>
+                <span className="mb-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
+                  INDEX
+                </span>
+                <h2
+                  id="features"
+                  className="text-pretty mb-3 max-w-[16ch] text-[clamp(24px,4vw,36px)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
+                >
+                  Reverse the feed, Own it.
+                </h2>
+                <p className="text-pretty max-w-[52ch] text-[15px] leading-relaxed text-body">
+                  Reels, long videos, articles, repos, screenshots -
+                  share it once and it becomes a searchable Index
+                  entry: transcript, summary, links, agent-ready
+                  markdown.
+                </p>
+                <p className="mt-3 font-mono text-[11px] text-muted">
+                  short · long · article · repo
+                </p>
+              </div>
+
+              <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
+                <div className="py-4 first:pt-0 md:py-5">
+                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                    FEED
+                  </span>
+                  <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
+                    Your Index, browsable
+                  </h3>
+                  <p className="text-pretty text-[14px] leading-relaxed text-body">
+                    Every item lands in your Feed. Filter by type,
+                    search by title or topic, open anything to grab
+                    its full transcript or copy a segment straight
+                    into your AI.
+                  </p>
+                </div>
+                <div className="py-4 md:py-5">
+                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                    DOCS
+                  </span>
+                  <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
+                    That PDF you saved and never reopened?
+                  </h3>
+                  <p className="text-pretty text-[14px] leading-relaxed text-body">
+                    Upload it - or paste the link - and the Docs page
+                    reads it for you: parsed text, a structured
+                    briefing, a clean rewrite. All markdown, all ready
+                    for your AI.
+                  </p>
+                  <p className="mt-2 font-mono text-[11px] text-muted">
+                    pdf today · word / spreadsheet / presentation /
+                    image - soon
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="stats"
           className="border-t border-line py-12"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
-              id="h-compounds"
+              id="stats"
               className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               It compounds - and it&apos;s yours.
@@ -387,7 +487,6 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
-
         <div className="mx-auto max-w-[960px] px-6">
           <p className="text-pretty border-t border-line py-6 text-[13px] text-muted">
             A shared Brain is growing quietly underneath all of this -
@@ -410,7 +509,7 @@ export default function LandingPage() {
               <OwnixLogo
                 aria-hidden="true"
                 focusable="false"
-                className="h-10 w-10 transition-transform duration-200 ease-out-quart hover:scale-110 hover:text-contrasignal hover:rotate-[-6deg]"
+                className="h-10 w-10 motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart motion-safe:hover:scale-110 hover:text-contrasignal motion-safe:animate-[ownix-logo-cycle_7s_linear_infinite] motion-safe:hover:rotate-[-6deg]"
               />
             </a>
             <div className="flex flex-col">

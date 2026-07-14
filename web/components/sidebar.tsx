@@ -52,9 +52,12 @@ const AVATAR_BORDER_COLORS = [
   statusColors.error,
 ] as const;
 
+// `trails`/`brightness` aren't real PulsingBorder props (silently dropped) —
+// `roundness`+`aspectRatio` are what make the shape a circle instead of the
+// library's default rounded rect.
 const AVATAR_BORDER_SHADER = {
-  trails: 2,
-  brightness: 1.15,
+  roundness: 1,
+  aspectRatio: 'square',
   scale: 0.95,
 } as const;
 

@@ -226,6 +226,17 @@
   to { opacity: 0; }
 }
 
+@keyframes ownix-logo-cycle {
+  0% { color: #a57534; }      /* signal-deep */
+  14.28% { color: #d99a45; }  /* signal */
+  28.57% { color: #efb566; }  /* signal-bright */
+  42.85% { color: #c6c1b8; }  /* body */
+  57.14% { color: #9ec9ff; }  /* contrasignal-bright */
+  71.42% { color: #94e6ee; }  /* contrasignal */
+  85.71% { color: #649ca1; }  /* contrasignal-deep */
+  100% { color: #a57534; }    /* loop back to signal-deep */
+}
+
 /* Sidebar brand reveal — fires only when the nav drawer opens (a state change,
    user-triggered, not page load). Base state is fully visible, so the header
    still renders without JS; these play on top when `open` flips true. No forwards

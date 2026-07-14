@@ -73,3 +73,42 @@ async def test_send_message_success_returns_result(monkeypatch: pytest.MonkeyPat
 
     result = await sender.send_message(123, "hi")
     assert result == {"message_id": 42}
+
+
+@pytest.mark.asyncio
+async def test_send_document_marks_markdown_as_utf8_and_normalizes_dashes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Markdown uploads include a UTF-8 BOM and avoid Gemini typographic dashes."""
+    body = {"ok": True, "result": {"document": {"file_name": "brief.md"}}}
+    fake_client = _FakeClient(_FakeResponse(200, body))
+    monkeypatch.setattr(sender, "_http", lambda: fake_client)
+    monkeypatch.setattr(sender, "log", MagicMock())
+
+    result = await sender.send_document(123, "A — B – C".encode("utf-8"), "brief.md")
+
+    assert result == {"document": {"file_name": "brief.md"}}
+    files = fake_client.posted[0]["files"]
+    filename, payload, mime = files["document"]
+    assert filename == "brief.md"
+    assert mime == "text/markdown; charset=utf-8"
+    assert payload.startswith(b"\xef\xbb\xbf")
+    assert payload.decode("utf-8-sig") == "A - B - C"
+
+
+@pytest.mark.asyncio
+async def test_send_document_leaves_non_markdown_payloads_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Telegram encoding workaround is scoped to Markdown documents only."""
+    body = {"ok": True, "result": {"document": {"file_name": "brief.txt"}}}
+    fake_client = _FakeClient(_FakeResponse(200, body))
+    monkeypatch.setattr(sender, "_http", lambda: fake_client)
+    monkeypatch.setattr(sender, "log", MagicMock())
+
+    await sender.send_document(123, "A — B".encode("utf-8"), "brief.txt")
+
+    filename, payload, mime = fake_client.posted[0]["files"]["document"]
+    assert filename == "brief.txt"
+    assert payload == "A — B".encode("utf-8")
+    assert mime == "text/plain"

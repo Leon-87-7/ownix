@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
+import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
 
 const linkClasses =
   'transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface';
@@ -13,11 +14,25 @@ export default function Footer() {
           row — wordmark left, nav right — no dividers either way. */}
       <div className="flex flex-col gap-3 min-[450px]:flex-row min-[450px]:items-center min-[450px]:justify-between">
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-3">
-          <OwnixLogo
-            aria-hidden="true"
-            focusable="false"
-            className="h-10 w-10 "
-          />
+          {/* Footer renders outside the dashboard's TooltipProvider (e.g. the
+              login page), so it brings its own — nesting providers is fine. */}
+          <TooltipProvider>
+            <Tooltip
+              content="back to Ownix home"
+              side="bottom"
+            >
+              <Link
+                href="/"
+                aria-label="Ownix home"
+              >
+                <OwnixLogo
+                  aria-hidden="true"
+                  focusable="false"
+                  className="h-10 w-10 motion-safe:animate-[ownix-logo-cycle_7s_linear_infinite] motion-safe:hover:scale-110 motion-safe:hover:rotate-[-6deg]"
+                />
+              </Link>
+            </Tooltip>
+          </TooltipProvider>
           <div className="flex flex-col">
             <span className="text-lg font-semibold text-body">
               Ownix

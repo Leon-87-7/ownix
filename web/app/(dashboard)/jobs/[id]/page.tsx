@@ -27,6 +27,8 @@ import { PageShell } from "@/components/page-shell";
 import { SkeletonBlock } from "@/components/feed/feed-states";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useRestrictedMode } from "@/lib/restricted/context";
+import { useGoogleStatus } from "@/components/google-status";
+import { GoogleDriveIcon } from "@/components/svg/google-drive-icon";
 
 const MarkdownEditor = dynamic(() => import("@/components/MarkdownEditor"), {
   ssr: false,
@@ -451,21 +453,54 @@ function JobActionsBar({
   job: JobDetail;
   hasFields: boolean;
 }) {
-  if (!job.drive_url && !hasFields) return null;
+  const { connected } = useGoogleStatus();
+  const [folderUrl, setFolderUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!connected) {
+      setFolderUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/google/folder")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { folder_url: string } | null) => {
+        if (!cancelled) setFolderUrl(data?.folder_url ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFolderUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connected]);
+
+  if (!job.drive_url && !hasFields && !folderUrl) return null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
-      {job.drive_url && /^https?:\/\//i.test(job.drive_url) ? (
-        <a
-          href={job.drive_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
-        >
-          Open in Drive &#8599;
-        </a>
-      ) : (
-        <span />
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
+          <a
+            href={job.drive_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+          >
+            Open in Drive &#8599;
+          </a>
+        )}
+        {folderUrl && (
+          <a
+            href={folderUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+          >
+            <GoogleDriveIcon className="h-3.5 w-3.5" />
+            Open Ownix folder &#8599;
+          </a>
+        )}
+      </div>
       {hasFields && (
         <CopyButton
           value={buildMarkdown(job)}

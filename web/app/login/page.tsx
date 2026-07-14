@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MoveLeft } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { AuthShell } from '@/components/auth-shell';
 import { GoogleIcon } from '@/components/svg/google-icon';
 
@@ -21,46 +20,46 @@ type AuthState = 'idle' | 'pending' | 'error';
 type WidgetState = 'loading' | 'ready' | 'error';
 
 export default function LoginPage() {
-  const router = useRouter();
   const lastAuthUser = useRef<TelegramUser | null>(null);
   const [authState, setAuthState] = useState<AuthState>('idle');
   const [authError, setAuthError] = useState<string | null>(null);
   const [widgetState, setWidgetState] =
     useState<WidgetState>('loading');
 
-  const authenticate = useCallback(
-    async (user: TelegramUser) => {
-      lastAuthUser.current = user;
-      setAuthState('pending');
-      setAuthError(null);
+  const authenticate = useCallback(async (user: TelegramUser) => {
+    lastAuthUser.current = user;
+    setAuthState('pending');
+    setAuthError(null);
 
-      try {
-        const res = await fetch('/api/auth/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(user),
-        });
+    try {
+      const res = await fetch('/api/auth/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user),
+      });
 
-        if (res.ok) {
-          router.replace('/feed');
-          return;
-        }
-
-        setAuthState('error');
-        setAuthError(
-          res.status === 401
-            ? 'Telegram could not verify this sign-in. Use the Telegram button again.'
-            : 'We could not complete sign-in. Try again.',
-        );
-      } catch {
-        setAuthState('error');
-        setAuthError(
-          'We could not reach the login service. Check your connection and try again.',
-        );
+      if (res.ok) {
+        // Hard nav, not router.replace: the (dashboard) layout's restricted
+        // flag is derived from cookies server-side, and a soft nav can reuse
+        // the Router Cache entry seeded by an earlier anonymous/restricted
+        // visit to /feed, landing back on the stale pre-login render.
+        window.location.href = '/feed';
+        return;
       }
-    },
-    [router],
-  );
+
+      setAuthState('error');
+      setAuthError(
+        res.status === 401
+          ? 'Telegram could not verify this sign-in. Use the Telegram button again.'
+          : 'We could not complete sign-in. Try again.',
+      );
+    } catch {
+      setAuthState('error');
+      setAuthError(
+        'We could not reach the login service. Check your connection and try again.',
+      );
+    }
+  }, []);
 
   function retryAuth() {
     if (lastAuthUser.current) {
@@ -167,7 +166,7 @@ export default function LoginPage() {
         >
           <span className="flex items-center gap-2">
             <MoveLeft className="h-4 w-4" />
-            Back to landing page
+            back to Ownix home
           </span>
         </Link>
 
