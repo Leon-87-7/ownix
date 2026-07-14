@@ -14,6 +14,15 @@
 # Docs, agent skills/config, vendored license texts, generated files, and
 # runtime artifacts are not product code; analyzing them only produces
 # unactionable findings.
+#
+# Markdown here is agent/product prose (CLAUDE.md, CONTEXT.md, DESIGN.md,
+# PRODUCT.md, kanban/briefs), not shipped content — prose lint findings are
+# never actionable for a PR gate. (Individual tools can't be toggled from
+# this file, but whole languages can.)
+languages:
+  markdown:
+    enabled: false
+
 exclude_paths:
   # Test trees and test doubles
   - 'tests/**'
