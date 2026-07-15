@@ -35,9 +35,6 @@ export const metadata: Metadata = {
   title: "Ownix — Your internet, indexed",
   description:
     "Collect what matters. Own your Index. Shape the Brain.",
-  icons: {
-    icon: "/icon0.svg",
-  },
 };
 
 export default function RootLayout({

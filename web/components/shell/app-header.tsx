@@ -19,14 +19,18 @@ export function AppHeader() {
   return (
     <header className="relative z-20 shrink-0 border-b border-line bg-canvas/85 px-4 py-3 backdrop-blur-md sm:px-6">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-5 gap-y-3 sm:justify-start">
-        <div className="flex flex-col">
-          <span className="text-4xl font-semibold leading-none tracking-tight text-ink">
+        <Link
+          href="/"
+          aria-label="Ownix home"
+          className="group flex cursor-pointer flex-col rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+        >
+          <span className="text-4xl font-semibold leading-none tracking-tight text-ink motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out-quart group-hover:text-signal-bright motion-safe:group-hover:-translate-y-0.5">
             Ownix
           </span>
-          <span className="mt-1 text-xs font-medium text-muted">
+          <span className="mt-1 text-xs font-medium text-muted transition-ui group-hover:text-contrasignal-deep">
             Your internet, indexed.
           </span>
-        </div>
+        </Link>
         <div
           aria-hidden="true"
           className="my-1 hidden w-px self-stretch bg-line-strong sm:block"
