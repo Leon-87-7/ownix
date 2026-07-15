@@ -44,6 +44,11 @@ describe('middleware routing cutover', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('https://ownix.test/login');
   });
+
+  it('lets link-preview crawlers (always cookie-less) reach the OG image', () => {
+    const response = middleware(requestFor('/opengraph-image'));
+    expect(response.status).toBe(200);
+  });
 });
 
 describe('middleware restricted mode (ADR-0035)', () => {
