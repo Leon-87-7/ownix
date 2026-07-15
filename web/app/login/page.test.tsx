@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from './page';
 
 const telegramUser = {
@@ -19,8 +19,26 @@ function telegramScript() {
 }
 
 describe('LoginPage', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_TELEGRAM_BOT_USERNAME', 'ownix_bot');
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('shows the unavailable fallback when no bot username is configured', () => {
+    vi.stubEnv('NEXT_PUBLIC_TELEGRAM_BOT_USERNAME', '');
+
+    render(<LoginPage />);
+
+    expect(
+      screen.getByText('Telegram sign-in is unavailable right now. Refresh the page or check your connection.'),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('script[src="https://telegram.org/js/telegram-widget.js?22"]'),
+    ).not.toBeInTheDocument();
   });
 
   it('reserves space while the Telegram widget loads', () => {
@@ -82,7 +100,7 @@ describe('LoginPage', () => {
     });
   });
 
-  it('shows an inline retry when Telegram auth is rejected', async () => {
+  it('shows the rejection message without a retry action for a 401', async () => {
     const fetchMock = vi.fn(async () => new Response('no', { status: 401 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -95,6 +113,27 @@ describe('LoginPage', () => {
 
     expect(
       screen.getByText('Telegram could not verify this sign-in. Use the Telegram button again.'),
+    ).toBeInTheDocument();
+
+    // Reposting the same rejected Telegram payload can't succeed — no point offering retry.
+    expect(
+      screen.queryByRole('button', { name: 'Retry Telegram sign-in' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers a working retry for a server error', async () => {
+    const fetchMock = vi.fn(async () => new Response('no', { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LoginPage />);
+
+    await act(async () => {
+      await (window as unknown as { onTelegramAuth: (user: typeof telegramUser) => Promise<void> })
+        .onTelegramAuth(telegramUser);
+    });
+
+    expect(
+      screen.getByText('We could not complete sign-in. Try again.'),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry Telegram sign-in' }));

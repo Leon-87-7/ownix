@@ -9,7 +9,7 @@ import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
-import { TelegramIcon } from '@/components/svg/telegram-icon';
+import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 import { ChevronsRight } from 'lucide-react';
 
 const pageDescription =
@@ -473,13 +473,7 @@ export default function LandingPage() {
                 me, asking if you want to help build what Ownix
                 becomes.
               </p>
-              <Link
-                href="/login"
-                className="inline-flex h-9 items-center gap-2 rounded-full bg-telegram-blue px-4 text-[13px] font-medium leading-none text-canvas transition-[filter] duration-150 ease-out hover:brightness-[1.08] [@media(pointer:coarse)]:h-11"
-              >
-                <TelegramIcon />
-                Sign in with Telegram
-              </Link>
+              <TelegramLoginWidget align="start" />
               <p className="text-pretty mt-3 font-mono text-xs text-muted">
                 no password · the bot collects your email · approval
                 within hours.
