@@ -1,9 +1,4 @@
-"""Unit tests for src/telegram/sender.py — no real network calls.
-
-Focus: on a Telegram HTTP error (e.g. 400 from a bad parse_mode), the sender
-must log Telegram's actual error `description` before re-raising, instead of
-swallowing it behind a bare 'raise_for_status' (which only logged '400').
-"""
+"""Unit tests for src/telegram/sender.py -- no real network calls."""
 
 from __future__ import annotations
 
@@ -39,6 +34,30 @@ class _FakeClient:
     async def post(self, url: str, **kwargs):  # noqa: ANN003
         self.posted.append(kwargs)
         return self._response
+
+
+class _FakeGetResponse:
+    def __init__(self, *, body: dict | None = None, content: bytes = b"") -> None:
+        self.status_code = 200
+        self._body = body or {"ok": True}
+        self.content = content
+
+    def json(self) -> dict:
+        return self._body
+
+    def raise_for_status(self) -> None:
+        raise AssertionError("raise_for_status should not be called for 200 responses")
+
+
+class _FakeGetClient:
+    def __init__(self) -> None:
+        self.get_calls: list[tuple[str, dict | None]] = []
+
+    async def get(self, url: str, params: dict | None = None) -> _FakeGetResponse:
+        self.get_calls.append((url, params))
+        if len(self.get_calls) == 1:
+            return _FakeGetResponse(body={"ok": True, "result": {"file_path": "photos/pic.png"}})
+        return _FakeGetResponse(content=b"image-bytes")
 
 
 @pytest.mark.asyncio
@@ -112,3 +131,36 @@ async def test_send_document_leaves_non_markdown_payloads_unchanged(
     assert filename == "brief.txt"
     assert payload == "A — B".encode("utf-8")
     assert mime == "text/plain"
+
+
+@pytest.mark.asyncio
+async def test_download_photo_uses_supplied_bot_token_for_getfile_and_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeGetClient()
+    monkeypatch.setattr(sender, "_client", fake)
+
+    content, mime_type = await sender.download_photo("FILE_ID", bot_token="ops-token")
+
+    assert content == b"image-bytes"
+    assert mime_type == "image/png"
+    assert fake.get_calls == [
+        ("https://api.telegram.org/botops-token/getFile", {"file_id": "FILE_ID"}),
+        ("https://api.telegram.org/file/botops-token/photos/pic.png", None),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_download_file_uses_supplied_bot_token_for_getfile_and_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeGetClient()
+    monkeypatch.setattr(sender, "_client", fake)
+
+    content = await sender.download_file("FILE_ID", bot_token="ops-token")
+
+    assert content == b"image-bytes"
+    assert fake.get_calls == [
+        ("https://api.telegram.org/botops-token/getFile", {"file_id": "FILE_ID"}),
+        ("https://api.telegram.org/file/botops-token/photos/pic.png", None),
+    ]

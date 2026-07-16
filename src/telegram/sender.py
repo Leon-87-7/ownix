@@ -234,6 +234,7 @@ async def send_force_reply(
     text: str,
     *,
     input_field_placeholder: str = "Your project direction...",
+    bot_token: str | None = None,
 ) -> dict[str, Any]:
     """Send a message that forces the user's next reply to address the bot."""
     payload: dict[str, Any] = {
@@ -251,10 +252,13 @@ async def send_force_reply(
         error_event="telegram_force_reply_failed",
         success_event="telegram_force_reply_sent",
         error_label="sendMessage (ForceReply)",
+        bot_token=bot_token,
     )
 
 
-async def forward_message(chat_id: int, from_chat_id: int, message_id: int) -> dict[str, Any]:
+async def forward_message(
+    chat_id: int, from_chat_id: int, message_id: int, *, bot_token: str | None = None
+) -> dict[str, Any]:
     """Forward a message from from_chat_id to chat_id."""
     payload: dict[str, Any] = {
         "chat_id": chat_id,
@@ -268,10 +272,13 @@ async def forward_message(chat_id: int, from_chat_id: int, message_id: int) -> d
         error_event="telegram_forward_failed",
         success_event="telegram_message_forwarded",
         message_id=message_id,
+        bot_token=bot_token,
     )
 
 
-async def edit_message_text(chat_id: int, message_id: int, text: str) -> None:
+async def edit_message_text(
+    chat_id: int, message_id: int, text: str, *, bot_token: str | None = None
+) -> None:
     """Edit the text of a message and remove any inline keyboard."""
     payload: dict[str, Any] = {
         "chat_id": chat_id,
@@ -286,6 +293,7 @@ async def edit_message_text(chat_id: int, message_id: int, text: str) -> None:
         error_event="telegram_edit_failed",
         success_event="telegram_message_edited",
         message_id=message_id,
+        bot_token=bot_token,
     )
 
 
@@ -322,12 +330,13 @@ async def answer_callback_query(
     _raise_for_status(response, method="answerCallbackQuery")
 
 
-async def download_photo(file_id: str) -> tuple[bytes, str]:
+async def download_photo(file_id: str, *, bot_token: str | None = None) -> tuple[bytes, str]:
     """Download a Telegram photo by file_id. Returns (raw_bytes, mime_type)."""
-    resp = await _http().get(_endpoint("getFile"), params={"file_id": file_id})
+    token = bot_token or settings.TELEGRAM_BOT_TOKEN
+    resp = await _http().get(_endpoint("getFile", bot_token=token), params={"file_id": file_id})
     _raise_for_status(resp, method="getFile")
     file_path: str = resp.json()["result"]["file_path"]
-    dl_url = f"{_API_BASE}/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+    dl_url = f"{_API_BASE}/file/bot{token}/{file_path}"
     file_resp = await _http().get(dl_url)
     _raise_for_status(file_resp, method="getFile.download")
     ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "jpg"
@@ -335,16 +344,17 @@ async def download_photo(file_id: str) -> tuple[bytes, str]:
     return file_resp.content, mime_map.get(ext, "image/jpeg")
 
 
-async def download_file(file_id: str) -> bytes:
+async def download_file(file_id: str, *, bot_token: str | None = None) -> bytes:
     """Download any Telegram file by file_id. Returns the raw bytes.
 
     Same getFile → /file/bot{token}/{path} two-step as download_photo, but
     format-agnostic (no mime map) — used for document uploads (#151).
     """
-    resp = await _http().get(_endpoint("getFile"), params={"file_id": file_id})
+    token = bot_token or settings.TELEGRAM_BOT_TOKEN
+    resp = await _http().get(_endpoint("getFile", bot_token=token), params={"file_id": file_id})
     _raise_for_status(resp, method="getFile")
     file_path: str = resp.json()["result"]["file_path"]
-    dl_url = f"{_API_BASE}/file/bot{settings.TELEGRAM_BOT_TOKEN}/{file_path}"
+    dl_url = f"{_API_BASE}/file/bot{token}/{file_path}"
     file_resp = await _http().get(dl_url)
     _raise_for_status(file_resp, method="getFile.download")
     return file_resp.content

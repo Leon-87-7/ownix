@@ -179,15 +179,17 @@ async def list_users(
     if email_domain and email_domain != "all":
         clauses.append("lower(coalesce(email, '')) LIKE ?")
         params.append("%@" + email_domain.lower().lstrip("@"))
-    where = " WHERE " + " AND ".join(clauses) if clauses else ""
-    sql = (
-        "SELECT tg_id, username, first_name, last_name, email, status, created_at, updated_at FROM users"
-        + where
-        + " ORDER BY created_at DESC, tg_id DESC"
-    )
+    sql_parts = [
+        "SELECT tg_id, username, first_name, last_name, email, status, created_at, updated_at",
+        "FROM users",
+    ]
+    if clauses:
+        sql_parts.append("WHERE " + " AND ".join(clauses))
+    sql_parts.append("ORDER BY created_at DESC, tg_id DESC")
     if limit is not None:
-        sql += " LIMIT ?"
+        sql_parts.append("LIMIT ?")
         params.append(limit)
+    sql = " ".join(sql_parts)
     return await database._fetch_dicts(sql, tuple(params))
 
 
