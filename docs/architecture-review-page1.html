@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VIG Architecture Review</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Inter, system-ui, sans-serif",
+        background: "#0d0e10",
+        mainBkg: "#202329",
+        primaryColor: "#202329",
+        primaryBorderColor: "#30343d",
+        primaryTextColor: "#f4f1eb",
+        secondaryColor: "#16181c",
+        secondaryBorderColor: "#30343d",
+        secondaryTextColor: "#c6c1b8",
+        tertiaryColor: "#0d0e10",
+        tertiaryBorderColor: "#30343d",
+        tertiaryTextColor: "#c6c1b8",
+        lineColor: "#5f6570",
+        textColor: "#f4f1eb",
+        clusterBkg: "#16181c",
+        clusterBorder: "#30343d",
+        edgeLabelBackground: "#0d0e10",
+        nodeBorder: "#30343d"
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --canvas: #0d0e10;
+      --surface: #16181c;
+      --surface-raised: #202329;
+      --hairline: #30343d;
+      --ink: #f4f1eb;
+      --body: #c6c1b8;
+      --muted: #948e84;
+      --signal: #d99a45;
+      --semantic-green-bg: #122b1c;
+      --semantic-green: #4ade80;
+      --semantic-yellow-bg: #2b240e;
+      --semantic-yellow: #eab308;
+      --semantic-purple-bg: #221a3d;
+      --semantic-purple: #a78bfa;
+      --semantic-gray-bg: #23262c;
+      --semantic-gray: #9aa1ad;
+    }
+
+    html { background: var(--canvas); }
+    body {
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    h1, h2, h3, h4, b, strong {
+      color: var(--ink);
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-weight: 650 !important;
+    }
+
+    .tracking-tight {
+      letter-spacing: 0 !important;
+    }
+
+    p, li, td, th, span {
+      color: inherit;
+    }
+
+    a { color: var(--signal); }
+
+    .card,
+    .bg-white,
+    .bg-slate-50,
+    .bg-blue-50,
+    .bg-emerald-50,
+    .bg-amber-50,
+    .bg-purple-50,
+    .bg-violet-50,
+    .bg-orange-50,
+    .bg-yellow-50,
+    .bg-red-50,
+    .bg-slate-100 {
+      background: var(--surface) !important;
+      border: 1px solid var(--hairline);
+      border-radius: 8px !important;
+      box-shadow: none !important;
+    }
+
+    .bg-slate-950 {
+      background: var(--surface-raised) !important;
+      border: 1px solid var(--signal);
+      border-radius: 8px !important;
+      box-shadow: none !important;
+    }
+
+    .text-slate-950,
+    .text-slate-900,
+    .text-slate-800,
+    .text-white {
+      color: var(--ink) !important;
+    }
+
+    .text-slate-700,
+    .text-slate-600,
+    .text-slate-300,
+    .text-slate-200 {
+      color: var(--body) !important;
+    }
+
+    .text-slate-500,
+    .text-slate-400 {
+      color: var(--muted) !important;
+    }
+
+    .text-amber-200,
+    .text-amber-300 {
+      color: var(--signal) !important;
+    }
+
+    .text-red-700,
+    .text-red-900,
+    .text-orange-700,
+    .text-orange-900,
+    .text-amber-700,
+    .text-amber-900,
+    .text-emerald-900,
+    .text-blue-900,
+    .text-violet-900,
+    .text-yellow-700,
+    .text-yellow-900 {
+      color: var(--body) !important;
+    }
+
+    .border,
+    .border-slate-200,
+    .border-slate-800,
+    .border-orange-200,
+    .border-amber-300,
+    .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+      border-color: var(--hairline) !important;
+    }
+
+    .badge {
+      border: 1px solid var(--hairline);
+      border-radius: 4px !important;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .badge.bg-red-50 {
+      background: var(--semantic-green-bg) !important;
+      border-color: #1d4d2d !important;
+      color: var(--semantic-green) !important;
+    }
+
+    .badge.bg-orange-50 {
+      background: var(--semantic-yellow-bg) !important;
+      border-color: #5c4511 !important;
+      color: var(--semantic-yellow) !important;
+    }
+
+    .badge.bg-yellow-50 {
+      background: var(--semantic-purple-bg) !important;
+      border-color: #4c3b7a !important;
+      color: var(--semantic-purple) !important;
+    }
+
+    .badge.bg-slate-100 {
+      background: var(--semantic-gray-bg) !important;
+      border-color: var(--hairline) !important;
+      color: var(--semantic-gray) !important;
+    }
+
+    .meta-line,
+    code,
+    pre,
+    table th {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .meta-line {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    code {
+      background: var(--canvas);
+      border: 1px solid var(--hairline);
+      border-radius: 4px;
+      color: var(--body);
+      padding: 1px 5px;
+    }
+
+    pre {
+      background: var(--canvas) !important;
+      border: 1px solid var(--hairline);
+      border-radius: 8px !important;
+      color: var(--body);
+    }
+
+    img {
+      border-color: var(--hairline) !important;
+      border-radius: 8px !important;
+    }
+
+    table {
+      border-color: var(--hairline) !important;
+    }
+
+    table th {
+      color: var(--muted) !important;
+      font-size: 11px;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    table td {
+      color: var(--body);
+    }
+
+    .mermaid {
+      background: var(--canvas) !important;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main class="mx-auto max-w-7xl px-6 py-8">
+    <header class="card mb-8 rounded-2xl bg-white p-7">
+      <p class="meta-line">Architecture review · page-1 runtime map</p>
+      <h1 class="mt-2 text-4xl font-black tracking-tight">VIG runtime architecture review</h1>
+      <p class="mt-4 max-w-4xl text-slate-700">
+        Based on <code>docs/diagrams/vig-architecture-pages/page-1.png</code> and the modules behind the runtime path.
+        This review looks for deepening opportunities: places where a module can put more behaviour behind a smaller
+        interface, improving locality, leverage, and testability.
+      </p>
+      <div class="mt-5 grid gap-3 md:grid-cols-4">
+        <div class="rounded-xl bg-blue-50 p-4"><b>Module</b><br><span class="text-sm text-slate-600">Anything with an interface and implementation.</span></div>
+        <div class="rounded-xl bg-amber-50 p-4"><b>Depth</b><br><span class="text-sm text-slate-600">More behaviour per unit of interface learned.</span></div>
+        <div class="rounded-xl bg-emerald-50 p-4"><b>Locality</b><br><span class="text-sm text-slate-600">Change and bugs concentrate in one place.</span></div>
+        <div class="rounded-xl bg-purple-50 p-4"><b>Deletion Test</b><br><span class="text-sm text-slate-600">If deleted, does complexity scatter?</span></div>
+      </div>
+      <p class="mt-4 text-sm text-slate-500">
+        Constraints respected: SQLite and Redis list queue are accepted architecture decisions; Redis session auth is accepted;
+        the Shared job-creation core is already a good deep module and should be preserved; ADR-0036 is accepted and
+        should shape Telegram/Ops recommendations even before the implementation lands.
+      </p>
+      <p class="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+        <b>Pending architecture input:</b> ADR-0036 splits Telegram into a user-facing Ownix bot and an internal Ops bot.
+        Treat invite approvals, Ops commands, allowlists, and <code>/webhook/ops</code> as the target shape, while noting
+        that the code has not landed yet.
+      </p>
+    </header>
+
+    <section class="card mb-8 rounded-2xl bg-white p-5">
+      <h2 class="text-2xl font-bold">Page 1 Reference</h2>
+      <p class="mb-4 text-sm text-slate-600">
+        The runtime diagram shows the main pressure points: Next.js, FastAPI, Telegram webhook, worker, Redis, SQLite,
+        GCS, Gemini, Google, and Telegram all touch the same flows.
+      </p>
+      <img class="w-full rounded-xl border border-slate-200" src="diagrams/vig-architecture-pages/page-1.png" alt="VIG runtime architecture page 1" />
+    </section>
+
+    <div class="grid gap-7">
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">1. Split and Deepen the Telegram Interaction Modules</h2>
+          <span class="badge rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">Strong</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/telegram/webhook.py</code>, <code>src/telegram/sender.py</code>,
+          future <code>/webhook/ops</code> route, future Ops bot module, <code>src/services/jobs.py</code>,
+          <code>src/database.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              The Telegram module has useful dispatch tables, but the interface still forces one place to understand update
+              parsing, invite access, slash shortcuts, chat state, callbacks, photo/document paths, job creation, and
+              user-facing delivery. ADR-0036 adds a second pressure: internal operations must move to a separate Ops bot,
+              so a single mixed Telegram module would now hide two different authorities behind one interface.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Deepen Telegram as two modules, not one: a user-facing Ownix bot module for login, submission, job status,
+              and result delivery, plus an Ops bot module for approval cards, pending-user inspection, allowlists, and
+              internal commands. Keep ADR-0033's Shared job-creation core intact; this is about placing conversation and
+              authority rules behind smaller interfaces, not moving job logic back into Telegram.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            Better locality for user-facing conversation rules and Ops-only authority rules. Tests can exercise Telegram
+            behaviour through smaller interfaces instead of assembling raw Telegram update dictionaries plus database/queue
+            side effects for every case. ADR-0036 also gives the deletion test sharper teeth: deleting the Ops module should
+            not scatter approval cards, allowlist checks, command parsing, and CSV thresholds into the user bot.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  W[webhook.py] --> U[update parsing]
+  W --> I[invite approvals]
+  W --> S[slash table]
+  W --> C[chat_state]
+  W --> K[callback table]
+  W --> J[create job]
+  W --> T[user replies]
+  W --> O[ops cards]
+  W --> P[photo/document paths]</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  UserBot[Ownix bot module] --> Conv[user conversation + callbacks]
+  UserBot --> Ingest[ingest requests]
+  UserBot --> Reply[user delivery]
+  OpsBot[Ops bot module] --> Pending[pending-user inspection]
+  OpsBot --> Approve[approval/block decisions]
+  OpsBot --> Commands[Ops read commands]
+  Ingest --> Core[Shared job-creation core]
+  Conv --> PRD[PRD/chat-state flows]
+  Approve --> Status[user status]
+  Reply --> Sender[Ownix sender adapter]
+  OpsBot --> OpsSender[Ops sender adapter]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          <b>ADR note:</b> Compatible with ADR-0033 and now constrained by ADR-0036. Do not re-import shared job creation
+          into either bot module. Also do not route Ops approval traffic through the user-facing Ownix bot; the target shape
+          is separate credentials, separate webhook path, and separate read/mutate allowlists.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">2. Create One Access-Decision Module</h2>
+          <span class="badge rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">Strong</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>web/middleware.ts</code>, <code>web/app/(dashboard)/layout.tsx</code>,
+          <code>src/auth/middleware.py</code>, <code>src/api/auth.py</code>, <code>src/telegram/webhook.py</code>,
+          <code>src/database.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              Access rules are split across frontend navigation, backend session resolution, route allowlists,
+              pre-approval exceptions, invite status, preview mode, Telegram invite callbacks, and Mini App handoff.
+              The interface is bigger than it looks because callers must know path classes, cookie meanings, approval
+              exceptions, and preview precedence.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Deepen a single access-decision module around an <code>AccessDecision</code> interface. Keep ADR-0031's two
+              enforcement points, but move route classification and approval outcomes behind one backend seam; keep Next
+              middleware as a navigation adapter.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            More leverage per rule change, better locality for invite/preview/auth behaviour, and a clearer test surface:
+            deleting this module would force the access matrix back into multiple callers.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart LR
+  N[Next middleware] --> C[cookie/preview]
+  A[API middleware] --> R[Redis session]
+  A --> DB[user status]
+  T[Telegram webhook] --> I[invite gate]
+  G[Google connect] --> H[handoff token]
+  Auth[/api/auth] --> Email[email + notify]</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart LR
+  N[Next middleware] --> D[Access decision module]
+  A[API middleware] --> D
+  T[Telegram webhook] --> D
+  G[Google connect] --> D
+  Auth[/api/auth] --> D
+  D --> R[session adapter]
+  D --> U[user/invite adapter]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> No conflict if <code>/api/*</code> remains FastAPI-enforced per ADR-0016/0031.
+          Moving true enforcement into Next would conflict.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">3. Extract Session Cookie Issuance</h2>
+          <span class="badge rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">Strong</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/api/auth.py</code>, <code>src/auth/session.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              Session minting is deep, but cookie issuance is shallow and duplicated. Route code knows max age,
+              <code>httponly</code>, <code>secure</code>, <code>samesite</code>, preview-cookie cleanup, logout shape,
+              and Mini App special casing.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Add a small session-cookie issuer module that owns cookie policy and calls <code>session.mint</code> /
+              <code>session.revoke</code> internally. The login routes should say which surface they are on, not restate
+              cookie mechanics.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            Higher depth at the login seam, fewer security facts in route code, and better locality when cookie policy
+            changes. This is small, surgical, and likely to pay back quickly.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  TelegramLogin[/telegram login/] --> Mint[session.mint]
+  MiniLogin[/miniapp session/] --> Mint
+  TelegramLogin --> CookieA[set Lax cookie + delete preview]
+  MiniLogin --> CookieB[set None cookie]
+  Logout[/logout/] --> Revoke[session.revoke + delete cookie]</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  Routes[auth routes] --> Issuer[Session cookie issuer]
+  Issuer --> Store[session store adapter]
+  Issuer --> Policy[web vs mini cookie policy]
+  Issuer --> Preview[preview cleanup]
+  Issuer --> Logout[clear session]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> Preserves ADR-0016 Redis opaque sessions; Mini App <code>SameSite=None</code> remains an explicit adapter case.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">4. Deepen the Opt-In Export Workspace Module</h2>
+          <span class="badge rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">Worth exploring</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/config.py</code>, <code>src/services/google_tokens.py</code>,
+          <code>src/services/google_workspace.py</code>, <code>src/services/drive.py</code>,
+          <code>src/services/sheets.py</code>, <code>src/api/google_oauth.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              The Google connection is a domain concept, but its behaviour is spread through settings, token encryption,
+              sync SQLite reads, workspace creation, export gating, Drive uploads, Sheets rows, OAuth endpoints, and
+              disconnect lifecycle.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Create a deeper opt-in export workspace module that owns "can this Tenant export?" and "where should this
+              artifact go?" Drive and Sheets become adapters behind that module rather than places where the policy is
+              rediscovered.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            Locality improves around credential revocation, operator fallback, per-user folders, and export blocking.
+            Tests can cover export policy once with fake adapters. Processors gain leverage because they stop carrying
+            Google connection policy in every upload/append call.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  P[processors] --> D[drive.py]
+  P --> S[sheets.py]
+  D --> E[settings.export_blocked]
+  S --> E
+  D --> W[google_workspace]
+  S --> W
+  W --> T[google_tokens]
+  OAuth[/api/google] --> T</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  P[processors] --> X[Opt-in export workspace module]
+  X --> Policy[export policy]
+  X --> Target[target folder/sheet]
+  X --> Drive[Drive adapter]
+  X --> Sheets[Sheets adapter]
+  X --> Tokens[token adapter]
+  OAuth[/api/google] --> X</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> Compatible with ADR-0030; this would deepen the chosen credential model rather than change it.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">5. Deepen the Job Submission Module</h2>
+          <span class="badge rounded-full bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">Strong</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/services/jobs.py</code>, <code>src/telegram/webhook.py</code>,
+          <code>src/api/jobs.py</code>, <code>src/services/repo_followup.py</code>, <code>src/queue.py</code>,
+          <code>src/worker.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              <code>create_and_enqueue_job</code> is already valuable, but the Job submission concept still leaks.
+              Callers still know task strings, cache policy, explicit-template side effects, and when to bypass the helper.
+              The duplicated task mapping smell is the giveaway: <code>webhook.py</code> has its own mapping shape while
+              <code>src/services/jobs.py</code> has <code>task_for_content_type</code>.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Deepen <code>src/services/jobs.py</code> into the Job submission module with a small interface such as
+              <code>submit_job(intent) -&gt; SubmissionResult</code>. Keep Telegram copy and HTTP responses outside it, but
+              move content-type-to-task mapping, dedup, create, status initialization, and enqueue into one implementation.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            Higher leverage across Telegram, dashboard, and repo follow-up callers. Better locality for new content types.
+            The deletion test is strong: deleting this module would re-spread dedup/create/enqueue rules across callers.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  TG[Telegram caller] --> Helper[create_and_enqueue_job]
+  API[Dashboard caller] --> Helper
+  Repo[Repo follow-up] --> Helper
+  TG --> MapA[local task mapping]
+  Helper --> MapB[task_for_content_type]
+  Helper --> DB[create job]
+  Helper --> Q[enqueue raw task]</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  TG[Telegram caller] --> Submit[Job submission module]
+  API[Dashboard caller] --> Submit
+  Repo[Repo follow-up] --> Submit
+  Submit --> Policy[dedup + template policy]
+  Submit --> DB[create/init job]
+  Submit --> Task[task mapping]
+  Submit --> Q[queue adapter]
+  Submit --> Result[SubmissionResult]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> Aligns with ADR-0033 if caller-owned notification stays intact. It would conflict only if the
+          module started sending Telegram messages.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">6. Make Task Envelopes a Real Module</h2>
+          <span class="badge rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">Worth exploring</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/queue.py</code>, <code>src/worker.py</code>, <code>src/services/jobs.py</code>,
+          <code>src/api/jobs.py</code>, <code>src/telegram/webhook.py</code>, processor entrypoints
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              The queue adapter is intentionally simple, but the task envelope is currently a raw dict convention shared
+              by producers and the worker. The interface is shallow: every producer and handler must remember discriminator
+              strings, optional flags, content-type-to-task mapping, and which task expects which persisted job state.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Deepen the task envelope module while keeping Redis list transport. The module owns task construction,
+              validation, serialization, and dispatch metadata. Redis remains the adapter; worker and producers stop
+              speaking ad hoc dict.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            More leverage for every new task type and retry path. Better locality for queue protocol changes. Tests can
+            verify task construction and dispatch without a live Redis adapter or brittle raw dict assertions.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart LR
+  API[api/jobs] --> Q[queue.enqueue dict]
+  TG[webhook] --> Q
+  Core[services/jobs] --> Q
+  Q --> W[worker dispatch raw task]
+  W --> P[processors]</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart LR
+  API[api/jobs] --> T[Task envelope module]
+  TG[webhook] --> T
+  Core[services/jobs] --> T
+  T --> Q[Redis list adapter]
+  Q --> W[worker]
+  W --> T
+  T --> P[processor dispatch]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> Compatible with ADR-0002. The proposal is not "replace Redis"; it is to hide the queue protocol
+          behind a deeper module.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">7. Add a Job Output Module</h2>
+          <span class="badge rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">Worth exploring</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/processors/*.py</code>, <code>src/services/drive.py</code>,
+          <code>src/services/sheets.py</code>, <code>src/telegram/sender.py</code>, <code>src/brain.py</code>,
+          <code>src/services/storage.py</code>
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              Processors mix core processing with durable-output concerns: Drive, Sheets, storage, <code>sheets_row_id</code>,
+              background spawning, export-gate behaviour, append-vs-update rules, and delivery metadata. Drive, Sheets,
+              and storage are adapters, but there is no higher-depth module at the seam where a processed artifact becomes
+              durable Job outputs.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Create a small Job output module with interfaces like <code>publish_article_outputs</code>,
+              <code>publish_document_outputs</code>, and <code>publish_repo_outputs</code>. Start with Sheets row
+              append/update plus <code>sheets_row_id</code>; do not abstract every external write at once. Let Drive,
+              Sheets, Telegram, Brain, and GCS remain adapters behind the seam.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            Improves locality for export/idempotency behaviour and makes ADR-0010 easier to preserve, because duplicate
+            output writes become visible at one seam. Processor tests can assert artifacts; Job output tests can assert
+            append/update and fan-out behaviour. The deletion test is strong for Sheets/output idempotency and weaker for
+            a broad "publish everything" abstraction, so keep the first pass narrow.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  Short[short_video] --> D[Drive]
+  Short --> S[Sheets]
+  Short --> TG[Telegram]
+  Short --> B[Brain]
+  Repo[repo] --> S
+  Repo --> TG
+  Doc[document] --> GCS[GCS]
+  Doc --> S
+  PRD[prd] --> D
+  PRD --> S
+  PRD --> TG</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  Proc[processors produce artifacts] --> Pub[Publication module]
+  Pub --> D[Drive adapter]
+  Pub --> S[Sheets adapter]
+  Pub --> TG[Telegram adapter]
+  Pub --> B[Brain ingest]
+  Pub --> GCS[GCS adapter]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+          <b>ADR note:</b> Compatible with existing Drive/Sheets/storage adapters. Must preserve ADR-0010 by making
+          duplicate output writes explicit rather than silently re-touching old rows/files.
+        </p>
+      </article>
+
+      <article class="card rounded-2xl bg-white p-6">
+        <div class="flex flex-wrap items-center gap-3">
+          <h2 class="text-2xl font-bold">8. Normalize Worker Dispatch</h2>
+          <span class="badge rounded-full bg-yellow-50 px-3 py-1 text-sm font-semibold text-yellow-700">Speculative</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-500">
+          <b>Files:</b> <code>src/worker.py</code>, <code>src/processors/enrichment.py</code>,
+          <code>src/processors/long_video.py</code>, <code>src/processors/document.py</code>, processor entrypoints
+        </p>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <h3 class="font-semibold">Problem</h3>
+            <p class="text-slate-700">
+              <code>worker.py</code> has a clean dispatch table, but each handler repeats a load/try/log/status/failure
+              notification shape. Processor interfaces vary: some take <code>job</code>, some take <code>job_id</code>,
+              and some take task flags.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold">Solution</h3>
+            <p class="text-slate-700">
+              Introduce a worker dispatch module with a narrow interface: task name to processor adapter. Each adapter
+              owns load shape, failure status, user message, and any follow-up enqueue. Keep <code>reap_stale_jobs()</code>
+              startup-only and do not turn this into a retry/backoff system.
+            </p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <h3 class="font-semibold">Benefits</h3>
+          <p class="text-slate-700">
+            More depth in the worker seam and better locality for future task types. The deletion test is moderate:
+            today most complexity reappears in one file, not many files, so this is less urgent than Job submission or
+            Job outputs.
+          </p>
+        </div>
+        <div class="mt-5 grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">Before</h3>
+            <pre class="mermaid">flowchart TB
+  Worker[worker.loop] --> Table[_TASK_HANDLERS]
+  Table --> H1[_handle_video]
+  Table --> H2[_handle_article]
+  Table --> H3[_handle_document]
+  H1 --> Load[load job]
+  H2 --> Load
+  H3 --> Load
+  H1 --> Notify[failure notify]
+  H2 --> Notify
+  H3 --> Notify</pre>
+          </div>
+          <div class="rounded-xl border p-4">
+            <h3 class="mb-2 font-semibold">After</h3>
+            <pre class="mermaid">flowchart TB
+  Worker[worker.loop] --> Dispatch[Worker dispatch module]
+  Dispatch --> A1[video adapter]
+  Dispatch --> A2[article adapter]
+  Dispatch --> A3[document adapter]
+  A1 --> Proc[processor entrypoints]
+  A2 --> Proc
+  A3 --> Proc
+  Dispatch --> Failure[standard failure policy]</pre>
+          </div>
+        </div>
+        <p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          <b>ADR note:</b> Compatible only if it preserves ADR-0002 and ADR-0010. Do not use this as a path to automatic
+          retries, backoff, streams, or dead letters.
+        </p>
+      </article>
+    </div>
+
+    <section class="card mt-8 rounded-2xl bg-slate-950 p-7 text-white">
+      <h2 class="text-2xl font-bold">Top Recommendation</h2>
+      <p class="mt-3 max-w-4xl text-slate-200">
+        Start with <b>Deepen the Job submission module</b>. It is narrower than the Telegram interaction module, directly
+        reinforces ADR-0033, and gives quick leverage across Telegram, dashboard submission, repo follow-up, reprocess,
+        and force-new paths without changing Redis or caller-owned notifications.
+      </p>
+      <p class="mt-4 text-slate-300">
+        Second choice: <b>Split and deepen the Telegram interaction modules</b>, especially as ADR-0036 lands. Third choice:
+        <b>Create one access-decision module</b>, especially if invite/preview/approval rules keep changing across the
+        dashboard, Ownix bot, and Ops bot.
+      </p>
+    </section>
+
+    <footer class="py-8 text-sm text-slate-500">
+      Generated for VIG from page-1 runtime architecture. Next step: pick one candidate and grill its design before proposing an interface.
+    </footer>
+  </main>
+</body>
+</html>

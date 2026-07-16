@@ -47,6 +47,12 @@
 | [#346](https://github.com/Leon-87-7/vig/issues/346) | Send recovery notifications after degraded health returns to healthy                         | Ops / Health     | —          |
 | [#347](https://github.com/Leon-87-7/vig/issues/347) | Harden startup alert ordering around ntfy readiness                                          | Ops / ntfy       | —          |
 | [#348](https://github.com/Leon-87-7/vig/issues/348) | Add deployment-level ntfy verification docs                                                  | Docs / ntfy      | —          |
+| [#374](https://github.com/Leon-87-7/vig/issues/374) | Ops bot foundation: settings, allowlists, sender, startup webhook registration               | Telegram / Ops   | —          |
+| [#375](https://github.com/Leon-87-7/vig/issues/375) | Invite approvals move to Ops bot with admin-only callbacks                                   | Telegram / Ops   | #374       |
+| [#376](https://github.com/Leon-87-7/vig/issues/376) | Ops bot read-only user queue commands                                                        | Telegram / Ops   | #374       |
+| [#377](https://github.com/Leon-87-7/vig/issues/377) | Domain-scoped batch approval with confirmation                                                | Telegram / Ops   | #374, #376 |
+| [#378](https://github.com/Leon-87-7/vig/issues/378) | Dev login stays quiet by default, with explicit Ops bot e2e mode                             | Auth / Dev       | #375       |
+| [#379](https://github.com/Leon-87-7/vig/issues/379) | Ngrok-assisted local Ops e2e helper                                                          | DevEx / Ops      | #374, #378 |
 
 ---
 
@@ -422,6 +428,15 @@ Restricted mode preview (source: docs/handoff/restricted-mode-preview.md — ADR
     └── #358 login access sequence + locked Connect Google
 Critical path: #353 → #354 → #355 → {#356, #357}; #358 follows #354 in parallel
 Follow-up (out of scope): #352 auto-approve new users — separate access-policy change, not part of this preview
+
+Ops bot + dev-login e2e (source: grill 2026-07-16; CONTEXT.md `Ops bot`, `Dev login`)
+#374 Ops bot foundation: settings, allowlists, sender, startup webhook registration
+├── #375 Invite approvals move to Ops bot with admin-only callbacks
+│   └── #378 Dev login stays quiet by default, with explicit Ops bot e2e mode
+│       └── #379 Ngrok-assisted local Ops e2e helper ◄── also #374
+└── #376 Ops bot read-only user queue commands
+    └── #377 Domain-scoped batch approval with confirmation ◄── also #374
+Critical path: #374 → #375 → #378 → #379; #374 → #376 → #377 parallel
 ```
 
 ---
