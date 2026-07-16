@@ -255,6 +255,25 @@ async def edit_message_text(chat_id: int, message_id: int, text: str) -> None:
     )
 
 
+async def edit_message_reply_markup(
+    chat_id: int, message_id: int, buttons: list[list[dict]]
+) -> None:
+    """Replace a message's inline keyboard without changing its text."""
+    payload: dict[str, Any] = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "reply_markup": {"inline_keyboard": buttons},
+    }
+    await _post_and_parse(
+        "editMessageReplyMarkup",
+        json_payload=payload,
+        chat_id=chat_id,
+        error_event="telegram_edit_reply_markup_failed",
+        success_event="telegram_message_reply_markup_edited",
+        message_id=message_id,
+    )
+
+
 async def answer_callback_query(callback_query_id: str, text: str | None = None) -> None:
     """Acknowledge a Telegram callback query to dismiss the loading state."""
     payload: dict[str, Any] = {"callback_query_id": callback_query_id}

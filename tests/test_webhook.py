@@ -494,7 +494,7 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
     sent = AsyncMock()
     keyboard = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
-    monkeypatch.setattr("src.telegram.webhook.send_inline_keyboard", keyboard)
+    monkeypatch.setattr("src.services.invite_notifications.send_inline_keyboard", keyboard)
 
     await _post_webhook("hello", approved=False)
     await _post_webhook(
@@ -533,9 +533,10 @@ async def test_invite_callback_approve_flips_status_and_notifies_user(
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     await db.set_user_email(100, "user@example.com")
     sent = AsyncMock()
+    edited_markup = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
-    monkeypatch.setattr("src.telegram.webhook.edit_message_text", AsyncMock())
+    monkeypatch.setattr("src.telegram.webhook.edit_message_reply_markup", edited_markup)
 
     await webhook._handle_callback(
         {
@@ -547,6 +548,11 @@ async def test_invite_callback_approve_flips_status_and_notifies_user(
 
     assert await db.get_user_status(100) == "approved"
     sent.assert_awaited_once_with(100, "You're in, send a link.")
+    edited_markup.assert_awaited_once_with(
+        999,
+        7,
+        [[{"text": "✅ Approved", "callback_data": "invite_status:approved:100"}]],
+    )
 
 
 @pytest.mark.asyncio
@@ -560,9 +566,10 @@ async def test_invite_callback_block_flips_status_and_notifies_user(
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     await db.set_user_email(100, "user@example.com")
     sent = AsyncMock()
+    edited_markup = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
-    monkeypatch.setattr("src.telegram.webhook.edit_message_text", AsyncMock())
+    monkeypatch.setattr("src.telegram.webhook.edit_message_reply_markup", edited_markup)
 
     await webhook._handle_callback(
         {
@@ -574,6 +581,32 @@ async def test_invite_callback_block_flips_status_and_notifies_user(
 
     assert await db.get_user_status(100) == "blocked"
     sent.assert_awaited_once_with(100, "Access blocked.")
+    edited_markup.assert_awaited_once_with(
+        999,
+        7,
+        [[{"text": "🚫 Blocked", "callback_data": "invite_status:blocked:100"}]],
+    )
+
+
+@pytest.mark.asyncio
+async def test_invite_status_callback_acknowledges_already_decided(
+    temp_db, monkeypatch
+):
+    from src.telegram import webhook
+
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+    answered = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
+
+    await webhook._handle_callback(
+        {
+            "id": "CB",
+            "data": "invite_status:approved:100",
+            "message": {"message_id": 7, "chat": {"id": 999}},
+        }
+    )
+
+    answered.assert_awaited_once_with("CB", text="Already approved.")
 
 
 @pytest.mark.asyncio

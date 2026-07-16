@@ -34,6 +34,10 @@ export function TelegramLoginWidget({
   const [canRetry, setCanRetry] = useState(false);
   const [widgetState, setWidgetState] =
     useState<WidgetState>('loading');
+  const showDevLogin =
+    process.env.NODE_ENV === 'development' &&
+    typeof window !== 'undefined' &&
+    window.location.hostname === 'localhost';
 
   const authenticate = useCallback(async (user: TelegramUser) => {
     lastAuthUser.current = user;
@@ -80,6 +84,31 @@ export function TelegramLoginWidget({
   function retryAuth() {
     if (lastAuthUser.current) {
       void authenticate(lastAuthUser.current);
+    }
+  }
+
+  async function devLogin() {
+    setAuthState('pending');
+    setAuthError(null);
+    setCanRetry(false);
+
+    try {
+      const res = await fetch('/api/auth/dev-login', { method: 'POST' });
+      if (res.ok) {
+        window.location.href = '/feed';
+        return;
+      }
+      setAuthState('error');
+      setAuthError(
+        res.status === 404
+          ? 'Dev login is disabled. Set DEV_LOGIN_ENABLED=true in the backend .env.local and restart uvicorn.'
+          : 'Dev login failed. Check the backend log and try again.',
+      );
+    } catch {
+      setAuthState('error');
+      setAuthError(
+        'We could not reach the login service. Check your connection and try again.',
+      );
     }
   }
 
@@ -158,6 +187,15 @@ export function TelegramLoginWidget({
             Telegram sign-in is unavailable right now. Refresh the
             page or check your connection.
           </p>
+        )}
+        {showDevLogin && (
+          <button
+            type="button"
+            onClick={devLogin}
+            className="inline-flex min-h-10 items-center justify-center rounded-md border border-line bg-raised px-4 text-sm font-medium text-ink transition-ui hover:bg-surface focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
+          >
+            Dev login
+          </button>
         )}
       </div>
 

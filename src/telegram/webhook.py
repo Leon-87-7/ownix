@@ -23,12 +23,14 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from src import database, queue
 from src.config import settings
 from src.services import storage
+from src.services.invite_notifications import notify_operator_invite
 from src.services.jobs import create_and_enqueue_job
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
     download_file,
     download_photo,
+    edit_message_reply_markup,
     edit_message_text,
     forward_message,
     send_document,
@@ -431,7 +433,19 @@ async def _cb_invite_decision(
     await answer_callback_query(ctx.cq_id, text=log_action.capitalize())
     await send_message(target_chat_id, notify_message)
     if ctx.message_id:
-        await edit_message_text(ctx.chat_id, ctx.message_id, f"Invite {log_action}.")
+        label = "✅ Approved" if status == "approved" else "🚫 Blocked"
+        await edit_message_reply_markup(
+            ctx.chat_id,
+            ctx.message_id,
+            [[{"text": label, "callback_data": f"invite_status:{status}:{target_chat_id}"}]],
+        )
+
+
+async def _cb_invite_status(ctx: CallbackCtx) -> None:
+    """Acknowledge taps on already-decided invite status buttons."""
+    status, _, _target_chat_id = ctx.job_id.partition(":")
+    text = "Already approved." if status == "approved" else "Already blocked."
+    await answer_callback_query(ctx.cq_id, text=text)
 
 
 _cb_invite_approve = functools.partial(
@@ -478,6 +492,7 @@ _CALLBACK_TABLE: dict[str, Callable[[CallbackCtx], Awaitable[None]]] = {
     "document_md": _cb_document_md,
     "invite_approve": _cb_invite_approve,
     "invite_block": _cb_invite_block,
+    "invite_status": _cb_invite_status,
     "repo_pick": _cb_repo_pick,
 }
 
@@ -1317,25 +1332,7 @@ async def _remember_invite_identity(
 
 
 async def _notify_operator_invite(chat_id: int, email: str) -> None:
-    operator_chat_id = settings.OPERATOR_CHAT_ID
-    if operator_chat_id is None:
-        log.warning("invite.operator_chat_id_unset", chat_id=chat_id)
-        return
-    user = await database.get_user(chat_id) or {}
-    first = (user.get("first_name") or "").strip()
-    last = (user.get("last_name") or "").strip()
-    name = " ".join(part for part in (first, last) if part).strip() or str(chat_id)
-    username = (user.get("username") or "unknown").lstrip("@")
-    await send_inline_keyboard(
-        operator_chat_id,
-        f"👤 {name} · {email} · @{username}",
-        buttons=[
-            [
-                {"text": "✅ Approve", "callback_data": f"invite_approve:{chat_id}"},
-                {"text": "🚫 Block", "callback_data": f"invite_block:{chat_id}"},
-            ]
-        ],
-    )
+    await notify_operator_invite(chat_id, email)
 
 
 async def _invite_gate_allows(

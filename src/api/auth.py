@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import random
+import time
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -13,6 +15,7 @@ from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
+from src.services.invite_notifications import notify_operator_invite
 from src.utils.logger import get_logger
 from src.utils.validators import normalize_email
 
@@ -35,6 +38,37 @@ class TelegramPayload(BaseModel):
     photo_url: str | None = None
     auth_date: int
     hash: str
+
+
+async def _login_telegram_user(payload: TelegramPayload, response: Response) -> dict:
+    await database.upsert_user(
+        tg_id=payload.id,
+        username=payload.username,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        photo_url=payload.photo_url,
+    )
+
+    session_user = {
+        "id": payload.id,
+        "first_name": payload.first_name,
+        "username": payload.username,
+        "photo_url": payload.photo_url,
+    }
+    session_id = await session_store.mint(session_user)
+
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=_COOKIE_MAX_AGE,
+        path="/",
+    )
+    response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    log.info("auth.telegram_login", tg_id=payload.id, username=payload.username)
+    return {"ok": True}
 
 
 @auth_router.post("/miniapp/session")
@@ -96,34 +130,21 @@ async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid Telegram auth payload")
 
-    await database.upsert_user(
-        tg_id=payload.id,
-        username=payload.username,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        photo_url=payload.photo_url,
-    )
+    return await _login_telegram_user(payload, response)
 
-    session_user = {
-        "id": payload.id,
-        "first_name": payload.first_name,
-        "username": payload.username,
-        "photo_url": payload.photo_url,
-    }
-    session_id = await session_store.mint(session_user)
 
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=session_id,
-        httponly=True,
-        secure=settings.SESSION_COOKIE_SECURE,
-        samesite="lax",
-        max_age=_COOKIE_MAX_AGE,
-        path="/",
+@auth_router.post("/dev-login")
+async def dev_login(response: Response) -> dict:
+    if not settings.DEV_LOGIN_ENABLED:
+        raise HTTPException(status_code=404, detail="Dev login is disabled")
+
+    payload = TelegramPayload(
+        id=random.randint(10**8, 10**9 - 1),
+        first_name="New Guy",
+        auth_date=int(time.time()),
+        hash="dev-login-bypasses-widget-hmac",
     )
-    response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
-    log.info("auth.telegram_login", tg_id=payload.id, username=payload.username)
-    return {"ok": True}
+    return await _login_telegram_user(payload, response)
 
 
 @auth_router.post("/logout")
@@ -164,6 +185,11 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
     tg_id = int(request.state.user["id"])
     await database.set_user_email(tg_id, email)
     status = await database.get_user_status(tg_id)
+    if status == "pending":
+        try:
+            await notify_operator_invite(tg_id, email)
+        except Exception:
+            log.exception("invite.operator_notification_failed", tg_id=tg_id)
     return {"email": email, "status": status}
 
 

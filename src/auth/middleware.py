@@ -14,8 +14,13 @@ COOKIE_NAME = "vig_session"
 # Paths that bypass the session gate entirely
 _OPEN_PATHS = frozenset(["/webhook", "/health"])
 
-# /api/auth/telegram is the login endpoint — must be reachable without a session
-_OPEN_API_PATHS = frozenset(["/api/auth/telegram", "/api/auth/miniapp/session", "/api/google/callback"])
+# Login/bootstrap endpoints — must be reachable without a session.
+_OPEN_API_PATHS = frozenset([
+    "/api/auth/telegram",
+    "/api/auth/dev-login",
+    "/api/auth/miniapp/session",
+    "/api/google/callback",
+])
 _OPEN_API_PREFIXES = ("/api/preview/",)
 
 _PRE_APPROVAL_AUTH_PATHS = frozenset([

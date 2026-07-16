@@ -15,6 +15,7 @@ import hmac
 import json
 import time
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from src.auth.hmac_verify import verify_telegram_auth
@@ -121,6 +122,7 @@ def fake_redis(monkeypatch: pytest.MonkeyPatch) -> FakeRedis:
     import src.auth.session as session_module
 
     fr = FakeRedis()
+    monkeypatch.setattr(session_module.settings, "SESSION_BACKEND", "redis")
     monkeypatch.setattr(session_module, "_redis", fr)
     return fr
 
@@ -131,6 +133,19 @@ class TestSessionStore:
 
         user = {"id": 42, "username": "leon"}
         sid = await session.mint(user)
+        assert await session.resolve(sid) == user
+
+    async def test_memory_backend_mint_resolve_roundtrip(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.auth import session
+
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        await session.close()
+
+        user = {"id": 43, "username": "local"}
+        sid = await session.mint(user)
+
         assert await session.resolve(sid) == user
 
     async def test_revoke_then_resolve_returns_none(self, fake_redis: FakeRedis) -> None:
@@ -149,6 +164,19 @@ class TestSessionStore:
         from src.auth import session
 
         token = await session.mint_handoff("real-session-id")
+        assert await session.redeem_handoff(token) == "real-session-id"
+        assert await session.redeem_handoff(token) is None
+
+    async def test_memory_backend_handoff_redeems_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.auth import session
+
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        await session.close()
+
+        token = await session.mint_handoff("real-session-id")
+
         assert await session.redeem_handoff(token) == "real-session-id"
         assert await session.redeem_handoff(token) is None
 
@@ -175,6 +203,7 @@ def auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import src.auth.session as session_module
 
     fr = FakeRedis()
+    monkeypatch.setattr(session_module.settings, "SESSION_BACKEND", "redis")
     monkeypatch.setattr(session_module, "_redis", fr)
 
     # Build app fresh (avoid touching the global app in src.main)
@@ -314,6 +343,49 @@ class TestSessionMiddleware:
         # 422 = FastAPI schema validation (missing fields) — middleware did not block it
         assert resp.status_code == 422
 
+    def test_new_user_telegram_login_creates_pending_user(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First-ever sign-in for a tg id: valid HMAC → session cookie set,
+        user upserted with default 'pending' status (not yet approved)."""
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.TELEGRAM_BOT_TOKEN", TOKEN)
+        payload = _make_payload(TOKEN, username="new_guy")
+
+        resp = auth_client.post("/api/auth/telegram", json=payload)
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert "vig_session=" in resp.headers["set-cookie"]
+        status = asyncio.run(database.get_user_status(99999))
+        assert status == "pending"
+
+    def test_dev_login_is_disabled_by_default(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", False)
+
+        resp = auth_client.post("/api/auth/dev-login")
+
+        assert resp.status_code == 404
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_dev_login_creates_pending_user_when_enabled(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456789)
+
+        resp = auth_client.post("/api/auth/dev-login")
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert "vig_session=" in resp.headers["set-cookie"]
+        status = asyncio.run(database.get_user_status(123456789))
+        assert status == "pending"
+
 
 class TestAuthRouter:
     def test_logout_clears_cookie(
@@ -352,10 +424,14 @@ class TestAuthRouter:
         assert resp.json()["username"] == "me_user"
         assert resp.json()["status"] == "pending"
 
-    def test_set_email_persists_for_current_user(self, auth_client: TestClient) -> None:
+    def test_set_email_persists_for_current_user(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         import src.auth.session as session_module
         from src import database
 
+        notify = AsyncMock()
+        monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
         user = {"id": 101, "username": "email_user"}
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:email-sid"] = json.dumps(user)
@@ -371,6 +447,30 @@ class TestAuthRouter:
         db_user = asyncio.run(database.get_user(101))
         assert db_user is not None
         assert db_user["email"] == "user@example.com"
+        notify.assert_awaited_once_with(101, "user@example.com")
+
+    def test_set_email_does_not_notify_for_approved_user(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        notify = AsyncMock()
+        monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
+        user = {"id": 102, "username": "approved_user"}
+        asyncio.run(database.set_user_status(102, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:approved-email-sid"] = json.dumps(user)
+
+        resp = auth_client.put(
+            "/api/auth/email",
+            cookies={"vig_session": "approved-email-sid"},
+            json={"email": "Approved@Example.COM"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+        notify.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

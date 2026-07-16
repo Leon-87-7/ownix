@@ -12,7 +12,7 @@ from src.utils.google_token_crypto import google_token_fernet
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -73,7 +73,9 @@ class Settings(BaseSettings):
 
     # Web dashboard (issue #84)
     SESSION_COOKIE_SECURE: bool = True  # set False only for local HTTP dev
+    SESSION_BACKEND: str = "redis"  # "redis" in prod; "memory" for local browser auth loops
     MINI_APP_URL: str = ""
+    DEV_LOGIN_ENABLED: bool = False
 
     # Slices #6/#7 — Mini-PRD
     GOOGLE_DRIVE_FOLDER_PRD: str = ""

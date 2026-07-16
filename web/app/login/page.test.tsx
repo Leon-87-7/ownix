@@ -21,6 +21,7 @@ function telegramScript() {
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.stubEnv('NEXT_PUBLIC_TELEGRAM_BOT_USERNAME', 'ownix_bot');
+    vi.stubEnv('NODE_ENV', 'development');
   });
 
   afterEach(() => {
@@ -139,5 +140,29 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Telegram sign-in' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows a localhost dev login fallback that uses the backend dev endpoint', async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, hostname: 'localhost', href: '' },
+    });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LoginPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dev login' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/auth/dev-login', { method: 'POST' }),
+    );
+    await waitFor(() => expect(window.location.href).toBe('/feed'));
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 });
