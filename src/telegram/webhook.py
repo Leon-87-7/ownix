@@ -1725,7 +1725,7 @@ async def _handle_ops_callback(callback: dict) -> None:
         await ops_bot.answer_ops_callback(cq_id, "Already decided.")
         return
     if prefix == "ops_approve_pending":
-        count = await ops_bot.approve_pending_domain(payload)
+        count = await ops_bot.approve_pending_batch(payload)
         await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
         if message_id:
             await ops_bot.edit_ops_reply_markup(

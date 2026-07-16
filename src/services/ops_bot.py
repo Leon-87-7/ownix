@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import secrets
 from dataclasses import dataclass
 
-from src import database
+from src import database, queue
 from src.config import settings
 from src.telegram import sender
 from src.utils.logger import get_logger
@@ -14,6 +16,7 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 MAX_CHAT_ROWS = 20
+BATCH_TTL_SECONDS = 15 * 60
 HELP_TEXT = """Ops commands:
 /pending
 /users [pending|approved|blocked|email <domain|all>]
@@ -46,6 +49,10 @@ def can_read(chat_id: int) -> bool:
 
 def can_admin(chat_id: int) -> bool:
     return chat_id in set(settings.ops_admin_chat_ids)
+
+
+def can_deliver_to(ctx: OpsCtx) -> bool:
+    return ctx.chat_id == ctx.sender_id or can_read(ctx.chat_id)
 
 
 async def send_ops_message(chat_id: int, text: str, *, parse_mode: str | None = None) -> dict:
@@ -183,6 +190,20 @@ async def deliver_rows(chat_id: int, title: str, rows: list[dict]) -> None:
     )
 
 
+def _batch_key(batch_id: str) -> str:
+    return f"ops_approve_pending:{batch_id}"
+
+
+async def create_approval_batch(domain: str, rows: list[dict]) -> str:
+    batch_id = secrets.token_urlsafe(8)
+    payload = {
+        "domain": domain,
+        "ids": [int(row["tg_id"]) for row in rows],
+    }
+    await queue._client().set(_batch_key(batch_id), json.dumps(payload), ex=BATCH_TTL_SECONDS)
+    return batch_id
+
+
 async def list_users(
     status: str | None = None, *, email_domain: str | None = None, limit: int | None = 20
 ) -> list[dict]:
@@ -208,47 +229,69 @@ async def list_users(
     return await database._fetch_dicts(sql, tuple(params))
 
 
-async def approve_pending_domain(domain: str) -> int:
-    domain = normalize_email_domain(domain) or ""
-    if not domain:
+async def _approve_pending_ids(target_ids: list[int]) -> int:
+    if not target_ids:
         return 0
-    params = ("%@" + domain,)
+
+    approved_rows: list[dict] = []
     async with database.connection() as conn:
-        cur = await conn.execute(
-            """
-            SELECT tg_id, username, first_name, last_name, email, status, created_at, updated_at
-            FROM users
-            WHERE status = 'pending'
-              AND lower(coalesce(email, '')) LIKE ?
-            ORDER BY created_at DESC, tg_id DESC
-            """,
-            params,
-        )
-        rows = [dict(row) for row in await cur.fetchall()]
-        if not rows:
-            return 0
-        placeholders = ",".join("?" for _ in rows)
-        cur = await conn.execute(
-            f"""
-            UPDATE users
-            SET status = 'approved', updated_at = CURRENT_TIMESTAMP
-            WHERE status = 'pending'
-              AND tg_id IN ({placeholders})
-            """,
-            tuple(int(row["tg_id"]) for row in rows),
-        )
-        count = cur.rowcount
+        for tg_id in target_ids:
+            cur = await conn.execute(
+                """
+                SELECT tg_id, username, first_name, last_name, email, status, created_at, updated_at
+                FROM users
+                WHERE tg_id = ?
+                  AND status = 'pending'
+                """,
+                (tg_id,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                continue
+            cur = await conn.execute(
+                """
+                UPDATE users
+                SET status = 'approved', updated_at = CURRENT_TIMESTAMP
+                WHERE tg_id = ?
+                  AND status = 'pending'
+                """,
+                (tg_id,),
+            )
+            if cur.rowcount == 1:
+                approved_rows.append(dict(row))
         await conn.commit()
-    for row in rows:
+    for row in approved_rows:
         try:
             await sender.send_message(int(row["tg_id"]), "You're in, send a link.")
         except Exception:
             log.exception("ops_batch_approval_notification_failed", tg_id=row.get("tg_id"))
-    return max(count, 0)
+    return len(approved_rows)
+
+
+async def approve_pending_batch(batch_id: str) -> int:
+    raw = await queue._client().get(_batch_key(batch_id))
+    await queue._client().delete(_batch_key(batch_id))
+    if not raw:
+        return 0
+    try:
+        payload = json.loads(raw)
+        target_ids = [int(value) for value in payload.get("ids", [])]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        log.warning("ops_batch_approval_invalid_payload", batch_id=batch_id)
+        return 0
+    return await _approve_pending_ids(target_ids)
+
+
+async def approve_pending_domain(domain: str) -> int:
+    domain = normalize_email_domain(domain)
+    if not domain:
+        return 0
+    rows = await list_users("pending", email_domain=domain, limit=None)
+    return await _approve_pending_ids([int(row["tg_id"]) for row in rows])
 
 
 async def handle_command(ctx: OpsCtx) -> None:
-    if not can_read(ctx.sender_id):
+    if not can_read(ctx.sender_id) or not can_deliver_to(ctx):
         await send_ops_message(ctx.chat_id, "Not authorized.")
         return
     cmd = ctx.parts[0].lower()
@@ -297,6 +340,7 @@ async def handle_command(ctx: OpsCtx) -> None:
                 f"\nShowing first {MAX_CHAT_ROWS} of {len(rows)}. "
                 f"Confirm approves all {len(rows)} pending @{domain}."
             )
+        batch_id = await create_approval_batch(domain, rows)
         await send_ops_keyboard(
             ctx.chat_id,
             text,
@@ -304,7 +348,7 @@ async def handle_command(ctx: OpsCtx) -> None:
                 [
                     {
                         "text": f"✅ Confirm @{domain}",
-                        "callback_data": f"ops_approve_pending:{domain}",
+                        "callback_data": f"ops_approve_pending:{batch_id}",
                     },
                     {"text": "Cancel", "callback_data": "ops_approve_pending_cancel:0"},
                 ]

@@ -2176,6 +2176,24 @@ async def test_ops_approve_pending_command_authorizes_sender_not_group_chat(
     assert any(call["json"].get("text") == "Not authorized." for call in fake_http.calls)
 
 
+async def test_ops_approve_pending_command_rejects_unauthorized_destination_chat(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/approve_pending example.com", chat_id=-100, sender_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert any(call["json"].get("text") == "Not authorized." for call in fake_http.calls)
+
+
 async def test_ops_rows_csv_neutralizes_formula_like_user_fields() -> None:
     from src.services import ops_bot
 
@@ -2218,6 +2236,50 @@ async def test_ops_approve_pending_domain_commits_before_best_effort_notificatio
     assert await database.get_user_status(786) == "approved"
     assert await database.get_user_status(787) == "approved"
     assert notify.await_count == 2
+
+
+async def test_ops_approve_pending_callback_uses_previewed_user_cohort(
+    client, monkeypatch
+) -> None:
+    c, fake_redis, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    await database.set_user_email(788, "first@example.com")
+    await database.set_user_status(788, "pending")
+
+    preview = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/approve_pending example.com", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert preview.status_code == 200
+    keyboard_calls = [
+        call for call in fake_http.calls if "botops-token/sendMessage" in call["url"]
+    ]
+    callback_data = keyboard_calls[-1]["json"]["reply_markup"]["inline_keyboard"][0][0][
+        "callback_data"
+    ]
+    assert callback_data.startswith("ops_approve_pending:")
+    assert fake_redis._strings
+
+    await database.set_user_email(789, "late@example.com")
+    await database.set_user_status(789, "pending")
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback(callback_data, chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(788) == "approved"
+    assert await database.get_user_status(789) == "pending"
+    assert any(
+        call["json"].get("text") == "Approved 1"
+        and "botops-token/answerCallbackQuery" in call["url"]
+        for call in fake_http.calls
+    )
 
 
 async def test_ops_approve_pending_callback_rejects_bare_at_without_mutating_all(
@@ -2275,6 +2337,24 @@ async def test_ops_pending_command_authorizes_sender_not_group_chat(client, monk
     response = c.post(
         "/webhook/ops",
         json=_telegram_update("/pending", chat_id=-100, sender_id=901),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert any(call["json"].get("text") == "Not authorized." for call in fake_http.calls)
+
+
+async def test_ops_pending_command_rejects_unauthorized_destination_chat(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_CHAT_IDS", "900")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/pending", chat_id=-100, sender_id=900),
         headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
     )
 
