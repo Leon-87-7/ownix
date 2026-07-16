@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     MINI_APP_URL: str = ""
     DEV_LOGIN_ENABLED: bool = False
 
+    # Ops bot (ADR-0036) — separate internal Telegram operations surface.
+    OPS_BOT_TOKEN: str = ""
+    OPS_WEBHOOK_SECRET: str = ""
+    OPS_WEBHOOK_URL: str = ""
+    OPS_CHAT_IDS: str = ""
+    OPS_ADMIN_CHAT_IDS: str = ""
+    OPS_DEV_CHAT_IDS: str = ""
+    OPS_DEV_NOTIFICATIONS: bool = False
+
     # Slices #6/#7 — Mini-PRD
     GOOGLE_DRIVE_FOLDER_PRD: str = ""
     PRD_MAX_TRANSCRIPT_CHARS: int = 60_000
@@ -98,6 +107,35 @@ class Settings(BaseSettings):
     # trusted for anonymous preview rate limiting. Keep narrow unless the API is
     # only reachable through that proxy network.
     PREVIEW_TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,::1/128"
+
+    def parse_chat_ids(self, raw: str) -> tuple[int, ...]:
+        """Parse comma-separated Telegram chat IDs, ignoring blanks safely."""
+        ids: list[int] = []
+        seen: set[int] = set()
+        for part in raw.split(","):
+            value = part.strip()
+            if not value:
+                continue
+            try:
+                chat_id = int(value)
+            except ValueError as exc:
+                raise ValueError(f"Invalid Telegram chat id: {value!r}") from exc
+            if chat_id not in seen:
+                ids.append(chat_id)
+                seen.add(chat_id)
+        return tuple(ids)
+
+    @property
+    def ops_chat_ids(self) -> tuple[int, ...]:
+        return self.parse_chat_ids(self.OPS_CHAT_IDS)
+
+    @property
+    def ops_admin_chat_ids(self) -> tuple[int, ...]:
+        return self.parse_chat_ids(self.OPS_ADMIN_CHAT_IDS)
+
+    @property
+    def ops_dev_chat_ids(self) -> tuple[int, ...]:
+        return self.parse_chat_ids(self.OPS_DEV_CHAT_IDS)
 
     def _google_token_readable(self, encrypted_token: str) -> bool:
         try:
@@ -122,11 +160,7 @@ class Settings(BaseSettings):
                 if await asyncio.to_thread(self._has_readable_google_token, chat_id):
                     return False
             except sqlite3.Error:
-                return (
-                    False
-                    if self.OPERATOR_CHAT_ID is None
-                    else chat_id != self.OPERATOR_CHAT_ID
-                )
+                return False if self.OPERATOR_CHAT_ID is None else chat_id != self.OPERATOR_CHAT_ID
         return (
             self.OPERATOR_CHAT_ID is not None
             and chat_id is not None
@@ -146,6 +180,4 @@ class Settings(BaseSettings):
             return row is not None and self._google_token_readable(str(row[0]))
 
 
-settings = (
-    Settings()
-)  # pyright: ignore[reportCallIssue] — required fields are populated from env, not literal args
+settings = Settings()  # pyright: ignore[reportCallIssue] — required fields are populated from env, not literal args

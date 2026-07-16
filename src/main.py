@@ -36,6 +36,35 @@ async def _register_webhook() -> None:
         log.error("webhook_registration_failed", response=data)
 
 
+async def _register_ops_webhook() -> None:
+    from src.config import settings
+
+    missing = [
+        name
+        for name, value in {
+            "OPS_BOT_TOKEN": settings.OPS_BOT_TOKEN,
+            "OPS_WEBHOOK_SECRET": settings.OPS_WEBHOOK_SECRET,
+            "OPS_WEBHOOK_URL": settings.OPS_WEBHOOK_URL,
+        }.items()
+        if not value
+    ]
+    if missing:
+        log.warning("ops_webhook_missing_config", missing=missing)
+        return
+    tg_url = f"https://api.telegram.org/bot{settings.OPS_BOT_TOKEN}/setWebhook"
+    payload = {
+        "url": settings.OPS_WEBHOOK_URL,
+        "secret_token": settings.OPS_WEBHOOK_SECRET,
+        "allowed_updates": ["message", "callback_query"],
+    }
+    resp = await sender._http().post(tg_url, json=payload)
+    data = resp.json()
+    if data.get("ok"):
+        log.info("ops_webhook_registered", url=payload["url"])
+    else:
+        log.error("ops_webhook_registration_failed", response=data)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from src.config import settings
@@ -53,12 +82,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         scheduler.start()
         log.info("brain_scheduler_started")
     await _register_webhook()
+    await _register_ops_webhook()
     log.info("api_ready")
     yield
     log.info("api_shutting_down")
     await sender.close()
     await queue.close()
     from src.auth import session as session_store
+
     await session_store.close()
 
 

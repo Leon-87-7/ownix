@@ -144,7 +144,25 @@ async def dev_login(response: Response) -> dict:
         auth_date=int(time.time()),
         hash="dev-login-bypasses-widget-hmac",
     )
-    return await _login_telegram_user(payload, response)
+    result = await _login_telegram_user(payload, response)
+    await database.set_user_email(payload.id, f"dev-{payload.id}@local.test")
+    if settings.OPS_DEV_NOTIFICATIONS:
+        try:
+            await notify_operator_invite(payload.id, f"dev-{payload.id}@local.test", dev=True)
+        except Exception:
+            log.exception("invite.dev_operator_notification_failed", tg_id=payload.id)
+    return result
+
+
+@auth_router.post("/dev-approve")
+async def dev_approve(request: Request) -> dict:
+    """Local-only fallback to approve the current Dev login session without Telegram callbacks."""
+    if not settings.DEV_LOGIN_ENABLED:
+        raise HTTPException(status_code=404, detail="Dev approval is disabled")
+    tg_id = int(request.state.user["id"])
+    await database.set_user_status(tg_id, "approved")
+    log.info("auth.dev_approve", tg_id=tg_id)
+    return {"ok": True, "status": "approved"}
 
 
 @auth_router.post("/logout")
@@ -167,9 +185,7 @@ async def me(request: Request, response: Response) -> dict:
         # A stale preview cookie on an approved session would render the
         # dashboard in Restricted mode (ADR-0035 §1 says approved users get
         # their own Feed) — clear it whenever we see it.
-        response.delete_cookie(
-            "ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE
-        )
+        response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
     return {
         **session_user,
         "email": db_user.get("email") if db_user else None,

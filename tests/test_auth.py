@@ -386,6 +386,52 @@ class TestSessionMiddleware:
         status = asyncio.run(database.get_user_status(123456789))
         assert status == "pending"
 
+    def test_dev_login_quiet_by_default(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        notify = AsyncMock()
+        monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.OPS_DEV_NOTIFICATIONS", False)
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456790)
+
+        resp = auth_client.post("/api/auth/dev-login")
+
+        assert resp.status_code == 200
+        notify.assert_not_awaited()
+
+    def test_dev_approve_fallback_approves_current_dev_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        user = {"id": 123456792, "username": "dev_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:dev-approve-sid"] = json.dumps(user)
+
+        resp = auth_client.post("/api/auth/dev-approve", cookies={"vig_session": "dev-approve-sid"})
+
+        assert resp.status_code == 200
+        assert asyncio.run(database.get_user_status(123456792)) == "approved"
+
+    def test_dev_login_sends_marked_ops_card_when_enabled(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        notify = AsyncMock()
+        monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.OPS_DEV_NOTIFICATIONS", True)
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456791)
+
+        resp = auth_client.post("/api/auth/dev-login")
+
+        assert resp.status_code == 200
+        notify.assert_awaited_once_with(123456791, "dev-123456791@local.test", dev=True)
+
 
 class TestAuthRouter:
     def test_logout_clears_cookie(
@@ -484,13 +530,21 @@ def _sign_miniapp(data: dict[str, str], bot_token: str) -> str:
     return hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
 
-def _make_init_data(bot_token: str, *, auth_date: int = 1_700_000_000, user_id: int = 4242, chat_id: int | None = None) -> str:
+def _make_init_data(
+    bot_token: str,
+    *,
+    auth_date: int = 1_700_000_000,
+    user_id: int = 4242,
+    chat_id: int | None = None,
+) -> str:
     from urllib.parse import urlencode
 
     data = {
         "auth_date": str(auth_date),
         "query_id": "AAH-test",
-        "user": json.dumps({"id": user_id, "first_name": "Mini", "username": "mini_user"}, separators=(",", ":")),
+        "user": json.dumps(
+            {"id": user_id, "first_name": "Mini", "username": "mini_user"}, separators=(",", ":")
+        ),
     }
     if chat_id is not None:
         data["chat"] = json.dumps({"id": chat_id, "type": "private"}, separators=(",", ":"))
@@ -513,7 +567,10 @@ def test_verify_miniapp_init_data_rejects_tampering_and_stale_payloads() -> None
     from src.auth.telegram_miniapp import verify_init_data
 
     init_data = _make_init_data(TOKEN, auth_date=1_700_000_000)
-    assert verify_init_data(init_data.replace("mini_user", "attacker"), TOKEN, now=1_700_000_030) is None
+    assert (
+        verify_init_data(init_data.replace("mini_user", "attacker"), TOKEN, now=1_700_000_030)
+        is None
+    )
     assert verify_init_data(init_data, TOKEN, now=1_700_004_000) is None
 
 
@@ -541,8 +598,11 @@ def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.Monke
     monkeypatch.setattr(auth_api.settings, "SESSION_COOKIE_SECURE", False)
 
     response = Response()
-    payload = auth_api.MiniAppSessionPayload(init_data=_make_init_data(TOKEN, auth_date=int(time.time()), chat_id=-7777))
+    payload = auth_api.MiniAppSessionPayload(
+        init_data=_make_init_data(TOKEN, auth_date=int(time.time()), chat_id=-7777)
+    )
     import asyncio
+
     result = asyncio.run(auth_api.miniapp_session(payload, response))
 
     assert result["ok"] is True

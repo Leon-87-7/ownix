@@ -54,6 +54,7 @@ web/public/seed.json
 # Local operator/debug exports
 local-users.csv
 logs/*.txt
+.codacy/codacy.yaml
 
 */brag/*
 error.log

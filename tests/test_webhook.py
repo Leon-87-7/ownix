@@ -241,9 +241,7 @@ async def _seed_job(path: str, job_id: str, chat_id: int = 1, **fields) -> None:
         vals.append(v)
     placeholders = ",".join("?" * len(cols))
     async with aiosqlite.connect(path) as conn:
-        await conn.execute(
-            f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals
-        )
+        await conn.execute(f"INSERT INTO jobs ({','.join(cols)}) VALUES ({placeholders})", vals)
         await conn.commit()
 
 
@@ -282,9 +280,7 @@ async def test_callback_prd_auto_resend_when_status_done(temp_db, monkeypatch):
     from src.telegram import webhook
 
     await _approve_user(100)
-    await _seed_job(
-        temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}'
-    )
+    await _seed_job(temp_db, "J_DONE", chat_id=100, prd_auto_status="done", prd_auto_json='{"x":1}')
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
@@ -427,8 +423,7 @@ async def _post_webhook(
     body = {
         "message": {
             "chat": {"id": chat_id},
-            "from": from_user
-            or {"id": chat_id, "first_name": "Test", "username": "tester"},
+            "from": from_user or {"id": chat_id, "first_name": "Test", "username": "tester"},
             "text": text,
             "message_id": 1,
         }
@@ -489,12 +484,12 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
 ):
     from src import database as db
 
-    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
-    monkeypatch.setattr("src.database.settings.OPERATOR_CHAT_ID", 999)
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "999")
     sent = AsyncMock()
     keyboard = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
-    monkeypatch.setattr("src.services.invite_notifications.send_inline_keyboard", keyboard)
+    monkeypatch.setattr("src.services.ops_bot.send_ops_keyboard", keyboard)
 
     await _post_webhook("hello", approved=False)
     await _post_webhook(
@@ -517,26 +512,25 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
     assert args[0] == 999
     assert "Ada Lovelace" in args[1]
     assert "user@example.com" in args[1]
-    buttons = kwargs["buttons"]
-    assert buttons[0][0]["callback_data"] == "invite_approve:100"
-    assert buttons[0][1]["callback_data"] == "invite_block:100"
+    buttons = args[2]
+    assert buttons[0][0]["callback_data"] == "ops_invite_approve:100"
+    assert buttons[0][1]["callback_data"] == "ops_invite_block:100"
+    assert kwargs.get("parse_mode") is None
     assert "still waiting on the operator" in sent.await_args.args[1].lower()
 
 
 @pytest.mark.asyncio
-async def test_invite_callback_approve_flips_status_and_notifies_user(
-    temp_db, monkeypatch
-):
+async def test_invite_callback_approve_is_deprecated_and_does_not_mutate(temp_db, monkeypatch):
     from src import database as db
     from src.telegram import webhook
 
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     await db.set_user_email(100, "user@example.com")
+    await db.set_user_status(100, "pending")
     sent = AsyncMock()
-    edited_markup = AsyncMock()
+    answered = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
-    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
-    monkeypatch.setattr("src.telegram.webhook.edit_message_reply_markup", edited_markup)
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
 
     await webhook._handle_callback(
         {
@@ -546,30 +540,24 @@ async def test_invite_callback_approve_flips_status_and_notifies_user(
         }
     )
 
-    assert await db.get_user_status(100) == "approved"
-    sent.assert_awaited_once_with(100, "You're in, send a link.")
-    edited_markup.assert_awaited_once_with(
-        999,
-        7,
-        [[{"text": "✅ Approved", "callback_data": "invite_status:approved:100"}]],
-    )
+    assert await db.get_user_status(100) == "pending"
+    sent.assert_not_awaited()
+    answered.assert_awaited_once_with("CB", text="Use the Ops bot approval card.")
 
 
 @pytest.mark.asyncio
-async def test_invite_callback_block_flips_status_and_notifies_user(
-    temp_db, monkeypatch
-):
-    """Operator-chat block callback still works after the auth-gate change (mirrors approve test)."""
+async def test_invite_callback_block_is_deprecated_and_does_not_mutate(temp_db, monkeypatch):
+    """Legacy Ownix invite decisions are acknowledged but no longer mutate users."""
     from src import database as db
     from src.telegram import webhook
 
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     await db.set_user_email(100, "user@example.com")
+    await db.set_user_status(100, "pending")
     sent = AsyncMock()
-    edited_markup = AsyncMock()
+    answered = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
-    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", AsyncMock())
-    monkeypatch.setattr("src.telegram.webhook.edit_message_reply_markup", edited_markup)
+    monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
 
     await webhook._handle_callback(
         {
@@ -579,21 +567,17 @@ async def test_invite_callback_block_flips_status_and_notifies_user(
         }
     )
 
-    assert await db.get_user_status(100) == "blocked"
-    sent.assert_awaited_once_with(100, "Access blocked.")
-    edited_markup.assert_awaited_once_with(
-        999,
-        7,
-        [[{"text": "🚫 Blocked", "callback_data": "invite_status:blocked:100"}]],
-    )
+    assert await db.get_user_status(100) == "pending"
+    sent.assert_not_awaited()
+    answered.assert_awaited_once_with("CB", text="Use the Ops bot approval card.")
 
 
 @pytest.mark.asyncio
-async def test_invite_status_callback_acknowledges_already_decided(
-    temp_db, monkeypatch
-):
+async def test_invite_status_callback_acknowledges_already_decided(temp_db, monkeypatch):
+    from src import database as db
     from src.telegram import webhook
 
+    await db.set_user_status(999, "approved")
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     answered = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
@@ -611,7 +595,7 @@ async def test_invite_status_callback_acknowledges_already_decided(
 
 @pytest.mark.asyncio
 async def test_invite_callback_approve_rejects_non_operator_chat(temp_db, monkeypatch):
-    """A chat that isn't the operator must not be able to approve invites (blocker fix)."""
+    """Deprecated Ownix approve callbacks do not mutate even from arbitrary chats."""
     from src import database as db
     from src.telegram import webhook
 
@@ -636,7 +620,7 @@ async def test_invite_callback_approve_rejects_non_operator_chat(temp_db, monkey
 
     set_status.assert_not_awaited()
     sent.assert_not_awaited()
-    answered.assert_awaited_once_with("CB", text="Not authorized.")
+    answered.assert_awaited_once_with("CB", text="Use the Ops bot approval card.")
     assert await db.get_user_status(100) == "pending"
 
 
@@ -644,7 +628,7 @@ async def test_invite_callback_approve_rejects_non_operator_chat(temp_db, monkey
 async def test_invite_callback_approve_rejects_unset_operator_and_missing_chat(
     temp_db, monkeypatch
 ):
-    """Unset operator config plus missing chat id must not approve invites."""
+    """Unset operator config plus missing chat id must not approve via deprecated callback."""
     from src import database as db
     from src.telegram import webhook
 
@@ -669,13 +653,13 @@ async def test_invite_callback_approve_rejects_unset_operator_and_missing_chat(
 
     set_status.assert_not_awaited()
     sent.assert_not_awaited()
-    answered.assert_awaited_once_with("CB", text="Not authorized.")
+    answered.assert_awaited_once_with("CB", text="Use the Ops bot approval card.")
     assert await db.get_user_status(100) == "pending"
 
 
 @pytest.mark.asyncio
 async def test_invite_callback_block_rejects_non_operator_chat(temp_db, monkeypatch):
-    """A chat that isn't the operator must not be able to block invites (blocker fix)."""
+    """Deprecated Ownix block callbacks do not mutate even from arbitrary chats."""
     from src import database as db
     from src.telegram import webhook
 
@@ -700,7 +684,7 @@ async def test_invite_callback_block_rejects_non_operator_chat(temp_db, monkeypa
 
     set_status.assert_not_awaited()
     sent.assert_not_awaited()
-    answered.assert_awaited_once_with("CB", text="Not authorized.")
+    answered.assert_awaited_once_with("CB", text="Use the Ops bot approval card.")
     assert await db.get_user_status(100) == "pending"
 
 
@@ -712,9 +696,7 @@ async def test_invite_gate_skips_unchanged_approved_upsert_but_keeps_pending_ups
     from src.telegram import webhook
 
     identity = {"first_name": "Ada", "last_name": "Lovelace", "username": "ada"}
-    await db.upsert_user(
-        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
-    )
+    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
     await db.set_user_status(100, "approved")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -738,7 +720,9 @@ async def test_invite_gate_skips_unchanged_approved_upsert_but_keeps_pending_ups
 
 
 @pytest.mark.asyncio
-async def test_callback_from_pending_awaiting_email_does_not_send_email_validation_error(monkeypatch):
+async def test_callback_from_pending_awaiting_email_does_not_send_email_validation_error(
+    monkeypatch,
+):
     """A button press from a pending, awaiting_email chat must not trigger the
     'Please send a valid email address' text-input error message."""
     from src.telegram import webhook
@@ -751,7 +735,9 @@ async def test_callback_from_pending_awaiting_email_does_not_send_email_validati
     monkeypatch.setattr(webhook, "send_message", fake_send_message)
     monkeypatch.setattr(webhook.database, "get_user_status", AsyncMock(return_value="pending"))
     monkeypatch.setattr(webhook.database, "get_user", AsyncMock(return_value={"email": None}))
-    monkeypatch.setattr(webhook.database, "get_chat_state", AsyncMock(return_value={"mode": "awaiting_email"}))
+    monkeypatch.setattr(
+        webhook.database, "get_chat_state", AsyncMock(return_value={"mode": "awaiting_email"})
+    )
     monkeypatch.setattr(webhook, "_resolve_chat_state", lambda state: True)
     monkeypatch.setattr(webhook.database, "upsert_user", AsyncMock())
     set_chat_state = AsyncMock()
@@ -776,9 +762,7 @@ async def test_callback_reprocess_rejects_blocked_chat(temp_db, monkeypatch):
 
     await db.set_user_email(100, "user@example.com")
     await db.set_user_status(100, "blocked")
-    await _seed_job(
-        temp_db, "J_BLOCKED", chat_id=100, status="error", content_type="short"
-    )
+    await _seed_job(temp_db, "J_BLOCKED", chat_id=100, status="error", content_type="short")
     create_job = AsyncMock(wraps=db.create_job)
     monkeypatch.setattr("src.telegram.webhook.database.create_job", create_job)
     sent = AsyncMock()
@@ -797,15 +781,11 @@ async def test_callback_reprocess_rejects_blocked_chat(temp_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_invite_gate_skips_upsert_for_unchanged_approved_identity(
-    temp_db, monkeypatch
-):
+async def test_invite_gate_skips_upsert_for_unchanged_approved_identity(temp_db, monkeypatch):
     from src import database as db
     from src.telegram import webhook
 
-    await db.upsert_user(
-        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
-    )
+    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
     await db.set_user_status(100, "approved")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -825,9 +805,7 @@ async def test_invite_gate_still_upserts_pending_identity(temp_db, monkeypatch):
     from src import database as db
     from src.telegram import webhook
 
-    await db.upsert_user(
-        tg_id=100, first_name="Ada", last_name="Lovelace", username="ada"
-    )
+    await db.upsert_user(tg_id=100, first_name="Ada", last_name="Lovelace", username="ada")
     await db.set_user_status(100, "pending")
     upsert = AsyncMock(wraps=db.upsert_user)
     monkeypatch.setattr("src.telegram.webhook.database.upsert_user", upsert)
@@ -916,9 +894,7 @@ async def test_routing_awaiting_intent_url_starts_new_job(
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_armed_state(
-    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
-):
+async def test_cancel_with_armed_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     from src import database as db
 
     await db.set_chat_state(chat_id=100, mode="awaiting_intent", job_id="J")
@@ -930,9 +906,7 @@ async def test_cancel_with_armed_state(
 
 
 @pytest.mark.asyncio
-async def test_cancel_with_no_state(
-    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
-):
+async def test_cancel_with_no_state(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/cancel")
@@ -940,9 +914,7 @@ async def test_cancel_with_no_state(
 
 
 @pytest.mark.asyncio
-async def test_spec_no_args_usage(
-    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
-):
+async def test_spec_no_args_usage(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/spec")
@@ -963,12 +935,8 @@ async def test_spec_no_match_shows_recent(
 
 
 @pytest.mark.asyncio
-async def test_spec_short_only_rejection(
-    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
-):
-    await _seed_job(
-        temp_db, "20260101_120000_AAAA", chat_id=100, content_type="short", title="S"
-    )
+async def test_spec_short_only_rejection(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
+    await _seed_job(temp_db, "20260101_120000_AAAA", chat_id=100, content_type="short", title="S")
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/spec AAAA")
@@ -1166,9 +1134,7 @@ async def test_template_pick_rejects_job_not_ready(temp_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_template_freestyle_arms_state_and_sends_force_reply(
-    temp_db, monkeypatch
-):
+async def test_template_freestyle_arms_state_and_sends_force_reply(temp_db, monkeypatch):
     from src.telegram import webhook
     from src import database as db
 
@@ -1208,9 +1174,7 @@ async def test_awaiting_freestyle_enqueues_when_transcript_done(
     await _post_webhook("Summarize the key business lessons from this video")
     enq.assert_awaited_once_with({"task": "enrichment", "job_id": "J_FT"})
     job = await db.get_job("J_FT")
-    assert (
-        job["freestyle_prompt"] == "Summarize the key business lessons from this video"
-    )
+    assert job["freestyle_prompt"] == "Summarize the key business lessons from this video"
     assert await db.get_chat_state(100) is None
 
 
@@ -1295,9 +1259,7 @@ async def test_cb_reprocess_creates_fresh_job_and_enqueues(temp_db, monkeypatch)
     from src.telegram.webhook import CallbackCtx, _cb_reprocess
     from src import database as db
 
-    await _seed_job(
-        temp_db, "J_ORPH", chat_id=100, status="error", content_type="short"
-    )
+    await _seed_job(temp_db, "J_ORPH", chat_id=100, status="error", content_type="short")
     enqueued = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
@@ -1367,9 +1329,7 @@ async def test_cb_enrichment_retry_rejects_wrong_status(temp_db, monkeypatch):
     monkeypatch.setattr("src.queue.enqueue", enqueued)
     ack = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.answer_callback_query", ack)
-    ctx = CallbackCtx(
-        chat_id=1, job_id="J_ENR", cq_id="CQ2", data="enrichment_retry:J_ENR"
-    )
+    ctx = CallbackCtx(chat_id=1, job_id="J_ENR", cq_id="CQ2", data="enrichment_retry:J_ENR")
     await _cb_enrichment_retry(ctx)
     enqueued.assert_not_awaited()
     _, kwargs = ack.await_args
@@ -1395,14 +1355,12 @@ async def test_intent_text_never_appears_in_log_records(
         await _post_webhook(secret_intent, chat_id=100)
 
     for record in caplog.records:
-        assert (
-            secret_intent not in record.getMessage()
-        ), f"intent_text leaked in log record: {record.getMessage()!r}"
+        assert secret_intent not in record.getMessage(), (
+            f"intent_text leaked in log record: {record.getMessage()!r}"
+        )
         for key, value in record.__dict__.items():
             if isinstance(value, str) and secret_intent in value:
-                raise AssertionError(
-                    f"intent_text leaked in record attribute {key!r}: {value!r}"
-                )
+                raise AssertionError(f"intent_text leaked in record attribute {key!r}: {value!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -1613,9 +1571,7 @@ async def test_awaiting_freestyle_short_video_enqueues_video_task(
     """For short video: user reply with prompt enqueues video task and sends confirmation."""
     from src import database as db
 
-    await _seed_job(
-        temp_db, "J_SH", chat_id=100, content_type="short", status="pending"
-    )
+    await _seed_job(temp_db, "J_SH", chat_id=100, content_type="short", status="pending")
     await db.set_chat_state(chat_id=100, mode="awaiting_freestyle", job_id="J_SH")
     enq = AsyncMock()
     monkeypatch.setattr("src.queue.enqueue", enq)
@@ -1710,9 +1666,7 @@ async def test_download_md_cache_miss_calls_jina_and_sends_document(
     from src.services import jina as jina_module
 
     url = "https://example.com/article"
-    fetch_mock = AsyncMock(
-        return_value=("Great Article", "# Great Article\n\nBody text.")
-    )
+    fetch_mock = AsyncMock(return_value=("Great Article", "# Great Article\n\nBody text."))
     monkeypatch.setattr(jina_module, "fetch_markdown", fetch_mock)
     send_doc = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_document", send_doc)
@@ -1924,9 +1878,7 @@ async def test_force_repo_deletes_both_redis_cache_keys(
     # Dispatch /force via the slash handler directly
     from src.telegram.webhook import _cmd_force, SlashCtx
 
-    ctx = SlashCtx(
-        chat_id=1, parts=["/force", "https://github.com/owner/repo"], message_id=None
-    )
+    ctx = SlashCtx(chat_id=1, parts=["/force", "https://github.com/owner/repo"], message_id=None)
     await _cmd_force(ctx)
 
     assert "github_repo_bundle:owner/repo" in deleted
@@ -1948,14 +1900,12 @@ async def test_start_sends_welcome_message(
     sent.assert_awaited_once()
     args, kwargs = sent.await_args
     assert args[0] == 100
-    assert "Video Intelligence Gateway" in args[1]
+    assert "Ownix" in args[1]
     assert kwargs.get("parse_mode") == "Markdown"
 
 
 @pytest.mark.asyncio
-async def test_help_sends_command_list(
-    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
-):
+async def test_help_sends_command_list(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
     await _post_webhook("/help")
@@ -1990,9 +1940,7 @@ async def test_webhook_handler_error_returns_ok_and_notifies_user(
 
 
 @pytest.mark.asyncio
-async def test_webhook_callback_error_acknowledges_query(
-    _patch_webhook_secret, monkeypatch
-):
+async def test_webhook_callback_error_acknowledges_query(_patch_webhook_secret, monkeypatch):
     """A failing callback must still answer the query so the button stops spinning."""
     from src.telegram.webhook import webhook
 
@@ -2010,3 +1958,171 @@ async def test_webhook_callback_error_acknowledges_query(
     result = await webhook(_Req(), x_telegram_bot_api_secret_token="S")
     assert result == {"ok": True}
     ack.assert_awaited_once_with("cb1")
+
+
+def _ops_callback(
+    data: str,
+    chat_id: int = 900,
+    callback_id: str = "cq-1",
+    sender_id: int | None = None,
+) -> dict:
+    return {
+        "update_id": 2,
+        "callback_query": {
+            "id": callback_id,
+            "from": {"id": chat_id if sender_id is None else sender_id},
+            "message": {"message_id": 10, "chat": {"id": chat_id, "type": "private"}},
+            "data": data,
+        },
+    }
+
+
+async def test_ops_webhook_rejects_unset_secret(client, monkeypatch) -> None:
+    c, _, _ = client
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "")
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:777"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+    assert response.status_code == 403
+
+
+async def test_ops_webhook_rejects_wrong_secret(client, monkeypatch) -> None:
+    c, _, _ = client
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:777"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"},
+    )
+    assert response.status_code == 403
+
+
+async def test_ops_unauthorized_invite_callback_does_not_mutate_user(client, monkeypatch) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    await database.set_user_status(777, "pending")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:777", chat_id=900, sender_id=901),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(777) == "pending"
+    assert any("botops-token/answerCallbackQuery" in call["url"] for call in fake_http.calls)
+
+
+async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_message(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    await database.set_user_status(778, "pending")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:778", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(778) == "approved"
+    user_messages = [c for c in fake_http.calls if c["json"].get("chat_id") == 778]
+    assert user_messages and "bottest-token/sendMessage" in user_messages[0]["url"]
+
+
+async def test_ops_approve_pending_command_rejects_bare_at_without_mutating_all(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    await database.set_user_email(781, "a@example.com")
+    await database.set_user_status(781, "pending")
+    await database.set_user_email(782, "b@other.com")
+    await database.set_user_status(782, "pending")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/approve_pending @", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(781) == "pending"
+    assert await database.get_user_status(782) == "pending"
+    assert any(
+        "Usage: /approve_pending <email-domain>" in call["json"].get("text", "")
+        for call in fake_http.calls
+    )
+
+
+async def test_ops_approve_pending_callback_rejects_bare_at_without_mutating_all(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    await database.set_user_email(783, "a@example.com")
+    await database.set_user_status(783, "pending")
+    await database.set_user_email(784, "b@other.com")
+    await database.set_user_status(784, "pending")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_approve_pending:@", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(783) == "pending"
+    assert await database.get_user_status(784) == "pending"
+    assert any(
+        call["json"].get("text") == "Approved 0"
+        and "botops-token/answerCallbackQuery" in call["url"]
+        for call in fake_http.calls
+    )
+
+
+async def test_ops_pending_command_renders_rows_for_read_allowlist(client, monkeypatch) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_CHAT_IDS", "900")
+    await database.set_user_email(780, "a@example.com")
+    await database.set_user_status(780, "pending")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/pending", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert any("Pending users" in call["json"].get("text", "") for call in fake_http.calls)
+
+
+async def test_ops_unknown_command_returns_command_list(client, monkeypatch) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_CHAT_IDS", "900")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_telegram_update("/wat", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    messages = [call["json"].get("text", "") for call in fake_http.calls]
+    assert any("/pending" in text and "/approve_pending" in text for text in messages)

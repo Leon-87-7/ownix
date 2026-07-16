@@ -24,13 +24,13 @@ from src import database, queue
 from src.config import settings
 from src.services import storage
 from src.services.invite_notifications import notify_operator_invite
+from src.services import ops_bot
 from src.services.jobs import create_and_enqueue_job
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
     download_file,
     download_photo,
-    edit_message_reply_markup,
     edit_message_text,
     forward_message,
     send_document,
@@ -419,26 +419,9 @@ async def _cb_document_md(ctx: CallbackCtx) -> None:
 async def _cb_invite_decision(
     ctx: CallbackCtx, status: str, notify_message: str, log_action: str
 ) -> None:
-    """Shared handler for the operator's ✅ Approve / 🚫 Block invite buttons."""
-    if settings.OPERATOR_CHAT_ID is None or ctx.chat_id != settings.OPERATOR_CHAT_ID:
-        log.warning("invite_decision.unauthorized", chat_id=ctx.chat_id, action=log_action)
-        await answer_callback_query(ctx.cq_id, text="Not authorized.")
-        return
-    try:
-        target_chat_id = int(ctx.job_id)
-    except ValueError:
-        await answer_callback_query(ctx.cq_id, text="Invalid invite action.")
-        return
-    await database.set_user_status(target_chat_id, status)
-    await answer_callback_query(ctx.cq_id, text=log_action.capitalize())
-    await send_message(target_chat_id, notify_message)
-    if ctx.message_id:
-        label = "✅ Approved" if status == "approved" else "🚫 Blocked"
-        await edit_message_reply_markup(
-            ctx.chat_id,
-            ctx.message_id,
-            [[{"text": label, "callback_data": f"invite_status:{status}:{target_chat_id}"}]],
-        )
+    """Deprecated Ownix-bot invite callbacks; decisions now live on /webhook/ops."""
+    log.warning("invite_decision.deprecated_ownix_callback", chat_id=ctx.chat_id, action=log_action)
+    await answer_callback_query(ctx.cq_id, text="Use the Ops bot approval card.")
 
 
 async def _cb_invite_status(ctx: CallbackCtx) -> None:
@@ -1636,6 +1619,121 @@ async def _route_document_url(chat_id: int, url: str, message_id: int | None) ->
         log.info("document_url_not_pdf", chat_id=chat_id, url=url)
         return
     await _enqueue_document_job(chat_id, data, message_id)
+
+
+async def _handle_ops_callback(callback: dict) -> None:
+    cq_id = callback.get("id", "")
+    data = callback.get("data", "")
+    msg = callback.get("message") or {}
+    chat_id = msg.get("chat", {}).get("id")
+    message_id = msg.get("message_id")
+    prefix, _, payload = data.partition(":")
+    mutating_prefixes = {
+        "ops_invite_approve",
+        "ops_invite_block",
+        "ops_approve_pending",
+        "ops_approve_pending_cancel",
+    }
+    if prefix in mutating_prefixes:
+        sender_id = (callback.get("from") or {}).get("id")
+        try:
+            sender_chat_id = int(sender_id)
+        except (TypeError, ValueError):
+            sender_chat_id = None
+        if sender_chat_id is None or not ops_bot.can_admin(sender_chat_id):
+            log.warning(
+                "ops_callback.unauthorized",
+                sender_id=sender_id,
+                chat_id=chat_id,
+                data=data,
+            )
+            await ops_bot.answer_ops_callback(cq_id, "Not authorized.")
+            return
+    if prefix in {"ops_invite_approve", "ops_invite_block"}:
+        try:
+            target_chat_id = int(payload)
+        except ValueError:
+            await ops_bot.answer_ops_callback(cq_id, "Invalid invite action.")
+            return
+        status = "approved" if prefix == "ops_invite_approve" else "blocked"
+        await database.set_user_status(target_chat_id, status)
+        await ops_bot.answer_ops_callback(cq_id, status.capitalize())
+        await send_message(
+            target_chat_id,
+            _INVITE_APPROVED_MESSAGE if status == "approved" else _INVITE_BLOCKED_MESSAGE,
+        )
+        if message_id:
+            label = "✅ Approved" if status == "approved" else "🚫 Blocked"
+            await ops_bot.edit_ops_reply_markup(
+                int(chat_id),
+                int(message_id),
+                [
+                    [
+                        {
+                            "text": label,
+                            "callback_data": f"ops_invite_status:{status}:{target_chat_id}",
+                        }
+                    ]
+                ],
+            )
+        return
+    if prefix == "ops_invite_status":
+        await ops_bot.answer_ops_callback(cq_id, "Already decided.")
+        return
+    if prefix == "ops_approve_pending":
+        count = await ops_bot.approve_pending_domain(payload)
+        await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
+        if message_id:
+            await ops_bot.edit_ops_reply_markup(
+                int(chat_id),
+                int(message_id),
+                [
+                    [
+                        {
+                            "text": f"✅ Approved {count}",
+                            "callback_data": f"ops_batch_status:{payload}",
+                        }
+                    ]
+                ],
+            )
+        return
+    if prefix == "ops_approve_pending_cancel":
+        await ops_bot.answer_ops_callback(cq_id, "Canceled")
+        if message_id:
+            await ops_bot.edit_ops_reply_markup(int(chat_id), int(message_id), [])
+        return
+    await ops_bot.answer_ops_callback(cq_id)
+
+
+@router.post("/webhook/ops")
+async def ops_webhook(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+) -> dict[str, bool]:
+    if not settings.OPS_WEBHOOK_SECRET:
+        log.warning("ops_webhook_secret_unset")
+        raise HTTPException(status_code=403, detail="invalid secret")
+    if not compare_digest(x_telegram_bot_api_secret_token or "", settings.OPS_WEBHOOK_SECRET):
+        log.warning("ops_webhook_invalid_secret")
+        raise HTTPException(status_code=403, detail="invalid secret")
+    update = await request.json()
+    callback = update.get("callback_query")
+    if callback:
+        try:
+            await _handle_ops_callback(callback)
+        except Exception:
+            log.exception("ops_webhook_callback_error")
+            with suppress(Exception):
+                await ops_bot.answer_ops_callback(callback.get("id", ""))
+        return {"ok": True}
+    message = update.get("message") or update.get("edited_message") or {}
+    chat_id = (message.get("chat") or {}).get("id")
+    text = (message.get("text") or "").strip()
+    if chat_id and text.startswith("/"):
+        await ops_bot.handle_command(
+            ops_bot.OpsCtx(int(chat_id), text.split(), message.get("message_id"))
+        )
+    return {"ok": True}
 
 
 @router.post("/webhook")

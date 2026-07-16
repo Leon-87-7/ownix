@@ -12,22 +12,27 @@ from src.auth import session as session_store
 COOKIE_NAME = "vig_session"
 
 # Paths that bypass the session gate entirely
-_OPEN_PATHS = frozenset(["/webhook", "/health"])
+_OPEN_PATHS = frozenset(["/webhook", "/webhook/ops", "/health"])
 
 # Login/bootstrap endpoints — must be reachable without a session.
-_OPEN_API_PATHS = frozenset([
-    "/api/auth/telegram",
-    "/api/auth/dev-login",
-    "/api/auth/miniapp/session",
-    "/api/google/callback",
-])
+_OPEN_API_PATHS = frozenset(
+    [
+        "/api/auth/telegram",
+        "/api/auth/dev-login",
+        "/api/auth/miniapp/session",
+        "/api/google/callback",
+    ]
+)
 _OPEN_API_PREFIXES = ("/api/preview/",)
 
-_PRE_APPROVAL_AUTH_PATHS = frozenset([
-    "/api/auth/me",
-    "/api/auth/email",
-    "/api/auth/logout",
-])
+_PRE_APPROVAL_AUTH_PATHS = frozenset(
+    [
+        "/api/auth/me",
+        "/api/auth/email",
+        "/api/auth/logout",
+        "/api/auth/dev-approve",
+    ]
+)
 
 # Mini App "Connect Google" opens this path via Telegram's openLink, which hands off
 # to the system browser — a separate cookie jar with no access to the webview session.

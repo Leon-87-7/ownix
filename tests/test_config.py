@@ -1,4 +1,5 @@
 """Unit tests for src/config.py — startup validation guards."""
+
 from __future__ import annotations
 
 import pytest
@@ -60,3 +61,14 @@ def test_settings_loads_local_env_file_after_base_env(tmp_path, monkeypatch) -> 
 
     assert s.GOOGLE_DRIVE_FOLDER_BRAIN == ""
     assert s.DB_PATH == "./data/local-dev.db"
+
+
+def test_settings_parses_ops_chat_ids_safely() -> None:
+    s = Settings(**_base_env(OPS_CHAT_IDS=" 1,2,,1,-3 "))
+    assert s.ops_chat_ids == (1, 2, -3)
+
+
+def test_settings_rejects_bad_ops_chat_id() -> None:
+    s = Settings(**_base_env(OPS_ADMIN_CHAT_IDS="1, nope"))
+    with pytest.raises(ValueError):
+        _ = s.ops_admin_chat_ids
