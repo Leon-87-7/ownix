@@ -290,7 +290,9 @@ async def test_backfill_limit_and_chat_id_scope_query(monkeypatch) -> None:
     assert fetch_frames.await_count == 1
     save_thumbnail.assert_awaited_once()
     assert "chat_id = ?" in execute_calls[0][0]
-    assert execute_calls[0][1] == [42]
+    # Since 19a490f the SQL LIMIT is a bound parameter, so limit rides along.
+    assert "LIMIT ?" in execute_calls[0][0]
+    assert execute_calls[0][1] == [42, 1]
 
 
 @pytest.mark.asyncio
