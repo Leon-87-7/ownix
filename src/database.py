@@ -188,6 +188,7 @@ CREATE TABLE IF NOT EXISTS links (
     archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 
 -- Tag vocabulary for job tagging (issue #87 / S4).
@@ -1095,6 +1096,13 @@ _MIGRATIONS.append([
 # v29 → v30: optional Lucide tag icon names (#386).
 _MIGRATIONS.append([
     "ALTER TABLE tags ADD COLUMN icon TEXT",
+])
+
+# v30 → v31: unique URL constraint so concurrent ingests can upsert atomically
+# (PR #390 review). Dedup first — keep the earliest row per URL.
+_MIGRATIONS.append([
+    "DELETE FROM links WHERE rowid NOT IN (SELECT MIN(rowid) FROM links GROUP BY url)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url)",
 ])
 
 

@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS links (
     archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 
@@ -180,20 +181,20 @@ def _extract_html_description(html: str) -> str:
     )
 
 
-def _is_safe_public_url(url: str) -> bool:
+async def _is_safe_public_url(url: str) -> bool:
     """SSRF guard: HTTP(S) only, and every resolved address must be global.
 
     Extracted links are third-party content — never let the resolver GET
-    loopback, RFC1918, link-local, or cloud-metadata targets.
+    loopback, RFC1918, link-local, or cloud-metadata targets. DNS resolution
+    runs through the loop's executor so a slow resolver never blocks the loop.
     """
     import ipaddress
-    import socket
 
     parts = urlsplit(url)
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         return False
     try:
-        infos = socket.getaddrinfo(parts.hostname, None)
+        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, None)
         return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
     except (OSError, ValueError):
         return False
@@ -217,7 +218,7 @@ async def _fetch_meta(url: str) -> tuple[str, str, bool]:
         ) as client:
             target = url
             for _ in range(4):
-                if not _is_safe_public_url(target):
+                if not await _is_safe_public_url(target):
                     log.info("brain.title_meta_fetch_blocked", url=target[:200])
                     return "", "", False
                 async with client.stream("GET", target) as response:
@@ -525,12 +526,20 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
             async with aiosqlite.connect(settings.DB_PATH) as conn:
                 conn.row_factory = aiosqlite.Row
                 link_id = generate_id()
-                await conn.execute(
+                # Atomic upsert: a concurrent ingest that inserted this URL while
+                # we were fetching becomes a seen_count bump, never a duplicate
+                # (unique index idx_links_url_unique, migration v31).
+                insert_cursor = await conn.execute(
                     """
                     INSERT INTO links
                         (id, url, title, topic, description, source_job, embedding,
                          drive_file_id, seen_count, last_seen_at, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
+                    ON CONFLICT(url) DO UPDATE SET
+                        seen_count = links.seen_count + 1,
+                        last_seen_at = excluded.last_seen_at,
+                        updated_at = excluded.updated_at
+                    RETURNING id
                     """,
                     (
                         link_id,
@@ -546,7 +555,12 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
                         now_iso,
                     ),
                 )
+                inserted = await insert_cursor.fetchone()
                 await conn.commit()
+                if inserted is not None and inserted["id"] != link_id:
+                    # Lost the race — the winning ingest owns the .md upload.
+                    log.info("brain.link_upsert_race", url=url, kept_id=inserted["id"])
+                    continue
 
                 # Compute top-3 related
                 cursor5 = await conn.execute(
