@@ -115,6 +115,17 @@ async def fetch_manifest(owner: str, repo: str, path: str, token: str) -> str | 
         return None
 
 
+async def fetch_repo_description(owner: str, repo: str, token: str | None) -> str | None:
+    """Fetch owner/repo's GitHub description. Never raises; returns None on error."""
+    try:
+        meta = await asyncio.to_thread(_fetch_bundle_meta_sync, owner, repo, token or None)
+    except Exception as exc:
+        log.warning("github_description_fetch_failed", repo=f"{owner}/{repo}", error=str(exc)[:120])
+        return None
+    description = (meta or {}).get("description")
+    return description.strip() if isinstance(description, str) and description.strip() else None
+
+
 def _fetch_bundle_meta_sync(owner: str, repo: str, token: str | None) -> dict | None:
     """Full metadata including default_branch. Returns None on 404. Raises on 403/5xx."""
     url = f"https://api.github.com/repos/{owner}/{repo}"

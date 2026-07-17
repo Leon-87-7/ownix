@@ -8,6 +8,7 @@ export interface Tag {
   name: string;
   meaning: string;
   color: string;
+  icon?: string | null;
   created_at?: string;
 }
 
@@ -15,6 +16,7 @@ export interface TagFormState {
   name: string;
   meaning: string;
   color: string;
+  icon?: string | null;
 }
 
 export function useTagList() {

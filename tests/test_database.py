@@ -901,3 +901,66 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
         "order": "desc",
         "size": 25,
     }
+
+
+# ---------------------------------------------------------------------------
+# link_tags (#382) + tag icon (#386) + palette remap (#383)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_link_tags_attach_detach_round_trip(temp_db):
+    from src import database as db
+
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com', 'j1', 't', 't', 't')"""
+        )
+        await conn.commit()
+
+    tag = await db.create_tag(chat_id=1, name="svg", meaning="vector art", color="#f87171", icon="Code2")
+    assert tag["icon"] == "Code2"
+
+    await db.attach_link_tag("l1", tag["id"])
+    await db.attach_link_tag("l1", tag["id"])  # idempotent (INSERT OR IGNORE)
+    tags = await db.list_link_tags("l1")
+    assert [(t["name"], t["icon"]) for t in tags] == [("svg", "Code2")]
+
+    assert await db.detach_link_tag("l1", tag["id"]) is True
+    assert await db.detach_link_tag("l1", tag["id"]) is False  # already gone
+    assert await db.list_link_tags("l1") == []
+
+
+@pytest.mark.asyncio
+async def test_update_tag_preserves_and_clears_icon(temp_db):
+    from src import database as db
+
+    tag = await db.create_tag(chat_id=1, name="ui", meaning="", color="#60a5fa", icon="Brain")
+    ok = await db.update_tag(
+        chat_id=1, tag_id=tag["id"], name="ui", meaning="interface", color="#60a5fa", icon="Brain"
+    )
+    assert ok
+    stored = await db.get_tag(1, tag["id"])
+    assert stored is not None and stored["icon"] == "Brain"
+
+    await db.update_tag(chat_id=1, tag_id=tag["id"], name="ui", meaning="", color="#60a5fa", icon=None)
+    stored = await db.get_tag(1, tag["id"])
+    assert stored is not None and stored["icon"] is None
+
+
+@pytest.mark.asyncio
+async def test_banned_palette_colors_remap_on_migration(temp_db):
+    """v29 remaps orange/yellow-band tag colors to the nearest allowed hue."""
+    from src import database as db
+
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            "INSERT INTO tags (id, chat_id, name, color) VALUES ('t_old', 2, 'legacy', '#eab308')"
+        )
+        await conn.execute("PRAGMA user_version = 28")
+        await conn.commit()
+
+    await db.init_db()  # re-runs migrations from v28
+
+    stored = await db.get_tag(2, "t_old")
+    assert stored is not None and stored["color"] == "#f87171"

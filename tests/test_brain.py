@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
-import struct
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
-import pytest_asyncio
 
 from src.brain import (
     EMBEDDING_DIM,
     _cosine_similarity,
     _load_embeddings,
     _rebuild_lock,
-    _resolve_title,
+    _resolve_identity,
     rebuild_graph,
     get_graph,
     ingest_links,
@@ -78,7 +75,6 @@ def test_load_embeddings_valid():
 
 
 def test_load_embeddings_bad_length_skipped(caplog):
-    import logging
 
     v_good = _rand_vec()
     bad_blob = b"\x00" * 10  # wrong length
@@ -100,33 +96,91 @@ def test_load_embeddings_bad_length_skipped(caplog):
 
 
 # ---------------------------------------------------------------------------
-# _resolve_title
+# _resolve_identity — (title, description) pair, tiered per docs/TASK.md task 32
 # ---------------------------------------------------------------------------
 
+GOOD_DESC = "A utility-first CSS framework for rapidly building modern user interfaces."
+
+
 @pytest.mark.asyncio
-async def test_resolve_title_github():
-    """GitHub URL should return the title from Gemini generate()."""
+async def test_resolve_identity_github_returns_pair():
+    """GitHub URLs: title is owner/repo, description is the repo description — separate fields."""
     url = "https://github.com/vercel/next.js"
-    topic = "web dev"
 
-    with patch("src.services.gemini.generate", new=AsyncMock(return_value="vercel/next.js")):
-        result = await _resolve_title(url, topic)
+    with patch(
+        "src.services.github.fetch_repo_description",
+        new=AsyncMock(return_value="The React Framework for the Web"),
+    ):
+        title, description, resolved = await _resolve_identity(url)
 
-    assert result == "vercel/next.js"
+    assert title == "vercel/next.js"
+    assert description == "The React Framework for the Web"
+    assert resolved is True
 
 
 @pytest.mark.asyncio
-async def test_resolve_title_strip_tld():
-    """Non-GitHub URL falls back to hint when GeminiUnavailableError is raised."""
-    from src.services.gemini import GeminiUnavailableError
+async def test_resolve_identity_github_missing_description():
+    url = "https://github.com/vercel/next.js"
 
+    with patch("src.services.github.fetch_repo_description", new=AsyncMock(return_value=None)):
+        title, description, resolved = await _resolve_identity(url)
+
+    assert title == "vercel/next.js"
+    assert description == ""
+    # None is ambiguous (missing repo vs transport error) -> retryable.
+    assert resolved is False
+
+
+@pytest.mark.asyncio
+async def test_resolve_identity_strong_meta_skips_jina():
+    """A normal-length page title with a solid description never touches Jina."""
     url = "https://docs.tailwindcss.com/getting-started"
-    topic = "css"
+    jina = AsyncMock()
 
-    with patch("src.services.gemini.generate", new=AsyncMock(side_effect=GeminiUnavailableError("both failed"))):
-        result = await _resolve_title(url, topic)
+    with patch(
+        "src.brain._fetch_meta",
+        new=AsyncMock(return_value=("Installation - Tailwind CSS", GOOD_DESC, True)),
+    ), patch("src.services.jina.fetch_markdown", new=jina):
+        title, description, resolved = await _resolve_identity(url)
 
-    assert result == "docs.tailwindcss"
+    assert title == "Installation - Tailwind CSS"
+    assert description == GOOD_DESC
+    assert resolved is True
+    jina.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_resolve_identity_vague_description_escalates_to_jina():
+    """Description under 40 chars escalates; Jina's first paragraph becomes the description."""
+    url = "https://example.com/article"
+    body = "First paragraph of the article, detailed enough to describe it.\n\nSecond paragraph."
+
+    with patch(
+        "src.brain._fetch_meta", new=AsyncMock(return_value=("A Fine Article", "Short.", True))
+    ), patch(
+        "src.services.jina.fetch_markdown",
+        new=AsyncMock(return_value=("A Fine Article — Full Title", body)),
+    ):
+        title, description, resolved = await _resolve_identity(url)
+
+    assert title == "A Fine Article — Full Title"
+    assert description == "First paragraph of the article, detailed enough to describe it."
+    assert resolved is True
+
+
+@pytest.mark.asyncio
+async def test_resolve_identity_falls_back_to_host_hint():
+    """Total fetch failure yields the deterministic host hint and an empty description."""
+    url = "https://docs.tailwindcss.com/getting-started"
+
+    with patch("src.brain._fetch_meta", new=AsyncMock(return_value=("", "", False))), patch(
+        "src.services.jina.fetch_markdown", new=AsyncMock(side_effect=Exception("down"))
+    ):
+        title, description, resolved = await _resolve_identity(url)
+
+    assert title == "docs.tailwindcss"
+    assert description == ""
+    assert resolved is False
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +220,11 @@ async def test_soft_dedup_seen_count():
 
         with patch("src.brain.settings") as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
-             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed:
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Example Tool — Official Site", GOOD_DESC, True)),
+             ):
 
             mock_settings.DB_PATH = db_path
             mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
@@ -182,13 +240,18 @@ async def test_soft_dedup_seen_count():
         async with aiosqlite.connect(db_path) as conn:
             conn.row_factory = aiosqlite.Row
             cursor = await conn.execute(
-                "SELECT COUNT(*) as cnt, MAX(seen_count) as max_seen FROM links WHERE url = ?",
+                "SELECT COUNT(*) as cnt, MAX(seen_count) as max_seen, MAX(title) as title, "
+                "MAX(description) as description FROM links WHERE url = ?",
                 (url,),
             )
             row = await cursor.fetchone()
 
         assert row["cnt"] == 1, "Expected exactly one row per URL"
         assert row["max_seen"] == 2, "seen_count should be 2 after two ingests"
+        # Standalone identity: the resolved page title beats the provided label,
+        # and the per-URL description is persisted.
+        assert row["title"] == "Example Tool — Official Site"
+        assert row["description"] == GOOD_DESC
 
     finally:
         os.unlink(db_path)
@@ -232,7 +295,7 @@ async def test_search_returns_empty_on_no_corpus():
     import tempfile
     import os
     import aiosqlite
-    from src.brain import ingest_links, SCHEMA_SQL
+    from src.brain import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -282,7 +345,8 @@ async def test_normalized_url_dedup_variants():
 
         with patch("src.brain.settings") as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
-             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed:
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+             patch("src.brain._resolve_identity", new=AsyncMock(return_value=("Tool", "", True))):
             mock_settings.DB_PATH = db_path
             mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
             mock_settings.BRAIN_MIN_SCORE = 0.5
@@ -422,7 +486,8 @@ async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_bu
 
 
 @pytest.mark.asyncio
-async def test_list_links_q_filters_by_substring_across_url_title_topic():
+async def test_list_links_q_filters_by_substring_across_url_title_description():
+    """Since #384, q matches url/title/description — never the shared video topic."""
     import aiosqlite
     import os
     import tempfile
@@ -438,26 +503,27 @@ async def test_list_links_q_filters_by_substring_across_url_title_topic():
             await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
             await conn.executemany(
                 """INSERT INTO links
-                   (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 'j', 1, ?, ?, ?)""",
+                   (id, url, title, topic, description, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, 'j', 1, ?, ?, ?)""",
                 [
-                    ("a", "https://github.com/foo", "Repo", "code", "t", "t", "t"),
-                    ("b", "https://news.com/x", "GitHub digest", "media", "t", "t", "t"),
-                    ("c", "https://blog.io/y", "Other", "github-actions", "t", "t", "t"),
-                    ("d", "https://example.com/z", "Nope", "misc", "t", "t", "t"),
+                    ("a", "https://github.com/foo", "Repo", "code", None, "t", "t", "t"),
+                    ("b", "https://news.com/x", "GitHub digest", "media", None, "t", "t", "t"),
+                    ("c", "https://blog.io/y", "Other", "github-actions", None, "t", "t", "t"),
+                    ("d", "https://example.com/z", "Nope", "misc", "A GitHub client.", "t", "t", "t"),
                 ],
             )
             await conn.commit()
 
         with patch("src.brain.settings") as mock_settings:
             mock_settings.DB_PATH = db_path
-            res = await list_links(q="github")  # case-insensitive; matches url/title/topic
+            res = await list_links(q="github")  # case-insensitive; url/title/description
             empty = await list_links(q="   ")  # blank q is ignored, returns all
 
+        # c matches only via its topic — excluded since #384; d matches via description.
         assert {item["url"] for item in res["items"]} == {
             "https://github.com/foo",
             "https://news.com/x",
-            "https://blog.io/y",
+            "https://example.com/z",
         }
         assert res["total"] == 3
         assert empty["total"] == 4
@@ -559,5 +625,131 @@ async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
             "https://example.com/a",
             "https://example.com/b",
         ]
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# #384 / #387 — standalone search: no sibling-topic leakage, exact tag match
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_list_links_search_is_standalone_and_matches_exact_tags():
+    """Searching never matches the shared video topic; exact tag names match, substrings don't."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            # Three sibling links sharing one video topic mentioning svg.
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, topic, description, source_job, seen_count,
+                    last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'svg tips for devs', ?, 'j', 1, 't', 't', 't')""",
+                [
+                    ("a", "https://ora.studio", "ORA Studio", "Draw SVG shapes in the browser."),
+                    ("b", "https://invoicegen.io", "Invoice Generator", "Privacy-first invoices."),
+                    ("c", "https://iconfonts.dev", "Icon Fonts", "Icon font toolkit."),
+                ],
+            )
+            await conn.executemany(
+                "INSERT INTO tags (id, chat_id, name) VALUES (?, 1, ?)",
+                [("t_svg", "svg"), ("t_svgicons", "svg-icons")],
+            )
+            await conn.executemany(
+                "INSERT INTO link_tags (link_id, tag_id) VALUES (?, ?)",
+                [("b", "t_svg"), ("c", "t_svgicons")],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            result = await list_links(q="svg")
+
+        urls = sorted(item["url"] for item in result["items"])
+        # a: description hit; b: exact tag "svg"; c must NOT match — its topic
+        # mentions svg (excluded, #384) and its tag is "svg-icons" (not exact, #387).
+        assert urls == ["https://invoicegen.io", "https://ora.studio"]
+        assert result["total"] == 2
+        by_url = {item["url"]: item for item in result["items"]}
+        assert [t["name"] for t in by_url["https://invoicegen.io"]["tags"]] == ["svg"]
+        assert by_url["https://ora.studio"]["tags"] == []
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# #385 — refresh loop repairs description IS NULL and re-embeds
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_refresh_repairs_missing_description_and_reembeds():
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        old_vec = _rand_vec()
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT)")
+            await conn.execute(
+                """INSERT INTO links
+                   (id, url, title, topic, description, source_job, embedding, drive_file_id,
+                    seen_count, last_seen_at, created_at, updated_at)
+                   VALUES ('l1', 'https://example.com/tool', 'Old Hint', 'video topic', NULL,
+                           'j', ?, 'drive-1', 1, 't', 't', 't')""",
+                (_make_blob(old_vec),),
+            )
+            await conn.commit()
+
+        new_vec = _rand_vec()
+        embed_calls: list[str] = []
+
+        async def fake_embed(doc: str):
+            embed_calls.append(doc)
+            return new_vec
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Example Tool", GOOD_DESC, True)),
+             ), \
+             patch("src.brain._embed", new=fake_embed), \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload:
+            mock_settings.DB_PATH = db_path
+            mock_settings.BRAIN_REFRESH_BATCH = 10
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "folder"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_settings.GITHUB_TOKEN = ""
+            mock_upload.return_value = ("file-id", "drive-url")
+            await refresh_stale_links()
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT title, description, embedding FROM links WHERE id = 'l1'"
+            )
+            row = await cursor.fetchone()
+
+        assert row["description"] == GOOD_DESC
+        assert row["title"] == "Example Tool"
+        # Re-embedded with the link-own doc: description in, video topic out.
+        assert embed_calls and GOOD_DESC in embed_calls[0]
+        assert "video topic" not in embed_calls[0]
+        np.testing.assert_allclose(
+            np.frombuffer(row["embedding"], dtype=np.float32), new_vec, rtol=1e-5
+        )
     finally:
         os.unlink(db_path)

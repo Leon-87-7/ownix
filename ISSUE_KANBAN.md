@@ -53,6 +53,13 @@
 | [#346](https://github.com/Leon-87-7/vig/issues/346) | Send recovery notifications after degraded health returns to healthy                         | Ops / Health     | —          |
 | [#347](https://github.com/Leon-87-7/vig/issues/347) | Harden startup alert ordering around ntfy readiness                                          | Ops / ntfy       | —          |
 | [#348](https://github.com/Leon-87-7/vig/issues/348) | Add deployment-level ntfy verification docs                                                  | Docs / ntfy      | —          |
+| [#381](https://github.com/Leon-87-7/vig/issues/381) | Standalone link identity — links.description via tiered resolver (GitHub svc → meta parse → Jina) | Brain            | —          |
+| [#382](https://github.com/Leon-87-7/vig/issues/382) | link_tags schema + attach/detach API + dot-cluster TagMenu trigger on link rows              | Tags             | —          |
+| [#383](https://github.com/Leon-87-7/vig/issues/383) | Global tag palette redesign — ~10 OKLCH hues, orange-yellow band excluded, color remap migration | Tags             | —          |
+| [#384](https://github.com/Leon-87-7/vig/issues/384) | Search + embedding cutover to url/title/description — topic demoted to provenance            | Brain            | #381       |
+| [#385](https://github.com/Leon-87-7/vig/issues/385) | Backfill standalone link identity via refresh-loop repair (re-resolve + re-embed)            | Brain            | #384       |
+| [#386](https://github.com/Leon-87-7/vig/issues/386) | Optional tag icons — nullable tags.icon + Lucide picker, icon-in-color rendering             | Tags             | #382       |
+| [#387](https://github.com/Leon-87-7/vig/issues/387) | Links search box matches tag names exactly via link_tags join                                | Tags             | #382       |
 
 ---
 
@@ -437,6 +444,16 @@ Ops bot + dev-login e2e (source: grill 2026-07-16; CONTEXT.md `Ops bot`, `Dev lo
 └── #376 Ops bot read-only user queue commands
     └── #377 Domain-scoped batch approval with confirmation ◄── also #374
 Critical path: #374 → #375 → #378 → #379; #374 → #376 → #377 parallel
+
+Standalone link identity + link tags (source: docs/TASK.md tasks 30 & 32 — grill 2026-07-17; CONTEXT.md `Standalone link identity`, `Link tag`)
+#381 links.description via tiered resolver (GitHub svc → meta parse → Jina)
+└── #384 search + embedding cutover to url/title/description
+    └── #385 backfill via refresh-loop repair (re-resolve + re-embed)
+#382 link_tags schema + attach/detach API + dot-cluster TagMenu trigger
+├── #386 optional tag icons (tags.icon + Lucide picker)
+└── #387 Links search box matches tag names exactly
+#383 global tag palette redesign — parallel, no dependency
+Critical path: #381 → #384 → #385; #382 → {#386, #387} independent chain; #383 parallel
 ```
 
 ---

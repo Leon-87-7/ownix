@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from datetime import datetime, timedelta, timezone
+from html import unescape
 from urllib.parse import urlsplit, urlunsplit
 from typing import Any
 
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS links (
     url           TEXT NOT NULL,
     title         TEXT,
     topic         TEXT,
+    description   TEXT,
     source_job    TEXT NOT NULL,
     embedding     BLOB,
     drive_file_id TEXT,
@@ -40,8 +42,27 @@ CREATE TABLE IF NOT EXISTS links (
     archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
+
+-- Tag tables are owned by src/database.py; mirrored here so brain-standalone
+-- databases (tests, tooling) support the tag-aware link search.
+CREATE TABLE IF NOT EXISTS tags (
+    id         TEXT PRIMARY KEY,
+    chat_id    INTEGER NOT NULL,
+    name       TEXT NOT NULL,
+    meaning    TEXT NOT NULL DEFAULT '',
+    color      TEXT NOT NULL DEFAULT '#8b5cf6',
+    icon       TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(chat_id, name)
+);
+CREATE TABLE IF NOT EXISTS link_tags (
+    link_id TEXT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+    tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (link_id, tag_id)
+);
 """
 
 
@@ -74,33 +95,215 @@ async def _embed(text: str) -> np.ndarray | None:
         return None
 
 
-async def _resolve_title(url: str, topic: str) -> str:
-    """Resolve a short human title for a URL via Gemini's generate(); fall back to URL hint on any error."""
-    from urllib.parse import urlparse
-    from src.services.gemini import generate, GeminiUnavailableError
+_TITLE_MAX_CHARS = 120
+_META_FETCH_LIMIT = 128_000
+_BOILERPLATE_TITLES = {
+    "just a moment",
+    "attention required",
+    "access denied",
+    "forbidden",
+    "not found",
+    "page not found",
+    "error",
+}
 
-    parsed = urlparse(url)
-    hostname = parsed.hostname or url
-    path = parsed.path or ""
 
-    # Compute hint for fallback
-    if "github.com" in hostname:
-        parts = [p for p in path.split("/") if p]
-        hint = f"{parts[0]}/{parts[1]}" if len(parts) >= 2 else hostname
-    else:
-        bare = re.sub(r"^www\.", "", hostname)
-        bare = re.sub(r"\.[a-z]{2,}$", "", bare)
-        hint = bare
+def _fallback_title_hint(url: str) -> str:
+    parts = urlsplit(url)
+    hostname = parts.hostname or url
+    path = parts.path or ""
+    if hostname.lower() in {"github.com", "www.github.com"}:
+        segments = [p for p in path.split("/") if p]
+        return f"{segments[0]}/{segments[1]}" if len(segments) >= 2 else hostname
 
-    prompt = (
-        f"Give a short title (max 5 words) for a link to '{hint}' found in a video about '{topic}'."
+    bare = re.sub(r"^www\.", "", hostname, flags=re.IGNORECASE)
+    bare = re.sub(r"\.[a-z]{2,}$", "", bare, flags=re.IGNORECASE)
+    return bare or url
+
+
+def _clean_title(value: str | None, max_chars: int = _TITLE_MAX_CHARS) -> str:
+    title = unescape(value or "")
+    title = re.sub(r"\s+", " ", title).strip(" \t\r\n-|—–")
+    return title[:max_chars].strip()
+
+
+def _is_weak_title(title: str) -> bool:
+    # Titles are naturally short — only boilerplate or near-empty counts as weak.
+    # (The <40-char vagueness rule applies to *descriptions*, per docs/TASK.md task 32.)
+    cleaned = title.strip().lower()
+    return len(title.strip()) < 5 or cleaned in _BOILERPLATE_TITLES
+
+
+_DESCRIPTION_MIN_CHARS = 40
+_DESCRIPTION_MAX_CHARS = 300
+
+
+def _is_vague_description(description: str) -> bool:
+    cleaned = description.strip().lower()
+    return len(description.strip()) < _DESCRIPTION_MIN_CHARS or cleaned in _BOILERPLATE_TITLES
+
+
+def _extract_meta_content(html: str, patterns: tuple[str, ...], max_chars: int) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, html, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            value = _clean_title(re.sub(r"<[^>]+>", "", match.group(1)), max_chars)
+            if value:
+                return value
+    return ""
+
+
+def _extract_html_title(html: str) -> str:
+    return _extract_meta_content(
+        html,
+        (
+            r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']',
+            r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:title["\']',
+            r"<title[^>]*>(.*?)</title>",
+        ),
+        _TITLE_MAX_CHARS,
     )
-    try:
-        result = await generate(prompt, model="gemini-2.5-flash-lite")
-        return result.strip()
-    except GeminiUnavailableError:
-        return hint
 
+
+def _extract_html_description(html: str) -> str:
+    return _extract_meta_content(
+        html,
+        (
+            r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:description["\']',
+            r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']description["\']',
+            r'<meta[^>]+name=["\']twitter:description["\'][^>]+content=["\']([^"\']+)["\']',
+        ),
+        _DESCRIPTION_MAX_CHARS,
+    )
+
+
+async def _is_safe_public_url(url: str) -> bool:
+    """SSRF guard: HTTP(S) only, and every resolved address must be global.
+
+    Extracted links are third-party content — never let the resolver GET
+    loopback, RFC1918, link-local, or cloud-metadata targets. DNS resolution
+    runs through the loop's executor so a slow resolver never blocks the loop.
+    """
+    import ipaddress
+
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"} or not parts.hostname:
+        return False
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, None)
+        return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
+    except (OSError, ValueError):
+        return False
+
+
+async def _fetch_meta(url: str) -> tuple[str, str, bool]:
+    """One capped GET returning (title, description, fetched).
+
+    ``fetched`` is True when the page answered at all — even without usable
+    meta tags — so callers can tell "resolved to nothing" from "retry later".
+    Redirects are followed manually (≤3 hops) so every hop is re-validated
+    against the SSRF guard.
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0),
+            follow_redirects=False,
+            headers={"User-Agent": "vig-title-resolver/1.0"},
+        ) as client:
+            target = url
+            for _ in range(4):
+                if not await _is_safe_public_url(target):
+                    log.info("brain.title_meta_fetch_blocked", url=target[:200])
+                    return "", "", False
+                async with client.stream("GET", target) as response:
+                    if response.is_redirect:
+                        location = response.headers.get("location", "")
+                        target = str(response.next_request.url) if response.next_request else location
+                        if not target:
+                            return "", "", True
+                        continue
+                    response.raise_for_status()
+                    chunks: list[bytes] = []
+                    total = 0
+                    async for chunk in response.aiter_bytes():
+                        chunks.append(chunk)
+                        total += len(chunk)
+                        if total >= _META_FETCH_LIMIT:
+                            break
+                html = b"".join(chunks).decode("utf-8", errors="replace")
+                return _extract_html_title(html), _extract_html_description(html), True
+        return "", "", False  # redirect loop exhausted
+    except Exception as exc:
+        log.info("brain.title_meta_fetch_failed", url=url, error=str(exc)[:120])
+        return "", "", False
+
+
+def _first_paragraph(markdown: str) -> str:
+    # Parentheses stay — they carry version numbers and clarifications.
+    for block in markdown.split("\n\n"):
+        text = _clean_title(re.sub(r"[#>*`\[\]]", " ", block), _DESCRIPTION_MAX_CHARS)
+        if len(text) >= _DESCRIPTION_MIN_CHARS:
+            return text
+    return ""
+
+
+async def _resolve_identity(url: str) -> tuple[str, str, bool]:
+    """Resolve a link's standalone (title, description, resolved) from the URL.
+
+    Tiered per docs/TASK.md task 32: GitHub service → meta-tag parse → Jina
+    escalation when the description is vague (<40 chars) or the title is weak.
+    ``resolved`` is False only when every tier failed to answer (retryable);
+    a page that answered with no usable description resolves to ("…", "", True)
+    so the refresh loop can persist "" and stop refetching it. Never raises;
+    the title falls back to the host hint.
+    """
+    fallback = _fallback_title_hint(url)
+
+    repo = _github_owner_repo(url)
+    if repo:
+        from src.services.github import fetch_repo_description
+
+        owner, name = repo
+        description = await fetch_repo_description(owner, name, settings.GITHUB_TOKEN)
+        # fetch_repo_description returns None on both "no description" and
+        # transport error — treat None as retryable, a real string as resolved.
+        return f"{owner}/{name}", _clean_title(description) if description else "", description is not None
+
+    title, description, fetched = await _fetch_meta(url)
+
+    if _is_weak_title(title) or _is_vague_description(description):
+        try:
+            from src.services.jina import fetch_markdown
+
+            jina_title, body = await fetch_markdown(url)
+            stronger = _clean_title(jina_title)
+            if stronger and not _is_weak_title(stronger):
+                title = stronger
+            paragraph = _first_paragraph(body)
+            if paragraph:
+                description = paragraph
+            fetched = True
+        except Exception as exc:
+            log.info("brain.title_jina_fetch_failed", url=url, error=str(exc)[:120])
+
+    if _is_weak_title(title):
+        title = fallback
+    if _is_vague_description(description):
+        description = description.strip()  # keep a short-but-real description over nothing
+
+    return title or fallback, description, fetched
+
+
+
+def _link_embedding_doc(url: str, title: str | None, description: str | None) -> str:
+    """Compose the searchable/semantic identity doc for one link."""
+    return " ".join(part.strip() for part in (url, title or "", description or "") if part and part.strip())
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-10))
@@ -291,45 +494,60 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
         if not url:
             continue
         try:
+            # --- Soft dedup (own short connection) ---
             async with aiosqlite.connect(settings.DB_PATH) as conn:
                 conn.row_factory = aiosqlite.Row
-
-                # --- Soft dedup ---
                 cursor = await conn.execute(
                     "SELECT id, seen_count, drive_file_id, title, topic FROM links WHERE url = ? LIMIT 1",
                     (url,),
                 )
                 existing = await cursor.fetchone()
-
                 if existing:
                     await _touch_existing_link(conn, existing, url, topic, source_job_id, now_iso)
                     continue
 
-                # --- First sighting ---
-                provided_title = link.get("title") or link.get("label")
-                if provided_title:
-                    title_str = provided_title
-                else:
-                    title_str = await _resolve_title(url, topic)
+            # --- First sighting: network work happens with no connection held ---
+            # Standalone identity (docs/TASK.md task 32): the page's own title
+            # wins; the extraction-provided label only beats a bare host hint.
+            provided_title = link.get("title") or link.get("label")
+            title_str, description, resolved = await _resolve_identity(url)
+            if (
+                provided_title
+                and title_str == _fallback_title_hint(url)
+                and not _github_owner_repo(url)
+            ):
+                title_str = provided_title
 
-                # Build embedding document
-                embed_doc = f"{url} {title_str} {topic}"
-                embedding_arr = await _embed(embed_doc)
-                embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
+            # Embedding doc = link-own identity only (url+title+description, #384)
+            embed_doc = _link_embedding_doc(url, title_str, description)
+            embedding_arr = await _embed(embed_doc)
+            embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
 
+            async with aiosqlite.connect(settings.DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
                 link_id = generate_id()
-                await conn.execute(
+                # Atomic upsert: a concurrent ingest that inserted this URL while
+                # we were fetching becomes a seen_count bump, never a duplicate
+                # (unique index idx_links_url_unique, migration v31).
+                insert_cursor = await conn.execute(
                     """
                     INSERT INTO links
-                        (id, url, title, topic, source_job, embedding,
+                        (id, url, title, topic, description, source_job, embedding,
                          drive_file_id, seen_count, last_seen_at, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
+                    ON CONFLICT(url) DO UPDATE SET
+                        seen_count = links.seen_count + 1,
+                        last_seen_at = excluded.last_seen_at,
+                        updated_at = excluded.updated_at
+                    RETURNING id
                     """,
                     (
                         link_id,
                         url,
                         title_str,
                         topic,
+                        # NULL = retry via refresh loop; "" = resolved, no description.
+                        description if resolved else None,
                         source_job_id,
                         embedding_blob,
                         now_iso,
@@ -337,7 +555,12 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
                         now_iso,
                     ),
                 )
+                inserted = await insert_cursor.fetchone()
                 await conn.commit()
+                if inserted is not None and inserted["id"] != link_id:
+                    # Lost the race — the winning ingest owns the .md upload.
+                    log.info("brain.link_upsert_race", url=url, kept_id=inserted["id"])
+                    continue
 
                 # Compute top-3 related
                 cursor5 = await conn.execute(
@@ -518,23 +741,46 @@ async def list_links(
     q: str = "",
     sort: str = "last_seen",
     order: str = "desc",
+    viewer_chat_id: int | None = None,
 ) -> dict[str, Any]:
     """Return deduplicated Brain links with configurable sorting and pagination.
 
     ``sort`` is ``last_seen`` or ``appearances`` and ``order`` is ``asc``/``desc``
     (anything else falls back to ``last_seen`` desc).
-    ``q`` filters by case-insensitive substring across url/title/topic.
+    ``q`` filters by case-insensitive substring across url/title/description, plus exact tag names.
+    Tags are private to their owner (CONTEXT.md "Link tag") — matching and the
+    returned tag payload are constrained to ``viewer_chat_id`` when given.
     # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
     """
     import aiosqlite
+    import json
 
-    where = "COALESCE(j.status, '') != 'cancelled'"
+    # Every query below is a join of static fragments with bound parameters —
+    # nothing user-controlled ever lands in the SQL text. The viewer scope uses
+    # the null-tolerant `(? IS NULL OR t.chat_id = ?)` form so the statement
+    # itself never varies with the caller.
+    where_parts = ["COALESCE(j.status, '') != 'cancelled'"]
     filter_params: list[Any] = []
     if q.strip():
-        where += " AND (l.url LIKE ? ESCAPE '\\' OR l.title LIKE ? ESCAPE '\\' OR l.topic LIKE ? ESCAPE '\\')"
-        escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where_parts.append(
+            """(
+            l.url LIKE ? ESCAPE '\\'
+            OR l.title LIKE ? ESCAPE '\\'
+            OR l.description LIKE ? ESCAPE '\\'
+            OR EXISTS (
+                SELECT 1 FROM link_tags lt
+                JOIN tags t ON t.id = lt.tag_id
+                WHERE lt.link_id = l.id AND lower(t.name) = lower(?)
+                  AND (? IS NULL OR t.chat_id = ?)
+            )
+        )"""
+        )
+        query = q.strip()
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{escaped}%"
-        filter_params = [like, like, like]
+        filter_params = [like, like, like, query, viewer_chat_id, viewer_chat_id]
+
+    where = " AND ".join(where_parts)
 
     sort_columns = {
         "last_seen": "l.last_seen_at",
@@ -542,38 +788,64 @@ async def list_links(
     }
     sort_column = sort_columns.get(sort, sort_columns["last_seen"])
     sort_direction = "ASC" if order == "asc" else "DESC"
-    order_by = f"{sort_column} {sort_direction}, l.url ASC"
+    order_by = ", ".join([sort_column + " " + sort_direction, "l.url ASC"])
+
+    from_clause = "FROM links l LEFT JOIN jobs j ON j.id = l.source_job"
+    count_sql = " ".join(["SELECT COUNT(*) AS total", from_clause, "WHERE", where])
+    rows_sql = " ".join(
+        [
+            "SELECT l.id, l.url, l.title, l.topic, l.description,"
+            " l.seen_count, l.created_at, l.last_seen_at",
+            from_clause,
+            "WHERE",
+            where,
+            "ORDER BY",
+            order_by,
+            "LIMIT ? OFFSET ?",
+        ]
+    )
 
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
-        count_cursor = await conn.execute(
-            f"""SELECT COUNT(*) AS total
-                FROM links l
-                LEFT JOIN jobs j ON j.id = l.source_job
-                WHERE {where}""",
-            filter_params,
-        )
+        count_cursor = await conn.execute(count_sql, filter_params)
         count_row = await count_cursor.fetchone()
-        cursor = await conn.execute(
-            f"""SELECT l.url, l.title, l.topic, l.seen_count, l.created_at, l.last_seen_at
-                FROM links l
-                LEFT JOIN jobs j ON j.id = l.source_job
-                WHERE {where}
-                ORDER BY {order_by}
-                LIMIT ? OFFSET ?""",
-            (*filter_params, limit, offset),
-        )
+        cursor = await conn.execute(rows_sql, (*filter_params, limit, offset))
         rows = [dict(r) for r in await cursor.fetchall()]
+
+        # Attached tags, batched on the same connection via json_each so the
+        # statement is a single static string. Brain-only databases (tests,
+        # standalone) may lack the tags tables — treat as untagged.
+        link_ids = [row["id"] for row in rows]
+        tags_by_link: dict[str, list[dict]] = {lid: [] for lid in link_ids}
+        if link_ids:
+            try:
+                tag_cursor = await conn.execute(
+                    """SELECT lt.link_id, t.id, t.name, t.color, t.meaning, t.icon
+                       FROM link_tags lt
+                       JOIN tags t ON t.id = lt.tag_id
+                       WHERE lt.link_id IN (SELECT value FROM json_each(?))
+                         AND (? IS NULL OR t.chat_id = ?)
+                       ORDER BY t.name""",
+                    (json.dumps(link_ids), viewer_chat_id, viewer_chat_id),
+                )
+                for tag_row in await tag_cursor.fetchall():
+                    tag = dict(tag_row)
+                    tags_by_link[tag.pop("link_id")].append(tag)
+            except aiosqlite.OperationalError:
+                pass
 
     return {
         "items": [
             {
+                "id": row["id"],
                 "url": row["url"],
                 "title": row.get("title"),
                 "topic": row.get("topic"),
+                "description": row.get("description"),
                 "seen_count": row.get("seen_count") or 1,
                 "first_seen": row["created_at"],
                 "last_seen": row["last_seen_at"],
+                "tags": tags_by_link.get(row["id"], []),
             }
             for row in rows
         ],
@@ -717,7 +989,7 @@ async def _select_refresh_batch(
     cursor2 = await conn.execute(
         """
         SELECT * FROM links
-        WHERE embedding IS NULL OR drive_file_id IS NULL
+        WHERE embedding IS NULL OR drive_file_id IS NULL OR description IS NULL
         ORDER BY updated_at ASC
         LIMIT ?
         """,
@@ -758,8 +1030,23 @@ async def _refresh_one_link(
     is_repair = lnk_id in repair_ids
     repaired_delta = 0
 
+    if lnk.get("description") is None:
+        title, description, resolved = await _resolve_identity(lnk["url"])
+        if resolved:
+            # "" is a completed resolution (page has no description) — persist it
+            # so this row stops being re-fetched; NULL stays only on failure.
+            lnk["title"] = title or lnk.get("title")
+            lnk["description"] = description
+            await conn.execute(
+                "UPDATE links SET title = ?, description = ? WHERE id = ?",
+                (lnk["title"], description, lnk_id),
+            )
+            embedding_blob = None
+        else:
+            log.info("brain.refresh_identity_unresolved", link_id=lnk_id, url=lnk["url"])
+
     if embedding_blob is None:
-        embed_doc = f"{lnk['url']} {lnk['title'] or ''} {lnk['topic'] or ''}"
+        embed_doc = _link_embedding_doc(lnk['url'], lnk.get('title'), lnk.get('description'))
         new_arr = await _embed(embed_doc)
         if new_arr is not None:
             embedding_blob = new_arr.tobytes()

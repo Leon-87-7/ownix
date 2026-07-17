@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
+import { TagMark, TagMenu } from '@/components/ui/tag-picker';
+import { useLinkTags } from '@/lib/hooks/useLinkTags';
 import {
   LINKS_PAGE_SIZES,
   type LinkRow,
@@ -38,7 +41,13 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
-function TruncatedDescription({ text }: { text: string }) {
+function TruncatedDescription({
+  text,
+  provenance,
+}: {
+  text: string;
+  provenance?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   return (
     <span className="inline-flex max-w-full items-center gap-2">
@@ -51,6 +60,13 @@ function TruncatedDescription({ text }: { text: string }) {
         }`}
       >
         {text}
+        {/* Provenance ("seen in a video about X") only in the expanded panel —
+            the row itself carries link-own identity only (task 32). */}
+        {expanded && provenance && (
+          <span className="mt-1 block text-[11px] text-muted">
+            From: {provenance}
+          </span>
+        )}
       </span>
       <button
         type="button"
@@ -61,6 +77,39 @@ function TruncatedDescription({ text }: { text: string }) {
         {expanded ? 'Less' : 'More'}
       </button>
     </span>
+  );
+}
+
+function LinkTagCluster({ link }: { link: LinkRow }) {
+  const { linkTags, allTags, toggleTag, createTag } = useLinkTags(link.id, link.tags ?? []);
+  const trigger = (
+    <button
+      type="button"
+      aria-label={linkTags.length ? `Edit ${linkTags.length} link tags` : 'Add link tag'}
+      className="inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded border border-line px-1.5 text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+    >
+      {linkTags.length === 0 ? (
+        <span className="text-sm leading-none opacity-70">+</span>
+      ) : (
+        linkTags.slice(0, 4).map((tag) => (
+          <Tooltip key={tag.id} content={[tag.name, tag.meaning].filter(Boolean).join(' — ')}>
+            <span className="inline-flex h-4 w-4 items-center justify-center">
+              <TagMark tag={tag} className="h-3 w-3" />
+            </span>
+          </Tooltip>
+        ))
+      )}
+    </button>
+  );
+
+  return (
+    <TagMenu
+      jobTags={linkTags}
+      allTags={allTags}
+      onToggle={toggleTag}
+      onCreate={createTag}
+      trigger={trigger}
+    />
   );
 }
 
@@ -87,19 +136,26 @@ function LinkUrl({ link }: { link: LinkRow }) {
 }
 
 function LinkDescription({ link }: { link: LinkRow }) {
-  const description = [link.title, link.topic]
+  // Standalone identity: the collapsed row shows only the link's own
+  // title · description. The source-video topic is provenance and appears
+  // exclusively inside the expanded panel — never as row identity.
+  const description = [link.title, link.description]
     .filter(Boolean)
     .join(' · ');
   return description ? (
-    <TruncatedDescription text={description} />
+    <TruncatedDescription
+      text={description}
+      provenance={link.topic || undefined}
+    />
   ) : null;
 }
 
 function TableCard({ link }: { link: LinkRow }) {
   return (
     <article className="rounded-lg border border-line bg-surface px-4 py-3">
-      <div className="min-w-0">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <LinkUrl link={link} />
+        <LinkTagCluster link={link} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] tabular-nums text-muted">
         <span>
@@ -110,7 +166,7 @@ function TableCard({ link }: { link: LinkRow }) {
           {link.seen_count === 1 ? '' : 's'}
         </span>
       </div>
-      {Boolean(link.title || link.topic) && (
+      {Boolean(link.title || link.description) && (
         <div className="mt-2 font-mono">
           <LinkDescription link={link} />
         </div>
@@ -172,7 +228,7 @@ export function LinksSearchBar({
             }
           }
         }}
-        placeholder="Filter links by URL, title, or topic…"
+        placeholder="Filter links by URL, title, description, or exact tag…"
         aria-label="Filter extracted links"
         className="h-9 w-full min-w-0 rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:flex-1"
       />
@@ -367,7 +423,10 @@ export function LinksTable({
                   >
                     <td className="max-w-[36rem] px-4 py-3">
                       <div className="flex flex-col gap-1">
-                        <LinkUrl link={link} />
+                        <div className="flex items-center gap-2">
+                          <LinkUrl link={link} />
+                          <LinkTagCluster link={link} />
+                        </div>
                         <LinkDescription link={link} />
                       </div>
                     </td>

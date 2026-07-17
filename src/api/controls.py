@@ -17,7 +17,8 @@ controls_router = APIRouter(prefix="/api/controls", tags=["controls"])
 class TagIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
     meaning: str = Field(default="", max_length=500)
-    color: str = Field(default="#6366f1", pattern=r"^#[0-9a-fA-F]{6}$")
+    color: str = Field(default="#8b5cf6", pattern=r"^#[0-9a-fA-F]{6}$")
+    icon: str | None = Field(default=None, max_length=80)
 
 
 class DomainIn(BaseModel):
@@ -48,7 +49,7 @@ async def create_tag(body: TagIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     try:
         return await database.create_tag(
-            chat_id=chat_id, name=body.name.strip(), meaning=body.meaning, color=body.color
+            chat_id=chat_id, name=body.name.strip(), meaning=body.meaning, color=body.color, icon=body.icon
         )
     except Exception as exc:
         if "UNIQUE constraint failed" in str(exc):
@@ -60,11 +61,11 @@ async def create_tag(body: TagIn, request: Request) -> dict:
 async def update_tag(tag_id: str, body: TagIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     ok = await database.update_tag(
-        chat_id=chat_id, tag_id=tag_id, name=body.name.strip(), meaning=body.meaning, color=body.color
+        chat_id=chat_id, tag_id=tag_id, name=body.name.strip(), meaning=body.meaning, color=body.color, icon=body.icon
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Tag not found")
-    return {"id": tag_id, "name": body.name, "meaning": body.meaning, "color": body.color}
+    return {"id": tag_id, "name": body.name, "meaning": body.meaning, "color": body.color, "icon": body.icon}
 
 
 @controls_router.delete("/tags/{tag_id}", status_code=204)

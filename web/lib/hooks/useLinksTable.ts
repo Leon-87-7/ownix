@@ -2,13 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+export type LinkTag = { id: string; name: string; color: string; meaning: string; icon?: string | null };
+
 export type LinkRow = {
+  id: string;
   url: string;
   title?: string | null;
   topic?: string | null;
+  description?: string | null;
   seen_count: number;
   first_seen: string;
   last_seen?: string | null;
+  tags?: LinkTag[];
 };
 
 type LinksResponse = {

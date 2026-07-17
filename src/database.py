@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS links (
     url           TEXT NOT NULL,
     title         TEXT,
     topic         TEXT,
+    description   TEXT,
     source_job    TEXT NOT NULL,
     embedding     BLOB,
     drive_file_id TEXT,
@@ -187,6 +188,7 @@ CREATE TABLE IF NOT EXISTS links (
     archived      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 
 -- Tag vocabulary for job tagging (issue #87 / S4).
@@ -195,7 +197,8 @@ CREATE TABLE IF NOT EXISTS tags (
     chat_id    INTEGER NOT NULL,
     name       TEXT NOT NULL,
     meaning    TEXT NOT NULL DEFAULT '',
-    color      TEXT NOT NULL DEFAULT '#6366f1',
+    color      TEXT NOT NULL DEFAULT '#8b5cf6',
+    icon       TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
 );
@@ -221,6 +224,13 @@ CREATE TABLE IF NOT EXISTS job_annotations (
     job_id     TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
     notes      TEXT NOT NULL DEFAULT '',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Link-tag links (issue #382).
+CREATE TABLE IF NOT EXISTS link_tags (
+    link_id TEXT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+    tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (link_id, tag_id)
 );
 
 -- Job-tag links (issue #88 / S5).
@@ -1062,6 +1072,39 @@ _MIGRATIONS.append([
     )""",
 ])
 
+# v26 → v27: standalone link identity — per-URL description (#381 / docs/TASK.md task 32).
+_MIGRATIONS.append([
+    "ALTER TABLE links ADD COLUMN description TEXT",
+])
+
+# v27 → v28: link tags join table (#382).
+_MIGRATIONS.append([
+    """CREATE TABLE IF NOT EXISTS link_tags (
+        link_id TEXT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+        tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (link_id, tag_id)
+    )""",
+])
+
+# v28 → v29: remap removed orange/yellow-band tag colors to the nearest allowed
+# hue (#383). The whole band sits closest to the palette's red at ~22° — mapping
+# to violet would jump ~200° of hue.
+_MIGRATIONS.append([
+    "UPDATE tags SET color = '#f87171' WHERE lower(color) IN ('#eab308', '#f97316', '#fcd34d', '#fef3c7', '#a16207')",
+])
+
+# v29 → v30: optional Lucide tag icon names (#386).
+_MIGRATIONS.append([
+    "ALTER TABLE tags ADD COLUMN icon TEXT",
+])
+
+# v30 → v31: unique URL constraint so concurrent ingests can upsert atomically
+# (PR #390 review). Dedup first — keep the earliest row per URL.
+_MIGRATIONS.append([
+    "DELETE FROM links WHERE rowid NOT IN (SELECT MIN(rowid) FROM links GROUP BY url)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url)",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1789,35 +1832,35 @@ async def list_pending_users() -> list[dict]:
 
 async def list_tags(chat_id: int) -> list[dict]:
     return await _fetch_dicts(
-        "SELECT id, name, meaning, color, created_at FROM tags WHERE chat_id = ? ORDER BY name",
+        "SELECT id, name, meaning, color, icon, created_at FROM tags WHERE chat_id = ? ORDER BY name",
         (chat_id,),
     )
 
 
 async def get_tag(chat_id: int, tag_id: str) -> dict | None:
     row = await _fetch_one(
-        "SELECT id, name, meaning, color FROM tags WHERE id = ? AND chat_id = ?",
+        "SELECT id, name, meaning, color, icon FROM tags WHERE id = ? AND chat_id = ?",
         (tag_id, chat_id),
     )
     return dict(row) if row else None
 
 
-async def create_tag(*, chat_id: int, name: str, meaning: str, color: str) -> dict:
+async def create_tag(*, chat_id: int, name: str, meaning: str, color: str, icon: str | None = None) -> dict:
     tag_id = generate_id()
     async with connection() as conn:
         await conn.execute(
-            "INSERT INTO tags (id, chat_id, name, meaning, color) VALUES (?, ?, ?, ?, ?)",
-            (tag_id, chat_id, name, meaning, color),
+            "INSERT INTO tags (id, chat_id, name, meaning, color, icon) VALUES (?, ?, ?, ?, ?, ?)",
+            (tag_id, chat_id, name, meaning, color, icon),
         )
         await conn.commit()
-    return {"id": tag_id, "name": name, "meaning": meaning, "color": color}
+    return {"id": tag_id, "name": name, "meaning": meaning, "color": color, "icon": icon}
 
 
-async def update_tag(*, chat_id: int, tag_id: str, name: str, meaning: str, color: str) -> bool:
+async def update_tag(*, chat_id: int, tag_id: str, name: str, meaning: str, color: str, icon: str | None = None) -> bool:
     return (
         await _execute_rowcount(
-            "UPDATE tags SET name = ?, meaning = ?, color = ? WHERE id = ? AND chat_id = ?",
-            (name, meaning, color, tag_id, chat_id),
+            "UPDATE tags SET name = ?, meaning = ?, color = ?, icon = ? WHERE id = ? AND chat_id = ?",
+            (name, meaning, color, icon, tag_id, chat_id),
         )
         > 0
     )
@@ -1944,10 +1987,44 @@ async def upsert_job_annotation(job_id: str, notes: str) -> dict:
     )
 
 
+async def list_link_tags(link_id: str, chat_id: int | None = None) -> list[dict]:
+    """Return tags attached to *link_id* ordered by name.
+
+    Tags are viewer-private (CONTEXT.md "Link tag") — pass ``chat_id`` to
+    constrain to the viewer's own vocabulary. The statement is static; the
+    scope is the null-tolerant ``(? IS NULL OR t.chat_id = ?)`` form.
+    """
+    return await _fetch_dicts(
+        """SELECT t.id, t.name, t.color, t.meaning, t.icon
+           FROM link_tags lt
+           JOIN tags t ON t.id = lt.tag_id
+           WHERE lt.link_id = ? AND (? IS NULL OR t.chat_id = ?)
+           ORDER BY t.name""",
+        (link_id, chat_id, chat_id),
+    )
+
+
+async def attach_link_tag(link_id: str, tag_id: str) -> bool:
+    await _execute(
+        "INSERT OR IGNORE INTO link_tags (link_id, tag_id) VALUES (?, ?)", (link_id, tag_id)
+    )
+    return True
+
+
+async def detach_link_tag(link_id: str, tag_id: str) -> bool:
+    return (
+        await _execute_rowcount(
+            "DELETE FROM link_tags WHERE link_id = ? AND tag_id = ?",
+            (link_id, tag_id),
+        )
+        > 0
+    )
+
+
 async def list_job_tags(job_id: str) -> list[dict]:
     """Return tags attached to *job_id* ordered by name."""
     return await _fetch_dicts(
-        """SELECT t.id, t.name, t.color, t.meaning
+        """SELECT t.id, t.name, t.color, t.meaning, t.icon
            FROM job_tags jt
            JOIN tags t ON t.id = jt.tag_id
            WHERE jt.job_id = ?
@@ -1975,7 +2052,7 @@ async def batch_list_job_tags(job_ids: list[str]) -> dict[str, list[dict]]:
     if not job_ids:
         return {}
     rows = await _fetch_in(
-        """SELECT jt.job_id, t.id, t.name, t.color, t.meaning
+        """SELECT jt.job_id, t.id, t.name, t.color, t.meaning, t.icon
            FROM job_tags jt
            JOIN tags t ON t.id = jt.tag_id
            WHERE jt.job_id IN ({placeholders})

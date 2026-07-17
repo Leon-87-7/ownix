@@ -18,7 +18,7 @@ import {
 import { PRESET_COLORS } from '@/components/ui/tag-picker';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 
-const DEFAULT_COLOR = '#6366f1';
+const DEFAULT_COLOR = '#8b5cf6';
 
 function ColorSwatch({ color }: { color: string }) {
   return (
@@ -191,6 +191,8 @@ function TagRow({
             name: tag.name,
             meaning: tag.meaning,
             color: tag.color,
+            // Carried through the form untouched so saving an edit doesn't NULL it.
+            icon: tag.icon,
           }}
           onSubmit={handleUpdate}
           onCancel={() => setEditing(false)}
