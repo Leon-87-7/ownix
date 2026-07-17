@@ -29,6 +29,12 @@
 | [#334](https://github.com/Leon-87-7/vig/issues/334) | Docs ingest modal from Feed actions                                                                        | Web / Feed               | Merged; PR #337; closed on GH                                                              |
 | [#335](https://github.com/Leon-87-7/vig/issues/335) | Desktop Commands launcher for Feed actions                                                                 | Web / Feed               | Merged; PR #337; closed on GH                                                              |
 | [#336](https://github.com/Leon-87-7/vig/issues/336) | Move Links inventory API to Feed namespace last                                                            | API / Feed               | Merged; PR #337; closed on GH                                                              |
+| [#374](https://github.com/Leon-87-7/vig/issues/374) | Ops bot foundation: settings, allowlists, sender, startup webhook registration                              | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#375](https://github.com/Leon-87-7/vig/issues/375) | Invite approvals move to Ops bot with admin-only callbacks                                                  | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#376](https://github.com/Leon-87-7/vig/issues/376) | Ops bot read-only user queue commands                                                                       | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#377](https://github.com/Leon-87-7/vig/issues/377) | Domain-scoped batch approval with confirmation                                                              | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#378](https://github.com/Leon-87-7/vig/issues/378) | Dev login stays quiet by default, with explicit Ops bot e2e mode                                            | Auth / Dev               | Merged; PR #380; closed on GH                                                              |
+| [#379](https://github.com/Leon-87-7/vig/issues/379) | Ngrok-assisted local Ops e2e helper                                                                         | DevEx / Ops              | Merged; PR #380; closed on GH                                                              |
 
 ---
 
@@ -47,12 +53,6 @@
 | [#346](https://github.com/Leon-87-7/vig/issues/346) | Send recovery notifications after degraded health returns to healthy                         | Ops / Health     | —          |
 | [#347](https://github.com/Leon-87-7/vig/issues/347) | Harden startup alert ordering around ntfy readiness                                          | Ops / ntfy       | —          |
 | [#348](https://github.com/Leon-87-7/vig/issues/348) | Add deployment-level ntfy verification docs                                                  | Docs / ntfy      | —          |
-| [#374](https://github.com/Leon-87-7/vig/issues/374) | Ops bot foundation: settings, allowlists, sender, startup webhook registration               | Telegram / Ops   | —          |
-| [#375](https://github.com/Leon-87-7/vig/issues/375) | Invite approvals move to Ops bot with admin-only callbacks                                   | Telegram / Ops   | #374       |
-| [#376](https://github.com/Leon-87-7/vig/issues/376) | Ops bot read-only user queue commands                                                        | Telegram / Ops   | #374       |
-| [#377](https://github.com/Leon-87-7/vig/issues/377) | Domain-scoped batch approval with confirmation                                                | Telegram / Ops   | #374, #376 |
-| [#378](https://github.com/Leon-87-7/vig/issues/378) | Dev login stays quiet by default, with explicit Ops bot e2e mode                             | Auth / Dev       | #375       |
-| [#379](https://github.com/Leon-87-7/vig/issues/379) | Ngrok-assisted local Ops e2e helper                                                          | DevEx / Ops      | #374, #378 |
 
 ---
 
@@ -451,6 +451,7 @@ Critical path: #374 → #375 → #378 → #379; #374 → #376 → #377 parallel
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#380](https://github.com/Leon-87-7/vig/pull/380) | feat(telegram): add Ops bot workflow | codex/ops-bot-workflow→main | #374–#379 | ✅ Merged |
 | [#350](https://github.com/Leon-87-7/vig/pull/350) | feat(web): transition dashboard to Ownix design system | codex/ownix-design-system-shell→main | — | ✅ Merged |
 | [#338](https://github.com/Leon-87-7/vig/pull/338) | fix(doc-parser): shorten source document key | codex/doc-parser-source-chip→main | — | ✅ Merged |
 | [#337](https://github.com/Leon-87-7/vig/pull/337) | Feed inventory IA: Links and Commands | codex-IA-refactor→main | #333–#336 | ✅ Merged |
