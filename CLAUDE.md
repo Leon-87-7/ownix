@@ -1,6 +1,61 @@
-# vig — Claude Code instructions
+# CLAUDE.md
 
-Video Intelligence Gateway — a Python (FastAPI + SQLite + Redis) service replacing a 60+ node n8n workflow. Telegram bot that processes short videos (Instagram Reels, YouTube Shorts, TikTok) and long videos (YouTube), runs them through Gemini Vision / Text enrichment, stores results in Google Drive + Sheets, and accumulates a semantic link graph (Second Brain). See `docs/seed/PRD.md`, `docs/seed/ARCHITECTURE.md`, `docs/seed/TECHSTACK.md` for full spec.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project overview
+
+vig — Video Intelligence Gateway. A Python (FastAPI + SQLite + Redis) service replacing a 60+ node n8n workflow. A Telegram bot ingests URLs and files and routes them through typed pipelines — short videos (Reels / TikTok / YouTube Shorts), long YouTube videos, dev articles, GitHub repos, PDF documents, and photo OCR — enriches them with Gemini, stores results in Google Drive + Sheets + GCS, and accumulates a semantic link graph ("Second Brain"). A Next.js dashboard ("The Operator's Console") under `web/` browses the results, and a second "Ops" Telegram bot handles user/invite administration.
+
+Full spec: `docs/seed/PRD.md`, `docs/seed/ARCHITECTURE.md`, `docs/seed/TECHSTACK.md`; dashboard spec: `docs/seed/WEB-PRD.md`. Domain glossary and decisions: `CONTEXT.md` (repo root) + `docs/adr/`.
+
+## Commands
+
+Backend (repo root, Python 3.11+):
+
+```shell
+pip install -r requirements-dev.txt            # includes runtime deps
+python -m pytest tests -q                      # full suite (never via rtk — see .claude/rules/rtk-tests.md)
+python -m pytest tests/test_article_pipeline.py -q   # single file
+RUN_INTEGRATION=1 python -m pytest tests -q    # also run tests hitting real external APIs
+ruff check src/                                # lint (line-length 100, py311)
+```
+
+Services (Docker Compose runs `api`, `worker`, `transcript-service`, `redis`, `cloudflared`):
+
+```shell
+docker-compose up -d
+python transcript_server.py                    # transcript sidecar on host, :5151 (needs flask waitress yt-dlp youtube-transcript-api Pillow)
+```
+
+Web dashboard (`web/`, Node):
+
+```shell
+npm run dev          # Next.js dev server
+npm test             # Vitest watch — or test:run / test:coverage
+npm run lint
+npm run build
+```
+
+`NEXT_PUBLIC_API_MOCK=1` runs the dashboard in mock/demo mode (MSW handlers in `web/lib/mocks/`, auth gate skipped outside production). In production the frontend is served by Vercel — the local `web` service in `docker-compose.yml` is commented out.
+
+## Architecture
+
+Two long-running processes are built from the same image:
+
+- **API** — `src/main.py` (uvicorn `src.main:app`). Hosts the Telegram webhook (`src/telegram/webhook.py`), the ops-bot webhook (`/webhook/ops`, handlers in `src/services/ops_bot.py`), `/health`, and the dashboard JSON API (`src/api/` — jobs, brain, spaces, parsed/doc-parser, preview, controls, auth, google_oauth). Auth is session-cookie middleware in `src/auth/`.
+- **Worker** — `src/worker.py`. BRPOPs JSON task envelopes `{"task": <discriminator>, "job_id": ...}` from the Redis list `video_jobs` (`src/queue.py`) and dispatches by discriminator: `video` (→ `short_video` or `long_video` by content_type), `enrichment`, `article`, `repo`, `document`, `prd_auto`, `prd_auto_resend`, `prd_intent` — all in `src/processors/`.
+
+Photo messages are the exception: processed inline in the webhook, never queued (ADR-0003); multi-image sends are auto-batched via Telegram `media_group_id`.
+
+Supporting pieces:
+
+- **URL routing** — `detect_pipeline(url, extra_domains)` in `src/utils/validators.py` maps a URL to content_type `short` / `long` / `repo` / `document` (`.pdf`) / `article` (default-domain or per-chat allowlist), else rejects.
+- **Job creation core** — `create_and_enqueue_job()` in `src/services/jobs.py` (ADR-0033) owns dedup + create + enqueue. Its three callers (Telegram webhook, dashboard `POST /api/jobs`, repo follow-up) each own their own result notification.
+- **State** — SQLite WAL at `data/jobs.db` via `src/database.py`. Migrations run automatically at startup via `PRAGMA user_version`; the `_MIGRATIONS` table maps each version to either a list of idempotent SQL statements or an async callable. Job status FSM: `pending → processing → transcript_done → enriching → done` (or `error` / `cancelled`); short/article/document skip the intermediate states.
+- **Transcript sidecar** — `transcript_server.py` (Flask + waitress, :5151) wraps yt-dlp / youtube-transcript-api / frame extraction; runs on the host or as the `transcript-service` container.
+- **Second Brain** — `src/brain.py`: Gemini embeddings + NumPy cosine similarity, Obsidian-style `.md` node graph in Drive, searched via `/find`.
+- **External services** — one module each in `src/services/` (gemini, drive, sheets, storage/GCS, jina, github, brave, transcript, google_auth/tokens/workspace, pdf_intake, space_export, job_recovery, …).
+- **Web** — Next.js 14 App Router. Routes live in `web/app/(dashboard)/` (feed, brain, spaces, prompts, controls, jobs/[id], doc-parser) plus public `login` / `privacy` / `terms` / `restricted`; the session gate is `web/middleware.ts`. Tests are Vitest + React Testing Library + MSW, colocated `.test.tsx` beside each component.
 
 ## Task lookup
 
@@ -76,7 +131,7 @@ Default canonical vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`
 
 ### Domain docs
 
-Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root (neither yet exists; `/grill-with-docs` creates them lazily as terms/decisions get resolved). See `docs/agents/domain.md`.
+Single-context layout — one `CONTEXT.md` at the repo root (glossary + architecture decisions, the single source of truth for domain language) plus numbered ADRs in `docs/adr/`. Both grow lazily via `/grill-with-docs` sessions. See `docs/agents/domain.md`. Ops runbook: `docs/agents/ops.md`.
 
 ## Shared agent knowledge
 
