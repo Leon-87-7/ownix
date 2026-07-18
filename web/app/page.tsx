@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import Image from 'next/image';
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
@@ -55,6 +56,11 @@ const tiles: [string, number][] = [
 ];
 
 export default function LandingPage() {
+  // Session-aware CTA: logged-in visitors see "Open feed", anonymous ones
+  // "Look inside". vig_session is httpOnly, so this has to be a server read —
+  // which opts the landing page into dynamic rendering. /restricted handles
+  // the actual routing (approved -> feed, else -> preview) either way.
+  const signedIn = Boolean(cookies().get('vig_session')?.value);
   return (
     <>
       <nav
@@ -133,7 +139,7 @@ export default function LandingPage() {
                 href="/restricted"
                 className={btnGhost}
               >
-                Look inside
+                {signedIn ? 'Open feed' : 'Look inside'}
               </Link>
               <span className="ml-2 font-mono text-xs text-muted">
                 invite-only for now
