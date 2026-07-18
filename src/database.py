@@ -1172,6 +1172,17 @@ async def init_db() -> None:
             "SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'"
         )
         is_fresh = await cur.fetchone() is None
+        if not is_fresh:
+            links_cur = await conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='links'"
+            )
+            if await links_cur.fetchone() is not None:
+                # SCHEMA_SQL below unconditionally creates a UNIQUE index on links.url;
+                # dedup first so it doesn't crash on rows left over from before that
+                # constraint existed (the migration's own dedup step runs too late).
+                await conn.execute(
+                    "DELETE FROM links WHERE rowid NOT IN (SELECT MIN(rowid) FROM links GROUP BY url)"
+                )
         await conn.executescript(SCHEMA_SQL)
         if is_fresh:
             # DDL already includes all columns; skip past all migration steps.
