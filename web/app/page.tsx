@@ -95,14 +95,14 @@ export default function LandingPage() {
           id="hero"
         >
           <HeroGradient />
-          {/* Legibility scrim. Below lg the copy spans nearly the full hero
-            width, so the left-to-right gradient would leave its right edge
-            over barely-scrimmed shader — flat 90% canvas there; the gradient
-            (hot corners surviving on the right) is lg-up only, where the
-            960px wrap keeps text inside the 0.88 zone. */}
+          {/* Legibility scrim. Below lg a flat 90% canvas killed the glow
+            entirely; instead lean the scrim left-to-right — strong under the
+            left-aligned copy, easing to a 0.45 floor on the right so the hot
+            corner survives (no text reaches that far). lg-up widens the fade
+            since the 960px wrap keeps text well inside the dark zone. */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-canvas/90 lg:bg-transparent lg:bg-[linear-gradient(100deg,rgba(13,14,16,0.96)_0%,rgba(13,14,16,0.88)_55%,rgba(13,14,16,0.45)_80%,rgba(13,14,16,0.12)_100%)]"
+            className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(13,14,16,0.95)_0%,rgba(13,14,16,0.86)_50%,rgba(13,14,16,0.45)_100%)] lg:bg-[linear-gradient(100deg,rgba(13,14,16,0.96)_0%,rgba(13,14,16,0.88)_55%,rgba(13,14,16,0.45)_80%,rgba(13,14,16,0.12)_100%)]"
           />
           <div className="mx-auto max-w-[960px] px-6">
             <p className="text-pretty hero-rise mb-4 text-sm font-medium text-muted">
