@@ -8,10 +8,11 @@ import { HeroGradient } from '@/components/landing/hero-gradient';
 import { AppSlot } from '@/components/landing/app-slot';
 import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
+import { OnboardingMinigame } from '@/components/landing/onboarding-minigame';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
-import { ChevronsRight, MessageSquareQuote } from 'lucide-react';
+import { ChevronDown, ChevronsRight, MessageSquareQuote } from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -40,13 +41,6 @@ const btnGhost = `inline-flex h-8 items-center justify-center rounded-md border 
 const btnSignal = `inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep ${touchTarget}`;
 const linkClasses =
   'inline-block transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface [@media(pointer:coarse)]:py-3';
-
-const indexBadges = [
-  ['SHORT · REELS · TIKTOK', 'text-type-short'],
-  ['LONG VIDEO', 'text-type-long'],
-  ['ARTICLE · PDF', 'text-type-article'],
-  ['REPO', 'text-type-repo'],
-];
 
 const tiles: [string, number][] = [
   ['Items indexed', 260],
@@ -146,56 +140,39 @@ export default function LandingPage() {
               </span>
             </div>
           </div>
+          {/* Edge tab on the hero's bottom border (grab-tab aesthetic from the
+            mobile nav) — a plain anchor, not a third CTA: signal orange stays
+            rationed to "Get an invite" (ADR-0038). */}
+          <a
+            href="#onboarding"
+            className={`absolute bottom-0 left-1/2 flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-t-xl border border-b-0 border-t-2 border-line bg-raised px-4 text-[13px] font-medium leading-none text-muted shadow-overlay transition-ui hover:text-ink ${touchTarget}`}
+          >
+            See how it works
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </a>
         </header>
 
         <section
-          aria-labelledby="demo"
+          id="onboarding"
+          aria-labelledby="onboarding-heading"
           className="border-t border-line py-12"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
-              id="demo"
+              id="onboarding-heading"
               className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Three taps. Nothing new to learn.
             </h2>
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              It&apos;s the share sheet you already use - aimed at
-              Ownix instead of a friend. Mid-doomscroll, mid-commute,
-              mid-anything: share it, keep scrolling. Ownix does the
-              reading.
+            <p className="text-pretty mb-2 max-w-[58ch] text-[15px] leading-relaxed">
+              Mid-doomscroll, mid-commute, mid-anything: share it,
+              keep scrolling. Ownix does the reading.
             </p>
-
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
-              <DemoVideo
-                src="/demo-capture.mp4"
-                className="block aspect-video w-full border-b border-line bg-canvas"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
-                <span className="font-mono text-xs text-body">
-                  11:32 shared ·{' '}
-                  <b className="font-medium text-status-done">
-                    11:32 reel analysis ready
-                  </b>{' '}
-                  · 11:33 landed in Dashboard
-                </span>
-              </div>
-            </div>
-
-            <div
-              role="group"
-              className="mt-6 flex flex-wrap gap-2"
-              aria-label="What Ownix indexes"
-            >
-              {indexBadges.map(([label, color]) => (
-                <span
-                  key={label}
-                  className={`rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-[0.4px] ${color}`}
-                >
-                  {label}
-                </span>
-              ))}
+            <p className="mb-6 text-[15px] font-medium text-ink">
+              Click through the loop — share, AI pass, store, reuse.
+            </p>
+            <div className="mx-auto max-w-[560px]">
+              <OnboardingMinigame />
             </div>
           </div>
         </section>
@@ -462,6 +439,40 @@ export default function LandingPage() {
                   nothing.
                 </b>
               </p>
+            </div>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="demo"
+          className="border-t border-line py-12"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="demo"
+              className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              See the real capture proof.
+            </h2>
+            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+              The storyboard above is the onboarding narrative. This
+              recording is the plain proof: share sheet to Telegram,
+              bot reply, then a finished Ownix Feed item.
+            </p>
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
+              <DemoVideo
+                src="/demo-capture.mp4"
+                className="block aspect-video w-full border-b border-line bg-canvas"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
+                <span className="font-mono text-xs text-body">
+                  11:32 shared ·{' '}
+                  <b className="font-medium text-status-done">
+                    11:32 reel analysis ready
+                  </b>{' '}
+                  · 11:33 landed in Dashboard
+                </span>
+              </div>
             </div>
           </div>
         </section>
