@@ -280,7 +280,7 @@ export function SubmitJobProvider({
         !shouldIgnoreGlobalShortcut(event.target)
       ) {
         event.preventDefault();
-        window.location.assign('/?view=links');
+        window.location.assign('/feed?view=links');
         return;
       }
       if (
@@ -497,7 +497,7 @@ export function SubmitJobProvider({
                 icon={Link2}
                 label="Open Links"
                 shortcut="L"
-                onSelect={() => go('/?view=links')}
+                onSelect={() => go('/feed?view=links')}
               />
             </CommandGroup>
             {feedRecovery && (
