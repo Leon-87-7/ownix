@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import httpx
 
 from src import database
-from src.processors.article import _extract_og_image_url
+from src.utils.og_image import extract_og_image_url
 
 
 @dataclass
@@ -24,7 +24,7 @@ class Summary:
 async def _fetch_og_image(client: httpx.AsyncClient, url: str) -> str | None:
     response = await client.get(url)
     response.raise_for_status()
-    return _extract_og_image_url(response.text, str(response.url))
+    return extract_og_image_url(response.text, str(response.url))
 
 
 async def backfill(*, dry_run: bool = False, limit: int | None = None) -> Summary:

@@ -68,7 +68,7 @@ async def temp_db():
 @pytest.fixture(autouse=True)
 def _mock_edit_message(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.processors.article.edit_message_text", AsyncMock())
-    monkeypatch.setattr("src.processors.article._fetch_og_image_url", AsyncMock(return_value=None))
+    monkeypatch.setattr("src.processors.article.fetch_og_image_url", AsyncMock(return_value=None))
 
 
 # ---------------------------------------------------------------------------
@@ -85,29 +85,29 @@ _GEMINI_RESPONSE = json.dumps({
 
 
 def test_extract_og_image_url_absolute_and_relative() -> None:
-    from src.processors.article import _extract_og_image_url
+    from src.utils.og_image import extract_og_image_url
 
-    assert _extract_og_image_url(
+    assert extract_og_image_url(
         '<html><head><meta property="og:image" content="https://cdn.example.com/og.jpg"></head></html>'
     ) == "https://cdn.example.com/og.jpg"
-    assert _extract_og_image_url(
+    assert extract_og_image_url(
         '<meta content="/images/og.jpg" property="og:image">',
         "https://example.com/posts/1",
     ) == "https://example.com/images/og.jpg"
 
 
 def test_extract_og_image_url_rejects_non_http_schemes() -> None:
-    from src.processors.article import _extract_og_image_url
+    from src.utils.og_image import extract_og_image_url
 
     assert (
-        _extract_og_image_url('<meta property="og:image" content="data:image/png;base64,AAAA">')
+        extract_og_image_url('<meta property="og:image" content="data:image/png;base64,AAAA">')
         is None
     )
     assert (
-        _extract_og_image_url('<meta property="og:image" content="javascript:void(0)">') is None
+        extract_og_image_url('<meta property="og:image" content="javascript:void(0)">') is None
     )
     # invalid-scheme tag followed by a valid one must not abort the scan
-    assert _extract_og_image_url(
+    assert extract_og_image_url(
         '<meta property="og:image" content="data:image/png;base64,AAAA">'
         '<meta property="og:image" content="https://cdn.example.com/og.jpg">'
     ) == "https://cdn.example.com/og.jpg"
@@ -206,7 +206,7 @@ async def test_article_run_persists_og_image_url(temp_db, monkeypatch) -> None:
     )
 
     update_status = AsyncMock()
-    monkeypatch.setattr("src.processors.article._fetch_og_image_url", AsyncMock(return_value="https://cdn.example.com/og.jpg"))
+    monkeypatch.setattr("src.processors.article.fetch_og_image_url", AsyncMock(return_value="https://cdn.example.com/og.jpg"))
     monkeypatch.setattr("src.processors.article.database.update_job_status", update_status)
     monkeypatch.setattr("src.processors.article.database.get_job", AsyncMock(return_value=job))
     monkeypatch.setattr("src.processors.article.database.insert_markdown_cache", AsyncMock())

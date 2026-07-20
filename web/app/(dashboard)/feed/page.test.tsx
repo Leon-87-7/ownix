@@ -265,10 +265,10 @@ describe('FeedPage', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === '/api/brain/links/view' && init?.method === 'PUT') {
-        return Promise.resolve(new Response(JSON.stringify({ sort: 'last_seen', order: 'desc', size: 25 }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ order: 'desc', size: 25 }), { status: 200 }));
       }
       if (url === '/api/brain/links/view') {
-        return Promise.resolve(new Response(JSON.stringify({ sort: 'last_seen', order: 'desc', size: 25 }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ order: 'desc', size: 25 }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({
         items: [
@@ -297,12 +297,12 @@ describe('FeedPage', () => {
     });
     expect(navigationMock.replace).toHaveBeenCalledWith('/feed?view=links', { scroll: false });
     expect(screen.queryByText('Jobs')).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&sort=last_seen&order=desc');
+    expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&order=desc');
   });
 
   it('omits the Links view and skips authenticated links fetches in restricted mode', async () => {
     navigationMock.searchParams = new URLSearchParams('view=links');
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL) =>
       new Response(JSON.stringify({
         stale_pending: 0,
         error_jobs: 0,

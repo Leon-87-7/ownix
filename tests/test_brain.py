@@ -15,6 +15,7 @@ from src.brain import (
     _resolve_identity,
     rebuild_graph,
     get_graph,
+    get_link_preview,
     ingest_links,
     list_links,
     normalize_url,
@@ -486,6 +487,89 @@ async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_bu
 
 
 @pytest.mark.asyncio
+async def test_link_preview_keeps_transient_fetch_failure_retryable() -> None:
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                """INSERT INTO links
+                   (id, url, title, topic, source_job, seen_count,
+                    last_seen_at, created_at, updated_at, og_image_url)
+                   VALUES ('link-1', 'https://example.com/page', 'Title', 'Topic',
+                           'job-1', 1, 't', 't', 't', NULL)"""
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings, patch(
+            "src.brain.fetch_public_html", new=AsyncMock(return_value=None)
+        ):
+            mock_settings.DB_PATH = db_path
+            result = await get_link_preview("link-1")
+
+        async with aiosqlite.connect(db_path) as conn:
+            stored = await (
+                await conn.execute("SELECT og_image_url FROM links WHERE id = 'link-1'")
+            ).fetchone()
+
+        assert result == {"id": "link-1", "og_image_url": None}
+        assert stored[0] is None
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_link_preview_caches_successful_page_without_an_image() -> None:
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+    from src.utils.public_html import PublicHtmlResult
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                """INSERT INTO links
+                   (id, url, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES ('link-1', 'https://example.com/page', 'job-1', 1, 't', 't', 't')"""
+            )
+            await conn.commit()
+
+        fetch = AsyncMock(
+            return_value=PublicHtmlResult(
+                html="<html><title>No image here</title></html>",
+                final_url="https://example.com/page",
+            )
+        )
+        with patch("src.brain.settings") as mock_settings, patch(
+            "src.brain.fetch_public_html", new=fetch
+        ):
+            mock_settings.DB_PATH = db_path
+            first = await get_link_preview("link-1")
+            second = await get_link_preview("link-1")
+
+        async with aiosqlite.connect(db_path) as conn:
+            stored = await (
+                await conn.execute("SELECT og_image_url FROM links WHERE id = 'link-1'")
+            ).fetchone()
+
+        assert first == second == {"id": "link-1", "og_image_url": None}
+        assert fetch.await_count == 1
+        assert stored[0] == ""
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
 async def test_list_links_q_filters_by_substring_across_url_title_description():
     """Since #384, q matches url/title/description — never the shared video topic."""
     import aiosqlite
@@ -578,7 +662,7 @@ async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
         os.unlink(db_path)
 
 @pytest.mark.asyncio
-async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
+async def test_list_links_sorts_by_last_seen_in_both_directions():
     import aiosqlite
     import os
     import tempfile
@@ -606,19 +690,19 @@ async def test_list_links_sorts_by_appearances_and_falls_back_to_last_seen():
 
         with patch("src.brain.settings") as mock_settings:
             mock_settings.DB_PATH = db_path
-            by_appearances = await list_links(sort="appearances", order="desc")
-            by_appearances_asc = await list_links(sort="appearances", order="asc")
-            fallback = await list_links(sort="nonsense", order="sideways")
+            descending = await list_links(order="desc")
+            ascending = await list_links(order="asc")
+            fallback = await list_links(order="sideways")
 
-        assert [item["url"] for item in by_appearances["items"]] == [
-            "https://example.com/b",
-            "https://example.com/a",
+        assert [item["url"] for item in descending["items"]] == [
             "https://example.com/c",
+            "https://example.com/a",
+            "https://example.com/b",
         ]
-        assert [item["url"] for item in by_appearances_asc["items"]] == [
-            "https://example.com/c",
-            "https://example.com/a",
+        assert [item["url"] for item in ascending["items"]] == [
             "https://example.com/b",
+            "https://example.com/a",
+            "https://example.com/c",
         ]
         assert [item["url"] for item in fallback["items"]] == [
             "https://example.com/c",

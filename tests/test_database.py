@@ -640,7 +640,7 @@ async def _build_pre_invite_gate_db(path: str, *, status_exists: bool = False) -
     """A DB pinned one version before users.email/status + awaiting_email."""
     from src import database
 
-    target_version = len(database._MIGRATIONS) - 1
+    target_version = database._MIGRATIONS.index(database._migrate_v23_v24)
     async with aiosqlite.connect(path) as conn:
         await conn.execute(
             "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
@@ -796,7 +796,7 @@ async def _build_pre_v23_db(path: str, *, job_delivery: str) -> None:
     document_outputs child row to prove the FK-CASCADE survives the rebuild."""
     from src import database
 
-    target_version = len(database._MIGRATIONS) - 2
+    target_version = database._MIGRATIONS.index(database._migrate_v22_v23)
     async with aiosqlite.connect(path) as conn:
         await conn.execute(
             "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
@@ -877,27 +877,27 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
     await database.init_db()
 
     assert await database.get_brain_links_view(42) == {
-        "sort": "last_seen",
         "order": "desc",
         "size": 25,
     }
 
-    saved = await database.set_brain_links_view(42, sort="appearances", order="asc", size=100)
-    assert saved == {"sort": "appearances", "order": "asc", "size": 100}
+    saved = await database.set_brain_links_view(42, order="asc", size=100)
+    assert saved == {"order": "asc", "size": 100}
     assert await database.get_brain_links_view(42) == saved
 
     await database.set_user_setting(
-        42, "brain_links_view", '{"sort":"bad","order":"bad","size":999}'
+        42, "brain_links_view", '{"sort":"appearances","order":"asc","size":100}'
     )
+    assert await database.get_brain_links_view(42) == {"order": "asc", "size": 100}
+
+    await database.set_user_setting(42, "brain_links_view", '{"order":"bad","size":999}')
     assert await database.get_brain_links_view(42) == {
-        "sort": "last_seen",
         "order": "desc",
         "size": 25,
     }
 
     await database.set_user_setting(42, "brain_links_view", "{not-json")
     assert await database.get_brain_links_view(42) == {
-        "sort": "last_seen",
         "order": "desc",
         "size": 25,
     }

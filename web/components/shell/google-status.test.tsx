@@ -19,7 +19,9 @@ beforeEach(() => {
 
 describe('GoogleStatusProvider', () => {
   it('fetches /api/google/status once and exposes connected', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ connected: true })));
+    const fetchMock = vi.fn(async (_input?: RequestInfo | URL) =>
+      new Response(JSON.stringify({ connected: true })),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     render(

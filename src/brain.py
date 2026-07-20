@@ -16,6 +16,8 @@ from src.config import settings
 from src.database import generate_id
 from src.services.drive import upload_file
 from src.utils.logger import get_logger
+from src.utils.og_image import extract_og_image_url
+from src.utils.public_html import fetch_public_html
 
 log = get_logger(__name__)
 
@@ -39,7 +41,8 @@ CREATE TABLE IF NOT EXISTS links (
     updated_at    TEXT NOT NULL,
     stars         INTEGER,
     pushed_at     TEXT,
-    archived      INTEGER NOT NULL DEFAULT 0
+    archived      INTEGER NOT NULL DEFAULT 0,
+    og_image_url  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
@@ -96,7 +99,6 @@ async def _embed(text: str) -> np.ndarray | None:
 
 
 _TITLE_MAX_CHARS = 120
-_META_FETCH_LIMIT = 128_000
 _BOILERPLATE_TITLES = {
     "just a moment",
     "attention required",
@@ -181,67 +183,16 @@ def _extract_html_description(html: str) -> str:
     )
 
 
-async def _is_safe_public_url(url: str) -> bool:
-    """SSRF guard: HTTP(S) only, and every resolved address must be global.
-
-    Extracted links are third-party content — never let the resolver GET
-    loopback, RFC1918, link-local, or cloud-metadata targets. DNS resolution
-    runs through the loop's executor so a slow resolver never blocks the loop.
-    """
-    import ipaddress
-
-    parts = urlsplit(url)
-    if parts.scheme not in {"http", "https"} or not parts.hostname:
-        return False
-    try:
-        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, None)
-        return all(ipaddress.ip_address(info[4][0]).is_global for info in infos)
-    except (OSError, ValueError):
-        return False
-
-
 async def _fetch_meta(url: str) -> tuple[str, str, bool]:
-    """One capped GET returning (title, description, fetched).
+    """Fetch metadata through the shared hardened public-HTML module.
 
     ``fetched`` is True when the page answered at all — even without usable
     meta tags — so callers can tell "resolved to nothing" from "retry later".
-    Redirects are followed manually (≤3 hops) so every hop is re-validated
-    against the SSRF guard.
     """
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(5.0),
-            follow_redirects=False,
-            headers={"User-Agent": "vig-title-resolver/1.0"},
-        ) as client:
-            target = url
-            for _ in range(4):
-                if not await _is_safe_public_url(target):
-                    log.info("brain.title_meta_fetch_blocked", url=target[:200])
-                    return "", "", False
-                async with client.stream("GET", target) as response:
-                    if response.is_redirect:
-                        location = response.headers.get("location", "")
-                        target = str(response.next_request.url) if response.next_request else location
-                        if not target:
-                            return "", "", True
-                        continue
-                    response.raise_for_status()
-                    chunks: list[bytes] = []
-                    total = 0
-                    async for chunk in response.aiter_bytes():
-                        chunks.append(chunk)
-                        total += len(chunk)
-                        if total >= _META_FETCH_LIMIT:
-                            break
-                html = b"".join(chunks).decode("utf-8", errors="replace")
-                return _extract_html_title(html), _extract_html_description(html), True
-        return "", "", False  # redirect loop exhausted
-    except Exception as exc:
-        log.info("brain.title_meta_fetch_failed", url=url, error=str(exc)[:120])
+    result = await fetch_public_html(url)
+    if result is None:
         return "", "", False
+    return _extract_html_title(result.html), _extract_html_description(result.html), True
 
 
 def _first_paragraph(markdown: str) -> str:
@@ -739,14 +690,12 @@ async def list_links(
     limit: int = 50,
     offset: int = 0,
     q: str = "",
-    sort: str = "last_seen",
     order: str = "desc",
     viewer_chat_id: int | None = None,
 ) -> dict[str, Any]:
     """Return deduplicated Brain links with configurable sorting and pagination.
 
-    ``sort`` is ``last_seen`` or ``appearances`` and ``order`` is ``asc``/``desc``
-    (anything else falls back to ``last_seen`` desc).
+    ``order`` controls last-seen ordering (anything except ``asc`` is descending).
     ``q`` filters by case-insensitive substring across url/title/description, plus exact tag names.
     Tags are private to their owner (CONTEXT.md "Link tag") — matching and the
     returned tag payload are constrained to ``viewer_chat_id`` when given.
@@ -782,13 +731,8 @@ async def list_links(
 
     where = " AND ".join(where_parts)
 
-    sort_columns = {
-        "last_seen": "l.last_seen_at",
-        "appearances": "l.seen_count",
-    }
-    sort_column = sort_columns.get(sort, sort_columns["last_seen"])
     sort_direction = "ASC" if order == "asc" else "DESC"
-    order_by = ", ".join([sort_column + " " + sort_direction, "l.url ASC"])
+    order_by = ", ".join(["l.last_seen_at " + sort_direction, "l.url ASC"])
 
     from_clause = "FROM links l LEFT JOIN jobs j ON j.id = l.source_job"
     count_sql = " ".join(["SELECT COUNT(*) AS total", from_clause, "WHERE", where])
@@ -852,6 +796,55 @@ async def list_links(
         "limit": limit,
         "offset": offset,
         "total": count_row["total"] if count_row else 0,
+    }
+
+
+async def get_link_preview(link_id: str) -> dict[str, Any] | None:
+    """Return a link's preview payload for the Links table's hover/arrow-key panel.
+
+    ``og_image_url`` is cached on the row lazily: NULL means never checked (this
+    call fetches it), '' means checked with none found, non-empty is the
+    resolved og:image URL. Either way, once checked it's never re-fetched.
+    """
+    import aiosqlite
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute(
+            "SELECT id, url, og_image_url FROM links WHERE id = ?",
+            (link_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        link = dict(row)
+
+    og_image_url = link["og_image_url"]
+    if og_image_url is None:
+        page = await fetch_public_html(link["url"])
+        if page is not None:
+            candidate = extract_og_image_url(page.html, page.final_url) or ""
+            async with aiosqlite.connect(settings.DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    """UPDATE links SET og_image_url = ?
+                       WHERE id = ? AND og_image_url IS NULL
+                       RETURNING og_image_url""",
+                    (candidate, link_id),
+                )
+                updated = await cursor.fetchone()
+                if updated is None:
+                    cursor = await conn.execute(
+                        "SELECT og_image_url FROM links WHERE id = ?", (link_id,)
+                    )
+                    updated = await cursor.fetchone()
+                await conn.commit()
+            if updated is not None:
+                og_image_url = updated["og_image_url"]
+
+    return {
+        "id": link["id"],
+        "og_image_url": og_image_url or None,
     }
 
 

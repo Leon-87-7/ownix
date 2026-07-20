@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
+import OwnixLogo from '@/app/ownix-logo.svg';
 import { PlatformGlyph } from '@/components/ui/platform-icon';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TagMark, TagMenu } from '@/components/ui/tag-picker';
@@ -48,26 +49,61 @@ function trimUrl(url: string): string {
   }
 }
 
-function formatDate(value: string): string {
+/** Compact dd/mm/yy — used for Last seen everywhere (mobile card + the
+ * desktop URL cell it's folded into, replacing the old More button there). */
+function formatDateCompact(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 }
 
-/** The always-present More panel of a Link row. Expanded order: full URL
- * (the only place it renders on touch) → title · description → provenance
- * ("seen in a video about X" — never row identity, task 32). */
-function LinkDetails({ link }: { link: LinkRow }) {
-  const [expanded, setExpanded] = useState(false);
+function OgPreviewImage({ src, className }: { src: string | null; className: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) return null;
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={className}
+    />
+  );
+}
+
+/** Mobile-only: the card's More panel. Expanded order: og:image preview
+ * (fetched lazily via the shared links-table selection/cache, task 397) →
+ * full URL (the only place it renders on touch) → title · description →
+ * provenance ("seen in a video about X" — never row identity, task 32). */
+function LinkDetails({
+  link,
+  linksData,
+  expanded,
+  onToggle,
+}: {
+  link: LinkRow;
+  linksData: UseLinksTableResult;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const description = [link.title, link.description]
     .filter(Boolean)
     .join(' · ');
   const href = safeUrl(link.url);
+  const { preview, previewState } = linksData;
+  const ogImageUrl =
+    preview?.id === link.id && previewState === 'ready'
+      ? preview.og_image_url
+      : null;
+
   return (
-    <span className="inline-flex max-w-full items-center gap-2">
+    <span className="inline-flex max-w-full items-start gap-2">
       <span
         title={description || undefined}
         className={`min-w-0 text-xs text-body ${
@@ -76,6 +112,13 @@ function LinkDetails({ link }: { link: LinkRow }) {
             : 'max-w-[40ch] truncate sm:max-w-[60ch]'
         }`}
       >
+        {expanded && ogImageUrl && (
+          <OgPreviewImage
+            key={ogImageUrl}
+            src={ogImageUrl}
+            className="mb-2 h-32 w-full rounded-md border border-line object-cover"
+          />
+        )}
         {expanded &&
           (href ? (
             <a
@@ -101,7 +144,7 @@ function LinkDetails({ link }: { link: LinkRow }) {
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={onToggle}
         className="relative shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-ui before:absolute before:-inset-x-2 before:-inset-y-2.5 hover:bg-raised hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]"
       >
         {expanded ? 'Less' : 'More'}
@@ -186,24 +229,33 @@ function LinkUrl({ link }: { link: LinkRow }) {
   );
 }
 
-function TableCard({ link }: { link: LinkRow }) {
+function TableCard({
+  link,
+  linksData,
+  expanded,
+  onToggle,
+}: {
+  link: LinkRow;
+  linksData: UseLinksTableResult;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   return (
     <article className="rounded-lg border border-line bg-surface px-4 py-3">
       <div className="flex min-w-0 items-center gap-2">
         <LinkUrl link={link} />
         <LinkTagCluster link={link} />
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] tabular-nums text-muted">
-        <span>
-          Last seen {formatDate(link.last_seen ?? link.first_seen)}
-        </span>
-        <span>
-          {link.seen_count} appearance
-          {link.seen_count === 1 ? '' : 's'}
-        </span>
+      <div className="mt-2 font-mono text-[11px] tabular-nums text-muted">
+        Last seen {formatDateCompact(link.last_seen ?? link.first_seen)}
       </div>
       <div className="mt-2">
-        <LinkDetails link={link} />
+        <LinkDetails
+          link={link}
+          linksData={linksData}
+          expanded={expanded}
+          onToggle={onToggle}
+        />
       </div>
     </article>
   );
@@ -219,14 +271,51 @@ function linksCountLabel(
   return `${total} link${total === 1 ? '' : 's'}`;
 }
 
+function LinkPreviewEmptyState() {
+  return (
+    <aside className="flex min-h-[320px] min-w-0 flex-1 items-center justify-center rounded-xl border border-line bg-surface p-4 sm:max-h-[70vh]">
+      <div
+        role="status"
+        aria-label="Select a row to preview its details"
+        className="relative h-44 w-44"
+      >
+        <OwnixLogo
+          aria-hidden="true"
+          focusable="false"
+          className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 text-ink"
+        />
+        <svg
+          viewBox="0 0 176 176"
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full origin-center motion-safe:animate-[spin_14s_linear_infinite] motion-reduce:animate-none"
+        >
+          <defs>
+            <path
+              id="links-preview-select-ring"
+              d="M 88,88 m -66,0 a 66,66 0 1,1 132,0 a 66,66 0 1,1 -132,0"
+            />
+          </defs>
+          <text className="fill-muted font-mono text-[10px] font-medium tracking-[0.18em]">
+            <textPath
+              href="#links-preview-select-ring"
+              startOffset="0"
+              textLength="408"
+              lengthAdjust="spacing"
+            >
+              ◉ SELECT A ROW ◉ SELECT A ROW
+            </textPath>
+          </text>
+        </svg>
+      </div>
+    </aside>
+  );
+}
+
 function SortIcon({
-  active,
   order,
 }: {
-  active: boolean;
   order: LinksOrder;
 }) {
-  if (!active) return null;
   const Icon = order === 'desc' ? ArrowDown : ArrowUp;
   return (
     <Icon
@@ -292,6 +381,69 @@ export function LinksSearchBar({
   );
 }
 
+/** Desktop-only preview panel beside the table: the selected row's (hover or
+ * ↑/↓) og:image + row metadata — this is what replaced the per-row More
+ * button on desktop (task 397). */
+function LinkPreviewPanel({ linksData }: { linksData: UseLinksTableResult }) {
+  const { data, selectedLinkId, preview, previewState } = linksData;
+  const link = data.items.find((item) => item.id === selectedLinkId) ?? null;
+
+  if (!link) {
+    return <LinkPreviewEmptyState />;
+  }
+
+  const href = safeUrl(link.url);
+  const description = [link.title, link.description].filter(Boolean).join(' · ');
+  const ogImageUrl =
+    previewState === 'ready' && preview?.id === link.id ? preview.og_image_url : null;
+
+  return (
+    <aside className="max-h-[70vh] min-w-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-line bg-surface p-4">
+      {ogImageUrl && (
+        <OgPreviewImage
+          key={ogImageUrl}
+          src={ogImageUrl}
+          className="aspect-video w-full rounded-lg border border-line object-cover"
+        />
+      )}
+      {previewState === 'loading' && preview?.id !== link.id && (
+        <div className="aspect-video w-full animate-pulse rounded-lg border border-line bg-canvas" />
+      )}
+      <div className="flex min-w-0 items-center gap-2">
+        <PlatformGlyph url={link.url} size={16} className="shrink-0 text-muted" />
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 truncate font-mono text-xs text-ink transition-ui hover:text-signal hover:underline"
+          >
+            {link.url}
+          </a>
+        ) : (
+          <span className="min-w-0 truncate font-mono text-xs text-muted">
+            {link.url}
+          </span>
+        )}
+      </div>
+      {description && <p className="text-sm text-body">{description}</p>}
+      {link.topic && <p className="text-xs text-muted">From: {link.topic}</p>}
+      {link.tags && link.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {link.tags.map((tag) => (
+            <Tooltip key={tag.id} content={[tag.name, tag.meaning].filter(Boolean).join(' — ')}>
+              <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] text-body">
+                <TagMark tag={tag} className="h-3 w-3" />
+                {tag.name}
+              </span>
+            </Tooltip>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 export function LinksTable({
   linksData,
 }: {
@@ -301,7 +453,7 @@ export function LinksTable({
     query,
     view,
     viewLoaded,
-    toggleSort,
+    toggleOrder,
     data,
     state,
     message,
@@ -316,8 +468,35 @@ export function LinksTable({
     end,
     hasPrevious,
     hasNext,
+    selectedLinkId,
+    selectLink,
+    hoverLink,
+    cancelHover,
+    selectAdjacent,
   } = linksData;
   const pending = state === 'loading' || state === 'idle';
+  const [expandedLinkId, setExpandedLinkId] = useState<string | null>(null);
+
+  const toggleMobileDetails = (linkId: string) => {
+    const opening = expandedLinkId !== linkId;
+    setExpandedLinkId(opening ? linkId : null);
+    if (opening) selectLink(linkId);
+  };
+
+  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+  const keyboardNavigationRef = useRef(false);
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: 'nearest' });
+    if (keyboardNavigationRef.current) {
+      selectedRowRef.current?.focus();
+      keyboardNavigationRef.current = false;
+    }
+  }, [selectedLinkId]);
+
+  const moveSelection = (direction: 1 | -1) => {
+    keyboardNavigationRef.current = true;
+    selectAdjacent(direction);
+  };
 
   return (
     <section className="space-y-3">
@@ -342,7 +521,7 @@ export function LinksTable({
 
       {state === 'error' && <LinksErrorBanner message={message} />}
 
-      {/* Same 639px breakpoint as the table's `hidden sm:block` — CSS gates both. */}
+      {/* Same 639px breakpoint as the table's `hidden sm:flex` below — CSS gates both. */}
       <div className="space-y-2 sm:hidden">
         {pending && (
           <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-body">
@@ -361,120 +540,105 @@ export function LinksTable({
             <TableCard
               key={link.url}
               link={link}
+              linksData={linksData}
+              expanded={expandedLinkId === link.id}
+              onToggle={() => toggleMobileDetails(link.id)}
             />
           ))}
       </div>
 
-      <div className="hidden overflow-hidden rounded-xl border border-line bg-surface shadow-[0_1px_0_rgba(255,255,255,0.03)] sm:block">
-        <div className="max-h-[70vh] overflow-auto">
-          <table className="min-w-full divide-y divide-line text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-raised text-xs text-muted shadow-[0_1px_0_rgba(255,255,255,0.06)]">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-4 py-3 font-medium"
-                >
-                  URL
-                </th>
-                <th
-                  scope="col"
-                  aria-sort={
-                    view.sort === 'last_seen'
-                      ? view.order === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  }
-                  className="px-4 py-3 font-medium"
-                >
-                  <button
-                    type="button"
-                    disabled={!viewLoaded}
-                    onClick={() => toggleSort('last_seen')}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-left transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
-                  >
-                    Last seen{' '}
-                    <SortIcon
-                      active={view.sort === 'last_seen'}
-                      order={view.order}
-                    />
-                  </button>
-                </th>
-                <th
-                  scope="col"
-                  aria-sort={
-                    view.sort === 'appearances'
-                      ? view.order === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  }
-                  className="px-4 py-3 text-right font-medium"
-                >
-                  <button
-                    type="button"
-                    disabled={!viewLoaded}
-                    onClick={() => toggleSort('appearances')}
-                    className="ml-auto inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
-                  >
-                    Appearances{' '}
-                    <SortIcon
-                      active={view.sort === 'appearances'}
-                      order={view.order}
-                    />
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {pending && (
+      <div className="hidden gap-3 sm:flex">
+        <div className="min-w-0 flex-[2] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="max-h-[70vh] overflow-auto">
+            <table className="min-w-full divide-y divide-line text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-raised text-xs text-muted shadow-[0_1px_0_rgba(255,255,255,0.06)]">
                 <tr>
-                  <td
-                    colSpan={3}
-                    className="px-4 py-8 text-center text-body"
+                  <th
+                    scope="col"
+                    aria-sort={view.order === 'asc' ? 'ascending' : 'descending'}
+                    className="px-4 py-3 font-medium"
                   >
-                    Loading extracted links…
-                  </td>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-[11px] font-normal uppercase tracking-wider text-muted">
+                        ↑↓ navigate
+                      </span>
+                      <button
+                        type="button"
+                        disabled={!viewLoaded}
+                        onClick={toggleOrder}
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
+                      >
+                        Last seen{' '}
+                        <SortIcon order={view.order} />
+                      </button>
+                    </div>
+                  </th>
                 </tr>
-              )}
-              {state === 'ready' && data.items.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={3}
-                    className="px-4 py-8 text-center text-body"
-                  >
-                    {query.trim()
-                      ? 'No links match your search.'
-                      : 'No extracted links have been saved yet.'}
-                  </td>
-                </tr>
-              )}
-              {state === 'ready' &&
-                data.items.map((link) => (
-                  <tr
-                    key={link.url}
-                    className="transition-colors hover:bg-raised/60"
-                  >
-                    <td className="max-w-[36rem] px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <LinkUrl link={link} />
-                          <LinkTagCluster link={link} />
-                        </div>
-                        <LinkDetails link={link} />
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs tabular-nums text-body">
-                      {formatDate(link.last_seen ?? link.first_seen)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs tabular-nums text-ink">
-                      {link.seen_count}
+              </thead>
+              <tbody className="divide-y divide-line">
+                {pending && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-body">
+                      Loading extracted links…
                     </td>
                   </tr>
-                ))}
-            </tbody>
-          </table>
+                )}
+                {state === 'ready' && data.items.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-body">
+                      {query.trim()
+                        ? 'No links match your search.'
+                        : 'No extracted links have been saved yet.'}
+                    </td>
+                  </tr>
+                )}
+                {state === 'ready' &&
+                  data.items.map((link, index) => (
+                    <tr
+                      key={link.url}
+                      ref={link.id === selectedLinkId ? selectedRowRef : undefined}
+                      aria-selected={link.id === selectedLinkId}
+                      tabIndex={
+                        link.id === selectedLinkId || (!selectedLinkId && index === 0)
+                          ? 0
+                          : -1
+                      }
+                      onFocus={() => selectLink(link.id)}
+                      onClick={() => selectLink(link.id)}
+                      onMouseEnter={() => hoverLink(link.id)}
+                      onMouseLeave={cancelHover}
+                      onKeyDown={(event) => {
+                        if (event.currentTarget !== event.target) return;
+                        if (event.key === 'ArrowDown') {
+                          event.preventDefault();
+                          moveSelection(1);
+                        } else if (event.key === 'ArrowUp') {
+                          event.preventDefault();
+                          moveSelection(-1);
+                        }
+                      }}
+                      className={`transition-colors hover:bg-raised/60 focus-visible:bg-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-signal ${
+                        link.id === selectedLinkId ? 'bg-raised' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <LinkUrl link={link} />
+                            <LinkTagCluster link={link} />
+                          </div>
+                          <span className="font-mono text-[11px] tabular-nums text-muted">
+                            {formatDateCompact(link.last_seen ?? link.first_seen)}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+        <LinkPreviewPanel linksData={linksData} />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

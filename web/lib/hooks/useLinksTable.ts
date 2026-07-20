@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 
 export type LinkTag = { id: string; name: string; color: string; meaning: string; icon?: string | null };
 
+export type LinkPreview = {
+  id: string;
+  og_image_url?: string | null;
+};
+
+const HOVER_SELECT_DELAY_MS = 220;
+
 export type LinkRow = {
   id: string;
   url: string;
@@ -23,18 +30,15 @@ type LinksResponse = {
   total: number;
 };
 
-export type LinksSort = 'last_seen' | 'appearances';
 export type LinksOrder = 'asc' | 'desc';
 
 export type LinksView = {
-  sort: LinksSort;
   order: LinksOrder;
   size: 25 | 50 | 100;
 };
 export type LinksTableState = 'idle' | 'loading' | 'ready' | 'error';
 
 const DEFAULT_LINKS_VIEW: LinksView = {
-  sort: 'last_seen',
   order: 'desc',
   size: 25,
 };
@@ -63,6 +67,37 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
   );
   const [message, setMessage] = useState('');
   const [jumpPage, setJumpPage] = useState('1');
+
+  // Desktop preview panel: which row is selected (hover/arrow-key), its
+  // fetched og:image + metadata, cached per id so re-selecting a row already
+  // seen this session never re-fetches.
+  const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [previewCache, setPreviewCache] = useState<Record<string, LinkPreview>>({});
+  const [previewState, setPreviewState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHover = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  };
+
+  const selectLink = (id: string) => {
+    cancelHover();
+    setSelectedLinkId(id);
+  };
+
+  const hoverLink = (id: string) => {
+    cancelHover();
+    hoverTimer.current = setTimeout(() => setSelectedLinkId(id), HOVER_SELECT_DELAY_MS);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    };
+  }, []);
 
   const setQuery = (next: string) => {
     setQueryState(next);
@@ -117,7 +152,6 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
       const params = new URLSearchParams({
         limit: String(view.size),
         offset: String(page * view.size),
-        sort: view.sort,
         order: view.order,
       });
       if (debouncedQuery.trim())
@@ -147,6 +181,49 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
       cancelled = true;
     };
   }, [enabled, page, debouncedQuery, view, viewLoaded]);
+
+  // Preserve an explicit selection only while it remains in the visible list.
+  // Starting empty keeps mobile preview fetching genuinely lazy and gives the
+  // desktop panel a meaningful select-a-row state.
+  useEffect(() => {
+    if (state !== 'ready') return;
+    setSelectedLinkId((prev) =>
+      data.items.some((item) => item.id === prev) ? prev : null,
+    );
+  }, [state, data.items]);
+
+  // Fetches (and caches) the selected link's og:image + metadata. Reselecting
+  // an id already seen this session skips the request entirely.
+  useEffect(() => {
+    if (!selectedLinkId) {
+      setPreviewState('idle');
+      return;
+    }
+    if (previewCache[selectedLinkId]) {
+      setPreviewState('ready');
+      return;
+    }
+    let cancelled = false;
+    setPreviewState('loading');
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/brain/links/${selectedLinkId}/preview`);
+        if (!res.ok)
+          throw new Error(`Preview request failed (${res.status})`);
+        const payload = (await res.json()) as LinkPreview;
+        if (!cancelled) {
+          setPreviewCache((cache) => ({ ...cache, [selectedLinkId]: payload }));
+          setPreviewState('ready');
+        }
+      } catch {
+        if (!cancelled) setPreviewState('error');
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLinkId, previewCache]);
 
   // Skip the first run so loading the view from GET doesn't immediately PUT it back.
   const skipFirstPut = useRef(true);
@@ -181,11 +258,9 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
     setView((value) => ({ ...value, ...patch }));
   };
 
-  const toggleSort = (sort: LinksSort) => {
+  const toggleOrder = () => {
     updateView({
-      sort,
-      order:
-        view.sort === sort && view.order === 'desc' ? 'asc' : 'desc',
+      order: view.order === 'desc' ? 'asc' : 'desc',
     });
   };
 
@@ -194,13 +269,24 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
     setPage(Math.min(Math.max(requested, 1), pageCount) - 1);
   };
 
+  // Moves the preview selection to the previous/next visible row (↑/↓).
+  const selectAdjacent = (direction: 1 | -1) => {
+    if (data.items.length === 0) return;
+    const index = data.items.findIndex((item) => item.id === selectedLinkId);
+    const nextIndex =
+      index === -1
+        ? 0
+        : Math.min(Math.max(index + direction, 0), data.items.length - 1);
+    selectLink(data.items[nextIndex].id);
+  };
+
   return {
     query,
     setQuery,
     view,
     viewLoaded,
     updateView,
-    toggleSort,
+    toggleOrder,
     data,
     state,
     message,
@@ -215,6 +301,13 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
     end,
     hasPrevious,
     hasNext,
+    selectedLinkId,
+    selectLink,
+    hoverLink,
+    cancelHover,
+    selectAdjacent,
+    preview: selectedLinkId ? (previewCache[selectedLinkId] ?? null) : null,
+    previewState,
   };
 }
 

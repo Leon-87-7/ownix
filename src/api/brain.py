@@ -20,7 +20,6 @@ brain_router = APIRouter(prefix="/api/brain", tags=["brain"])
 
 class BrainLinksViewIn(BaseModel):
     # Server clamps every value in set_brain_links_view; this is just typed parsing.
-    sort: str
     order: str
     size: int
 
@@ -43,7 +42,6 @@ async def list_links(
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     q: str = Query(default=""),
-    sort: str = Query(default="last_seen"),
     order: str = Query(default="desc"),
 ) -> dict:
     # Link inventory stays operator-wide; tag matching/payload is viewer-private.
@@ -51,10 +49,19 @@ async def list_links(
         limit=limit,
         offset=offset,
         q=q,
-        sort=sort,
         order=order,
         viewer_chat_id=request.state.user["id"],
     )
+
+
+@brain_router.get("/links/{link_id}/preview")
+async def get_link_preview(link_id: str) -> dict:
+    preview = await brain.get_link_preview(link_id)
+    if preview is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    return preview
+
+
 # ---------------------------------------------------------------------------
 # Link-tag links
 # ---------------------------------------------------------------------------
@@ -110,7 +117,6 @@ async def update_links_view(body: BrainLinksViewIn, request: Request) -> dict[st
     chat_id: int = request.state.user["id"]
     return await database.set_brain_links_view(
         chat_id,
-        sort=body.sort,
         order=body.order,
         size=body.size,
     )

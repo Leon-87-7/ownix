@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
+import { fireEvent } from '@testing-library/react';
 import { render, screen } from '@/test/render';
 import { LinksTable } from '@/components/feed/links-table';
 import type { UseLinksTableResult } from '@/lib/hooks/useLinksTable';
@@ -20,10 +21,10 @@ function makeLinksData(link: typeof baseLink): UseLinksTableResult {
   return {
     query: '',
     setQuery: () => {},
-    view: { sort: 'last_seen', order: 'desc', size: 25 },
+    view: { order: 'desc', size: 25 },
     viewLoaded: true,
     updateView: () => {},
-    toggleSort: () => {},
+    toggleOrder: () => {},
     data: { items: [link], limit: 25, offset: 0, total: 1 },
     state: 'ready',
     message: '',
@@ -38,10 +39,54 @@ function makeLinksData(link: typeof baseLink): UseLinksTableResult {
     end: 1,
     hasPrevious: false,
     hasNext: false,
+    // null: no row preselected, so the preview panel's placeholder renders
+    // instead of the full URL — keeps the "collapsed row never shows the
+    // full URL" assertions below meaningful. Preview-panel-specific tests
+    // override this.
+    selectedLinkId: null,
+    selectLink: () => {},
+    hoverLink: () => {},
+    cancelHover: () => {},
+    selectAdjacent: () => {},
+    preview: null,
+    previewState: 'idle',
   } as unknown as UseLinksTableResult;
 }
 
 describe('LinksTable trimmed URL row', () => {
+  it('renders a branded select-a-row empty preview state', () => {
+    render(<LinksTable linksData={makeLinksData(baseLink)} />);
+
+    expect(
+      screen.getByRole('status', { name: 'Select a row to preview its details' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('◉ SELECT A ROW ◉ SELECT A ROW')).toBeInTheDocument();
+  });
+
+  it('selects the whole desktop row and cancels an unfinished hover', async () => {
+    const user = userEvent.setup();
+    const linksData = makeLinksData(baseLink);
+    linksData.selectLink = vi.fn();
+    linksData.hoverLink = vi.fn();
+    linksData.cancelHover = vi.fn();
+    linksData.selectAdjacent = vi.fn();
+    render(<LinksTable linksData={linksData} />);
+    const row = screen.getByRole('row', { name: /thenounproject\.com/i });
+
+    expect(row).toHaveAttribute('tabindex', '0');
+    fireEvent.focus(row);
+    expect(linksData.selectLink).toHaveBeenCalledWith('lnk_1');
+    await user.click(row);
+    expect(linksData.selectLink).toHaveBeenCalledWith('lnk_1');
+    fireEvent.keyDown(row, { key: 'ArrowDown' });
+    expect(linksData.selectAdjacent).toHaveBeenCalledWith(1);
+
+    await user.hover(row);
+    expect(linksData.hoverLink).toHaveBeenCalledWith('lnk_1');
+    await user.unhover(row);
+    expect(linksData.cancelHover).toHaveBeenCalled();
+  });
+
   it('shows pathname + query instead of the full URL', () => {
     render(
       <LinksTable
@@ -128,6 +173,44 @@ describe('LinksTable trimmed URL row', () => {
     );
     expect(screen.getAllByRole('button', { name: 'More' }).length).toBeGreaterThan(0);
   });
+
+  it('keeps only one mobile details card expanded', async () => {
+    const user = userEvent.setup();
+    const linksData = makeLinksData(baseLink);
+    linksData.data.items = [
+      baseLink,
+      { ...baseLink, id: 'lnk_2', url: 'https://example.com/second' },
+    ];
+    linksData.selectLink = vi.fn();
+    render(<LinksTable linksData={linksData} />);
+    const moreButtons = screen.getAllByRole('button', { name: 'More' });
+
+    await user.click(moreButtons[0]);
+    expect(screen.getAllByRole('button', { name: 'Less' })).toHaveLength(1);
+
+    await user.click(screen.getAllByRole('button', { name: 'More' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Less' })).toHaveLength(1);
+    expect(linksData.selectLink).toHaveBeenLastCalledWith('lnk_2');
+  });
+
+  it('removes a failed desktop OG preview image', () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    const linksData = makeLinksData(baseLink);
+    linksData.selectedLinkId = 'lnk_1';
+    linksData.preview = {
+      id: 'lnk_1',
+      og_image_url: 'https://cdn.example.com/og.jpg',
+    };
+    linksData.previewState = 'ready';
+    const { container } = render(<LinksTable linksData={linksData} />);
+    const image = container.querySelector('img[src="https://cdn.example.com/og.jpg"]');
+
+    expect(image).not.toBeNull();
+    fireEvent.error(image!);
+    expect(
+      container.querySelector('img[src="https://cdn.example.com/og.jpg"]'),
+    ).toBeNull();
+  });
 });
 
 describe('LinksTable standalone identity line', () => {
@@ -161,7 +244,7 @@ describe('LinksTable standalone identity line', () => {
         })}
       />,
     );
-    // Two More buttons (mobile card + desktop row); expanding the first suffices.
+    // Mobile-only control (desktop uses the hover/arrow-key preview panel instead).
     await user.click(screen.getAllByRole('button', { name: 'More' })[0]);
     expect(
       screen.getAllByText(/From: The video discusses/, { exact: false }).length,

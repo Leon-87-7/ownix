@@ -185,7 +185,8 @@ CREATE TABLE IF NOT EXISTS links (
     updated_at    TEXT NOT NULL,
     stars         INTEGER,
     pushed_at     TEXT,
-    archived      INTEGER NOT NULL DEFAULT 0
+    archived      INTEGER NOT NULL DEFAULT 0,
+    og_image_url  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
@@ -1105,6 +1106,12 @@ _MIGRATIONS.append([
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url)",
 ])
 
+# v31 → v32: cached og:image for the Links preview panel. NULL = not yet
+# checked, '' = checked with no og:image found, non-empty = the resolved URL.
+_MIGRATIONS.append([
+    "ALTER TABLE links ADD COLUMN og_image_url TEXT",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1306,8 +1313,7 @@ async def set_user_setting(chat_id: int, key: str, value: str) -> None:
 
 
 _BRAIN_LINKS_VIEW_KEY = "brain_links_view"
-_DEFAULT_BRAIN_LINKS_VIEW = {"sort": "last_seen", "order": "desc", "size": 25}
-_BRAIN_LINKS_VIEW_SORTS = {"last_seen", "appearances"}
+_DEFAULT_BRAIN_LINKS_VIEW = {"order": "desc", "size": 25}
 _BRAIN_LINKS_VIEW_ORDERS = {"asc", "desc"}
 _BRAIN_LINKS_VIEW_SIZES = {25, 50, 100}
 
@@ -1315,11 +1321,8 @@ _BRAIN_LINKS_VIEW_SIZES = {25, 50, 100}
 def _normalize_brain_links_view(value: object) -> dict[str, int | str]:
     view = dict(_DEFAULT_BRAIN_LINKS_VIEW)
     if isinstance(value, dict):
-        sort = value.get("sort")
         order = value.get("order")
         size = value.get("size")
-        if sort in _BRAIN_LINKS_VIEW_SORTS:
-            view["sort"] = str(sort)
         if order in _BRAIN_LINKS_VIEW_ORDERS:
             view["order"] = str(order)
         if size in _BRAIN_LINKS_VIEW_SIZES:
@@ -1339,9 +1342,9 @@ async def get_brain_links_view(chat_id: int) -> dict[str, int | str]:
 
 
 async def set_brain_links_view(
-    chat_id: int, *, sort: str, order: str, size: int
+    chat_id: int, *, order: str, size: int
 ) -> dict[str, int | str]:
-    view = _normalize_brain_links_view({"sort": sort, "order": order, "size": size})
+    view = _normalize_brain_links_view({"order": order, "size": size})
     await set_user_setting(chat_id, _BRAIN_LINKS_VIEW_KEY, json.dumps(view, separators=(",", ":")))
     return view
 
