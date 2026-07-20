@@ -100,18 +100,17 @@ function LinkPreviewMotif({ label, className }: { label: string; className: stri
   );
 }
 
+function LinkPreviewUnavailable({ className }: { className: string }) {
+  return <LinkPreviewMotif label="NO PREVIEW" className={`${className} bg-canvas px-3`} />;
+}
+
 function OgPreviewImage({ src, className }: { src: string | null; className: string }) {
   const [failed, setFailed] = useState(false);
 
   if (!src) return null;
 
   if (failed) {
-    return (
-      <LinkPreviewMotif
-        label="NO PREVIEW"
-        className={`${className} bg-canvas px-3`}
-      />
-    );
+    return <LinkPreviewUnavailable className={className} />;
   }
 
   return (
@@ -149,7 +148,9 @@ function LinkDetails({
     .filter(Boolean)
     .join(' · ');
   const href = safeUrl(link.url);
-  const { preview, previewState } = linksData;
+  const { preview, previewState, selectedLinkId } = linksData;
+  const previewResolved =
+    selectedLinkId === link.id && (previewState === 'ready' || previewState === 'error');
   const ogImageUrl =
     preview?.id === link.id && previewState === 'ready'
       ? preview.og_image_url
@@ -165,12 +166,16 @@ function LinkDetails({
             : 'max-w-[40ch] truncate sm:max-w-[60ch]'
         }`}
       >
-        {expanded && ogImageUrl && (
-          <OgPreviewImage
-            key={ogImageUrl}
-            src={linkPreviewImageUrl(link.id)}
-            className="mb-2 h-32 w-full rounded-md border border-line object-cover"
-          />
+        {expanded && previewResolved && (
+          ogImageUrl ? (
+            <OgPreviewImage
+              key={ogImageUrl}
+              src={linkPreviewImageUrl(link.id)}
+              className="mb-2 h-32 w-full rounded-md border border-line object-cover"
+            />
+          ) : (
+            <LinkPreviewUnavailable className="mb-2 h-32 w-full rounded-md border border-line" />
+          )
         )}
         {expanded &&
           (href ? (
@@ -420,15 +425,20 @@ function LinkPreviewPanel({ linksData }: { linksData: UseLinksTableResult }) {
   const description = [link.title, link.description].filter(Boolean).join(' · ');
   const ogImageUrl =
     previewState === 'ready' && preview?.id === link.id ? preview.og_image_url : null;
+  const previewResolved = previewState === 'ready' || previewState === 'error';
 
   return (
     <aside className="max-h-[70vh] min-w-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-line bg-surface p-4">
-      {ogImageUrl && (
-        <OgPreviewImage
-          key={ogImageUrl}
-          src={linkPreviewImageUrl(link.id)}
-          className="aspect-video w-full rounded-lg border border-line object-cover"
-        />
+      {previewResolved && (
+        ogImageUrl ? (
+          <OgPreviewImage
+            key={ogImageUrl}
+            src={linkPreviewImageUrl(link.id)}
+            className="aspect-video w-full rounded-lg border border-line object-cover"
+          />
+        ) : (
+          <LinkPreviewUnavailable className="aspect-video w-full rounded-lg border border-line" />
+        )
       )}
       {previewState === 'loading' && preview?.id !== link.id && (
         <div className="aspect-video w-full animate-pulse rounded-lg border border-line bg-canvas" />

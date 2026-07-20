@@ -210,6 +210,18 @@ describe('LinksTable trimmed URL row', () => {
     expect(screen.getByRole('status', { name: 'NO PREVIEW' })).toBeInTheDocument();
     expect(screen.getByText('◉ NO PREVIEW ◉ NO PREVIEW')).toBeInTheDocument();
   });
+
+  it('renders the no-preview motif when the preview endpoint finds no OG image', () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    const linksData = makeLinksData(baseLink);
+    linksData.selectedLinkId = 'lnk_1';
+    linksData.preview = { id: 'lnk_1', og_image_url: null };
+    linksData.previewState = 'ready';
+
+    render(<LinksTable linksData={linksData} />);
+
+    expect(screen.getByRole('status', { name: 'NO PREVIEW' })).toBeInTheDocument();
+  });
 });
 
 describe('LinksTable standalone identity line', () => {
