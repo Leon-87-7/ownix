@@ -97,7 +97,7 @@ async def fetch_public_html(
             extra_headers = {"Host": hostname}
             extensions: dict = {}
             if parts.scheme == "https":
-                extensions["sni_hostname"] = hostname.encode("ascii")
+                extensions["sni_hostname"] = hostname
             async with active_client.stream(
                 "GET",
                 pinned_url,
@@ -109,7 +109,7 @@ async def fetch_public_html(
                     location = response.headers.get("location", "")
                     if not location:
                         return PublicHtmlResult(html="", final_url=str(response.url))
-                    target = urljoin(str(response.url), location)
+                    target = urljoin(target, location)
                     continue
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
@@ -169,7 +169,7 @@ async def fetch_public_image(
             extra_headers = {"Host": hostname}
             extensions: dict = {}
             if parts.scheme == "https":
-                extensions["sni_hostname"] = hostname.encode("ascii")
+                extensions["sni_hostname"] = hostname
             async with active_client.stream(
                 "GET",
                 pinned_url,
