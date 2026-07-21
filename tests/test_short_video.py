@@ -23,6 +23,7 @@ from src.utils.validators import detect_pipeline
         "https://youtube.com/shorts/abc123",
         "https://instagram.com/reel/DVNolBNE6vV/",
         "https://tiktok.com/@user/video/1234567890",
+        "https://vt.tiktok.com/ZS2vJqL2Y/",
     ],
 )
 def test_detect_pipeline_short_urls(url: str) -> None:

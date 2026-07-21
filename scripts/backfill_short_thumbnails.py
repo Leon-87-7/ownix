@@ -121,11 +121,7 @@ async def backfill(
             print(f"skipped {job_id}: thumbnail already present")
             continue
 
-        if (
-            job.get("best_frame_index") is None
-            and fallback_frame == "skip"
-            and not rerun_vision
-        ):
+        if job.get("best_frame_index") is None and fallback_frame == "skip" and not rerun_vision:
             summary.needs_selection += 1
             print(f"needs_selection {job_id}: missing best_frame_index")
             continue
@@ -229,7 +225,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Print updates without writing them")
     parser.add_argument("--limit", type=int, default=None, help="Maximum jobs to fetch")
-    parser.add_argument("--chat-id", type=int, default=None, help="Only scan jobs for this Telegram chat ID")
+    parser.add_argument(
+        "--chat-id", type=int, default=None, help="Only scan jobs for this Telegram chat ID"
+    )
     parser.add_argument(
         "--rerun-vision",
         action="store_true",

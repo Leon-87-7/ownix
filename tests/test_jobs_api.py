@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.api import jobs
-from src.api.jobs import resolve_thumbnail
+from src.api.jobs import is_persistable_short_platform, resolve_thumbnail
 
 
 @pytest.mark.asyncio
@@ -50,6 +50,17 @@ async def test_resolve_thumbnail_ig_and_tiktok_short_placeholder(monkeypatch) ->
         None,
         None,
     )
+    assert await resolve_thumbnail({"id": "j3", "url": "https://vt.tiktok.com/ZS2vJqL2Y/", "content_type": "short"}) == (
+        None,
+        None,
+    )
+
+
+def test_is_persistable_short_platform() -> None:
+    assert is_persistable_short_platform("https://instagram.com/reel/abc123")
+    assert is_persistable_short_platform("https://www.tiktok.com/@user/video/123")
+    assert is_persistable_short_platform("https://vt.tiktok.com/ZS2vJqL2Y/")
+    assert not is_persistable_short_platform("https://youtube.com/shorts/abc123")
 
 
 @pytest.mark.asyncio

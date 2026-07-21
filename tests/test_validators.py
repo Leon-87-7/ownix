@@ -37,6 +37,8 @@ def test_non_pdf_article_url_unaffected() -> None:
         "https://www.instagram.com/reel/DVNolBNE6vV/?igsh=a2ZodGgxOXN4Ynp3",
         "https://tiktok.com/@implementationai/video/7234567890123456789",
         "https://www.tiktok.com/@some.user/video/1234567890",
+        "https://vt.tiktok.com/ZS2vJqL2Y/",
+        "https://vt.tiktok.com/ZS2vJqL2Y",
     ],
 )
 def test_short_pipeline(url: str) -> None:
@@ -74,6 +76,9 @@ def test_long_pipeline(url: str) -> None:
         "https://tiktok.com/",
         "https://tiktok.com/@user",
         "https://tiktok.com/discover",
+        # vt.tiktok.com short-link redirect requires a code, same as youtu.be
+        "https://vt.tiktok.com/",
+        "https://vt.tiktok.com",
         # Other platforms
         "https://twitter.com/x/status/123",
         "https://example.com/video",
@@ -102,6 +107,11 @@ def test_youtube_shorts_requires_id() -> None:
 def test_tiktok_requires_at_and_video() -> None:
     assert detect_pipeline("https://tiktok.com/@user/foo/123") == "rejected"
     assert detect_pipeline("https://tiktok.com/video/123") == "rejected"
+
+
+def test_vt_tiktok_requires_code() -> None:
+    assert detect_pipeline("https://vt.tiktok.com/") == "rejected"
+    assert detect_pipeline("https://vt.tiktok.com") == "rejected"
 
 
 def test_non_string_inputs() -> None:

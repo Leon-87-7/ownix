@@ -75,9 +75,7 @@ async def get_job_stats(
             (chat_id,),
         )
         rows2 = await cur2.fetchall()
-        by_content_type: dict[str, int] = {
-            row["content_type"]: row["cnt"] for row in rows2
-        }
+        by_content_type: dict[str, int] = {row["content_type"]: row["cnt"] for row in rows2}
 
     return {
         "total": total,
@@ -104,9 +102,7 @@ async def retry_recovery_pending(
 ) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.retry_pending(
-            chat_id, body.content_type if body else None
-        )
+        return await job_recovery.retry_pending(chat_id, body.content_type if body else None)
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
@@ -117,9 +113,7 @@ async def retry_recovery_error(
 ) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.retry_error(
-            chat_id, body.content_type if body else None
-        )
+        return await job_recovery.retry_error(chat_id, body.content_type if body else None)
     except ValueError as exc:
         raise _recovery_error(exc) from exc
 
@@ -130,12 +124,9 @@ async def clear_recovery_failed(
 ) -> dict[str, int]:
     chat_id: int = request.state.user["id"]
     try:
-        return await job_recovery.clear_failed(
-            chat_id, body.content_type if body else None
-        )
+        return await job_recovery.clear_failed(chat_id, body.content_type if body else None)
     except ValueError as exc:
         raise _recovery_error(exc) from exc
-
 
 
 class JobCreateRequest(BaseModel):
@@ -149,15 +140,11 @@ async def create_job(request: Request, body: JobCreateRequest) -> dict:
     """Create a dashboard-submitted job using the shared Telegram ingest core."""
     chat_id: int = request.state.user["id"]
     url = body.url.strip()
-    pipeline = detect_pipeline(
-        url, frozenset(await database.list_allowed_domains(chat_id))
-    )
+    pipeline = detect_pipeline(url, frozenset(await database.list_allowed_domains(chat_id)))
     if pipeline == "rejected":
         raise HTTPException(status_code=422, detail="Unsupported URL")
     if pipeline == "document":
-        raise HTTPException(
-            status_code=422, detail="Document URLs belong in the Doc Parser"
-        )
+        raise HTTPException(status_code=422, detail="Document URLs belong in the Doc Parser")
     if pipeline not in {"short", "long", "article", "repo"}:
         raise HTTPException(status_code=422, detail="Unsupported URL")
 
@@ -190,6 +177,7 @@ async def create_job(request: Request, body: JobCreateRequest) -> dict:
         "status": job.get("status", "pending"),
         "title": job.get("title"),
     }
+
 
 # ---------------------------------------------------------------------------
 # GET /api/jobs
@@ -227,6 +215,7 @@ def _stored_thumbnail_url(job_id: str) -> str:
 
 def is_persistable_short_platform(url: str) -> bool:
     host = (urlparse(url.strip()).hostname or "").lower().removeprefix("www.")
+    # host.endswith("tiktok.com") already matches vt.tiktok.com as a suffix.
     return host.endswith("instagram.com") or host.endswith("tiktok.com")
 
 
@@ -299,9 +288,7 @@ async def list_jobs(
     where, params = _job_scope_where(chat_id, content_type, status)
 
     async with database.connection() as conn:
-        cur_total = await conn.execute(
-            f"SELECT COUNT(*) FROM jobs WHERE {where}", params
-        )
+        cur_total = await conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", params)
         row_total = await cur_total.fetchone()
         total: int = row_total[0] if row_total else 0
 
@@ -327,9 +314,7 @@ async def list_jobs(
     items = []
     for row in rows:
         item = dict(row)
-        item["thumbnail_url"], item["thumbnail_kind"] = await resolve_thumbnail(
-            item, stored_ids
-        )
+        item["thumbnail_url"], item["thumbnail_kind"] = await resolve_thumbnail(item, stored_ids)
         items.append(item)
 
     return {
@@ -520,9 +505,7 @@ async def get_job_thumbnail(job_id: str, request: Request) -> Response:
     # Never echo back a non-image content type, even for rows stored before the
     # save-time allowlist existed — keeps the browser from sniffing active content.
     mime = (
-        thumbnail["mime"]
-        if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES
-        else "image/jpeg"
+        thumbnail["mime"] if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES else "image/jpeg"
     )
     return Response(content=thumbnail["bytes"], media_type=mime)
 

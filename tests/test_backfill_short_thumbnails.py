@@ -127,6 +127,17 @@ async def test_backfill_platform_null_eligibility_by_url(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_backfill_vt_tiktok_short_link_eligible(monkeypatch) -> None:
+    _patch_db(monkeypatch, [_job("job1", "https://vt.tiktok.com/ZS2vJqL2Y/")])
+    monkeypatch.setattr(backfill.frames, "fetch_frames", AsyncMock(return_value={"frames": [_frame()]}))
+
+    summary = await backfill.backfill()
+
+    assert summary.eligible == 1
+    assert summary.updated == 1
+
+
+@pytest.mark.asyncio
 async def test_backfill_already_present_skips_without_attempting(monkeypatch) -> None:
     _calls, _get_thumbnail_job_ids, save_thumbnail = _patch_db(
         monkeypatch,

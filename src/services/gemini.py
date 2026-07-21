@@ -90,6 +90,7 @@ _UI_CHROME_PATTERNS = [
 _HANDLE_PLATFORMS = {
     "instagram.com": "instagram",
     "tiktok.com": "tiktok",
+    "vt.tiktok.com": "tiktok",
     "twitter.com": "twitter",
     "x.com": "x",
     "youtube.com": "youtube",
@@ -151,7 +152,9 @@ def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict |
     from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS))
+    client = genai.Client(
+        api_key=api_key, http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS)
+    )
     if schema is not None:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -190,8 +193,10 @@ async def generate(
 ) -> str:
     """Text generation: free→paid fallback. Raises GeminiUnavailableError on total failure."""
     response = await _call_with_fallback(
-        _call_sync, prompt,
-        model=model, schema=schema,
+        _call_sync,
+        prompt,
+        model=model,
+        schema=schema,
         log_ok="gemini.generate_ok",
         log_fail="gemini.generate_key_failed",
     )
@@ -211,7 +216,8 @@ async def call_gemini_vision(frames: list[dict]) -> dict:
         for f in frames
     ]
     response = await _call_with_fallback(
-        _call_sync, parts,
+        _call_sync,
+        parts,
         model="gemini-2.5-flash",
         log_ok="gemini.vision_ok",
         log_fail="gemini.vision_key_failed",
@@ -238,7 +244,8 @@ async def call_gemini_photo_links(
         parts.append(f"User caption context: {caption}")
 
     response = await _call_with_fallback(
-        _call_sync, parts,
+        _call_sync,
+        parts,
         model="gemini-2.5-flash",
         log_ok="gemini.photo_ok",
         log_fail="gemini.photo_key_failed",
@@ -247,7 +254,9 @@ async def call_gemini_photo_links(
     raw_links = data.get("links", []) or []
     grounded = _filter_grounded_links(raw_links, data.get("summary", ""))
     data["links"] = grounded
-    log.info("gemini.photo_links_filtered", kept=len(grounded), dropped=len(raw_links) - len(grounded))
+    log.info(
+        "gemini.photo_links_filtered", kept=len(grounded), dropped=len(raw_links) - len(grounded)
+    )
     return data
 
 
@@ -261,7 +270,7 @@ async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
         f"Well-known products (open-source libs, SaaS, frameworks, APIs) → canonical URL.\n"
         f"Stock tickers → https://finance.yahoo.com/quote/TICKER.\n"
         f"Concepts (HTTP Request, API Documentation, Curl Command) → null.\n"
-        f"Return ONLY JSON array: [{{\"name\": \"...\", \"url\": \"https://...\" or null}}]\n\n"
+        f'Return ONLY JSON array: [{{"name": "...", "url": "https://..." or null}}]\n\n'
         f"Items:\n{lines}"
     )
     try:

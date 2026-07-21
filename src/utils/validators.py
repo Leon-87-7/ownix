@@ -96,6 +96,7 @@ def detect_pipeline(
         - youtube.com/shorts/{id}
         - instagram.com/reel/{id}
         - tiktok.com/@{user}/video/{id}
+        - vt.tiktok.com/{code} (TikTok's short-link redirect domain)
 
     Long pipeline:
         - youtube.com/watch?v={id}
@@ -143,7 +144,8 @@ def detect_pipeline(
 
 
 def _match_short(host: str, path: str) -> bool:
-    """YouTube Shorts, Instagram Reels (NOT /p/ carousels), TikTok user videos."""
+    """YouTube Shorts, Instagram Reels (NOT /p/ carousels), TikTok user videos
+    or short-link redirects (vt.tiktok.com)."""
     if (
         _host_matches(host, "youtube.com")
         and path.startswith("/shorts/")
@@ -152,7 +154,11 @@ def _match_short(host: str, path: str) -> bool:
         return True
     if _host_matches(host, "instagram.com") and path.startswith("/reel/"):
         return True
-    return bool(_host_matches(host, "tiktok.com") and _TIKTOK_VIDEO_PATH.match(path))
+    if _host_matches(host, "tiktok.com") and _TIKTOK_VIDEO_PATH.match(path):
+        return True
+    # vt.tiktok.com links carry an opaque redirect code, not /@user/video/id —
+    # same shape as youtu.be, so the same "non-empty path" check applies.
+    return _host_matches(host, "vt.tiktok.com") and len(path) > 1
 
 
 def _match_long(host: str, path: str, query: str) -> bool:
