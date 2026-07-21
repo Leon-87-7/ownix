@@ -60,8 +60,13 @@ def _validate_public_http_url(url: str):
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return "URL must be http(s) with a host"
     try:
-        infos = socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)
-    except socket.gaierror:
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(3.0)
+        try:
+            infos = socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)
+        finally:
+            socket.setdefaulttimeout(old_timeout)
+    except (socket.gaierror, socket.timeout):
         return "URL host could not be resolved"
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
@@ -84,10 +89,12 @@ def _validate_request_url():
 
 def _bounded_float(name: str, default: float, minimum: float, maximum: float):
     raw = request.args.get(name, default)
+    if isinstance(raw, str) and raw.strip().lower() in ("nan", "+nan", "-nan"):
+        raise ValueError(f"{name} must be a number")
     try:
         value = float(raw)
     except (TypeError, ValueError):
-        raise ValueError(f"{name} must be a number")
+        raise ValueError(f"{name} must be a number") from None
     if not minimum <= value <= maximum:
         raise ValueError(f"{name} must be between {minimum} and {maximum}")
     return value
@@ -98,7 +105,7 @@ def _bounded_int(name: str, default: int, minimum: int, maximum: int):
     try:
         value = int(raw)
     except (TypeError, ValueError):
-        raise ValueError(f"{name} must be an integer")
+        raise ValueError(f"{name} must be an integer") from None
     if not minimum <= value <= maximum:
         raise ValueError(f"{name} must be between {minimum} and {maximum}")
     return value
@@ -270,7 +277,7 @@ def get_transcript():
     url, error_response = _validate_request_url()
     if error_response:
         body, status = error_response
-        return jsonify([body.get_json()["error"] if False else {"error": body.get_json()["error"]}]), status
+        return jsonify([body.get_json()]), status
 
     # YouTube path: try YouTubeTranscriptApi first, fall back to yt-dlp subtitles
     video_id = extract_video_id(url)

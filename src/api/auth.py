@@ -7,7 +7,7 @@ import random
 import re
 import time
 
-from fastapi import APIRouter, Form, HTTPException, Request, Response
+from fastapi import APIRouter, Form, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -137,7 +137,7 @@ async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
 
 
 @auth_router.get("/handoff", response_class=HTMLResponse)
-async def handoff_login(token: str, job_id: str) -> HTMLResponse:
+async def handoff_login(token: str = Query(..., max_length=512), job_id: str = Query(...)) -> HTMLResponse:
     """Render a same-origin POST confirmation for Telegram dashboard handoff links."""
     if not _JOB_ID_RE.fullmatch(job_id):
         raise HTTPException(status_code=400, detail="Invalid job_id")
@@ -153,7 +153,9 @@ async def handoff_login(token: str, job_id: str) -> HTMLResponse:
 
 
 @auth_router.post("/handoff")
-async def redeem_handoff_login(token: str = Form(...), job_id: str = Form(...)) -> RedirectResponse:
+async def redeem_handoff_login(
+    token: str = Form(..., max_length=512), job_id: str = Form(...)
+) -> RedirectResponse:
     """Redeem a job-link handoff token and land the user straight on their job page."""
     if not _JOB_ID_RE.fullmatch(job_id):
         raise HTTPException(status_code=400, detail="Invalid job_id")

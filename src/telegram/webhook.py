@@ -71,14 +71,15 @@ async def _get_callback_owned_job(ctx: CallbackCtx, job_id: str | None = None) -
     return job
 
 
-def _validate_public_https_url(url: str) -> str | None:
+async def _validate_public_https_url(url: str) -> str | None:
     if len(url) > _MAX_DOWNLOAD_MD_URL_LENGTH:
         return "URL is too long."
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         return "URL must be https with a host."
     try:
-        infos = socket.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)
     except socket.gaierror:
         return "URL host could not be resolved."
     for info in infos:
@@ -875,7 +876,7 @@ async def _cmd_download_md(ctx: SlashCtx) -> None:
         await send_message(ctx.chat_id, "Usage: /download_md <URL>")
         return
     url = ctx.parts[1]
-    validation_error = _validate_public_https_url(url)
+    validation_error = await _validate_public_https_url(url)
     if validation_error:
         await send_message(ctx.chat_id, f"❌ {validation_error}")
         return
