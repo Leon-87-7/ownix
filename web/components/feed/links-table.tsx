@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
-import OwnixLogo from '@/app/ownix-logo.svg';
 import { PlatformGlyph } from '@/components/ui/platform-icon';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TagMark, TagMenu } from '@/components/ui/tag-picker';
+import PreviewMotif from '@/components/ui/preview-motif';
 import { useLinkTags } from '@/lib/hooks/useLinkTags';
 import {
   LINKS_PAGE_SIZES,
@@ -60,51 +60,27 @@ function formatDateCompact(value: string): string {
   return `${dd}/${mm}/${yy}`;
 }
 
-function LinkPreviewMotif({ label, className }: { label: string; className: string }) {
+
+function LinkPreviewUnavailable({
+  className,
+}: {
+  className: string;
+}) {
   return (
-    <div
-      role="status"
-      aria-label={label}
-      className={`flex items-center justify-center ${className}`}
-    >
-      <div className="relative h-44 w-44 max-h-full max-w-full">
-        <OwnixLogo
-          aria-hidden="true"
-          focusable="false"
-          className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 text-ink"
-        />
-        <svg
-          viewBox="0 0 176 176"
-          aria-hidden="true"
-          className="absolute inset-0 h-full w-full origin-center motion-safe:animate-[spin_14s_linear_infinite] motion-reduce:animate-none"
-        >
-          <defs>
-            <path
-              id="links-preview-state-ring"
-              d="M 88,88 m -66,0 a 66,66 0 1,1 132,0 a 66,66 0 1,1 -132,0"
-            />
-          </defs>
-          <text className="fill-muted font-mono text-[10px] font-medium tracking-[0.18em]">
-            <textPath
-              href="#links-preview-state-ring"
-              startOffset="0"
-              textLength="408"
-              lengthAdjust="spacing"
-            >
-              ◉ {label} ◉ {label}
-            </textPath>
-          </text>
-        </svg>
-      </div>
-    </div>
+    <PreviewMotif
+      label="NO PREVIEW"
+      className={`${className} bg-canvas px-3`}
+    />
   );
 }
 
-function LinkPreviewUnavailable({ className }: { className: string }) {
-  return <LinkPreviewMotif label="NO PREVIEW" className={`${className} bg-canvas px-3`} />;
-}
-
-function OgPreviewImage({ src, className }: { src: string | null; className: string }) {
+function OgPreviewImage({
+  src,
+  className,
+}: {
+  src: string | null;
+  className: string;
+}) {
   const [failed, setFailed] = useState(false);
 
   if (!src) return null;
@@ -150,7 +126,8 @@ function LinkDetails({
   const href = safeUrl(link.url);
   const { preview, previewState, selectedLinkId } = linksData;
   const previewResolved =
-    selectedLinkId === link.id && (previewState === 'ready' || previewState === 'error');
+    selectedLinkId === link.id &&
+    (previewState === 'ready' || previewState === 'error');
   const ogImageUrl =
     preview?.id === link.id && previewState === 'ready'
       ? preview.og_image_url
@@ -166,8 +143,9 @@ function LinkDetails({
             : 'max-w-[40ch] truncate sm:max-w-[60ch]'
         }`}
       >
-        {expanded && previewResolved && (
-          ogImageUrl ? (
+        {expanded &&
+          previewResolved &&
+          (ogImageUrl ? (
             <OgPreviewImage
               key={ogImageUrl}
               src={linkPreviewImageUrl(link.id)}
@@ -175,8 +153,7 @@ function LinkDetails({
             />
           ) : (
             <LinkPreviewUnavailable className="mb-2 h-32 w-full rounded-md border border-line" />
-          )
-        )}
+          ))}
         {expanded &&
           (href ? (
             <a
@@ -212,20 +189,35 @@ function LinkDetails({
 }
 
 function LinkTagCluster({ link }: { link: LinkRow }) {
-  const { linkTags, allTags, toggleTag, createTag } = useLinkTags(link.id, link.tags ?? []);
+  const { linkTags, allTags, toggleTag, createTag } = useLinkTags(
+    link.id,
+    link.tags ?? [],
+  );
   const trigger = (
     <button
       type="button"
-      aria-label={linkTags.length ? `Edit ${linkTags.length} link tags` : 'Add link tag'}
+      aria-label={
+        linkTags.length
+          ? `Edit ${linkTags.length} link tags`
+          : 'Add link tag'
+      }
       className="inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded border border-line px-1.5 text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       {linkTags.length === 0 ? (
         <span className="text-sm leading-none opacity-70">+</span>
       ) : (
         linkTags.slice(0, 4).map((tag) => (
-          <Tooltip key={tag.id} content={[tag.name, tag.meaning].filter(Boolean).join(' — ')}>
+          <Tooltip
+            key={tag.id}
+            content={[tag.name, tag.meaning]
+              .filter(Boolean)
+              .join(' — ')}
+          >
             <span className="inline-flex h-4 w-4 items-center justify-center">
-              <TagMark tag={tag} className="h-3 w-3" />
+              <TagMark
+                tag={tag}
+                className="h-3 w-3"
+              />
             </span>
           </Tooltip>
         ))
@@ -254,8 +246,15 @@ function LinkUrl({ link }: { link: LinkRow }) {
   if (!href) {
     return (
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <PlatformGlyph url={link.url} size={16} className="shrink-0 text-muted" />
-        <span className="min-w-0 truncate font-mono text-xs text-muted" title={link.url}>
+        <PlatformGlyph
+          url={link.url}
+          size={16}
+          className="shrink-0 text-muted"
+        />
+        <span
+          className="min-w-0 truncate font-mono text-xs text-muted"
+          title={link.url}
+        >
           {display}
         </span>
       </span>
@@ -263,14 +262,21 @@ function LinkUrl({ link }: { link: LinkRow }) {
   }
   return (
     <span className="flex min-w-0 flex-1 items-center gap-2">
-      <Tooltip content={link.url} mono>
+      <Tooltip
+        content={link.url}
+        mono
+      >
         <a
           href={href}
           target="_blank"
           rel="noopener noreferrer"
           className="flex min-w-0 items-center gap-2 font-mono text-xs text-ink transition-ui hover:text-signal hover:underline"
         >
-          <PlatformGlyph url={link.url} size={16} className="shrink-0 text-muted" />
+          <PlatformGlyph
+            url={link.url}
+            size={16}
+            className="shrink-0 text-muted"
+          />
           <span className="min-w-0 truncate">{display}</span>
         </a>
       </Tooltip>
@@ -281,7 +287,10 @@ function LinkUrl({ link }: { link: LinkRow }) {
         aria-label={`Open ${link.url} in a new tab`}
         className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-signal focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
-        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        <ExternalLink
+          className="h-3.5 w-3.5"
+          aria-hidden="true"
+        />
       </a>
     </span>
   );
@@ -305,7 +314,8 @@ function TableCard({
         <LinkTagCluster link={link} />
       </div>
       <div className="mt-2 font-mono text-[11px] tabular-nums text-muted">
-        Last seen {formatDateCompact(link.last_seen ?? link.first_seen)}
+        Last seen{' '}
+        {formatDateCompact(link.last_seen ?? link.first_seen)}
       </div>
       <div className="mt-2">
         <LinkDetails
@@ -332,7 +342,7 @@ function linksCountLabel(
 function LinkPreviewEmptyState() {
   return (
     <aside className="flex min-h-[320px] min-w-0 flex-1 items-center justify-center rounded-xl border border-line bg-surface p-4 sm:max-h-[70vh]">
-      <LinkPreviewMotif
+      <PreviewMotif
         label="SELECT A ROW"
         className="h-44 w-44"
       />
@@ -340,11 +350,7 @@ function LinkPreviewEmptyState() {
   );
 }
 
-function SortIcon({
-  order,
-}: {
-  order: LinksOrder;
-}) {
+function SortIcon({ order }: { order: LinksOrder }) {
   const Icon = order === 'desc' ? ArrowDown : ArrowUp;
   return (
     <Icon
@@ -413,24 +419,34 @@ export function LinksSearchBar({
 /** Desktop-only preview panel beside the table: the selected row's (hover or
  * ↑/↓) og:image + row metadata — this is what replaced the per-row More
  * button on desktop (task 397). */
-function LinkPreviewPanel({ linksData }: { linksData: UseLinksTableResult }) {
+function LinkPreviewPanel({
+  linksData,
+}: {
+  linksData: UseLinksTableResult;
+}) {
   const { data, selectedLinkId, preview, previewState } = linksData;
-  const link = data.items.find((item) => item.id === selectedLinkId) ?? null;
+  const link =
+    data.items.find((item) => item.id === selectedLinkId) ?? null;
 
   if (!link) {
     return <LinkPreviewEmptyState />;
   }
 
   const href = safeUrl(link.url);
-  const description = [link.title, link.description].filter(Boolean).join(' · ');
+  const description = [link.title, link.description]
+    .filter(Boolean)
+    .join(' · ');
   const ogImageUrl =
-    previewState === 'ready' && preview?.id === link.id ? preview.og_image_url : null;
-  const previewResolved = previewState === 'ready' || previewState === 'error';
+    previewState === 'ready' && preview?.id === link.id
+      ? preview.og_image_url
+      : null;
+  const previewResolved =
+    previewState === 'ready' || previewState === 'error';
 
   return (
     <aside className="max-h-[70vh] min-w-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-line bg-surface p-4">
-      {previewResolved && (
-        ogImageUrl ? (
+      {previewResolved &&
+        (ogImageUrl ? (
           <OgPreviewImage
             key={ogImageUrl}
             src={linkPreviewImageUrl(link.id)}
@@ -438,13 +454,16 @@ function LinkPreviewPanel({ linksData }: { linksData: UseLinksTableResult }) {
           />
         ) : (
           <LinkPreviewUnavailable className="aspect-video w-full rounded-lg border border-line" />
-        )
-      )}
+        ))}
       {previewState === 'loading' && preview?.id !== link.id && (
         <div className="aspect-video w-full animate-pulse rounded-lg border border-line bg-canvas" />
       )}
       <div className="flex min-w-0 items-center gap-2">
-        <PlatformGlyph url={link.url} size={16} className="shrink-0 text-muted" />
+        <PlatformGlyph
+          url={link.url}
+          size={16}
+          className="shrink-0 text-muted"
+        />
         {href ? (
           <a
             href={href}
@@ -460,14 +479,26 @@ function LinkPreviewPanel({ linksData }: { linksData: UseLinksTableResult }) {
           </span>
         )}
       </div>
-      {description && <p className="text-sm text-body">{description}</p>}
-      {link.topic && <p className="text-xs text-muted">From: {link.topic}</p>}
+      {description && (
+        <p className="text-sm text-body">{description}</p>
+      )}
+      {link.topic && (
+        <p className="text-xs text-muted">From: {link.topic}</p>
+      )}
       {link.tags && link.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {link.tags.map((tag) => (
-            <Tooltip key={tag.id} content={[tag.name, tag.meaning].filter(Boolean).join(' — ')}>
+            <Tooltip
+              key={tag.id}
+              content={[tag.name, tag.meaning]
+                .filter(Boolean)
+                .join(' — ')}
+            >
               <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] text-body">
-                <TagMark tag={tag} className="h-3 w-3" />
+                <TagMark
+                  tag={tag}
+                  className="h-3 w-3"
+                />
                 {tag.name}
               </span>
             </Tooltip>
@@ -509,7 +540,9 @@ export function LinksTable({
     selectAdjacent,
   } = linksData;
   const pending = state === 'loading' || state === 'idle';
-  const [expandedLinkId, setExpandedLinkId] = useState<string | null>(null);
+  const [expandedLinkId, setExpandedLinkId] = useState<string | null>(
+    null,
+  );
 
   const toggleMobileDetails = (linkId: string) => {
     const opening = expandedLinkId !== linkId;
@@ -547,9 +580,7 @@ export function LinksTable({
           </span>
         </div>
         <p className="font-mono text-xs tabular-nums text-muted">
-          {pending
-            ? 'Loading…'
-            : `${start}-${end} of ${data.total}`}
+          {pending ? 'Loading…' : `${start}-${end} of ${data.total}`}
         </p>
       </div>
 
@@ -589,7 +620,11 @@ export function LinksTable({
                 <tr>
                   <th
                     scope="col"
-                    aria-sort={view.order === 'asc' ? 'ascending' : 'descending'}
+                    aria-sort={
+                      view.order === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                    }
                     className="px-4 py-3 font-medium"
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -602,8 +637,7 @@ export function LinksTable({
                         onClick={toggleOrder}
                         className="inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-right transition-ui hover:bg-surface hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:text-muted disabled:opacity-50"
                       >
-                        Last seen{' '}
-                        <SortIcon order={view.order} />
+                        Last seen <SortIcon order={view.order} />
                       </button>
                     </div>
                   </th>
@@ -630,10 +664,15 @@ export function LinksTable({
                   data.items.map((link, index) => (
                     <tr
                       key={link.url}
-                      ref={link.id === selectedLinkId ? selectedRowRef : undefined}
+                      ref={
+                        link.id === selectedLinkId
+                          ? selectedRowRef
+                          : undefined
+                      }
                       aria-selected={link.id === selectedLinkId}
                       tabIndex={
-                        link.id === selectedLinkId || (!selectedLinkId && index === 0)
+                        link.id === selectedLinkId ||
+                        (!selectedLinkId && index === 0)
                           ? 0
                           : -1
                       }
@@ -642,7 +681,8 @@ export function LinksTable({
                       onMouseEnter={() => hoverLink(link.id)}
                       onMouseLeave={cancelHover}
                       onKeyDown={(event) => {
-                        if (event.currentTarget !== event.target) return;
+                        if (event.currentTarget !== event.target)
+                          return;
                         if (event.key === 'ArrowDown') {
                           event.preventDefault();
                           moveSelection(1);
@@ -662,7 +702,9 @@ export function LinksTable({
                             <LinkTagCluster link={link} />
                           </div>
                           <span className="font-mono text-[11px] tabular-nums text-muted">
-                            {formatDateCompact(link.last_seen ?? link.first_seen)}
+                            {formatDateCompact(
+                              link.last_seen ?? link.first_seen,
+                            )}
                           </span>
                         </div>
                       </td>
