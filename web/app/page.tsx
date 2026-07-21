@@ -8,10 +8,16 @@ import { HeroGradient } from '@/components/landing/hero-gradient';
 import { AppSlot } from '@/components/landing/app-slot';
 import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
+import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
+import { TelegramIcon } from '@/components/svg/telegram-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
-import { ChevronsRight, MessageSquareQuote } from 'lucide-react';
+import {
+  ChevronsRight,
+  MessageSquareQuote,
+  Share,
+} from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -42,17 +48,17 @@ const linkClasses =
   'inline-block transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface [@media(pointer:coarse)]:py-3';
 
 const indexBadges = [
-  ['SHORT · REELS · TIKTOK', 'text-type-short'],
+  ['SHORT ◉ REELS ◉ TIKTOK', 'text-type-short'],
   ['LONG VIDEO', 'text-type-long'],
-  ['ARTICLE · PDF', 'text-type-article'],
+  ['ARTICLE ◉ PDF', 'text-type-article'],
   ['REPO', 'text-type-repo'],
 ];
 
 const tiles: [string, number][] = [
-  ['Items indexed', 260],
-  ['Links extracted', 623],
-  ['Videos transcribed', 207],
-  ['Repos collected', 35],
+  ['Items indexed', 318],
+  ['Links extracted', 727],
+  ['Videos transcribed', 259],
+  ['Repos collected', 38],
 ];
 
 export default function LandingPage() {
@@ -174,11 +180,11 @@ export default function LandingPage() {
               />
               <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
                 <span className="font-mono text-xs text-body">
-                  11:32 shared ·{' '}
+                  11:32 shared ◉{' '}
                   <b className="font-medium text-status-done">
                     11:32 reel analysis ready
                   </b>{' '}
-                  · 11:33 landed in Dashboard
+                  ◉ 11:33 landed in Dashboard
                 </span>
               </div>
             </div>
@@ -358,7 +364,7 @@ export default function LandingPage() {
                   markdown.
                 </p>
                 <p className="mt-3 font-mono text-[11px] text-muted">
-                  short · long · article · repo
+                  short ◉ long ◉ article ◉ repo
                 </p>
               </div>
 
@@ -368,13 +374,13 @@ export default function LandingPage() {
                     FEED
                   </span>
                   <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
-                    Your Index, browsable
+                    Your personal search-engine
                   </h3>
                   <p className="text-pretty text-[14px] leading-relaxed text-body">
                     Every item lands in your Feed. Filter by type,
-                    search by title or topic, open anything to grab
-                    its full transcript or copy a segment straight
-                    into your AI.
+                    search by title or tag, open anything to grab its
+                    full transcript or copy a segment straight into
+                    your AI.
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
@@ -391,7 +397,7 @@ export default function LandingPage() {
                     for your AI.
                   </p>
                   <p className="mt-2 font-mono text-[11px] text-muted">
-                    pdf today · word / spreadsheet / presentation /
+                    pdf today ◉ word / spreadsheet / presentation /
                     image - soon
                   </p>
                 </div>
@@ -399,8 +405,9 @@ export default function LandingPage() {
             </div>
           </div>
         </section>
-        <div className="flex mx-auto max-w-[960px] gap-3 border-t border-line p-6">
-          <MessageSquareQuote className="my-auto h-4 w-6 shrink-0" />
+
+        <div className="mx-auto flex max-w-[960px] items-center justify-center gap-3 border-t border-line p-6">
+          <MessageSquareQuote className="h-4 w-6 shrink-0" />
           <p className="text-pretty text-[13px] text-muted leading-normal">
             A shared Brain is growing quietly underneath all of this -
             early members shape it.
@@ -445,13 +452,21 @@ export default function LandingPage() {
             </div>
 
             <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              Browse by thumbnail, search by title or topic, and pull
-              up every link a video ever mentioned - the course, the
-              repo, the tool - long after the video itself scrolled
-              away.
+              As I was building Ownix I once needed a frontend
+              component library I&apos;d seen weeks earlier -
+              couldn&apos;t remember its name, just a glimpse of the
+              homepage. Searched my Index instead of my memory, and
+              there it was in the link table.
             </p>
 
-            <div className="flex max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
+            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+              Don&apos;t remember the title either? Search by tag,
+              thumbnail, or whatever you do remember, and pull up
+              every link a video ever mentioned - long after it
+              scrolled away.
+            </p>
+
+            <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
               <GoogleDriveIcon className="my-auto h-[18px] w-[18px] shrink-0" />
               <p className="text-pretty text-sm leading-normal">
                 Everything also lands in your Google Drive as
@@ -469,7 +484,7 @@ export default function LandingPage() {
         <section
           id="invite"
           aria-labelledby="h-invite"
-          className="border-t border-line py-16 md:py-20"
+          className="border-t border-line py-10 md:py-14"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <div className="rounded-lg border border-line bg-surface p-8">
@@ -487,10 +502,44 @@ export default function LandingPage() {
                 becomes.
               </p>
               <TelegramLoginWidget align="start" />
-              <p className="text-pretty mt-3 font-mono text-xs text-muted">
-                no password · the bot collects your email · approval
+              <p className="text-pretty font-mono text-xs text-muted">
+                no password ◉ the bot collects your email ◉ approval
                 within hours.
               </p>
+              {/* <p className="text-pretty mt-3 font-mono text-xs text-muted">
+                Your internet, Own it, Reuse it, Find it, even from a
+                glimpse.
+              </p> */}
+
+              <div className="mt-8 border-t border-line pt-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex shrink-0 items-center gap-1 text-muted">
+                    <Share
+                      aria-hidden="true"
+                      className="h-4 w-4 shrink-0 "
+                    />
+                    <span className="block shrink-0 font-mono text-lg font-medium tracking-[0.4px] text-muted">
+                      FROM
+                    </span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <WordmarkMarquee />
+                  </div>
+                  <ChevronsRight
+                    aria-hidden="true"
+                    className="shrink-0 text-muted"
+                  />
+                  <TelegramIcon
+                    aria-hidden="true"
+                    className="h-6 w-6 shrink-0"
+                  />
+                </div>
+                <span className="sr-only">
+                  Share from Instagram, YouTube, TikTok, GitHub, or
+                  articles to Telegram, and it lands transcribed and
+                  searchable in your Index.
+                </span>
+              </div>
             </div>
           </div>
         </section>

@@ -137,14 +137,17 @@
    Reduced motion (global block) freezes to a single chevron per side via the
    c2/c3 base opacity. */
 @keyframes chev-step-2 {
+
   0%,
   20% {
     opacity: 0;
   }
+
   28%,
   72% {
     opacity: 1;
   }
+
   80%,
   100% {
     opacity: 0;
@@ -152,14 +155,17 @@
 }
 
 @keyframes chev-step-3 {
+
   0%,
   40% {
     opacity: 0;
   }
+
   44%,
   56% {
     opacity: 1;
   }
+
   60%,
   100% {
     opacity: 0;
@@ -217,24 +223,76 @@
 }
 
 @keyframes tooltip-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes tooltip-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes wordmark-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes ownix-logo-cycle {
-  0% { color: #a57534; }      /* signal-deep */
-  14.28% { color: #d99a45; }  /* signal */
-  28.57% { color: #efb566; }  /* signal-bright */
-  42.85% { color: #c6c1b8; }  /* body */
-  57.14% { color: #9ec9ff; }  /* contrasignal-bright */
-  71.42% { color: #94e6ee; }  /* contrasignal */
-  85.71% { color: #649ca1; }  /* contrasignal-deep */
-  100% { color: #a57534; }    /* loop back to signal-deep */
+  0% {
+    color: #a57534;
+  }
+
+  /* signal-deep */
+  14.28% {
+    color: #d99a45;
+  }
+
+  /* signal */
+  28.57% {
+    color: #efb566;
+  }
+
+  /* signal-bright */
+  42.85% {
+    color: #c6c1b8;
+  }
+
+  /* body */
+  57.14% {
+    color: #9ec9ff;
+  }
+
+  /* contrasignal-bright */
+  71.42% {
+    color: #94e6ee;
+  }
+
+  /* contrasignal */
+  85.71% {
+    color: #649ca1;
+  }
+
+  /* contrasignal-deep */
+  100% {
+    color: #a57534;
+  }
+
+  /* loop back to signal-deep */
 }
 
 /* Sidebar brand reveal — fires only when the nav drawer opens (a state change,
@@ -244,13 +302,27 @@
    scale/opacity transitions take over cleanly. */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes sidebar-mark-in {
-    from { opacity: 0; transform: scale(0.82); }
-    to   { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.82);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   @keyframes sidebar-word-in {
-    from { opacity: 0; transform: translateX(-8px); }
-    to   { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .sidebar-mark-in {
