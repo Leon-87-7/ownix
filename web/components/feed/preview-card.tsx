@@ -34,10 +34,12 @@ function Thumbnail({
 }) {
   const [failed, setFailed] = useState(false);
   const display = job.title?.trim() || job.url;
+  // compact = Short grid: force 9:16 regardless of thumbnail_kind so a short
+  // with a failed/missing OG fetch can't break the uniform portrait wall.
   const aspectClass =
     variant === "bento"
       ? "aspect-video sm:aspect-auto sm:h-full"
-      : job.thumbnail_kind === "portrait"
+      : variant === "compact" || job.thumbnail_kind === "portrait"
         ? "aspect-[9/16]"
         : "aspect-video";
   const showImage = Boolean(job.thumbnail_url) && !failed;

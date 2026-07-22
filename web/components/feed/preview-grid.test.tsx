@@ -70,4 +70,12 @@ describe("PreviewGrid", () => {
     const card = cardOf(/portrait short/i);
     expect(card?.innerHTML).toContain("aspect-[9/16]");
   });
+
+  it("shorts: forces 9:16 even when thumbnail_kind is missing", () => {
+    const kindless = { ...portraitJob, thumbnail_kind: null };
+    render(<PreviewGrid jobs={[kindless]} variant="shorts" />);
+    const card = cardOf(/portrait short/i);
+    expect(card?.innerHTML).toContain("aspect-[9/16]");
+    expect(card?.innerHTML).not.toContain("aspect-video");
+  });
 });
