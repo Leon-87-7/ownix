@@ -1,20 +1,20 @@
-import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
-import "./globals.css";
-import MockProvider from "@/components/shell/mock-provider";
+import type { Metadata } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
+import './globals.css';
+import MockProvider from '@/components/shell/mock-provider';
 
 // Two voices (DESIGN.md): Inter for human language, JetBrains Mono for machine facts.
 const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
 });
 
 const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-jetbrains",
-  display: "swap",
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains',
+  display: 'swap',
 });
 
 // new URL() throws on a malformed value (missing protocol, stray whitespace);
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
   // Absolute URLs for og:image etc. Vercel falls back to the deployment URL
   // when this is unset; a custom domain should set NEXT_PUBLIC_SITE_URL.
   ...(siteUrl() ? { metadataBase: siteUrl() } : {}),
-  title: "Ownix — Your internet, indexed",
+  title: 'Ownix — Your internet. Own it',
   description:
-    "Collect what matters. Own your Index. Shape the Brain.",
+    'Collect what matters. Own your Index. Shape the Brain.',
 };
 
 export default function RootLayout({
@@ -43,13 +43,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
       <body className="bg-canvas font-sans text-ink antialiased">
         <MockProvider>{children}</MockProvider>
-      {/* impeccable-live-start */}
-{process.env.NODE_ENV === 'development' && <script src="http://localhost:8400/live.js"></script>}
-{/* impeccable-live-end */}
-</body>
+        {/* impeccable-live-start */}
+        {process.env.NODE_ENV === 'development' && (
+          <script src="http://localhost:8400/live.js"></script>
+        )}
+        {/* impeccable-live-end */}
+      </body>
     </html>
   );
 }

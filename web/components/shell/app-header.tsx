@@ -27,7 +27,7 @@ export function AppHeader() {
             Ownix
           </span>
           <span className="mt-1 text-xs font-medium text-muted transition-ui group-hover:text-contrasignal-deep">
-            Your internet, indexed.
+            Your internet. Own it.
           </span>
         </Link>
         <div

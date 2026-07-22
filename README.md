@@ -1,4 +1,4 @@
-# Ownix — Your internet, indexed
+# Ownix — Your internet. Own it
 
 ![Ownix — You watched it. You liked it. You lost it.](docs/assets/og-image.png)
 
@@ -215,27 +215,27 @@ sqlite3 data/jobs.db "PRAGMA user_version;"
 
 All env vars are validated at startup by `src/config.py` (pydantic-settings). Missing required vars crash the process before the first request.
 
-| Variable                                      | Required | Description                                         |
-| --------------------------------------------- | -------- | --------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN`                          | ✅       | Bot token from @BotFather                           |
-| `TELEGRAM_WEBHOOK_SECRET`                     | ✅       | Random secret for webhook validation                |
-| `WEBHOOK_URL`                                 | ✅       | Public HTTPS base URL                               |
-| `REDIS_URL`                                   | ✅       | Redis connection string                             |
-| `DB_PATH`                                     | ✅       | SQLite file path (default: `/app/data/jobs.db`)     |
-| `GEMINI_FREE_API_KEY`                         | ✅       | Primary Gemini key                                  |
-| `GEMINI_PAID_API_KEY`                         | —        | Fallback Gemini key on rate limit                   |
-| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | ✅       | Drive + Sheets OAuth                                |
-| `GOOGLE_SHEETS_ID`                            | ✅       | Single consolidated workbook (5 tabs)               |
-| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN`        | ✅       | Drive folder IDs                                    |
-| `GOOGLE_DRIVE_FOLDER_PRD`                     | —        | PRD output folder (Mini-PRD disabled if absent)     |
-| `BRAVE_API_KEY`                               | —        | Brave Search (link verification disabled if absent) |
+| Variable                                      | Required | Description                                                               |
+| --------------------------------------------- | -------- | ------------------------------------------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`                          | ✅       | Bot token from @BotFather                                                 |
+| `TELEGRAM_WEBHOOK_SECRET`                     | ✅       | Random secret for webhook validation                                      |
+| `WEBHOOK_URL`                                 | ✅       | Public HTTPS base URL                                                     |
+| `REDIS_URL`                                   | ✅       | Redis connection string                                                   |
+| `DB_PATH`                                     | ✅       | SQLite file path (default: `/app/data/jobs.db`)                           |
+| `GEMINI_FREE_API_KEY`                         | ✅       | Primary Gemini key                                                        |
+| `GEMINI_PAID_API_KEY`                         | —        | Fallback Gemini key on rate limit                                         |
+| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | ✅       | Drive + Sheets OAuth                                                      |
+| `GOOGLE_SHEETS_ID`                            | ✅       | Single consolidated workbook (5 tabs)                                     |
+| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN`        | ✅       | Drive folder IDs                                                          |
+| `GOOGLE_DRIVE_FOLDER_PRD`                     | —        | PRD output folder (Mini-PRD disabled if absent)                           |
+| `BRAVE_API_KEY`                               | —        | Brave Search (link verification disabled if absent)                       |
 | `GITHUB_TOKEN`                                | —        | GitHub API for the repo pipeline + `/find` enrichment (higher rate limit) |
-| `JINA_API_KEY`                                | —        | Jina Reader (works without key, higher quota with)  |
-| `BRAIN_MIN_SCORE`                             | —        | Cosine similarity floor for `/find` (default: 0.5)  |
-| `PRD_MAX_TRANSCRIPT_CHARS`                    | —        | PRD transcript cap (default: 60000)                 |
-| `PRD_INTENT_COOLDOWN_SECONDS`                 | —        | Cooldown between intent PRD re-runs (default: 15)   |
-| `GOOGLE_STORAGE_BUCKET`                       | —        | GCS bucket for document pipeline (document pipeline disabled if absent) |
-| `GOOGLE_SERVICE_ACCOUNT_JSON`                 | —        | Service-account key file (GCS auth; falls back to OAuth) |
+| `JINA_API_KEY`                                | —        | Jina Reader (works without key, higher quota with)                        |
+| `BRAIN_MIN_SCORE`                             | —        | Cosine similarity floor for `/find` (default: 0.5)                        |
+| `PRD_MAX_TRANSCRIPT_CHARS`                    | —        | PRD transcript cap (default: 60000)                                       |
+| `PRD_INTENT_COOLDOWN_SECONDS`                 | —        | Cooldown between intent PRD re-runs (default: 15)                         |
+| `GOOGLE_STORAGE_BUCKET`                       | —        | GCS bucket for document pipeline (document pipeline disabled if absent)   |
+| `GOOGLE_SERVICE_ACCOUNT_JSON`                 | —        | Service-account key file (GCS auth; falls back to OAuth)                  |
 
 ---
 

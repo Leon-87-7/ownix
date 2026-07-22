@@ -1,6 +1,6 @@
 # Ownix
 
-**Your internet, indexed.**
+**Your internet. Own it.**
 
 Ownix is a quiet, premium tool for collecting the internet you care about:
 videos, links, articles, repos, documents, and ideas. Everything you save
@@ -19,6 +19,6 @@ workflows, and honest feedback.
 
 Ownix
 
-Your internet, indexed.
+Your internet. Own it.
 
 Collect what matters. Own your Index. Shape the Brain.
