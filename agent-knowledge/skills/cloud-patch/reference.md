@@ -1,9 +1,9 @@
 # Cloud Patch — prompt anatomy
 
-Extracted from `docs/cloud-patch/codex-391-395-prompt.md` (cohesive feature)
-and `docs/cloud-patch/codex-399-402-410-prompt.md` (independent batch). Read
-both once before drafting a new one. Deviate only when the batch genuinely
-doesn't fit either shape.
+Extracted from `docs/cloud-patch/codex-391-395-onboarding-hero.md` (cohesive
+feature) and `docs/cloud-patch/codex-399-402-410-security-hardening.md`
+(independent batch). Read both once before drafting a new one. Deviate only
+when the batch genuinely doesn't fit either shape.
 
 ## 1. Title + hard-stop banner
 

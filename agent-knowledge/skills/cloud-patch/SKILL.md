@@ -54,9 +54,14 @@ UI-flavored batches also want `DESIGN.md`/`PRODUCT.md`.
 
 Follow the structure and phrasing conventions in
 [reference.md](reference.md) — extracted from the two prompts already in
-`docs/cloud-patch/`. Save to `docs/cloud-patch/codex-<range>-prompt.md`
-(e.g. `codex-391-395-prompt.md`, `codex-399-402-410-prompt.md` — numbers
-ascending, no spaces).
+`docs/cloud-patch/`. Save to `docs/cloud-patch/codex-<range>-<topic>.md`:
+numbers ascending, no spaces, then a short kebab-case slug naming what the
+batch is about — not "prompt" (that's true of every file in this
+directory, so it says nothing) — e.g. `codex-415-417-addlink.md` for the
+link-pipeline batch, `codex-391-395-onboarding-hero.md` for a landing-page
+feature. Pick the slug from the batch's dominant theme: the feature name
+for a cohesive batch, or the shared category for an independent one (e.g.
+`codex-399-402-410-security-hardening.md`).
 
 ### 6. Hand it back for review
 
