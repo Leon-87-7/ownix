@@ -6,10 +6,12 @@ import { YouTubeShortsIcon } from '@/components/svg/youtube-shorts-icon';
 import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { TikTokIcon } from '@/components/svg/tiktok-icon';
 import { GitHubIcon } from '@/components/svg/github-icon';
+import { PDFIcon } from '@/components/svg/pdf-icon';
 
 const icons = [
   YouTubeIcon,
   InstagramIcon,
+  PDFIcon,
   TikTokIcon,
   YouTubeShortsIcon,
   GitHubIcon,

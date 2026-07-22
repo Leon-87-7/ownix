@@ -19,7 +19,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </h1>
           <p className="mt-3 flex gap-1 text-sm font-medium text-body">
             <span className="italic">your internet,</span>
-            <span className="font-mono">indexed.</span>
+            <span className="font-mono">own it.</span>
           </p>
           {children}
         </div>

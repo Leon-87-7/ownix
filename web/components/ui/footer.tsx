@@ -39,7 +39,7 @@ export default function Footer() {
             </span>
             <span className="text-sm leading-6">
               <span className="italic">your internet,</span>{' '}
-              <span className="font-mono">indexed.</span>
+              <span className="font-mono">own it.</span>
             </span>
           </div>
         </div>
