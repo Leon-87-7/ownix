@@ -3,20 +3,41 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { useVisualViewport } from '@/lib/hooks/useVisualViewport';
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
 
+// Vertical breathing room subtracted from the visible height when capping the
+// dialog, mirroring the 2rem (32px) horizontal inset of `w-[calc(100%-2rem)]`.
+const VIEWPORT_PADDING_Y = 32;
+
 export function DialogContent({
   children,
   className = '',
+  style,
   ...props
 }: ComponentPropsWithoutRef<typeof RadixDialog.Content>) {
+  // RadixDialog.Content is only mounted while the dialog is open, so tracking
+  // the visual viewport here follows the keyboard for the open dialog only.
+  const { centerY, height } = useVisualViewport(true);
+  // Recenter on the visible band above the software keyboard, and cap the
+  // height so a tall dialog scrolls internally instead of hiding its submit
+  // control behind the keyboard. Falls back to the CSS `top-1/2` centering
+  // (desktop, or before the API reports) when unmeasured.
+  const viewportStyle =
+    centerY != null && height != null
+      ? {
+          top: `${centerY}px`,
+          maxHeight: `${Math.max(0, height - VIEWPORT_PADDING_Y)}px`,
+        }
+      : undefined;
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
       <RadixDialog.Content
-        className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-surface p-5 shadow-overlay data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none focus:outline-none ${className}`}
+        className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-5 shadow-overlay data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none focus:outline-none ${className}`}
+        style={{ ...viewportStyle, ...style }}
         {...props}
       >
         {children}
