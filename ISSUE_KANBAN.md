@@ -105,6 +105,7 @@
 | [#416](https://github.com/Leon-87-7/ownix/issues/416) | feat(web): Add Link modal (U shortcut) | Web | #415 |
 | [#417](https://github.com/Leon-87-7/ownix/issues/417) | feat(web): Feed content-type support for link jobs | Web | #415 |
 | [#398](https://github.com/Leon-87-7/ownix/issues/398) | feat: Freestyle button on job detail — run a custom prompt against any job | Web / Jobs | — |
+| [#419](https://github.com/Leon-87-7/ownix/issues/419) | feat(web): mobile Feed intake sheet — BadgePlus launcher for the three ingests | Web / Feed | — |
 
 ---
 
@@ -518,6 +519,10 @@ Link pipeline — direct-add URLs to the Second Brain (grill 2026-07-22 — ADR-
 ├── #416 Add Link modal (U shortcut) ◄── #415
 └── #417 Feed content-type support for link jobs ◄── #415
 Critical path: #415 → {#416, #417}
+
+Mobile Feed intake sheet — BadgePlus launcher for the three ingests (grill 2026-07-23 — ADR-0040; CONTEXT.md `Link pipeline`)
+#419 shared INTAKE_ACTIONS + "Ingest Link" rename + bottom-sheet launcher replacing the mobile Submit/Docs chips (independent) ◄── relates to #416 Ingest Link modal
+Critical path: none — single independent slice
 ```
 
 ---
