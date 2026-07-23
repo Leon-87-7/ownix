@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ExternalLink } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
+import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { PlatformGlyph } from '@/components/ui/platform-icon';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TagMark, TagMenu } from '@/components/ui/tag-picker';
@@ -287,7 +288,7 @@ function LinkUrl({ link }: { link: LinkRow }) {
         aria-label={`Open ${link.url} in a new tab`}
         className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-signal focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
-        <ExternalLink
+        <OwnixShareIcon
           className="h-3.5 w-3.5"
           aria-hidden="true"
         />
@@ -344,6 +345,7 @@ function LinkPreviewEmptyState() {
     <aside className="flex min-h-[320px] min-w-0 flex-1 items-center justify-center rounded-xl border border-line bg-surface p-4 sm:max-h-[70vh]">
       <PreviewMotif
         label="SELECT A ROW"
+        ariaLabel="Select a row to preview its details"
         className="h-44 w-44"
       />
     </aside>

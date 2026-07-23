@@ -5,6 +5,7 @@ import { DateTime } from "@/components/ui/date-time";
 import type { JobSummary } from "@/components/feed/job-card";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
+import { NoPreviewRing } from "@/components/ui/no-preview-ring";
 import { buildJobHref } from "@/lib/job-detail-utils";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
@@ -58,14 +59,16 @@ function Thumbnail({
           onError={() => setFailed(true)}
         />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+        <div className="relative flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+          <NoPreviewRing seed={job.id} label={job.content_type} />
+          {/* relative: paint above the absolutely-positioned ring */}
           <PlatformGlyph
             url={job.url}
             contentType={job.content_type}
             size={22}
-            className="text-muted"
+            className="relative text-muted"
           />
-          <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-muted">
+          <span className="relative font-mono text-[11px] font-medium uppercase tracking-wider text-muted">
             {job.content_type || display}
           </span>
         </div>

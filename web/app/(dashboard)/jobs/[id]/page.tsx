@@ -29,6 +29,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useRestrictedMode } from "@/lib/restricted/context";
 import { useGoogleStatus } from "@/components/shell/google-status";
 import { GoogleDriveIcon } from "@/components/svg/google-drive-icon";
+import { OwnixShareIcon } from "@/components/svg/ownix-share-icon";
 
 const MarkdownEditor = dynamic(() => import("@/components/ui/markdown-editor"), {
   ssr: false,
@@ -486,7 +487,7 @@ function JobActionsBar({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
           >
-            Open this file in Drive &#8599;
+            Open this file in Drive <OwnixShareIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         )}
         {folderUrl && (
@@ -497,7 +498,7 @@ function JobActionsBar({
             className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
           >
             <GoogleDriveIcon className="h-3.5 w-3.5" />
-            Open Ownix folder &#8599;
+            Open Ownix folder <OwnixShareIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </a>
         )}
       </div>

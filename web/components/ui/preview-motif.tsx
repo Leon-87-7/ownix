@@ -3,9 +3,12 @@ import OwnixLogo from '@/app/ownix-logo.svg';
 
 export default function PreviewMotif({
   label,
+  ariaLabel,
   className,
 }: {
   label: string;
+  /** Screen-reader name when the ring text alone is too terse. */
+  ariaLabel?: string;
   className: string;
 }) {
   const ringId = useId();
@@ -13,7 +16,7 @@ export default function PreviewMotif({
   return (
     <div
       role="status"
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
       className={`flex items-center justify-center ${className}`}
     >
       <div className="relative h-44 w-44 max-h-full max-w-full">

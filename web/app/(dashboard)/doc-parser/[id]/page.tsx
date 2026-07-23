@@ -2,7 +2,8 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Check, Copy, Download, ExternalLink, Sparkles } from 'lucide-react';
+import { Check, Copy, Download, Sparkles } from 'lucide-react';
+import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { DocumentSourceChip } from '@/components/doc-parser/document-source-chip';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
 import { downloadBlob } from '@/components/ui/export-modal';
@@ -131,7 +132,7 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
             aria-label="Open full output"
             className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
           >
-            <ExternalLink className="h-4 w-4" />
+            <OwnixShareIcon className="h-4 w-4" />
           </a>
         </Tooltip>
       </div>

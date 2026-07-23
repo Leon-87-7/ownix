@@ -32,7 +32,8 @@ import { RecoveryPanel } from '@/components/feed/recovery-panel';
 import { PageShell } from '@/components/shell/page-shell';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { useSubmitJob } from '@/components/feed/submit-job';
-import { BadgePlus, LayoutDashboard, Link2, List } from 'lucide-react';
+import { LayoutDashboard, Link2, List } from 'lucide-react';
+import { OwnixAddIcon } from '@/components/svg/ownix-add-icon';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/feed/job-card';
 import { LinksSearchBar, LinksTable } from '@/components/feed/links-table';
@@ -525,9 +526,9 @@ function FeedPageContent() {
               aria-haspopup="dialog"
               className="col-start-1 row-start-1 row-span-2 inline-flex min-h-9 items-center justify-center rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-body transition-ui hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
             >
-              <BadgePlus
+              <OwnixAddIcon
                 aria-hidden="true"
-                className="h-5 w-5"
+                className="h-10 w-10"
               />
             </button>
             {restricted && (
