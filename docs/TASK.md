@@ -24,7 +24,7 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 
-- feed page redesign. All tabs to have a list/detail switch (just like the file Explorer a Layout Switcher). The short thumbnails should be resized to the height of the long thumbnail height. And the full size thumbnail (the current size) should be in the detail page (for all content types)
+
 
 ---
 
