@@ -73,6 +73,8 @@ const config: Config = {
       animation: {
         'tooltip-in': 'tooltip-in 140ms ease-out both',
         'tooltip-out': 'tooltip-out 100ms ease-out both',
+        'slide-up-in': 'slide-up-in 180ms ease-out both',
+        'slide-up-out': 'slide-up-out 140ms ease-out both',
       },
     },
   },

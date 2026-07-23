@@ -32,7 +32,7 @@ import { RecoveryPanel } from '@/components/feed/recovery-panel';
 import { PageShell } from '@/components/shell/page-shell';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { useSubmitJob } from '@/components/feed/submit-job';
-import { FileCode2, LayoutDashboard, Link2, List, Plus } from 'lucide-react';
+import { BadgePlus, LayoutDashboard, Link2, List } from 'lucide-react';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/feed/job-card';
 import { LinksSearchBar, LinksTable } from '@/components/feed/links-table';
@@ -152,8 +152,7 @@ function FeedPageContent() {
     reload,
   } = useFeedData(urlContentType, restricted);
   const {
-    setOpen: setSubmitOpen,
-    openDocs,
+    openIntake,
     lastAccepted,
     registerFeedSearch,
   } = useSubmitJob();
@@ -494,42 +493,27 @@ function FeedPageContent() {
         }
         actionSlot={
           <>
-            {/* Mobile-only (<sm): Submit + Docs stack in the grid's first column
-             (Submit top, Docs bottom) via explicit col/row placement; the six
-             content-type tabs then auto-flow into columns 2–4 across both rows.
-             Index amber underline + text mark them as the row's actions without
-             matching the active chip's full signal fill. They
-             open the same dialogs as the sm+ header triggers. */}
+            {/* Mobile-only (<sm): one non-floating intake launcher occupies the
+             two-row footprint formerly used by Submit + Docs. The content tabs
+             continue flowing into columns 2-4. */}
             <button
               type="button"
-              onClick={() => setSubmitOpen(true)}
-              aria-label="Submit URL"
+              onClick={openIntake}
+              aria-label="Add to your Index"
               aria-haspopup="dialog"
-              aria-keyshortcuts="N"
-              className="col-start-1 row-start-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
+              className="col-start-1 row-start-1 row-span-2 inline-flex min-h-9 items-center justify-center rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-body transition-ui hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
             >
-              <Plus
+              <BadgePlus
                 aria-hidden="true"
-                className="h-4 w-4"
+                className="h-5 w-5"
               />
-              Submit
             </button>
-            <button
-              type="button"
-              onClick={openDocs}
-              aria-label="Ingest docs"
-              aria-haspopup="dialog"
-              aria-keyshortcuts="D"
-              className="col-start-1 row-start-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-[13px] font-medium text-signal transition-ui hover:bg-raised active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
-            >
-              <span className="flex items-center gap-2.5">
-                <FileCode2
-                  aria-hidden="true"
-                  className="h-4 w-4"
-                />
-                <span>Docs</span>
-              </span>
-            </button>
+            {restricted && (
+              <span
+                aria-hidden="true"
+                className="col-start-4 row-start-2 block sm:hidden"
+              />
+            )}
           </>
         }
       />

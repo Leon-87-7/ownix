@@ -325,6 +325,33 @@ describe('FeedPage', () => {
     ).toBe(false);
   });
 
+
+
+  it('renders one mobile intake launcher instead of separate Submit and Docs chips', () => {
+    render(<FeedTree />);
+
+    expect(screen.getByRole('button', { name: 'Add to your Index' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Submit URL' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ingest docs' })).toBeNull();
+  });
+
+  it('opens the intake sheet from the mobile launcher in restricted mode and gates per item', async () => {
+    render(<FeedTree restricted />);
+    fireEvent.click(screen.getByRole('button', { name: 'Keep looking' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to your Index' }));
+
+    expect(screen.getByText('Add to your Index')).toBeTruthy();
+    expect(screen.getByText('Save a link as-is to your Brain - no processing.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*Paste a URL/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('Sign in to submit URLs to your own Index.')).toBeTruthy(),
+    );
+    expect(screen.queryByRole('dialog', { name: 'Submit URL' })).toBeNull();
+  });
+
   it('opens the docs ingest dialog with the D shortcut', async () => {
     render(<FeedTree />);
     fireEvent.keyDown(window, { key: 'd' });
@@ -498,8 +525,8 @@ describe('FeedPage', () => {
     }));
 
     render(<FeedTree />);
-    // Two triggers (header + tabs-row action slot) open the same dialog; either works.
-    fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
+    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
@@ -546,7 +573,8 @@ describe('FeedPage', () => {
     }));
 
     const { rerender } = render(<FeedTree />);
-    fireEvent.click(screen.getAllByRole('button', { name: /submit url/i })[0]);
+    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });

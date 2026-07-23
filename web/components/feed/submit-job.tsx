@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { SubmitUrlForm } from '@/components/feed/submit-url-form';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import {
   FileCode2,
   Link2,
@@ -59,6 +60,7 @@ interface SubmitJobContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   openDocs: () => void;
+  openIntake: () => void;
   openCommand: () => void;
   lastAccepted: AcceptedJob | null;
   feedRecovery: FeedRecoveryCommands | null;
@@ -138,6 +140,39 @@ export function useSubmitJobOptional(): SubmitJobContextValue | null {
 
 // Space-separated keys render as individual right-aligned kbd chips so a
 // chord like "R P" reads as two keys.
+
+export type IntakeActionKey = 'submit' | 'docs' | 'link';
+
+export const INTAKE_ACTIONS: ReadonlyArray<{
+  key: IntakeActionKey;
+  icon: typeof Plus;
+  label: string;
+  description: string;
+  shortcut: string;
+}> = [
+  {
+    key: 'submit',
+    icon: Plus,
+    label: 'Submit URL',
+    description: 'Paste a URL - auto-detects the pipeline.',
+    shortcut: 'N',
+  },
+  {
+    key: 'docs',
+    icon: FileCode2,
+    label: 'Ingest Docs',
+    description: 'Upload a PDF or document to parse.',
+    shortcut: 'D',
+  },
+  {
+    key: 'link',
+    icon: Waypoints,
+    label: 'Ingest Link',
+    description: 'Save a link as-is to your Brain - no processing.',
+    shortcut: 'U',
+  },
+];
+
 function CommandShortcut({ keys }: { keys: string }) {
   return (
     <span className="ml-auto flex items-center gap-1">
@@ -215,6 +250,7 @@ export function SubmitJobProvider({
   const [open, setOpenRaw] = useState(false);
   const [docsOpenRaw, setDocsOpenRaw] = useState(false);
   const [addLinkOpenRaw, setAddLinkOpenRaw] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
       if (next && restricted) {
@@ -507,6 +543,7 @@ export function SubmitJobProvider({
     () => setDocsOpen(true),
     [setDocsOpen],
   );
+  const openIntake = useCallback(() => setIntakeOpen(true), []);
   const openCommand = useCallback(
     () => setCommandOpen(true),
     [setCommandOpen],
@@ -517,11 +554,30 @@ export function SubmitJobProvider({
     window.location.assign(href);
   }, []);
 
+  const launchIntakeAction = useCallback(
+    (key: IntakeActionKey, closeSurface: () => void) => {
+      closeSurface();
+      switch (key) {
+        case 'submit':
+          setOpen(true);
+          break;
+        case 'docs':
+          setDocsOpen(true);
+          break;
+        case 'link':
+          setAddLinkOpen(true);
+          break;
+      }
+    },
+    [setAddLinkOpen, setDocsOpen, setOpen],
+  );
+
   const value = useMemo(
     () => ({
       open,
       setOpen,
       openDocs,
+      openIntake,
       openCommand,
       lastAccepted,
       feedRecovery,
@@ -532,6 +588,7 @@ export function SubmitJobProvider({
     [
       open,
       openDocs,
+      openIntake,
       openCommand,
       lastAccepted,
       feedRecovery,
@@ -570,7 +627,7 @@ export function SubmitJobProvider({
         onOpenChange={setAddLinkOpen}
       >
         <DialogContent>
-          <DialogTitle>Add Link</DialogTitle>
+          <DialogTitle>Ingest Link</DialogTitle>
           <form
             onSubmit={submitAddLink}
             className="mt-4 space-y-4"
@@ -590,7 +647,7 @@ export function SubmitJobProvider({
               />
             </label>
             <p className="text-xs text-muted">
-              Add Link saves the link as-is; it does not process it
+              Ingest Link saves the link as-is; it does not process it
               through the pipeline-detection flow.
             </p>
             {addLinkError && (
@@ -607,7 +664,7 @@ export function SubmitJobProvider({
               disabled={addLinkSubmitting || !addLinkUrl.trim()}
               className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {addLinkSubmitting ? 'Adding…' : 'Add Link'}
+              {addLinkSubmitting ? 'Ingesting…' : 'Ingest Link'}
             </button>
           </form>
         </DialogContent>
@@ -626,6 +683,45 @@ export function SubmitJobProvider({
           />
         </DialogContent>
       </Dialog>
+
+      <Sheet
+        open={intakeOpen}
+        onOpenChange={setIntakeOpen}
+      >
+        <SheetContent aria-describedby={undefined}>
+          <SheetTitle>Add to your Index</SheetTitle>
+          <div className="mt-5 space-y-2">
+            {INTAKE_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.key}
+                  type="button"
+                  onClick={() =>
+                    launchIntakeAction(action.key, () =>
+                      setIntakeOpen(false),
+                    )
+                  }
+                  className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.98] motion-reduce:active:scale-100"
+                >
+                  <Icon
+                    className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">
+                      {action.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-5 text-body">
+                      {action.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
       <Dialog
         open={commandOpen}
         onOpenChange={setCommandOpen}
@@ -634,33 +730,19 @@ export function SubmitJobProvider({
           <DialogTitle>Command launcher</DialogTitle>
           <div className="mt-4 space-y-4">
             <CommandGroup label="Intake">
-              <CommandAction
-                icon={Plus}
-                label="Submit URL"
-                shortcut="N"
-                onSelect={() => {
-                  setCommandOpen(false);
-                  setOpen(true);
-                }}
-              />
-              <CommandAction
-                icon={FileCode2}
-                label="Ingest Docs"
-                shortcut="D"
-                onSelect={() => {
-                  setCommandOpen(false);
-                  setDocsOpen(true);
-                }}
-              />
-              <CommandAction
-                icon={Waypoints}
-                label="Ingest Links"
-                shortcut="U"
-                onSelect={() => {
-                  setCommandOpen(false);
-                  setAddLinkOpen(true);
-                }}
-              />
+              {INTAKE_ACTIONS.map((action) => (
+                <CommandAction
+                  key={action.key}
+                  icon={action.icon}
+                  label={action.label}
+                  shortcut={action.shortcut}
+                  onSelect={() =>
+                    launchIntakeAction(action.key, () =>
+                      setCommandOpen(false),
+                    )
+                  }
+                />
+              ))}
             </CommandGroup>
             <CommandGroup label="Navigate">
               <CommandAction
