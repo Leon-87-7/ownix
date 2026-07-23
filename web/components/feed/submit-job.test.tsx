@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SubmitJobProvider, useSubmitJob } from './submit-job';
+import { INTAKE_ACTIONS, SubmitJobProvider, useSubmitJob } from './submit-job';
 
 function ShortcutProbe() {
   const { open } = useSubmitJob();
@@ -11,6 +11,16 @@ function ShortcutProbe() {
 function LastAcceptedProbe() {
   const { lastAccepted } = useSubmitJob();
   return <span>{lastAccepted?.content_type ?? 'no accepted job'}</span>;
+}
+
+
+function OpenIntakeButton() {
+  const { openIntake } = useSubmitJob();
+  return (
+    <button type="button" onClick={openIntake}>
+      Open intake
+    </button>
+  );
 }
 
 function OpenSubmitButton() {
@@ -113,6 +123,60 @@ describe('SubmitJobProvider', () => {
     fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
 
     expect(screen.getByText('Command launcher')).toBeTruthy();
+  });
+
+
+
+  it('drives the desktop launcher intake group from INTAKE_ACTIONS', () => {
+    expect(INTAKE_ACTIONS.map((action) => action.label)).toEqual([
+      'Submit URL',
+      'Ingest Docs',
+      'Ingest Link',
+    ]);
+
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
+
+    expect(screen.getByRole('button', { name: /Submit URLN/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ingest DocsD/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ingest LinkU/i })).toBeTruthy();
+  });
+
+  it('opens the intake sheet with title and all action descriptions', () => {
+    render(
+      <SubmitJobProvider>
+        <OpenIntakeButton />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open intake' }));
+
+    expect(screen.getByText('Add to your Index')).toBeTruthy();
+    for (const action of INTAKE_ACTIONS) {
+      expect(screen.getByText(action.label)).toBeTruthy();
+      expect(screen.getByText(action.description)).toBeTruthy();
+    }
+  });
+
+  it('closes the intake sheet and opens the selected ingest dialog', async () => {
+    render(
+      <SubmitJobProvider>
+        <OpenIntakeButton />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open intake' }));
+    fireEvent.click(screen.getByRole('button', { name: /Ingest LinkSave a link/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Ingest Link' })).toBeTruthy(),
+    );
+    expect(screen.queryByText('Add to your Index')).toBeNull();
   });
 
   it('infers an optimistic article type when the accepted response omits content_type', async () => {
