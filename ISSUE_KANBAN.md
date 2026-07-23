@@ -106,6 +106,9 @@
 | [#417](https://github.com/Leon-87-7/ownix/issues/417) | feat(web): Feed content-type support for link jobs | Web | #415 |
 | [#398](https://github.com/Leon-87-7/ownix/issues/398) | feat: Freestyle button on job detail — run a custom prompt against any job | Web / Jobs | — |
 | [#419](https://github.com/Leon-87-7/ownix/issues/419) | feat(web): mobile Feed intake sheet — BadgePlus launcher for the three ingests | Web / Feed | — |
+| [#421](https://github.com/Leon-87-7/ownix/issues/421) | feat(web): PWA installability — complete the manifest (start_url /feed, id) | Web / PWA | — |
+| [#422](https://github.com/Leon-87-7/ownix/issues/422) | feat(web): offline fallback — /offline page + hand-rolled sw.js | Web / PWA | — |
+| [#423](https://github.com/Leon-87-7/ownix/issues/423) | feat(web): share-target intake — manifest share_target prefills the Submit URL dialog | Web / Feed | #421 |
 
 ---
 
@@ -523,6 +526,12 @@ Critical path: #415 → {#416, #417}
 Mobile Feed intake sheet — BadgePlus launcher for the three ingests (grill 2026-07-23 — ADR-0040; CONTEXT.md `Link pipeline`)
 #419 shared INTAKE_ACTIONS + "Ingest Link" rename + bottom-sheet launcher replacing the mobile Submit/Docs chips (independent) ◄── relates to #416 Ingest Link modal
 Critical path: none — single independent slice
+
+Installable PWA (grill 2026-07-23 — task #6 from docs/TASK.md)
+#421 PWA installability — manifest start_url /feed + id (root, unblocked)
+└── #423 share-target intake — manifest share_target → Submit URL dialog prefill ◄── #421 (share sheet lists installed PWAs only)
+#422 offline fallback — /offline page + hand-rolled sw.js (independent)
+Critical path: #421 → #423; #422 parallel
 ```
 
 ---

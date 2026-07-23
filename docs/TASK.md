@@ -86,41 +86,48 @@ and `/freestyle`).
 
 ## 5. Reconcile the export-isolation PRs (#207, #208) before building on them ✅ DONE
 
-## 6. Make the web app an installable PWA
+## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423
 
-> **Grill:** `/grill-with-search-docs` — hinges on manifest/service-worker
-> specifics and the `next-pwa`/Workbox dependency call.
+> **Grilled 2026-07-23** — all open questions resolved below.
 
 Scope is the `web/` Next.js app (app router).
 
-**Wanted:** the dashboard is installable, has an offline app shell, and can be
-selected from the OS share sheet as a URL intake target where the platform
-supports PWA share targets.
+**Wanted:** the dashboard is installable, has a minimal offline fallback, and is
+an Android share-sheet URL intake target.
 
-- Add a web app manifest (name, maskable icons, `theme_color`/`background_color`
-  from DESIGN.md `#0b0c0f` + signal, `display: standalone`) and wire it via
-  `web/app/layout.tsx` metadata. `start_url` points at `/feed` — per task 14's
-  resolved routing (`/` is the public landing; authenticated visits 307 to
-  `/feed`), the PWA opens the Feed directly and sidesteps the redirect.
-- Add a manifest `share_target` so supported browsers can send shared URLs/text
-  directly into the dashboard instead of requiring the Telegram bot forward
-  flow.
-- Add a service worker for installability + offline shell: precache the static
-  shell/assets, network-first for `/api/*` so live data isn't served stale.
-- Provide the required icon set (incl. maskable).
-- Add the receiving route/UI handoff for shared URLs: capture the shared URL,
-  prefill the dashboard submission flow, and let the operator choose the same
-  template/freestyle options as task 4's submit surface before creating a job.
+**Already shipped** (found in grill): `web/app/manifest.json` exists with name,
+maskable 192/512 icons (`web/public/web-app-manifest-*.png`), `display:
+standalone`, and `theme_color`/`background_color` `#0d0e10` — which matches the
+current `canvas` token (`web/tailwind.config.ts:9`; the brief's `#0b0c0f` was
+pre-repalette). Next serves `app/manifest.json` automatically — no
+`layout.tsx` wiring needed.
 
-**Open questions**
+**Remaining work**
 
-- Offline scope: installable shell only, or also cache last Feed/Brain payloads
-  for offline read?
-- Hand-rolled SW vs. a dependency (`next-pwa`/Workbox) — prefer the minimum that
-  makes it installable.
-- Share-target platform scope: rely on PWA `share_target` only where supported,
-  or also plan a native iOS Share Extension / Shortcut path for iPhone parity?
-- Are web push notifications in scope, or explicitly out for now?
+- Manifest: add `start_url: "/feed"` (per task 14's routing — sidesteps the
+  `/` redirect), `id`, and the `share_target` below.
+- **SW (resolved): tiny hand-rolled `web/public/sw.js`, no dependency.**
+  Verified in grill: Chrome (108+ mobile / 112+ desktop) no longer requires a
+  service worker for installability — manifest + HTTPS is the whole bar, so
+  `next-pwa`/Workbox has nothing to buy. The SW exists only for the offline
+  fallback: precache one `/offline` page, serve it when a navigation fetch
+  fails. No `/api/*` caching, no payload caching — live-data console, stale
+  data is worse than none. Skip SW registration when `NEXT_PUBLIC_API_MOCK=1`
+  (MSW's `mockServiceWorker.js` owns scope `/` in mock mode).
+- **Share target (resolved):** manifest-only, `method: "GET"`,
+  `action: "/feed"`, params `share_title`/`share_text`/`share_url`. iOS Safari
+  has no `share_target` for home-screen PWAs — iPhone intake stays the
+  Telegram-bot share flow (already works); an iOS Shortcut opening
+  `/feed?share_url=…` is a zero-code user-side option later.
+- **Receiving handoff (resolved):** Feed reads the `share_*` params, extracts
+  the first URL (`share_url`, falling back to a URL regex over `share_text` —
+  Android apps commonly put the URL in `text`), opens the existing Submit URL
+  dialog (`SubmitJobProvider`) prefilled so the operator picks the template,
+  then `router.replace('/feed')` strips the params. A share arriving while
+  logged out loses the URL (middleware drops the query on the `/login` 307) —
+  accepted; installed PWAs hold their session cookie.
+- **Web push (resolved): out.** Telegram is the notification channel; push
+  handlers can be added to the SW later without rework.
 
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306 - ✅DONE
 

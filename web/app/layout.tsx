@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
+import SwRegister from '@/components/shell/sw-register';
 
 // Two voices (DESIGN.md): Inter for human language, JetBrains Mono for machine facts.
 const inter = Inter({
@@ -49,6 +50,7 @@ export default function RootLayout({
     >
       <body className="bg-canvas font-sans text-ink antialiased">
         <MockProvider>{children}</MockProvider>
+        <SwRegister />
         {/* impeccable-live-start */}
         {process.env.NODE_ENV === 'development' && (
           <script src="http://localhost:8400/live.js"></script>

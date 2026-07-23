@@ -130,6 +130,8 @@ beforeEach(() => {
   setupMocks();
 });
 
+// extractSharedUrl unit tests live beside the helper: lib/share-target.test.ts
+
 describe('FeedPage', () => {
   it('renders Ownix heading', () => {
     render(<FeedTree />);
@@ -193,6 +195,34 @@ describe('FeedPage', () => {
     render(<FeedTree />);
     expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
     expect(setCtFilter).toHaveBeenCalledWith('');
+  });
+
+
+  it('hands share_text URLs to the Submit URL dialog and strips share params once', async () => {
+    navigationMock.searchParams = new URLSearchParams(
+      'share_title=Nice&share_text=Check+this+out+https%3A%2F%2Fexample.com%2Fx+%F0%9F%98%8D',
+    );
+    const { rerender } = render(<FeedTree />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'Submit URL' })).toBeTruthy(),
+    );
+    expect(screen.getByDisplayValue('https://example.com/x')).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+
+    navigationMock.replace.mockClear();
+    navigationMock.searchParams = new URLSearchParams();
+    rerender(<FeedTree />);
+
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+  });
+
+  it('strips share params even when no shared URL can be extracted', () => {
+    navigationMock.searchParams = new URLSearchParams('share_text=nope&share_url=ftp%3A%2F%2Fexample.com');
+    render(<FeedTree />);
+
+    expect(screen.queryByRole('dialog', { name: 'Submit URL' })).toBeNull();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
   });
 
   it('shows job count when loaded', () => {

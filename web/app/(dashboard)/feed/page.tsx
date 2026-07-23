@@ -37,6 +37,7 @@ import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/feed/job-card';
 import { LinksSearchBar, LinksTable } from '@/components/feed/links-table';
 import { useRestrictedMode } from '@/lib/restricted/context';
+import { extractSharedUrl } from '@/lib/share-target';
 import {
   Dialog,
   DialogContent,
@@ -153,6 +154,7 @@ function FeedPageContent() {
   } = useFeedData(urlContentType, restricted);
   const {
     openIntake,
+    openSubmitWith,
     lastAccepted,
     registerFeedSearch,
   } = useSubmitJob();
@@ -188,10 +190,10 @@ function FeedPageContent() {
   }, [jobs]);
   useBackgroundFreshness(reload);
 
-  // One URL-cleanup effect for the two transient params: capture the one-time
-  // ?google= OAuth result into state (CONTEXT.md `Account affordance`) and drop
-  // an unsupported ?type=, in a single replace so the two never race each other
-  // back into the address bar.
+  // One URL-cleanup effect for transient params: capture the one-time
+  // ?google= OAuth result into state (CONTEXT.md `Account affordance`), hand
+  // share targets into the Submit URL dialog, and drop unsupported ?type= in a
+  // single replace so the params never race each other back into the address bar.
   const [oauthResult, setOauthResult] = useState<
     'connected' | 'denied' | null
   >(null);
@@ -199,12 +201,24 @@ function FeedPageContent() {
     const google = searchParams.get('google');
     const rawType = searchParams.get('type');
     const restrictedLinksView = restricted && searchParams.get('view') === 'links';
+    const hasShareParams =
+      searchParams.has('share_title') ||
+      searchParams.has('share_text') ||
+      searchParams.has('share_url');
+    const sharedUrl = extractSharedUrl(
+      searchParams.get('share_url'),
+      searchParams.get('share_text'),
+    );
     const oauthReturn = google === 'connected' || google === 'denied';
     const badType = Boolean(rawType && !CONTENT_TYPES.has(rawType));
-    if (!oauthReturn && !badType && !restrictedLinksView) return;
+    if (!oauthReturn && !badType && !restrictedLinksView && !hasShareParams) return;
     if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
+    if (sharedUrl) openSubmitWith(sharedUrl);
     const params = new URLSearchParams(searchParams.toString());
     params.delete('google');
+    params.delete('share_title');
+    params.delete('share_text');
+    params.delete('share_url');
     if (restrictedLinksView) params.delete('view');
     if (badType) {
       params.delete('type');
@@ -214,7 +228,15 @@ function FeedPageContent() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, {
       scroll: false,
     });
-  }, [searchParams, pathname, router, setCtFilter, restricted]);
+  }, [
+    searchParams,
+    pathname,
+    router,
+    setCtFilter,
+    restricted,
+    openSubmitWith,
+    setOauthResult,
+  ]);
 
   const refreshFeed = useCallback(async () => {
     await reload();

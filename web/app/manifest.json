@@ -17,5 +17,16 @@
   ],
   "theme_color": "#0d0e10",
   "background_color": "#0d0e10",
-  "display": "standalone"
+  "display": "standalone",
+  "start_url": "/feed",
+  "id": "/feed",
+  "share_target": {
+    "action": "/feed",
+    "method": "GET",
+    "params": {
+      "title": "share_title",
+      "text": "share_text",
+      "url": "share_url"
+    }
+  }
 }

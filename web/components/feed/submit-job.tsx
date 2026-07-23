@@ -59,6 +59,7 @@ export interface FeedSearchCommands {
 interface SubmitJobContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
+  openSubmitWith: (url: string) => void;
   openDocs: () => void;
   openIntake: () => void;
   openCommand: () => void;
@@ -539,6 +540,15 @@ export function SubmitJobProvider({
     [addLinkSubmitting, addLinkUrl, setAddLinkOpen],
   );
 
+  const openSubmitWith = useCallback(
+    (nextUrl: string) => {
+      // Restricted mode: setOpen refuses with the sign-in toast — don't leave
+      // a stale prefill behind in that case.
+      if (!restricted) setUrl(nextUrl);
+      setOpen(true);
+    },
+    [restricted, setOpen, setUrl],
+  );
   const openDocs = useCallback(
     () => setDocsOpen(true),
     [setDocsOpen],
@@ -576,6 +586,7 @@ export function SubmitJobProvider({
     () => ({
       open,
       setOpen,
+      openSubmitWith,
       openDocs,
       openIntake,
       openCommand,
@@ -587,6 +598,7 @@ export function SubmitJobProvider({
     }),
     [
       open,
+      openSubmitWith,
       openDocs,
       openIntake,
       openCommand,
