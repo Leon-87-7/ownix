@@ -142,9 +142,9 @@ describe('SubmitJobProvider', () => {
 
     fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
 
-    expect(screen.getByRole('button', { name: /Submit URLN/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Ingest DocsD/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Ingest LinkU/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Submit URL\s*N/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ingest Docs\s*D/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ingest Link\s*U/i })).toBeTruthy();
   });
 
   it('opens the intake sheet with title and all action descriptions', () => {
@@ -171,7 +171,7 @@ describe('SubmitJobProvider', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open intake' }));
-    fireEvent.click(screen.getByRole('button', { name: /Ingest LinkSave a link/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Ingest Link\s*Save a link/i }));
 
     await waitFor(() =>
       expect(screen.getByRole('dialog', { name: 'Ingest Link' })).toBeTruthy(),

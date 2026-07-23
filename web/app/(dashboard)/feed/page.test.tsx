@@ -344,7 +344,7 @@ describe('FeedPage', () => {
     expect(screen.getByText('Add to your Index')).toBeTruthy();
     expect(screen.getByText('Save a link as-is to your Brain - no processing.')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Submit URLPaste a URL/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*Paste a URL/i }));
 
     await waitFor(() =>
       expect(screen.getByText('Sign in to submit URLs to your own Index.')).toBeTruthy(),
@@ -526,7 +526,7 @@ describe('FeedPage', () => {
 
     render(<FeedTree />);
     fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
-    fireEvent.click(screen.getByRole('button', { name: /Submit URLN/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
@@ -574,7 +574,7 @@ describe('FeedPage', () => {
 
     const { rerender } = render(<FeedTree />);
     fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
-    fireEvent.click(screen.getByRole('button', { name: /Submit URLN/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });

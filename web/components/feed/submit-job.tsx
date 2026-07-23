@@ -557,15 +557,17 @@ export function SubmitJobProvider({
   const launchIntakeAction = useCallback(
     (key: IntakeActionKey, closeSurface: () => void) => {
       closeSurface();
-      if (key === 'submit') {
-        setOpen(true);
-        return;
+      switch (key) {
+        case 'submit':
+          setOpen(true);
+          break;
+        case 'docs':
+          setDocsOpen(true);
+          break;
+        case 'link':
+          setAddLinkOpen(true);
+          break;
       }
-      if (key === 'docs') {
-        setDocsOpen(true);
-        return;
-      }
-      setAddLinkOpen(true);
     },
     [setAddLinkOpen, setDocsOpen, setOpen],
   );
@@ -662,7 +664,7 @@ export function SubmitJobProvider({
               disabled={addLinkSubmitting || !addLinkUrl.trim()}
               className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {addLinkSubmitting ? 'Adding…' : 'Ingest Link'}
+              {addLinkSubmitting ? 'Ingesting…' : 'Ingest Link'}
             </button>
           </form>
         </DialogContent>
@@ -686,7 +688,7 @@ export function SubmitJobProvider({
         open={intakeOpen}
         onOpenChange={setIntakeOpen}
       >
-        <SheetContent>
+        <SheetContent aria-describedby={undefined}>
           <SheetTitle>Add to your Index</SheetTitle>
           <div className="mt-5 space-y-2">
             {INTAKE_ACTIONS.map((action) => {
