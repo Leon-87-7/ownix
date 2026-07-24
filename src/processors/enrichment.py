@@ -361,6 +361,31 @@ def _format_template_analysis(template: str, analysis: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_tool_line(t: dict) -> str:
+    prefix = "$" if t.get("type") == "symbol" else f"[{_escape_html(t.get('type', 'tool'))}]"
+    name = _escape_html(t["name"])
+    if t.get("url"):
+        # URL lives in the href attribute — safe even with underscores/dots.
+        name = f'<a href="{_escape_attr(t["url"])}">{name}</a>'
+    desc = _escape_html(t.get("description", ""))
+    return f"• {prefix} {name}: {desc}"
+
+
+def _promise_gap_block(promise_gap: dict | None) -> list[str]:
+    gaps = promise_gap.get("gaps", []) if promise_gap else []
+    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
+    if not gaps and not hidden:
+        return []
+    lines = ["\n=====PROMISE=GAP====="]
+    if gaps:
+        lines.append("❌ Unfulfilled:")
+        lines.extend(f"• {_escape_html(g)}" for g in gaps)
+    if hidden:
+        lines.append("💎 Hidden value:")
+        lines.extend(f"• {_escape_html(h)}" for h in hidden)
+    return lines
+
+
 def _build_enrichment_message(
     job: dict,
     enrichment: Enrichment,
@@ -371,15 +396,7 @@ def _build_enrichment_message(
     title = _escape_html(job.get("title", "Untitled"))
     drive_url = job.get("drive_url", "")
 
-    tools_lines = []
-    for t in enrichment.tools_raw:
-        prefix = "$" if t.get("type") == "symbol" else f"[{_escape_html(t.get('type', 'tool'))}]"
-        name = _escape_html(t["name"])
-        if t.get("url"):
-            # URL lives in the href attribute — safe even with underscores/dots.
-            name = f'<a href="{_escape_attr(t["url"])}">{name}</a>'
-        desc = _escape_html(t.get("description", ""))
-        tools_lines.append(f"• {prefix} {name}: {desc}")
+    tools_lines = [_format_tool_line(t) for t in enrichment.tools_raw]
 
     action_lines = [
         f"• {_escape_html(ap)}" for ap in enrichment.action_points_str.split(" | ") if ap
@@ -414,16 +431,7 @@ def _build_enrichment_message(
         template = job.get("template") or "summary"
         parts.append(_format_template_analysis(template, template_analysis))
 
-    gaps = promise_gap.get("gaps", []) if promise_gap else []
-    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
-    if gaps or hidden:
-        parts.append("\n=====PROMISE=GAP=====")
-        if gaps:
-            parts.append("❌ Unfulfilled:")
-            parts.extend(f"• {_escape_html(g)}" for g in gaps)
-        if hidden:
-            parts.append("💎 Hidden value:")
-            parts.extend(f"• {_escape_html(h)}" for h in hidden)
+    parts += _promise_gap_block(promise_gap)
 
     return "\n".join(parts)
 

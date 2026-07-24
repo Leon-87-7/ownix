@@ -175,6 +175,58 @@ REPO_ANALYSIS_SCHEMA = {
 }
 
 
+def _repo_meta_block(owner: str, repo: str, meta: dict) -> str:
+    topics = meta.get("topics") or []
+    meta_block = (
+        f"Repository: {owner}/{repo}\n"
+        f"Stars: {meta.get('stars', 0):,} | Forks: {meta.get('forks', 0):,} | "
+        f"Language: {meta.get('language') or 'Unknown'}\n"
+        f"Description: {meta.get('description') or '(none)'}\n"
+    )
+    if topics:
+        meta_block += f"Topics: {', '.join(topics)}\n"
+    if meta.get("archived"):
+        meta_block += "⚠️ This repository is ARCHIVED.\n"
+    return meta_block
+
+
+def _repo_manifest_block(manifests: dict) -> str:
+    if not manifests:
+        return "Package manifests: (none detected)"
+    return "Package manifests:\n" + "\n\n".join(
+        f"--- {p} ---\n{c[:4_000]}" for p, c in manifests.items()
+    )
+
+
+def _repo_sub_readme_block(bundle: dict) -> str:
+    sub_readmes = bundle.get("sub_readmes") or {}
+    if not sub_readmes:
+        return ""
+    return "Sub-project READMEs:\n" + "\n\n".join(f"--- {p} ---\n{c}" for p, c in sub_readmes.items())
+
+
+def _repo_readme_block(no_readme: bool, readme: str) -> str:
+    if no_readme:
+        return (
+            "README: (not available — no README in this repository)\n"
+            "Instruction: lean on the file tree and manifests for analysis. "
+            "Flag in the tagline that no README was found."
+        )
+    return f"README:\n{readme}"
+
+
+def _repo_focus_block(freestyle_prompt: str | None) -> str:
+    if freestyle_prompt:
+        return f"User instruction: {freestyle_prompt}\nAnswer using the repository context above."
+    return (
+        "Extract a structured analysis matching the JSON schema. "
+        "Be specific about developer use-cases and educational concepts.\n"
+        "Calibrate confidence to star count: for repos with 1k+ stars make "
+        "direct claims; for repos under 100 stars use hedged language "
+        "(e.g. 'appears to', 'may be useful for')."
+    )
+
+
 def _build_repo_prompt(
     bundle: dict,
     freestyle_prompt: str | None = None,
@@ -218,17 +270,7 @@ def _build_repo_prompt(
         "example for this concept — not just what the concept is."
     )
 
-    topics = meta.get("topics") or []
-    meta_block = (
-        f"Repository: {owner}/{repo}\n"
-        f"Stars: {meta.get('stars', 0):,} | Forks: {meta.get('forks', 0):,} | "
-        f"Language: {meta.get('language') or 'Unknown'}\n"
-        f"Description: {meta.get('description') or '(none)'}\n"
-    )
-    if topics:
-        meta_block += f"Topics: {', '.join(topics)}\n"
-    if meta.get("archived"):
-        meta_block += "⚠️ This repository is ARCHIVED.\n"
+    meta_block = _repo_meta_block(owner, repo, meta)
 
     constraints_block = (
         "STRICT RULES:\n"
@@ -244,41 +286,10 @@ def _build_repo_prompt(
     tree_sample = _prioritize_tree(tree, 300)
     tree_block = "File tree:\n" + "\n".join(f"  {p}" for p in tree_sample)
 
-    if manifests:
-        manifest_block = "Package manifests:\n" + "\n\n".join(
-            f"--- {p} ---\n{c[:4_000]}" for p, c in manifests.items()
-        )
-    else:
-        manifest_block = "Package manifests: (none detected)"
-
-    sub_readmes = bundle.get("sub_readmes") or {}
-    sub_readme_block = ""
-    if sub_readmes:
-        sub_readme_block = "Sub-project READMEs:\n" + "\n\n".join(
-            f"--- {p} ---\n{c}" for p, c in sub_readmes.items()
-        )
-
-    if no_readme:
-        readme_block = (
-            "README: (not available — no README in this repository)\n"
-            "Instruction: lean on the file tree and manifests for analysis. "
-            "Flag in the tagline that no README was found."
-        )
-    else:
-        readme_block = f"README:\n{readme}"
-
-    if freestyle_prompt:
-        focus_block = (
-            f"User instruction: {freestyle_prompt}\nAnswer using the repository context above."
-        )
-    else:
-        focus_block = (
-            "Extract a structured analysis matching the JSON schema. "
-            "Be specific about developer use-cases and educational concepts.\n"
-            "Calibrate confidence to star count: for repos with 1k+ stars make "
-            "direct claims; for repos under 100 stars use hedged language "
-            "(e.g. 'appears to', 'may be useful for')."
-        )
+    manifest_block = _repo_manifest_block(manifests)
+    sub_readme_block = _repo_sub_readme_block(bundle)
+    readme_block = _repo_readme_block(no_readme, readme)
+    focus_block = _repo_focus_block(freestyle_prompt)
 
     blocks = [system_frame, meta_block]
     if not freestyle_prompt:
@@ -334,21 +345,11 @@ def _sanitize_filename(owner: str, repo: str, *, job_id: str = "") -> str:
     return f"{sanitized}.md" if sanitized else f"{job_id}.md"
 
 
-def render_repo_markdown(analysis: dict, bundle: dict) -> str:
-    owner = bundle.get("owner", "")
-    repo = bundle.get("repo", "")
-    meta = bundle.get("metadata") or {}
+def _repo_md_header(owner: str, repo: str, meta: dict, bundle: dict, tagline: str) -> list[str]:
     stars = meta.get("stars", 0)
     forks = meta.get("forks", 0)
     language = meta.get("language") or "Unknown"
     days = _days_ago(meta.get("pushed_at"))
-    repo_url = f"https://github.com/{owner}/{repo}"
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    tagline = analysis.get("tagline", "")
-    tech_stack = analysis.get("tech_stack") or []
-    for_dev = analysis.get("for_developers") or {}
-    for_edu = analysis.get("for_education") or {}
-
     lines = [
         f"# {owner}/{repo}",
         "",
@@ -361,14 +362,11 @@ def render_repo_markdown(analysis: dict, bundle: dict) -> str:
         lines += ["## Archived — no longer maintained", ""]
     if bundle.get("no_readme"):
         lines += ["## Note — No README detected — analysis is shallower than usual", ""]
+    return lines
 
-    lines += ["## Tech Stack", ""]
-    lines += [f"- {t}" for t in tech_stack] or ["_(none)_"]
-    components = analysis.get("key_components") or []
-    if components:
-        lines += ["", "## Key Components", ""]
-        lines += [f"- `{c.get('path', '')}` — {c.get('purpose', '')}" for c in components]
-    lines += ["", "## For Developers", "", "### Project Ideas", ""]
+
+def _repo_md_for_developers(for_dev: dict) -> list[str]:
+    lines = ["## For Developers", "", "### Project Ideas", ""]
     lines += [f"- {i}" for i in (for_dev.get("project_ideas") or [])] or ["_(none)_"]
     lines += [
         "",
@@ -381,18 +379,45 @@ def render_repo_markdown(analysis: dict, bundle: dict) -> str:
         for_dev.get("avoid_when", ""),
         "",
     ]
-    lines += ["## For Education", "", "### Concepts Taught", ""]
+    return lines
+
+
+def _repo_md_for_education(for_edu: dict) -> list[str]:
+    lines = ["## For Education", "", "### Concepts Taught", ""]
     lines += [f"- {c}" for c in (for_edu.get("concepts_taught") or [])] or ["_(none)_"]
     lines += ["", "### Prerequisites", ""]
     lines += [f"- {p}" for p in (for_edu.get("prerequisites") or [])] or ["_(none)_"]
     lines += ["", "### Curriculum Hooks", ""]
-    for hook in for_edu.get("curriculum_hooks") or []:
+    hooks = for_edu.get("curriculum_hooks") or []
+    for hook in hooks:
         fp = hook.get("file_pointer")
         pointer = f" — `{fp}`" if fp else ""
         lines.append(f"- **{hook.get('concept', '')}**{pointer}")
         lines.append(f"  {hook.get('why', '')}")
-    if not (for_edu.get("curriculum_hooks") or []):
+    if not hooks:
         lines.append("_(none)_")
+    return lines
+
+
+def render_repo_markdown(analysis: dict, bundle: dict) -> str:
+    owner = bundle.get("owner", "")
+    repo = bundle.get("repo", "")
+    meta = bundle.get("metadata") or {}
+    repo_url = f"https://github.com/{owner}/{repo}"
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    tech_stack = analysis.get("tech_stack") or []
+    components = analysis.get("key_components") or []
+
+    lines = _repo_md_header(owner, repo, meta, bundle, analysis.get("tagline", ""))
+
+    lines += ["## Tech Stack", ""]
+    lines += [f"- {t}" for t in tech_stack] or ["_(none)_"]
+    if components:
+        lines += ["", "## Key Components", ""]
+        lines += [f"- `{c.get('path', '')}` — {c.get('purpose', '')}" for c in components]
+
+    lines += _repo_md_for_developers(analysis.get("for_developers") or {})
+    lines += _repo_md_for_education(analysis.get("for_education") or {})
 
     lines += [
         "",

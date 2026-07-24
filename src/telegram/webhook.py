@@ -551,11 +551,7 @@ async def _handle_callback(callback: dict) -> None:
     if chat_id and prefix not in {"invite_approve", "invite_block"}:
         sender = callback.get("from") or {}
         chat = cb_message.get("chat") or {}
-        identity = {
-            "first_name": sender.get("first_name") or chat.get("first_name") or "",
-            "last_name": sender.get("last_name") or chat.get("last_name"),
-            "username": sender.get("username") or chat.get("username"),
-        }
+        identity = _extract_message_identity(sender, chat)
         if not await _invite_gate_allows(chat_id, "", identity, via_callback=True):
             await answer_callback_query(cq_id, text="Access restricted.")
             return
@@ -1737,6 +1733,78 @@ async def _settle_ops_invite_card(
         )
 
 
+_OPS_MUTATING_PREFIXES = {
+    "ops_invite_approve",
+    "ops_invite_block",
+    "ops_approve_pending",
+    "ops_approve_pending_cancel",
+}
+
+
+async def _ops_cb_invite_decision(
+    cq_id: str, chat_id: int | None, message_id: int | None, prefix: str, payload: str
+) -> None:
+    try:
+        target_chat_id = int(payload)
+    except ValueError:
+        await ops_bot.answer_ops_callback(cq_id, "Invalid invite action.")
+        return
+    status = "approved" if prefix == "ops_invite_approve" else "blocked"
+    async with database.connection() as conn:
+        cur = await conn.execute(
+            """
+            UPDATE users
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE tg_id = ?
+              AND status = 'pending'
+            """,
+            (status, target_chat_id),
+        )
+        await conn.commit()
+    if cur.rowcount != 1:
+        current_status = await database.get_user_status(target_chat_id)
+        if current_status in {"approved", "blocked"}:
+            await _settle_ops_invite_card(chat_id, message_id, current_status, target_chat_id)
+            await ops_bot.answer_ops_callback(cq_id, f"Already {current_status}.")
+        else:
+            await ops_bot.answer_ops_callback(cq_id, "Already decided.")
+        return
+    await ops_bot.answer_ops_callback(cq_id, status.capitalize())
+    await _settle_ops_invite_card(chat_id, message_id, status, target_chat_id)
+    try:
+        await send_message(
+            target_chat_id,
+            _INVITE_APPROVED_MESSAGE if status == "approved" else _INVITE_BLOCKED_MESSAGE,
+        )
+    except Exception:
+        log.exception(
+            "ops_invite.user_outcome_notification_failed",
+            target_chat_id=target_chat_id,
+            status=status,
+        )
+
+
+async def _ops_cb_approve_pending(
+    cq_id: str, chat_id: int | None, message_id: int | None, payload: str
+) -> None:
+    count = await ops_bot.approve_pending_batch(payload)
+    await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
+    if message_id:
+        await ops_bot.edit_ops_reply_markup(
+            int(chat_id),
+            int(message_id),
+            [[{"text": f"✅ Approved {count}", "callback_data": f"ops_batch_status:{payload}"}]],
+        )
+
+
+async def _ops_cb_approve_pending_cancel(
+    cq_id: str, chat_id: int | None, message_id: int | None
+) -> None:
+    await ops_bot.answer_ops_callback(cq_id, "Canceled")
+    if message_id:
+        await ops_bot.edit_ops_reply_markup(int(chat_id), int(message_id), [])
+
+
 async def _handle_ops_callback(callback: dict) -> None:
     cq_id = callback.get("id", "")
     data = callback.get("data", "")
@@ -1744,13 +1812,8 @@ async def _handle_ops_callback(callback: dict) -> None:
     chat_id = msg.get("chat", {}).get("id")
     message_id = msg.get("message_id")
     prefix, _, payload = data.partition(":")
-    mutating_prefixes = {
-        "ops_invite_approve",
-        "ops_invite_block",
-        "ops_approve_pending",
-        "ops_approve_pending_cancel",
-    }
-    if prefix in mutating_prefixes:
+
+    if prefix in _OPS_MUTATING_PREFIXES:
         sender_id = (callback.get("from") or {}).get("id")
         sender_chat_id = _int_or_none(sender_id)
         if sender_chat_id is None or not ops_bot.can_admin(sender_chat_id):
@@ -1762,72 +1825,17 @@ async def _handle_ops_callback(callback: dict) -> None:
             )
             await ops_bot.answer_ops_callback(cq_id, "Not authorized.")
             return
+
     if prefix in {"ops_invite_approve", "ops_invite_block"}:
-        try:
-            target_chat_id = int(payload)
-        except ValueError:
-            await ops_bot.answer_ops_callback(cq_id, "Invalid invite action.")
-            return
-        status = "approved" if prefix == "ops_invite_approve" else "blocked"
-        async with database.connection() as conn:
-            cur = await conn.execute(
-                """
-                UPDATE users
-                SET status = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE tg_id = ?
-                  AND status = 'pending'
-                """,
-                (status, target_chat_id),
-            )
-            await conn.commit()
-        if cur.rowcount != 1:
-            current_status = await database.get_user_status(target_chat_id)
-            if current_status in {"approved", "blocked"}:
-                await _settle_ops_invite_card(chat_id, message_id, current_status, target_chat_id)
-                await ops_bot.answer_ops_callback(cq_id, f"Already {current_status}.")
-            else:
-                await ops_bot.answer_ops_callback(cq_id, "Already decided.")
-            return
-        await ops_bot.answer_ops_callback(cq_id, status.capitalize())
-        await _settle_ops_invite_card(chat_id, message_id, status, target_chat_id)
-        try:
-            await send_message(
-                target_chat_id,
-                _INVITE_APPROVED_MESSAGE if status == "approved" else _INVITE_BLOCKED_MESSAGE,
-            )
-        except Exception:
-            log.exception(
-                "ops_invite.user_outcome_notification_failed",
-                target_chat_id=target_chat_id,
-                status=status,
-            )
-        return
-    if prefix == "ops_invite_status":
+        await _ops_cb_invite_decision(cq_id, chat_id, message_id, prefix, payload)
+    elif prefix == "ops_invite_status":
         await ops_bot.answer_ops_callback(cq_id, "Already decided.")
-        return
-    if prefix == "ops_approve_pending":
-        count = await ops_bot.approve_pending_batch(payload)
-        await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
-        if message_id:
-            await ops_bot.edit_ops_reply_markup(
-                int(chat_id),
-                int(message_id),
-                [
-                    [
-                        {
-                            "text": f"✅ Approved {count}",
-                            "callback_data": f"ops_batch_status:{payload}",
-                        }
-                    ]
-                ],
-            )
-        return
-    if prefix == "ops_approve_pending_cancel":
-        await ops_bot.answer_ops_callback(cq_id, "Canceled")
-        if message_id:
-            await ops_bot.edit_ops_reply_markup(int(chat_id), int(message_id), [])
-        return
-    await ops_bot.answer_ops_callback(cq_id)
+    elif prefix == "ops_approve_pending":
+        await _ops_cb_approve_pending(cq_id, chat_id, message_id, payload)
+    elif prefix == "ops_approve_pending_cancel":
+        await _ops_cb_approve_pending_cancel(cq_id, chat_id, message_id)
+    else:
+        await ops_bot.answer_ops_callback(cq_id)
 
 
 @router.post("/webhook/ops")
@@ -1862,6 +1870,58 @@ async def ops_webhook(
     return {"ok": True}
 
 
+async def _webhook_route_callback(callback: dict) -> None:
+    try:
+        await _handle_callback(callback)
+    except Exception:
+        log.exception("webhook_callback_error")
+        # Acknowledge so the client's inline button stops spinning even on failure.
+        with suppress(Exception):
+            await answer_callback_query(callback.get("id", ""))
+
+
+def _extract_message_identity(sender: dict, chat: dict) -> dict:
+    return {
+        "first_name": sender.get("first_name") or chat.get("first_name") or "",
+        "last_name": sender.get("last_name") or chat.get("last_name"),
+        "username": sender.get("username") or chat.get("username"),
+    }
+
+
+async def _webhook_route_photo(chat_id: int, message: dict, photo: list, identity: dict) -> None:
+    try:
+        if await _invite_gate_allows(chat_id, "", identity):
+            await _handle_photo_update(chat_id, message, photo)
+    except Exception:
+        log.exception("webhook_photo_error", chat_id=chat_id)
+
+
+async def _webhook_route_document(
+    chat_id: int, message: dict, document: dict, identity: dict
+) -> None:
+    try:
+        if await _invite_gate_allows(chat_id, "", identity):
+            await _handle_document_update(chat_id, message, document)
+    except Exception:
+        log.exception("webhook_document_error", chat_id=chat_id)
+
+
+async def _webhook_route_text(
+    chat_id: int, text: str, message_id: int | None, identity: dict
+) -> None:
+    try:
+        await _route_text(chat_id, text, message_id, identity)
+    except Exception:
+        log.exception("webhook_handler_error", chat_id=chat_id)
+        try:
+            await send_message(
+                chat_id,
+                "⚠️ Something went wrong processing your message. Please try again.",
+            )
+        except Exception:
+            log.exception("webhook_error_notification_failed", chat_id=chat_id)
+
+
 @router.post("/webhook")
 async def webhook(
     request: Request,
@@ -1876,13 +1936,7 @@ async def webhook(
     # Handle callback queries (inline keyboard button presses)
     callback = update.get("callback_query")
     if callback:
-        try:
-            await _handle_callback(callback)
-        except Exception:
-            log.exception("webhook_callback_error")
-            # Acknowledge so the client's inline button stops spinning even on failure.
-            with suppress(Exception):
-                await answer_callback_query(callback.get("id", ""))
+        await _webhook_route_callback(callback)
         return {"ok": True}
 
     message = update.get("message") or update.get("edited_message") or {}
@@ -1890,46 +1944,27 @@ async def webhook(
     chat_id = chat.get("id")
     text = (message.get("text") or "").strip()
     message_id = message.get("message_id")
-    sender = message.get("from") or {}
-    identity = {
-        "first_name": sender.get("first_name") or chat.get("first_name") or "",
-        "last_name": sender.get("last_name") or chat.get("last_name"),
-        "username": sender.get("username") or chat.get("username"),
-    }
+    identity = _extract_message_identity(message.get("from") or {}, chat)
 
     log.info("webhook_received", chat_id=chat_id, message_id=message_id, text_len=len(text))
 
     # Photo path
     photo = message.get("photo")
     if photo and chat_id:
-        if not await _invite_gate_allows(chat_id, "", identity):
-            return {"ok": True}
-        await _handle_photo_update(chat_id, message, photo)
+        await _webhook_route_photo(chat_id, message, photo, identity)
         return {"ok": True}
 
     # Document upload path (#151) — a file message has no `.text`, so this must
     # run before the text guard below.
     document = message.get("document")
     if document and chat_id:
-        if not await _invite_gate_allows(chat_id, "", identity):
-            return {"ok": True}
-        await _handle_document_update(chat_id, message, document)
+        await _webhook_route_document(chat_id, message, document, identity)
         return {"ok": True}
 
     if not chat_id or not text:
         return {"ok": True}
 
-    try:
-        await _route_text(chat_id, text, message_id, identity)
-    except Exception:
-        log.exception("webhook_handler_error", chat_id=chat_id)
-        try:
-            await send_message(
-                chat_id,
-                "⚠️ Something went wrong processing your message. Please try again.",
-            )
-        except Exception:
-            log.exception("webhook_error_notification_failed", chat_id=chat_id)
+    await _webhook_route_text(chat_id, text, message_id, identity)
     return {"ok": True}
 
 

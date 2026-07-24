@@ -336,15 +336,13 @@ async def init_db() -> None:
             mime_type="text/plain",
         )
         # Delete the temp file immediately
-        import asyncio as _asyncio
-
         def _delete_sync(fid: str) -> None:
             from src.services.drive import _build_service
 
             svc = _build_service()
             svc.files().delete(fileId=fid).execute()
 
-        await _asyncio.to_thread(_delete_sync, file_id)
+        await asyncio.to_thread(_delete_sync, file_id)
         log.info("brain.preflight_ok", folder=settings.GOOGLE_DRIVE_FOLDER_BRAIN)
     except Exception as e:
         log.error(
@@ -437,10 +435,121 @@ async def _touch_existing_link(
         )
 
 
-async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> None:
-    """Fire-and-forget: persist each URL as a semantic node in the graph."""
+async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str, now_iso: str) -> None:
     import aiosqlite
 
+    # --- Soft dedup (own short connection) ---
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute(
+            "SELECT id, seen_count, drive_file_id, title, topic FROM links WHERE url = ? LIMIT 1",
+            (url,),
+        )
+        existing = await cursor.fetchone()
+        if existing:
+            await _touch_existing_link(
+                conn, existing, url, topic, source_job_id, now_iso,
+                og_image_url=link.get("og_image_url"),
+            )
+            return
+
+    # --- First sighting: network work happens with no connection held ---
+    # Standalone identity (docs/TASK.md task 32): the page's own title
+    # wins; the extraction-provided label only beats a bare host hint.
+    provided_title = link.get("title") or link.get("label")
+    title_str, description, resolved = await _resolve_identity(url)
+    if (
+        provided_title
+        and title_str == _fallback_title_hint(url)
+        and not _github_owner_repo(url)
+    ):
+        title_str = provided_title
+
+    # Embedding doc = link-own identity only (url+title+description, #384)
+    embed_doc = _link_embedding_doc(url, title_str, description)
+    embedding_arr = await _embed(embed_doc)
+    embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        link_id = generate_id()
+        # Atomic upsert: a concurrent ingest that inserted this URL while
+        # we were fetching becomes a seen_count bump, never a duplicate
+        # (unique index idx_links_url_unique, migration v31).
+        insert_cursor = await conn.execute(
+            """
+            INSERT INTO links
+                (id, url, title, topic, description, source_job, embedding,
+                 drive_file_id, og_image_url, seen_count, last_seen_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+                seen_count = links.seen_count + 1,
+                last_seen_at = excluded.last_seen_at,
+                updated_at = excluded.updated_at,
+                og_image_url = COALESCE(links.og_image_url, excluded.og_image_url)
+            RETURNING id
+            """,
+            (
+                link_id,
+                url,
+                title_str,
+                topic,
+                # NULL = retry via refresh loop; "" = resolved, no description.
+                description if resolved else None,
+                source_job_id,
+                embedding_blob,
+                link.get("og_image_url"),
+                now_iso,
+                now_iso,
+                now_iso,
+            ),
+        )
+        inserted = await insert_cursor.fetchone()
+        await conn.commit()
+        if inserted is not None and inserted["id"] != link_id:
+            # Lost the race — the winning ingest owns the .md upload.
+            log.info("brain.link_upsert_race", url=url, kept_id=inserted["id"])
+            return
+
+        # Compute top-3 related
+        cursor5 = await conn.execute(
+            "SELECT id, embedding FROM links WHERE embedding IS NOT NULL AND id != ?",
+            (link_id,),
+        )
+        other_rows = [dict(r) for r in await cursor5.fetchall()]
+        ids_list, matrix = _load_embeddings(other_rows)
+
+        related: list[dict] = []
+        if embedding_arr is not None and ids_list:
+            related = _compute_related(link_id, embedding_arr, ids_list, matrix, conn)
+
+        related_titles = await _fetch_related_titles(conn, related)
+
+        src_url, src_drive_url = await _get_source_job_info(conn, source_job_id)
+
+        md_text = _build_obsidian_md(
+            title=title_str,
+            url=url,
+            topic=topic,
+            source_video_url=src_url,
+            source_drive_url=src_drive_url,
+            seen_count=1,
+            created_at=now_iso,
+            last_seen_at=now_iso,
+            related_titles=related_titles,
+        )
+        slug = _slugify(title_str)
+
+        try:
+            await _upload_brain_md(conn, md_text, slug, link_id)
+            await conn.commit()
+            log.info("brain.link_ingested", link_id=link_id, url=url)
+        except Exception as exc:
+            log.warning("brain.drive_upload_failed", url=url, error=str(exc))
+
+
+async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> None:
+    """Fire-and-forget: persist each URL as a semantic node in the graph."""
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for link in links:
@@ -449,115 +558,7 @@ async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> Non
         if not url:
             continue
         try:
-            # --- Soft dedup (own short connection) ---
-            async with aiosqlite.connect(settings.DB_PATH) as conn:
-                conn.row_factory = aiosqlite.Row
-                cursor = await conn.execute(
-                    "SELECT id, seen_count, drive_file_id, title, topic FROM links WHERE url = ? LIMIT 1",
-                    (url,),
-                )
-                existing = await cursor.fetchone()
-                if existing:
-                    await _touch_existing_link(
-                        conn, existing, url, topic, source_job_id, now_iso,
-                        og_image_url=link.get("og_image_url"),
-                    )
-                    continue
-
-            # --- First sighting: network work happens with no connection held ---
-            # Standalone identity (docs/TASK.md task 32): the page's own title
-            # wins; the extraction-provided label only beats a bare host hint.
-            provided_title = link.get("title") or link.get("label")
-            title_str, description, resolved = await _resolve_identity(url)
-            if (
-                provided_title
-                and title_str == _fallback_title_hint(url)
-                and not _github_owner_repo(url)
-            ):
-                title_str = provided_title
-
-            # Embedding doc = link-own identity only (url+title+description, #384)
-            embed_doc = _link_embedding_doc(url, title_str, description)
-            embedding_arr = await _embed(embed_doc)
-            embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
-
-            async with aiosqlite.connect(settings.DB_PATH) as conn:
-                conn.row_factory = aiosqlite.Row
-                link_id = generate_id()
-                # Atomic upsert: a concurrent ingest that inserted this URL while
-                # we were fetching becomes a seen_count bump, never a duplicate
-                # (unique index idx_links_url_unique, migration v31).
-                insert_cursor = await conn.execute(
-                    """
-                    INSERT INTO links
-                        (id, url, title, topic, description, source_job, embedding,
-                         drive_file_id, og_image_url, seen_count, last_seen_at, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
-                    ON CONFLICT(url) DO UPDATE SET
-                        seen_count = links.seen_count + 1,
-                        last_seen_at = excluded.last_seen_at,
-                        updated_at = excluded.updated_at,
-                        og_image_url = COALESCE(links.og_image_url, excluded.og_image_url)
-                    RETURNING id
-                    """,
-                    (
-                        link_id,
-                        url,
-                        title_str,
-                        topic,
-                        # NULL = retry via refresh loop; "" = resolved, no description.
-                        description if resolved else None,
-                        source_job_id,
-                        embedding_blob,
-                        link.get("og_image_url"),
-                        now_iso,
-                        now_iso,
-                        now_iso,
-                    ),
-                )
-                inserted = await insert_cursor.fetchone()
-                await conn.commit()
-                if inserted is not None and inserted["id"] != link_id:
-                    # Lost the race — the winning ingest owns the .md upload.
-                    log.info("brain.link_upsert_race", url=url, kept_id=inserted["id"])
-                    continue
-
-                # Compute top-3 related
-                cursor5 = await conn.execute(
-                    "SELECT id, embedding FROM links WHERE embedding IS NOT NULL AND id != ?",
-                    (link_id,),
-                )
-                other_rows = [dict(r) for r in await cursor5.fetchall()]
-                ids_list, matrix = _load_embeddings(other_rows)
-
-                related: list[dict] = []
-                if embedding_arr is not None and ids_list:
-                    related = _compute_related(link_id, embedding_arr, ids_list, matrix, conn)
-
-                related_titles = await _fetch_related_titles(conn, related)
-
-                src_url, src_drive_url = await _get_source_job_info(conn, source_job_id)
-
-                md_text = _build_obsidian_md(
-                    title=title_str,
-                    url=url,
-                    topic=topic,
-                    source_video_url=src_url,
-                    source_drive_url=src_drive_url,
-                    seen_count=1,
-                    created_at=now_iso,
-                    last_seen_at=now_iso,
-                    related_titles=related_titles,
-                )
-                slug = _slugify(title_str)
-
-                try:
-                    await _upload_brain_md(conn, md_text, slug, link_id)
-                    await conn.commit()
-                    log.info("brain.link_ingested", link_id=link_id, url=url)
-                except Exception as exc:
-                    log.warning("brain.drive_upload_failed", url=url, error=str(exc))
-
+            await _ingest_one_link(url, link, topic, source_job_id, now_iso)
         except Exception as exc:
             log.error("brain.ingest_link_error", url=url, error=str(exc))
 
@@ -1025,6 +1026,96 @@ async def _select_refresh_batch(
     return repair_rows + healthy_rows, repair_ids
 
 
+async def _refresh_link_description(conn, lnk: dict) -> bool:
+    """Resolve identity if the description is unset. Returns True if the
+    embedding must be invalidated (title/description changed)."""
+    if lnk.get("description") is not None:
+        return False
+    lnk_id = lnk["id"]
+    title, description, resolved = await _resolve_identity(lnk["url"])
+    if not resolved:
+        log.info("brain.refresh_identity_unresolved", link_id=lnk_id, url=lnk["url"])
+        return False
+    # "" is a completed resolution (page has no description) — persist it
+    # so this row stops being re-fetched; NULL stays only on failure.
+    lnk["title"] = title or lnk.get("title")
+    lnk["description"] = description
+    await conn.execute(
+        "UPDATE links SET title = ?, description = ? WHERE id = ?",
+        (lnk["title"], description, lnk_id),
+    )
+    return True
+
+
+async def _refresh_link_embedding(
+    conn, lnk_id: str, lnk: dict, embedding_blob, ids_list: list, matrix
+) -> tuple[bytes | None, np.ndarray, int]:
+    if embedding_blob is not None:
+        return embedding_blob, matrix, 0
+    embed_doc = _link_embedding_doc(lnk['url'], lnk.get('title'), lnk.get('description'))
+    new_arr = await _embed(embed_doc)
+    if new_arr is None:
+        return embedding_blob, matrix, 0
+    embedding_blob = new_arr.tobytes()
+    await conn.execute(
+        "UPDATE links SET embedding = ? WHERE id = ?",
+        (embedding_blob, lnk_id),
+    )
+    await conn.commit()
+    if lnk_id not in ids_list:
+        ids_list.append(lnk_id)
+        matrix = np.vstack([matrix, new_arr]) if matrix.size else new_arr.reshape(1, -1)
+    return embedding_blob, matrix, 1
+
+
+async def _upload_link_markdown(conn, lnk: dict, md_text: str, slug: str, is_repair: bool) -> int:
+    lnk_id = lnk["id"]
+    try:
+        if lnk["drive_file_id"] is None:
+            await _upload_brain_md(conn, md_text, slug, lnk_id)
+            return 1 if is_repair else 0
+        await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_BRAIN)
+        return 0
+    except Exception as exc:
+        log.warning("brain.refresh_drive_failed", link_id=lnk_id, error=str(exc))
+        return 0
+
+
+async def _refresh_repo_metadata(lnk: dict) -> tuple[int | None, str | None, int]:
+    """Returns (stars, pushed_at, archived), refetching from GitHub if stale."""
+    stars = lnk.get("stars")
+    pushed_at = lnk.get("pushed_at")
+    archived = int(bool(lnk.get("archived")))
+    repo_pair = _github_owner_repo(lnk["url"])
+    if not repo_pair or _is_repo_archived(lnk):
+        return stars, pushed_at, archived
+
+    try:
+        updated_at = datetime.fromisoformat((lnk.get("updated_at") or "").replace("Z", "+00:00"))
+        is_stale = (
+            stars is None
+            or pushed_at is None
+            or datetime.now(timezone.utc) - updated_at > timedelta(days=14)
+        )
+    except Exception:
+        is_stale = True
+    if not is_stale:
+        return stars, pushed_at, archived
+
+    try:
+        from src.services.github import fetch_repo_bundle
+
+        owner, repo = repo_pair
+        bundle = await fetch_repo_bundle(owner, repo, settings.GITHUB_TOKEN or None)
+        meta = bundle.get("metadata", {})
+        stars = meta.get("stars")
+        pushed_at = meta.get("pushed_at")
+        archived = int(bool(meta.get("archived", False)))
+    except Exception as exc:
+        log.warning("brain.repo_metadata_refresh_failed", link_id=lnk["id"], error=str(exc)[:120])
+    return stars, pushed_at, archived
+
+
 async def _refresh_one_link(
     conn, lnk: dict, repair_ids: set, ids_list: list, matrix, now_iso: str
 ) -> tuple[int, np.ndarray]:
@@ -1033,37 +1124,13 @@ async def _refresh_one_link(
     is_repair = lnk_id in repair_ids
     repaired_delta = 0
 
-    if lnk.get("description") is None:
-        title, description, resolved = await _resolve_identity(lnk["url"])
-        if resolved:
-            # "" is a completed resolution (page has no description) — persist it
-            # so this row stops being re-fetched; NULL stays only on failure.
-            lnk["title"] = title or lnk.get("title")
-            lnk["description"] = description
-            await conn.execute(
-                "UPDATE links SET title = ?, description = ? WHERE id = ?",
-                (lnk["title"], description, lnk_id),
-            )
-            embedding_blob = None
-        else:
-            log.info("brain.refresh_identity_unresolved", link_id=lnk_id, url=lnk["url"])
+    if await _refresh_link_description(conn, lnk):
+        embedding_blob = None
 
-    if embedding_blob is None:
-        embed_doc = _link_embedding_doc(lnk['url'], lnk.get('title'), lnk.get('description'))
-        new_arr = await _embed(embed_doc)
-        if new_arr is not None:
-            embedding_blob = new_arr.tobytes()
-            await conn.execute(
-                "UPDATE links SET embedding = ? WHERE id = ?",
-                (embedding_blob, lnk_id),
-            )
-            await conn.commit()
-            if lnk_id not in ids_list:
-                ids_list.append(lnk_id)
-                matrix = (
-                    np.vstack([matrix, new_arr]) if matrix.size else new_arr.reshape(1, -1)
-                )
-            repaired_delta += 1
+    embedding_blob, matrix, embed_delta = await _refresh_link_embedding(
+        conn, lnk_id, lnk, embedding_blob, ids_list, matrix
+    )
+    repaired_delta += embed_delta
 
     self_vec: np.ndarray | None = None
     if embedding_blob and len(embedding_blob) == EMBEDDING_DIM * 4:
@@ -1089,49 +1156,9 @@ async def _refresh_one_link(
     )
     slug = _slugify(lnk["title"] or lnk["url"])
 
-    try:
-        if lnk["drive_file_id"] is None:
-            await _upload_brain_md(conn, md_text, slug, lnk_id)
-            if is_repair:
-                repaired_delta += 1
-        else:
-            await upload_file(
-                md_text,
-                f"{slug}.md",
-                settings.GOOGLE_DRIVE_FOLDER_BRAIN,
-            )
-    except Exception as exc:
-        log.warning("brain.refresh_drive_failed", link_id=lnk_id, error=str(exc))
+    repaired_delta += await _upload_link_markdown(conn, lnk, md_text, slug, is_repair)
 
-    stars = lnk.get("stars")
-    pushed_at = lnk.get("pushed_at")
-    archived = int(bool(lnk.get("archived")))
-    repo_pair = _github_owner_repo(lnk["url"])
-    is_stale_repo = False
-    if repo_pair and not _is_repo_archived(lnk):
-        try:
-            updated_at = datetime.fromisoformat(
-                (lnk.get("updated_at") or "").replace("Z", "+00:00")
-            )
-            is_stale_repo = (
-                stars is None
-                or pushed_at is None
-                or datetime.now(timezone.utc) - updated_at > timedelta(days=14)
-            )
-        except Exception:
-            is_stale_repo = True
-    if is_stale_repo:
-        try:
-            from src.services.github import fetch_repo_bundle
-
-            owner, repo = repo_pair
-            bundle = await fetch_repo_bundle(owner, repo, settings.GITHUB_TOKEN or None)
-            meta = bundle.get("metadata", {})
-            stars = meta.get("stars")
-            pushed_at = meta.get("pushed_at")
-            archived = int(bool(meta.get("archived", False)))
-        except Exception as exc:
-            log.warning("brain.repo_metadata_refresh_failed", link_id=lnk_id, error=str(exc)[:120])
+    stars, pushed_at, archived = await _refresh_repo_metadata(lnk)
 
     await conn.execute(
         "UPDATE links SET updated_at = ?, stars = ?, pushed_at = ?, archived = ? WHERE id = ?",

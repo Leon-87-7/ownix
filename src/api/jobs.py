@@ -137,39 +137,45 @@ class JobCreateRequest(BaseModel):
 
 
 @jobs_router.post("")
-async def create_job(request: Request, body: JobCreateRequest) -> dict:
-    """Create a dashboard-submitted job using the shared Telegram ingest core."""
-    chat_id: int = request.state.user["id"]
-    url = body.url.strip()
-    if body.content_type == "link":
-        if not is_fetchable_url(url):
-            raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
-        warning = "Add Link saves the link as-is; it does not process it through the pipeline-detection flow."
-        # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any
-        # content_type returns the existing job instead of creating one, so a
-        # URL already tracked as another type never gains a duplicate link job.
-        job = await create_and_enqueue_job(chat_id, url, "link")
-        if job.get("content_type", "link") != "link":
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"⚠️ This URL already exists as a {job.get('content_type')} job "
-                    f"(job_{job['id'][-4:]}) — no link entry was created. {warning}"
-                ),
-            )
-        return {
-            "id": job["id"],
-            "job_id": job["id"],
-            "url": job.get("url", url),
-            "content_type": job.get("content_type", "link"),
-            "status": job.get("status", "pending"),
-            "title": job.get("title"),
-            "warning": warning,
-        }
+async def _create_link_job(chat_id: int, url: str) -> dict:
+    if not is_fetchable_url(url):
+        raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
+    warning = "Add Link saves the link as-is; it does not process it through the pipeline-detection flow."
+    # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any
+    # content_type returns the existing job instead of creating one, so a
+    # URL already tracked as another type never gains a duplicate link job.
+    job = await create_and_enqueue_job(chat_id, url, "link")
+    if job.get("content_type", "link") != "link":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"⚠️ This URL already exists as a {job.get('content_type')} job "
+                f"(job_{job['id'][-4:]}) — no link entry was created. {warning}"
+            ),
+        )
+    return {
+        "id": job["id"],
+        "job_id": job["id"],
+        "url": job.get("url", url),
+        "content_type": job.get("content_type", "link"),
+        "status": job.get("status", "pending"),
+        "title": job.get("title"),
+        "warning": warning,
+    }
 
+
+def _resolve_job_template(pipeline: str, template: str | None, freestyle_prompt: str | None) -> tuple[str | None, str | None]:
+    if pipeline == "repo":
+        return None, None
+    if template == "freestyle" and not freestyle_prompt:
+        raise HTTPException(status_code=422, detail="freestyle_prompt is required for freestyle")
+    if template and template != "freestyle" and template not in PROMPT_TEMPLATES:
+        raise HTTPException(status_code=422, detail="Unknown template")
+    return template, freestyle_prompt
+
+
+async def _create_pipeline_job(body: JobCreateRequest, chat_id: int, url: str) -> dict:
     pipeline = detect_pipeline(url, frozenset(await database.list_allowed_domains(chat_id)))
-    if pipeline == "rejected":
-        raise HTTPException(status_code=422, detail="Unsupported URL")
     if pipeline == "document":
         raise HTTPException(status_code=422, detail="Document URLs belong in the Doc Parser")
     if pipeline not in {"short", "long", "article", "repo"}:
@@ -177,17 +183,8 @@ async def create_job(request: Request, body: JobCreateRequest) -> dict:
 
     template = body.template.strip() if body.template else None
     freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
-    if pipeline == "repo":
-        template = None
-        freestyle_prompt = None
-    elif template:
-        if template == "freestyle":
-            if not freestyle_prompt:
-                raise HTTPException(
-                    status_code=422, detail="freestyle_prompt is required for freestyle"
-                )
-        elif template not in PROMPT_TEMPLATES:
-            raise HTTPException(status_code=422, detail="Unknown template")
+    template, freestyle_prompt = _resolve_job_template(pipeline, template, freestyle_prompt)
+
     url_for_job = normalize_repo_url(url) if pipeline == "repo" else url
     job = await create_and_enqueue_job(
         chat_id,
@@ -204,6 +201,15 @@ async def create_job(request: Request, body: JobCreateRequest) -> dict:
         "status": job.get("status", "pending"),
         "title": job.get("title"),
     }
+
+
+async def create_job(request: Request, body: JobCreateRequest) -> dict:
+    """Create a dashboard-submitted job using the shared Telegram ingest core."""
+    chat_id: int = request.state.user["id"]
+    url = body.url.strip()
+    if body.content_type == "link":
+        return await _create_link_job(chat_id, url)
+    return await _create_pipeline_job(body, chat_id, url)
 
 
 # ---------------------------------------------------------------------------

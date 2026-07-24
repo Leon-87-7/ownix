@@ -21,7 +21,7 @@
 ## Global Constraints
 
 - This plan file is the only artifact this planning pass wrote. Every task below performs real source edits — do not treat the plan itself as read-only.
-- Run Python tests directly, never through the `rtk` hook or `rtk proxy`: `python -m pytest tests/test_foo.py -q` or `python -m pytest tests -q`. If a full-suite run gets backgrounded with empty output, split into per-file/per-directory runs.
+- Run Python tests via the PowerShell tool, never Bash — the rtk hook only intercepts the Bash tool and mangles/hangs pytest regardless of how the command is phrased (see `.claude/rules/rtk-tests.md`): `python -m pytest tests/test_foo.py -q` or `python -m pytest tests -q`. Split large runs into per-file/per-directory invocations for speed/readability.
 - Run web tests with the repo's configured runner: `npx vitest run <path>` (Vitest 4.x, Testing Library — see `web/vitest.config.*`). Do not invent a different runner.
 - Each task must end in its own commit with a conventional-commit message (`fix:`, `refactor:`, `chore:`, `perf:`, `docs:`) — do not batch unrelated tasks into one commit.
 - Preserve existing behavior unless the finding explicitly calls for a behavior change — most tasks are bug fixes or refactors, not new features.

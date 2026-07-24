@@ -8,6 +8,15 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from src import database, queue
+from src.api.auth import auth_router
+from src.api.brain import brain_router
+from src.api.controls import controls_router
+from src.api.google_oauth import google_oauth_router
+from src.api.jobs import jobs_router
+from src.api.parsed import parsed_router
+from src.api.preview import preview_router
+from src.api.spaces import spaces_router
+from src.api.templates import templates_router
 from src.auth.middleware import SessionMiddleware
 from src.telegram import sender, webhook
 from src.utils.logger import configure_logging, get_logger
@@ -104,16 +113,6 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
 app.add_middleware(SessionMiddleware)
 app.include_router(webhook.router)
-from src.api.auth import auth_router
-from src.api.brain import brain_router
-from src.api.controls import controls_router
-from src.api.jobs import jobs_router
-from src.api.google_oauth import google_oauth_router
-from src.api.parsed import parsed_router
-from src.api.spaces import spaces_router
-from src.api.templates import templates_router
-from src.api.preview import preview_router
-
 app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)
