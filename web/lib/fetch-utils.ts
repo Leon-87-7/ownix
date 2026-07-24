@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export type FetchState = "loading" | "ok" | "not_found" | "forbidden" | "error";
 
@@ -27,24 +27,28 @@ export function useFetchList<T>(url: string, errorLabel: string) {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | undefined>();
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load ${errorLabel}`);
-        return res.json() as Promise<T[]>;
-      })
-      .then(setData)
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    try {
+      const res = await fetch(url, { signal });
+      if (!res.ok) throw new Error(`Failed to load ${errorLabel}`);
+      setData((await res.json()) as T[]);
+      setFetchError(undefined);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setFetchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
   }, [url, errorLabel]);
 
-  return { data, setData, loading, fetchError };
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  return { data, setData, loading, fetchError, reload: load };
 }
 
 export async function apiPost<T>(

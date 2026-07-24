@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Bot, BotOff } from 'lucide-react';
 import { PulsingBorder } from '@paper-design/shaders-react';
 import { useRestrictedMode } from '@/lib/restricted/context';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 // Dev/mock builds only (inlined at build time, so this whole branch is dead
 // code in prod): a floating, draggable switch between the two dev personas —
@@ -45,15 +46,7 @@ export default function DevPersonaSwitch() {
     null,
   );
   const moved = useRef(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
+  const reducedMotion = useReducedMotion();
 
   if (!DEV_PERSONA_SWITCH) return null;
 
