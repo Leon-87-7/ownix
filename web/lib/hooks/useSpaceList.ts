@@ -1,28 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useFetchList } from '@/lib/fetch-utils';
 import type { SpaceSummary } from '@/components/spaces/space-card';
 
 export function useSpaceList() {
-  const [spaces, setSpaces] = useState<SpaceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      const res = await fetch('/api/spaces');
-      if (!res.ok) throw new Error('Failed to load spaces');
-      const data: SpaceSummary[] = await res.json();
-      setSpaces(data);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { reload(); }, [reload]);
-
-  return { spaces, loading, error, reload };
+  const { data: spaces, loading, fetchError, reload } = useFetchList<SpaceSummary>('/api/spaces', 'spaces');
+  return { spaces, loading, error: fetchError ?? null, reload };
 }

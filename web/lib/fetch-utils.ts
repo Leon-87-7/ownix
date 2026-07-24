@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type FetchState = "loading" | "ok" | "not_found" | "forbidden" | "error";
 
@@ -26,25 +26,40 @@ export function useFetchList<T>(url: string, errorLabel: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | undefined>();
+  // Guards against an older in-flight request (e.g. a manual reload() fired
+  // while the mount fetch is still pending) resolving last and clobbering
+  // fresher state.
+  const requestGeneration = useRef(0);
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const generation = ++requestGeneration.current;
+    setLoading(true);
+    try {
+      const res = await fetch(url, { signal });
+      if (!res.ok) throw new Error(`Failed to load ${errorLabel}`);
+      const json = (await res.json()) as T[];
+      if (generation !== requestGeneration.current) return;
+      setData(json);
+      setFetchError(undefined);
+    } catch (err: unknown) {
+      if (generation !== requestGeneration.current) return;
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setFetchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (generation === requestGeneration.current) setLoading(false);
+    }
+  }, [url, errorLabel]);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(url, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Failed to load ${errorLabel}`);
-        return res.json() as Promise<T[]>;
-      })
-      .then(setData)
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setFetchError(msg);
-      })
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, [url, errorLabel]);
+    load(controller.signal);
+    return () => {
+      requestGeneration.current += 1;
+      controller.abort();
+    };
+  }, [load]);
 
-  return { data, setData, loading, fetchError };
+  return { data, setData, loading, fetchError, reload: load };
 }
 
 export async function apiPost<T>(
