@@ -233,6 +233,7 @@ export default function LandingPage() {
                 <Image
                   src={leonAvatar}
                   alt=""
+                  sizes="40px"
                   className="h-10 w-10 rounded-full object-cover"
                 />
                 Leon (me), building Ownix
@@ -554,6 +555,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-3">
             <a
               href="#top"
+              aria-label="Back to top"
               className="hover:text-signal-bright"
             >
               <OwnixLogo
