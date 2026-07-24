@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 /** Animates a stat from 0 to its value the first time it scrolls into view.
  * Server-renders the final value, so no-JS, reduced-motion, and headless
@@ -13,13 +14,15 @@ export function CountUp({
   delay?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
+    if (reducedMotion) {
+      // A live preference flip mid-animation lands here too — make sure it
+      // doesn't leave an eased intermediate number stuck in the DOM.
+      el.textContent = Math.round(value).toString();
       return;
     }
     let raf = 0;
@@ -48,7 +51,7 @@ export function CountUp({
       io.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [value, delay]);
+  }, [value, delay, reducedMotion]);
 
   return <span ref={ref}>{value}</span>;
 }

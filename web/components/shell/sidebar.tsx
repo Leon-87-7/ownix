@@ -5,7 +5,9 @@ import { PulsingBorder } from '@paper-design/shaders-react';
 import { Tooltip } from '@/components/ui/tooltip';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import OwnixLogo from '@/app/ownix-logo.svg';
+import { GitHubIcon } from '@/components/svg/github-icon';
 import {
   Rss,
   Brain,
@@ -22,7 +24,7 @@ import {
   Unplug,
   type LucideIcon,
 } from 'lucide-react';
-import { siGithub, siGoogle } from 'simple-icons';
+import { siGoogle } from 'simple-icons';
 import {
   useSessionUser,
   type InviteUser,
@@ -73,23 +75,7 @@ function LogoMark({ className }: { className?: string }) {
   );
 }
 
-// GitHub mark from simple-icons (lucide-react dropped its brand icons).
-// Renders the raw path with currentColor so it inherits hover/active tints.
-function GithubIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="currentColor"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d={siGithub.path} />
-    </svg>
-  );
-}
-
-// Google mark from simple-icons, same pattern as GithubIcon below.
+// Google mark from simple-icons (lucide-react dropped its brand icons).
 function GoogleIcon({
   className,
   outline = false,
@@ -143,24 +129,6 @@ function Avatar({
   );
 }
 
-function useReducedMotionPreference() {
-  const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!window.matchMedia) {
-      setReducedMotion(true);
-      return;
-    }
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-
-  return reducedMotion;
-}
-
 function GoogleConnectedAvatar({
   user,
   connected,
@@ -172,7 +140,7 @@ function GoogleConnectedAvatar({
   className?: string;
   avatarClassName?: string;
 }) {
-  const reducedMotion = useReducedMotionPreference();
+  const reducedMotion = useReducedMotion();
   const colors = useMemo(() => [...AVATAR_BORDER_COLORS], []);
 
   return (
@@ -411,7 +379,11 @@ export function Sidebar() {
               tabIndex={open ? -1 : undefined}
               className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
             >
-              <GithubIcon className="h-[18px] w-[18px]" />
+              <GitHubIcon
+                className="h-[18px] w-[18px]"
+                aria-hidden="true"
+                focusable="false"
+              />
             </a>
           </Tooltip>
           <Tooltip content="Expand navigation">
@@ -594,7 +566,11 @@ export function Sidebar() {
             tabIndex={open ? undefined : -1}
             className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
           >
-            <GithubIcon className="h-[18px] w-[18px] shrink-0" />
+            <GitHubIcon
+              className="h-[18px] w-[18px] shrink-0"
+              aria-hidden="true"
+              focusable="false"
+            />
             GitHub
           </a>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import dynamic from 'next/dynamic';
 import type { ForceGraphMethods, ForceGraphProps } from 'react-force-graph-2d';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 // react-force-graph touches `window` at import time — load it client-only (ADR-0028).
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false }) as ComponentType<
@@ -63,20 +64,6 @@ function escapeHtml(value: unknown): string {
 function linkEndpointId(endpoint: unknown): string | undefined {
   if (endpoint == null) return undefined;
   return typeof endpoint === 'object' && 'id' in endpoint ? String(endpoint.id) : String(endpoint);
-}
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(query.matches);
-    update();
-    query.addEventListener('change', update);
-    return () => query.removeEventListener('change', update);
-  }, []);
-
-  return reduced;
 }
 
 export function BrainGraph({ results, searchState }: { results: SearchResult[]; searchState: string }) {

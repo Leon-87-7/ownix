@@ -1,18 +1,10 @@
 'use client';
 
 import { GrainGradient } from '@paper-design/shaders-react';
-import { useEffect, useState } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 export function HeroGradient() {
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
+  const reduced = useReducedMotion();
 
   return (
     <GrainGradient

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { TagFormState } from '@/lib/hooks/useTagList';
+import { useTagAttachment } from '@/lib/hooks/useTagAttachment';
 
 export interface TagSummary {
   id: string;
@@ -61,30 +61,13 @@ export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
     refetchAll();
   }, [refetchAll]);
 
-  const toggleTag = useCallback(async (tagId: string, attached: boolean) => {
-    // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
-    const res = await fetch(linkTagsPath(linkId, tagId), {
-      method: attached ? 'DELETE' : 'POST',
-      credentials: 'include',
-    });
-    if (res.ok) refetchTags();
-  }, [linkId, refetchTags]);
-
-  const createTag = useCallback(async (values: TagFormState) => {
-    const res = await fetch('/api/controls/tags', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    });
-    if (!res.ok) throw new Error(res.status === 409 ? 'Tag name already exists' : 'Create failed');
-    const tag = (await res.json()) as TagSummary;
-    // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
-    const attach = await fetch(linkTagsPath(linkId, tag.id), { method: 'POST', credentials: 'include' });
-    if (!attach.ok) throw new Error('Tag created but could not be attached to this link');
-    refetchAll(true);
-    refetchTags();
-  }, [linkId, refetchAll, refetchTags]);
+  // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
+  const { toggleTag, createTag } = useTagAttachment({
+    path: (tagId) => linkTagsPath(linkId, tagId),
+    itemLabel: 'link',
+    refetchTags,
+    refetchAll,
+  });
 
   return { linkTags, allTags, toggleTag, createTag };
 }

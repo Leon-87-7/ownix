@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Check } from 'lucide-react';
 import { AuthShell } from '@/components/shell/auth-shell';
 
 export default function LogoutPage() {
@@ -9,17 +10,7 @@ export default function LogoutPage() {
           aria-hidden="true"
           className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-raised text-ink"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-          >
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+          <Check className="h-5 w-5" />
         </div>
         <h2 className="text-balance text-2xl font-semibold tracking-[-0.02em] text-ink">
           Session closed

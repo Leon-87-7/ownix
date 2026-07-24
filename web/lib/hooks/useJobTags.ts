@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { FetchState } from '@/lib/fetch-utils';
-import type { TagFormState } from '@/lib/hooks/useTagList';
+import { useTagAttachment } from '@/lib/hooks/useTagAttachment';
 
 interface TagSummary {
   id: string;
@@ -38,39 +38,14 @@ export function useJobTags(jobId: string, fetchState: FetchState, disabled = fal
     refetchAll();
   }, [fetchState, refetchTags, refetchAll, disabled]);
 
-  const toggleTag = useCallback(
-    async (tagId: string, attached: boolean) => {
-      if (disabled) return;
-      const res = await fetch(`/api/jobs/${jobId}/tags/${tagId}`, {
-        method: attached ? 'DELETE' : 'POST',
-        credentials: 'include',
-      });
-      if (res.ok) refetchTags(); // res.ok covers 200/201/204
-    },
-    [jobId, refetchTags, disabled],
-  );
-
-  // Create a tag in the user's library, then attach it to this job.
-  const createTag = useCallback(
-    async (values: TagFormState) => {
-      if (disabled) return;
-      const res = await fetch('/api/controls/tags', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-      if (!res.ok) {
-        throw new Error(res.status === 409 ? 'Tag name already exists' : 'Create failed');
-      }
-      const tag = (await res.json()) as TagSummary;
-      const attach = await fetch(`/api/jobs/${jobId}/tags/${tag.id}`, { method: 'POST', credentials: 'include' });
-      if (!attach.ok) throw new Error('Tag created but could not be attached to this job');
-      refetchAll();
-      refetchTags();
-    },
-    [jobId, refetchAll, refetchTags, disabled],
-  );
+  const { toggleTag, createTag } = useTagAttachment({
+    path: (tagId) =>
+      `/api/jobs/${encodeURIComponent(jobId)}/tags${tagId ? `/${encodeURIComponent(tagId)}` : ''}`,
+    itemLabel: 'job',
+    refetchTags,
+    refetchAll,
+    disabled,
+  });
 
   return { jobTags, allTags, refetchTags, toggleTag, createTag };
 }

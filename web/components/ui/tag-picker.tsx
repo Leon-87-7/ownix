@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   CornerDownLeft,
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { TagFormState } from '@/lib/hooks/useTagList';
 import { Tooltip } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 interface TagSummary {
   id: string;
@@ -226,14 +227,6 @@ function CreateTagModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -256,23 +249,15 @@ function CreateTagModal({
     'w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Create tag"
-        className="relative z-10 w-full max-w-md rounded-lg border border-line bg-surface p-5 shadow-xl"
-      >
-        <h2 className="mb-4 text-sm font-semibold text-ink">
-          Create tag
-        </h2>
+    <Dialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+    >
+      <DialogContent>
+        <DialogTitle>Create tag</DialogTitle>
         <form
           onSubmit={handleSubmit}
-          className="space-y-3"
+          className="mt-4 space-y-3"
         >
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex flex-1 flex-col gap-1">
@@ -377,8 +362,8 @@ function CreateTagModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

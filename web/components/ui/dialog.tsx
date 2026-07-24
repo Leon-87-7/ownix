@@ -16,8 +16,13 @@ export function DialogContent({
   children,
   className = '',
   style,
+  hideClose = false,
   ...props
-}: ComponentPropsWithoutRef<typeof RadixDialog.Content>) {
+}: ComponentPropsWithoutRef<typeof RadixDialog.Content> & {
+  /** Omit the close (X) affordance — for non-dismissible dialogs that also
+   * block Escape/outside-click, so no dead control invites a tap. */
+  hideClose?: boolean;
+}) {
   // RadixDialog.Content is only mounted while the dialog is open, so tracking
   // the visual viewport here follows the keyboard for the open dialog only.
   const { centerY, height } = useVisualViewport(true);
@@ -36,18 +41,21 @@ export function DialogContent({
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
       <RadixDialog.Content
+        aria-modal="true"
         className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-5 shadow-overlay data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none focus:outline-none ${className}`}
         style={{ ...viewportStyle, ...style }}
         {...props}
       >
         {children}
-        <RadixDialog.Close className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100">
-          <X
-            className="h-4 w-4"
-            aria-hidden="true"
-          />
-          <span className="sr-only">Close</span>
-        </RadixDialog.Close>
+        {!hideClose && (
+          <RadixDialog.Close className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100">
+            <X
+              className="h-4 w-4"
+              aria-hidden="true"
+            />
+            <span className="sr-only">Close</span>
+          </RadixDialog.Close>
+        )}
       </RadixDialog.Content>
     </RadixDialog.Portal>
   );
