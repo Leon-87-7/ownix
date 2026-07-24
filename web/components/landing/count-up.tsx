@@ -18,7 +18,13 @@ export function CountUp({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || reducedMotion) return;
+    if (!el) return;
+    if (reducedMotion) {
+      // A live preference flip mid-animation lands here too — make sure it
+      // doesn't leave an eased intermediate number stuck in the DOM.
+      el.textContent = Math.round(value).toString();
+      return;
+    }
     let raf = 0;
     const io = new IntersectionObserver(
       ([entry]) => {

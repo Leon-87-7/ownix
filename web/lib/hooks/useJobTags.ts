@@ -39,7 +39,8 @@ export function useJobTags(jobId: string, fetchState: FetchState, disabled = fal
   }, [fetchState, refetchTags, refetchAll, disabled]);
 
   const { toggleTag, createTag } = useTagAttachment({
-    path: (tagId) => `/api/jobs/${jobId}/tags${tagId ? `/${tagId}` : ''}`,
+    path: (tagId) =>
+      `/api/jobs/${encodeURIComponent(jobId)}/tags${tagId ? `/${encodeURIComponent(tagId)}` : ''}`,
     itemLabel: 'job',
     refetchTags,
     refetchAll,

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 
-export function useReducedMotion() {
-  const [reducedMotion, setReducedMotion] = useState<boolean | null>(null);
+// Safe-by-default: assume reduced motion until the media query resolves, so
+// no animation flashes for a vestibular-disorder user before the effect runs.
+export function useReducedMotion(): boolean {
+  const [reducedMotion, setReducedMotion] = useState(true);
 
   useEffect(() => {
-    if (!window.matchMedia) {
-      setReducedMotion(true);
-      return;
-    }
+    if (!window.matchMedia) return;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const update = () => setReducedMotion(media.matches);
     update();

@@ -11,6 +11,15 @@ interface TagSummary {
   icon?: string | null;
 }
 
+// SSRF guard: `path()` is caller-supplied, so pin every fetch to a relative,
+// same-origin API path before it reaches `fetch`.
+function sameOriginPath(path: string): string {
+  if (!path.startsWith('/')) {
+    throw new Error('useTagAttachment: path must be a relative same-origin path');
+  }
+  return path;
+}
+
 /** Shared attach/detach/create-and-attach flow for a `.../<itemId>/tags[/<tagId>]`
  * endpoint. Callers own fetching their own item tags + vocabulary (the fetch
  * gating and caching strategy differ per item type) — this only wraps the
@@ -31,7 +40,7 @@ export function useTagAttachment({
   const toggleTag = useCallback(
     async (tagId: string, attached: boolean) => {
       if (disabled) return;
-      const res = await fetch(path(tagId), {
+      const res = await fetch(sameOriginPath(path(tagId)), {
         method: attached ? 'DELETE' : 'POST',
         credentials: 'include',
       });
@@ -54,7 +63,7 @@ export function useTagAttachment({
         throw new Error(res.status === 409 ? 'Tag name already exists' : 'Create failed');
       }
       const tag = (await res.json()) as TagSummary;
-      const attach = await fetch(path(tag.id), { method: 'POST', credentials: 'include' });
+      const attach = await fetch(sameOriginPath(path(tag.id)), { method: 'POST', credentials: 'include' });
       if (!attach.ok) throw new Error(`Tag created but could not be attached to this ${itemLabel}`);
       refetchAll(true);
       refetchTags();

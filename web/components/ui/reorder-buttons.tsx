@@ -1,3 +1,5 @@
+import { ChevronUp, ChevronDown } from 'lucide-react';
+
 export function ReorderButtons({
   onUp,
   onDown,
@@ -16,13 +18,17 @@ export function ReorderButtons({
         disabled={disableUp}
         className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
         aria-label="Move up"
-      >&#9650;</button>
+      >
+        <ChevronUp className="h-3.5 w-3.5" />
+      </button>
       <button
         onClick={onDown}
         disabled={disableDown}
         className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
         aria-label="Move down"
-      >&#9660;</button>
+      >
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

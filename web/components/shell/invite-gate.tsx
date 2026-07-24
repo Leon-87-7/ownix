@@ -111,6 +111,7 @@ function EmailModal({
     <Dialog open>
       <DialogContent
         className="max-w-sm"
+        hideClose
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
