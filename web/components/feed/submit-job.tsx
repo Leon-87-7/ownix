@@ -335,104 +335,38 @@ export function SubmitJobProvider({
   feedSearchRef.current = feedSearch;
 
   useEffect(() => {
+    // ponytail: single-key shortcuts share one no-modifiers dispatch table;
+    // cmd/ctrl+shift+k keeps its own branch since its modifier check differs.
+    const plainKeyShortcuts: Record<string, () => void> = {
+      n: () => setOpen(true),
+      d: () => setDocsOpen(true),
+      u: () => setAddLinkOpen(true),
+      l: () => window.location.assign('/feed?view=links'),
+      c: () => {
+        const recovery = feedRecoveryRef.current;
+        if (!restricted && recovery?.canClearFailed && window.confirm(CLEAR_FAILED_CONFIRM))
+          recovery.clearFailed();
+      },
+      '/': () => feedSearchRef.current?.focusSearch(),
+      '*': () => feedSearchRef.current?.focusLinkSearch(),
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (
-        key === 'n' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        event.preventDefault();
-        setOpen(true);
-        return;
-      }
-      if (
-        key === 'd' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        event.preventDefault();
-        setDocsOpen(true);
-        return;
-      }
-      if (
-        key === 'u' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        event.preventDefault();
-        setAddLinkOpen(true);
-        return;
-      }
-      if (
-        key === 'l' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        event.preventDefault();
-        window.location.assign('/feed?view=links');
-        return;
-      }
-      if (
-        key === 'c' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        const recovery = feedRecoveryRef.current;
-        if (!restricted && recovery?.canClearFailed) {
+      const noMods = !event.altKey && !event.ctrlKey && !event.metaKey;
+
+      if (key === 'k' && (event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey) {
+        if (!shouldIgnoreGlobalShortcut(event.target)) {
           event.preventDefault();
-          if (window.confirm(CLEAR_FAILED_CONFIRM))
-            recovery.clearFailed();
+          setCommandOpen(true);
         }
         return;
       }
-      if (
-        key === '/' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        const search = feedSearchRef.current;
-        if (search) {
-          event.preventDefault();
-          search.focusSearch();
-        }
-        return;
-      }
-      if (
-        key === '*' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
-        const search = feedSearchRef.current;
-        if (search) {
-          event.preventDefault();
-          search.focusLinkSearch();
-        }
-        return;
-      }
-      if (
-        key === 'k' &&
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        !event.altKey &&
-        !shouldIgnoreGlobalShortcut(event.target)
-      ) {
+
+      const handler = plainKeyShortcuts[key];
+      if (noMods && handler && !shouldIgnoreGlobalShortcut(event.target)) {
         event.preventDefault();
-        setCommandOpen(true);
+        handler();
       }
     };
     window.addEventListener('keydown', onKeyDown);
