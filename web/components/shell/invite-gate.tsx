@@ -1,16 +1,9 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  FormEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, useContext, FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PreviewMotif from '../ui/preview-motif';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 
 type UserStatus = 'pending' | 'approved' | 'blocked';
 
@@ -77,33 +70,6 @@ function EmailModal({
   const [email, setEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previousFocus =
-      document.activeElement as HTMLElement | null;
-    inputRef.current?.focus();
-    return () => previousFocus?.focus();
-  }, []);
-
-  const trapTab = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab' || !dialogRef.current) return;
-    const focusables =
-      dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-    if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -142,21 +108,13 @@ function EmailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 px-4">
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invite-email-title"
-        onKeyDown={trapTab}
-        className="w-full max-w-sm rounded-lg border border-line bg-surface p-5 shadow-overlay"
+    <Dialog open>
+      <DialogContent
+        className="max-w-sm"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
       >
-        <h2
-          id="invite-email-title"
-          className="text-lg font-semibold text-ink"
-        >
-          Email required
-        </h2>
+        <DialogTitle>Email required</DialogTitle>
         <p className="mt-2 text-sm leading-6 text-body">
           Ownix is invite-only while it is young. Add the email we
           should use to review this Telegram account and follow up for
@@ -172,8 +130,9 @@ function EmailModal({
           >
             Email
           </label>
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
-            ref={inputRef}
+            autoFocus
             id="invite-email"
             type="email"
             value={email}
@@ -203,8 +162,8 @@ function EmailModal({
             {saving ? 'Saving...' : 'Save email'}
           </button>
         </form>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

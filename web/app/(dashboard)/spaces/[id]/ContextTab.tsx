@@ -4,6 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSpaceContext } from '@/lib/hooks/useSpaceContext';
 import { SkeletonLine } from '@/components/feed/feed-states';
+import { ReorderButtons } from '@/components/ui/reorder-buttons';
 
 const MarkdownEditor = dynamic(() => import('@/components/ui/markdown-editor'), {
   ssr: false,
@@ -46,20 +47,12 @@ export function ContextTab({ spaceId }: { spaceId: string }) {
           {blobs.map((blob, idx) => (
             <div key={blob.id} className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <button
-                    onClick={() => reorderBlob(idx, 'up')}
-                    disabled={idx === 0}
-                    className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
-                    aria-label="Move up"
-                  >&#9650;</button>
-                  <button
-                    onClick={() => reorderBlob(idx, 'down')}
-                    disabled={idx === blobs.length - 1}
-                    className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
-                    aria-label="Move down"
-                  >&#9660;</button>
-                </div>
+                <ReorderButtons
+                  onUp={() => reorderBlob(idx, 'up')}
+                  onDown={() => reorderBlob(idx, 'down')}
+                  disableUp={idx === 0}
+                  disableDown={idx === blobs.length - 1}
+                />
                 <input
                   type="text"
                   value={blob.name}

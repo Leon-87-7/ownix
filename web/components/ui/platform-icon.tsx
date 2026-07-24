@@ -16,21 +16,15 @@ type Platform =
   | 'article'
   | 'unknown';
 
-function hostFromUrl(url: string): string {
+function parseUrl(url: string): { host: string; path: string } {
   try {
-    return new URL(url).hostname
-      .toLowerCase()
-      .replace(/^(www|m)\./, '');
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname.toLowerCase().replace(/^(www|m)\./, ''),
+      path: parsed.pathname,
+    };
   } catch {
-    return '';
-  }
-}
-
-function pathFromUrl(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return '';
+    return { host: '', path: '' };
   }
 }
 
@@ -38,8 +32,7 @@ function platformFromUrl(
   url: string,
   contentType?: string,
 ): Platform {
-  const host = hostFromUrl(url);
-  const path = pathFromUrl(url);
+  const { host, path } = parseUrl(url);
   if (
     host === 'youtu.be' ||
     (host.endsWith('youtube.com') && path === '/watch')
@@ -55,7 +48,7 @@ function platformFromUrl(
 }
 
 function faviconUrl(url: string): string | null {
-  const host = hostFromUrl(url);
+  const { host } = parseUrl(url);
   return host
     ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`
     : null;
@@ -79,7 +72,7 @@ function labelFor(
   if (platform === 'instagram') return 'Instagram';
   if (platform === 'tiktok') return 'TikTok';
   if (platform === 'github') return 'GitHub';
-  if (platform === 'article') return hostFromUrl(url) || 'Article';
+  if (platform === 'article') return parseUrl(url).host || 'Article';
   return contentType || 'Source';
 }
 

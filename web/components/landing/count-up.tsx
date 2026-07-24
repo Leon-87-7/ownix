@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 /** Animates a stat from 0 to its value the first time it scrolls into view.
  * Server-renders the final value, so no-JS, reduced-motion, and headless
@@ -13,15 +14,11 @@ export function CountUp({
   delay?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      return;
-    }
+    if (!el || reducedMotion) return;
     let raf = 0;
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -48,7 +45,7 @@ export function CountUp({
       io.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [value, delay]);
+  }, [value, delay, reducedMotion]);
 
   return <span ref={ref}>{value}</span>;
 }

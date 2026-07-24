@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 /** Plays when a real scroll brings it into view, pauses when it scrolls out,
  * loops while visible. Muted + playsInline so the browser's autoplay policy
@@ -24,13 +25,11 @@ export function DemoVideo({
   className?: string;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return;
-    }
+    if (!el || reducedMotion) return;
     let sawFirstEntry = false;
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -45,7 +44,7 @@ export function DemoVideo({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [reducedMotion]);
 
   return (
     <video

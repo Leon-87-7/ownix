@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { YouTubeIcon } from '@/components/svg/youtube-icon';
 import { YouTubeShortsIcon } from '@/components/svg/youtube-shorts-icon';
 import { InstagramIcon } from '@/components/svg/instagram-icon';
@@ -30,31 +31,23 @@ const icons = [
 export function AppSlot() {
   const [active, setActive] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     setMounted(true);
-    const media = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    );
-    let id: ReturnType<typeof setInterval> | undefined;
-    const sync = () => {
-      clearInterval(id);
-      if (media.matches) {
-        setActive(0);
-      } else {
-        id = setInterval(
-          () => setActive((i) => (i + 1) % icons.length),
-          2600,
-        );
-      }
-    };
-    sync();
-    media.addEventListener('change', sync);
-    return () => {
-      clearInterval(id);
-      media.removeEventListener('change', sync);
-    };
   }, []);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setActive(0);
+      return;
+    }
+    const id = setInterval(
+      () => setActive((i) => (i + 1) % icons.length),
+      2600,
+    );
+    return () => clearInterval(id);
+  }, [reducedMotion]);
 
   const ActiveIcon = icons[active];
 

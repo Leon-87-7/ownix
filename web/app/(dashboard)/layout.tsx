@@ -1,6 +1,5 @@
 import { Sidebar } from '@/components/shell/sidebar';
 import { AppHeader } from '@/components/shell/app-header';
-import { PageBackground } from '@/components/shell/page-background';
 import { ScrollToTop } from '@/components/shell/scroll-to-top';
 import { InviteGate } from '@/components/shell/invite-gate';
 import { GoogleStatusProvider } from '@/components/shell/google-status';
@@ -40,7 +39,10 @@ export default async function DashboardLayout({
               <div className="flex h-screen overflow-hidden">
                 <Sidebar />
                 <main className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden">
-                  <PageBackground />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 z-0 bg-canvas"
+                  />
                   <AppHeader />
                   <div
                     data-dashboard-scroll

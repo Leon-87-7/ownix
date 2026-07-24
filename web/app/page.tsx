@@ -305,9 +305,6 @@ export default function LandingPage() {
                   <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.4px] text-muted">
                     AGENTS.md
                   </span>
-                  {/* <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-[0.4px] text-status-done">
-                    DONE
-                  </span> */}
                 </div>
                 <pre className="max-h-[280px] overflow-hidden whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-body [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
                   <span className="text-muted"># Role & Context</span>
