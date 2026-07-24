@@ -10,3 +10,5 @@ Run test suites **directly**, never through the rtk hook or `rtk proxy`:
 **Do:** run pytest via the **PowerShell tool**, not the Bash tool — the hook's matcher only catches `Bash`, so PowerShell invocations reach `python -m pytest` unmodified and return real output. e.g. `PowerShell: python -m pytest tests/test_foo.py -q`. Split large runs into per-file/per-directory invocations regardless of which tool you use — smaller runs are just faster and easier to read, not a workaround for the hook itself.
 
 `rtk proxy` (via Bash) is still fine for other commands (e.g. `git diff`).
+
+The PowerShell tool is a pragmatic sidestep, not a permanent fix — the actual bug is in rtk's own hook (it rewrites `pytest` unconditionally instead of excluding it), which is third-party tooling outside this repo. Fix it upstream in rtk if/when that's practical; until then this is the reliable path.

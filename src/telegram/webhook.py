@@ -551,11 +551,7 @@ async def _handle_callback(callback: dict) -> None:
     if chat_id and prefix not in {"invite_approve", "invite_block"}:
         sender = callback.get("from") or {}
         chat = cb_message.get("chat") or {}
-        identity = {
-            "first_name": sender.get("first_name") or chat.get("first_name") or "",
-            "last_name": sender.get("last_name") or chat.get("last_name"),
-            "username": sender.get("username") or chat.get("username"),
-        }
+        identity = _extract_message_identity(sender, chat)
         if not await _invite_gate_allows(chat_id, "", identity, via_callback=True):
             await answer_callback_query(cq_id, text="Access restricted.")
             return
@@ -1788,7 +1784,9 @@ async def _ops_cb_invite_decision(
         )
 
 
-async def _ops_cb_approve_pending(cq_id: str, chat_id: int | None, message_id: int | None, payload: str) -> None:
+async def _ops_cb_approve_pending(
+    cq_id: str, chat_id: int | None, message_id: int | None, payload: str
+) -> None:
     count = await ops_bot.approve_pending_batch(payload)
     await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
     if message_id:
@@ -1799,7 +1797,9 @@ async def _ops_cb_approve_pending(cq_id: str, chat_id: int | None, message_id: i
         )
 
 
-async def _ops_cb_approve_pending_cancel(cq_id: str, chat_id: int | None, message_id: int | None) -> None:
+async def _ops_cb_approve_pending_cancel(
+    cq_id: str, chat_id: int | None, message_id: int | None
+) -> None:
     await ops_bot.answer_ops_callback(cq_id, "Canceled")
     if message_id:
         await ops_bot.edit_ops_reply_markup(int(chat_id), int(message_id), [])
@@ -1889,16 +1889,26 @@ def _extract_message_identity(sender: dict, chat: dict) -> dict:
 
 
 async def _webhook_route_photo(chat_id: int, message: dict, photo: list, identity: dict) -> None:
-    if await _invite_gate_allows(chat_id, "", identity):
-        await _handle_photo_update(chat_id, message, photo)
+    try:
+        if await _invite_gate_allows(chat_id, "", identity):
+            await _handle_photo_update(chat_id, message, photo)
+    except Exception:
+        log.exception("webhook_photo_error", chat_id=chat_id)
 
 
-async def _webhook_route_document(chat_id: int, message: dict, document: dict, identity: dict) -> None:
-    if await _invite_gate_allows(chat_id, "", identity):
-        await _handle_document_update(chat_id, message, document)
+async def _webhook_route_document(
+    chat_id: int, message: dict, document: dict, identity: dict
+) -> None:
+    try:
+        if await _invite_gate_allows(chat_id, "", identity):
+            await _handle_document_update(chat_id, message, document)
+    except Exception:
+        log.exception("webhook_document_error", chat_id=chat_id)
 
 
-async def _webhook_route_text(chat_id: int, text: str, message_id: int | None, identity: dict) -> None:
+async def _webhook_route_text(
+    chat_id: int, text: str, message_id: int | None, identity: dict
+) -> None:
     try:
         await _route_text(chat_id, text, message_id, identity)
     except Exception:

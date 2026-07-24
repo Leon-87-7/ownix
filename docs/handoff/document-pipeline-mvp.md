@@ -210,6 +210,7 @@
       wheel before writing #153/#154 (the ADR verified it but pin-check).
 - [ ] Confirm `google-cloud-storage` import path + that platform GCS creds work
       via `google_auth` without enabling Drive/Sheets.
-- [ ] Run tests via `rtk proxy python -m pytest` (bare pytest gets mangled by the
-      rtk hook).
+- [ ] Run tests via the PowerShell tool, not Bash (`python -m pytest tests -q`) —
+      see `.claude/rules/rtk-tests.md`. The rtk hook only intercepts the Bash
+      tool and mangles/hangs pytest; PowerShell reaches pytest unmodified.
 - [ ] One commit per issue, all on the one PR.
