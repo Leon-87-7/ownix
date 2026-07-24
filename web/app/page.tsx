@@ -174,6 +174,7 @@ export default function LandingPage() {
               {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
               <DemoVideo
                 src="/demo-capture.mp4"
+                poster="/demo-poster.jpg"
                 className="block aspect-video w-full border-b border-line bg-canvas"
               />
               <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
