@@ -136,7 +136,6 @@ class JobCreateRequest(BaseModel):
     content_type: Literal["link"] | None = None
 
 
-@jobs_router.post("")
 async def _create_link_job(chat_id: int, url: str) -> dict:
     if not is_fetchable_url(url):
         raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
@@ -203,6 +202,7 @@ async def _create_pipeline_job(body: JobCreateRequest, chat_id: int, url: str) -
     }
 
 
+@jobs_router.post("")
 async def create_job(request: Request, body: JobCreateRequest) -> dict:
     """Create a dashboard-submitted job using the shared Telegram ingest core."""
     chat_id: int = request.state.user["id"]
