@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import requests
 
 from src.config import settings
+from src.utils import days_ago
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -235,25 +236,6 @@ async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
     return bundle
 
 
-def _fetch_sync(owner: str, repo: str, token: str) -> dict | None:
-    """Blocking HTTP call — run via asyncio.to_thread."""
-    url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
-    resp = requests.get(url, headers=headers, timeout=10)
-    if resp.status_code == 404:
-        return None
-    resp.raise_for_status()
-    data = resp.json()
-    return {
-        "stars": data["stargazers_count"],
-        "forks": data["forks_count"],
-        "language": data.get("language"),
-        "pushed_at": data.get("pushed_at"),
-        "description": data.get("description"),
-        "archived": data.get("archived", False),
-    }
-
-
 async def enrich_repo(owner: str, repo: str, token: str) -> dict | None:
     """Return GitHub metadata for owner/repo, using Redis cache (TTL 24h).
 
@@ -277,7 +259,7 @@ async def enrich_repo(owner: str, repo: str, token: str) -> dict | None:
 
     # API call
     try:
-        result = await asyncio.to_thread(_fetch_sync, owner, repo, token)
+        result = await asyncio.to_thread(_fetch_bundle_meta_sync, owner, repo, token)
     except Exception as exc:
         log.warning("github_fetch_failed", repo=f"{owner}/{repo}", error=str(exc)[:120])
         return None
@@ -346,15 +328,9 @@ async def enrich_github_links(links: list[dict]) -> list[dict]:
 
 def _apply_repo_metadata(lnk: dict, data: dict, now: datetime) -> None:
     """Attach the underscore-prefixed enrichment fields from an API result."""
-    pushed_at_raw = data.get("pushed_at") or ""
-    try:
-        pushed = datetime.fromisoformat(pushed_at_raw.replace("Z", "+00:00"))
-        days_ago = (now - pushed).days
-    except Exception:
-        days_ago = 0
     lnk["_enriched"] = True
     lnk["_stars"] = data.get("stars", 0)
     lnk["_forks"] = data.get("forks", 0)
     lnk["_language"] = data.get("language")
-    lnk["_days_ago"] = days_ago
+    lnk["_days_ago"] = days_ago(data.get("pushed_at"), now=now)
     lnk["_gh_description"] = data.get("description")

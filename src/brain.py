@@ -305,10 +305,6 @@ def _github_owner_repo(url: str) -> tuple[str, str] | None:
     return segments[0], segments[1]
 
 
-def _is_repo_archived(row: dict) -> bool:
-    return bool(row.get("archived"))
-
-
 def _slugify(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", title.lower())
     slug = re.sub(r"^_+|_+$", "", slug)
@@ -379,7 +375,7 @@ async def _rewrite_existing_md(
             blob = self_row["embedding"]
             if len(blob) == EMBEDDING_DIM * 4:
                 self_vec = np.frombuffer(blob, dtype=np.float32)
-                related = _compute_related(existing["id"], self_vec, ids_list, matrix, conn)
+                related = _compute_related(existing["id"], self_vec, ids_list, matrix)
 
     related_titles = await _fetch_related_titles(conn, related)
     src_url, src_drive_url = await _get_source_job_info(conn, source_job_id)
@@ -521,7 +517,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
 
         related: list[dict] = []
         if embedding_arr is not None and ids_list:
-            related = _compute_related(link_id, embedding_arr, ids_list, matrix, conn)
+            related = _compute_related(link_id, embedding_arr, ids_list, matrix)
 
         related_titles = await _fetch_related_titles(conn, related)
 
@@ -568,7 +564,6 @@ def _compute_related(
     self_vec: np.ndarray,
     ids_list: list[str],
     matrix: np.ndarray,
-    _conn: Any,
 ) -> list[dict]:
     sims = [
         (ids_list[i], _cosine_similarity(self_vec, matrix[i]))
@@ -684,7 +679,7 @@ async def get_graph() -> dict[str, list[dict]]:
     seen_pairs: set[tuple[str, str]] = set()
     edges: list[dict] = []
     for idx, link_id in enumerate(ids_list):
-        for related in _compute_related(link_id, matrix[idx], ids_list, matrix, None):
+        for related in _compute_related(link_id, matrix[idx], ids_list, matrix):
             source = id_to_row[link_id]["url"]
             target = id_to_row[related["id"]]["url"]
             key = tuple(sorted((source, target)))
@@ -947,7 +942,7 @@ async def _rebuild_one_link(
     if lnk["embedding"] and lnk_id in ids_list:
         idx = ids_list.index(lnk_id)
         self_vec = matrix[idx]
-        related_ids = [r["id"] for r in _compute_related(lnk_id, self_vec, ids_list, matrix, conn)]
+        related_ids = [r["id"] for r in _compute_related(lnk_id, self_vec, ids_list, matrix)]
     else:
         related_ids = []
 
@@ -1087,7 +1082,7 @@ async def _refresh_repo_metadata(lnk: dict) -> tuple[int | None, str | None, int
     pushed_at = lnk.get("pushed_at")
     archived = int(bool(lnk.get("archived")))
     repo_pair = _github_owner_repo(lnk["url"])
-    if not repo_pair or _is_repo_archived(lnk):
+    if not repo_pair or bool(lnk.get("archived")):
         return stars, pushed_at, archived
 
     try:
@@ -1138,7 +1133,7 @@ async def _refresh_one_link(
 
     related_titles: list[str] = []
     if self_vec is not None and ids_list:
-        related = _compute_related(lnk_id, self_vec, ids_list, matrix, conn)
+        related = _compute_related(lnk_id, self_vec, ids_list, matrix)
         related_titles = await _fetch_related_titles(conn, related, fallback_to_url=True)
 
     src_url, src_drive_url = await _get_source_job_info(conn, lnk["source_job"])

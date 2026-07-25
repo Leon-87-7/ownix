@@ -249,8 +249,7 @@ def _article_row(job: dict, *, domain: str) -> list:
     tools = job.get("ai_tools") or ""
     promise_gap_raw = job.get("promise_gap")
     try:
-        import json as _json
-        pg = _json.loads(promise_gap_raw) if promise_gap_raw else {}
+        pg = json.loads(promise_gap_raw) if promise_gap_raw else {}
         gaps = pg.get("gaps", [])
         hidden = pg.get("hidden_value", [])
         promise_gap_str = " | ".join(gaps + hidden)

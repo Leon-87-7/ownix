@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from src import database, queue
+from src.services.jobs import task_for_content_type
 from src.utils import job_tag
 from src.utils.logger import get_logger
-
-ContentType = Literal["short", "long", "article", "repo"]
 
 STALE_MINUTES = 10
 _CONTENT_TYPES = {"short", "long", "article", "repo"}
@@ -22,14 +21,6 @@ def _validate_content_type(content_type: str | None) -> str | None:
     if content_type not in _CONTENT_TYPES:
         raise ValueError("content_type must be one of short, long, article, repo")
     return content_type
-
-
-def _task_for(content_type: str) -> str | None:
-    if content_type in {"short", "long"}:
-        return "video"
-    if content_type in {"article", "repo"}:
-        return content_type
-    return None
 
 
 def _scope_where(chat_id: int, content_type: str | None) -> tuple[str, list[Any]]:
@@ -119,7 +110,7 @@ async def retry_pending(chat_id: int, content_type: str | None = None) -> dict[s
     unprocessed = {row["id"]: row for row in claimed}
     try:
         for row in claimed:
-            task = _task_for(row["content_type"])
+            task = task_for_content_type(row["content_type"], default=None)
             if task is None:
                 skipped_non_retryable += 1
                 del unprocessed[row["id"]]
@@ -258,7 +249,7 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
                 del unprocessed[row["id"]]
                 continue
 
-            task = _task_for(row_content_type)
+            task = task_for_content_type(row_content_type, default=None)
             if task is None:
                 # Nothing to retry — leave it as a failed job the user still sees.
                 await database.update_job_status(row["id"], "error")

@@ -8,9 +8,7 @@ import asyncio
 import functools
 import hashlib
 import html
-import ipaddress
 import re
-import socket
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
@@ -27,7 +25,7 @@ from src.config import settings
 from src.services import storage
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
-from src.services.jobs import create_and_enqueue_job
+from src.services.jobs import create_and_enqueue_job, task_for_content_type
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
@@ -44,6 +42,7 @@ from src.templates import PROMPT_TEMPLATES
 from src.utils import job_tag
 from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
+from src.utils.ssrf import is_public_host, is_public_ip, resolve_public_host
 from src.utils.validators import (
     detect_pipeline,
     normalize_email,
@@ -78,22 +77,11 @@ async def _validate_public_https_url(url: str) -> str | None:
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname:
         return "URL must be https with a host."
-    try:
-        loop = asyncio.get_running_loop()
-        infos = await loop.getaddrinfo(parsed.hostname, None, type=socket.SOCK_STREAM)
-    except socket.gaierror:
+    infos = await resolve_public_host(parsed.hostname)
+    if infos is None:
         return "URL host could not be resolved."
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            return "URL host resolves to a non-public address."
+    if not all(is_public_ip(info[4][0]) for info in infos):
+        return "URL host resolves to a non-public address."
     return None
 
 
@@ -405,11 +393,6 @@ async def _cb_article_retry(ctx: CallbackCtx) -> None:
     await send_message(ctx.chat_id, f"{job_tag(ctx.job_id)}\n📥 Retrying article analysis...")
 
 
-def _task_for(pipeline: str | None) -> str:
-    """Worker task name for a pipeline / content_type. Default video."""
-    return pipeline if pipeline in ("repo", "article", "document") else "video"
-
-
 async def _cb_reprocess(ctx: CallbackCtx) -> None:
     """One-tap retry for a 'processing' job orphaned by a restart (ADR-0010).
 
@@ -427,7 +410,7 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
         content_type=job["content_type"],
         template=job.get("template"),
     )
-    task_type = _task_for(job["content_type"])
+    task_type = task_for_content_type(job["content_type"], default="video")
     await queue.enqueue({"task": task_type, "job_id": new_job_id})
     log.info("reprocess_enqueued", orphan_job_id=ctx.job_id, new_job_id=new_job_id)
     await send_message(ctx.chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
@@ -468,9 +451,7 @@ async def _cb_document_md(ctx: CallbackCtx) -> None:
         )
 
 
-async def _cb_invite_decision(
-    ctx: CallbackCtx, status: str, notify_message: str, log_action: str
-) -> None:
+async def _cb_invite_decision(ctx: CallbackCtx, log_action: str) -> None:
     """Deprecated Ownix-bot invite callbacks; decisions now live on /webhook/ops."""
     log.warning("invite_decision.deprecated_ownix_callback", chat_id=ctx.chat_id, action=log_action)
     await answer_callback_query(ctx.cq_id, text="Use the Ops bot approval card.")
@@ -483,18 +464,8 @@ async def _cb_invite_status(ctx: CallbackCtx) -> None:
     await answer_callback_query(ctx.cq_id, text=text)
 
 
-_cb_invite_approve = functools.partial(
-    _cb_invite_decision,
-    status="approved",
-    notify_message=_INVITE_APPROVED_MESSAGE,
-    log_action="approved",
-)
-_cb_invite_block = functools.partial(
-    _cb_invite_decision,
-    status="blocked",
-    notify_message=_INVITE_BLOCKED_MESSAGE,
-    log_action="blocked",
-)
+_cb_invite_approve = functools.partial(_cb_invite_decision, log_action="approved")
+_cb_invite_block = functools.partial(_cb_invite_decision, log_action="blocked")
 
 
 async def _cb_repo_pick(ctx: CallbackCtx) -> None:
@@ -747,7 +718,9 @@ async def _cmd_template(ctx: SlashCtx) -> None:
         "pending",
         template_detection_method="explicit_command",
     )
-    await queue.enqueue({"task": _task_for(pipeline), "job_id": job_id})
+    await queue.enqueue(
+        {"task": task_for_content_type(pipeline, default="video"), "job_id": job_id}
+    )
     await send_message(
         ctx.chat_id,
         f"📥 Received\n✨ Kicking off Gemini analysis ({template})\njob_{job_id[-4:]}",
@@ -838,7 +811,7 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         job_id = existing_job["id"]
         await database.reset_job(job_id)
         content_type = existing_job.get("content_type")
-        task_type = _task_for(content_type)
+        task_type = task_for_content_type(content_type, default="video")
         if pipeline == "repo":
             try:
                 parts = [s for s in urlparse(lookup_url).path.split("/") if s]
@@ -877,7 +850,7 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         content_type=pipeline,
         message_id=ctx.message_id,
     )
-    task_type = _task_for(pipeline)
+    task_type = task_for_content_type(pipeline, default="video")
     await queue.enqueue({"task": task_type, "job_id": job_id})
     await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
 
@@ -1629,30 +1602,7 @@ async def _route_url(chat_id: int, text: str, message_id: int | None) -> None:
     await _route_video(chat_id, text, pipeline, message_id, pending_template)
 
 
-async def _is_public_host(host: str) -> bool:
-    """True only when every resolved address for *host* is a public, routable IP.
-
-    Blocks SSRF to loopback / private / link-local (incl. 169.254.169.254 cloud
-    metadata) / reserved ranges. ponytail: validates via getaddrinfo, not pinned
-    to the socket — a DNS-rebinding attacker could still race the resolution;
-    upgrade to an IP-pinned httpx transport if that threat becomes real.
-    """
-    try:
-        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            return False
-    return True
+_is_public_host = is_public_host
 
 
 async def _safe_get_pdf(url: str) -> bytes | None:

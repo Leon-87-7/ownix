@@ -263,7 +263,3 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
         except Exception:
             log.exception("invite.operator_notification_failed", tg_id=tg_id)
     return {"email": email, "status": status}
-
-
-# Compatibility aliases for older tests/callers; canonical routes live in src.api.google_oauth.
-from src.api.google_oauth import connect_google as google_connect  # noqa: E402,F401

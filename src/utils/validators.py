@@ -384,6 +384,22 @@ def extract_description_links(description: str) -> list[dict]:
     return results
 
 
-def slugify(s: str) -> str:
-    """lowercase, non-alnum → '_', strip leading/trailing '_', max 80 chars."""
-    return re.sub(r"^_+|_+$", "", re.sub(r"[^a-z0-9]+", "_", s.lower()))[:80]
+def slugify(s: str, max_len: int = 80) -> str:
+    """lowercase, non-alnum → '_', strip leading/trailing '_', max max_len chars."""
+    return re.sub(r"^_+|_+$", "", re.sub(r"[^a-z0-9]+", "_", s.lower()))[:max_len]
+
+
+def sanitize_filename_chars(
+    text: str, *, extra_chars: str = "", strip_extra: str = "", max_len: int = 80
+) -> str:
+    """Keep only alnum/space/hyphen/underscore (+ extra_chars), trim, cap length.
+
+    Preserves case and spaces — unlike slugify(), this is for a readable filename
+    stem, not a URL-safe slug. Returns '' when nothing survives; callers supply
+    their own fallback.
+    """
+    pattern = r"[^a-zA-Z0-9 \-_" + re.escape(extra_chars) + r"]"
+    cleaned = re.sub(pattern, "", text or "")
+    if strip_extra:
+        cleaned = cleaned.strip(strip_extra)
+    return cleaned.strip()[:max_len]

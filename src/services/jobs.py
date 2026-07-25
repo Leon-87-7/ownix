@@ -10,10 +10,13 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 
-def task_for_content_type(content_type: str) -> str:
+def task_for_content_type(content_type: str | None, *, default: str | None) -> str | None:
+    """Worker task name for a pipeline / content_type. short/long collapse to 'video'."""
     if content_type in {"short", "long"}:
         return "video"
-    return content_type
+    if content_type in {"article", "repo", "document"}:
+        return content_type
+    return default
 
 
 async def create_and_enqueue_job(
@@ -57,7 +60,9 @@ async def create_and_enqueue_job(
             "pending",
             template_detection_method="explicit_command",
         )
-    await queue.enqueue({"task": task_for_content_type(content_type), "job_id": job_id})
+    await queue.enqueue(
+        {"task": task_for_content_type(content_type, default=content_type), "job_id": job_id}
+    )
     created = await database.get_job(job_id)
     if created is None:
         return {

@@ -96,6 +96,30 @@ async def revoke(session_id: str) -> None:
     log.info("session_revoked")
 
 
+async def _mint_token(prefix: str, value: str, ttl: int) -> str:
+    token = secrets.token_urlsafe(24)
+    key = f"{prefix}{token}"
+    if _use_memory():
+        _memory_set(key, value, ex=ttl)
+    else:
+        await _client().set(key, value, ex=ttl)
+    return token
+
+
+async def _redeem_token(prefix: str, token: str) -> str | None:
+    """Atomically fetch-and-delete the value for a token.
+
+    Uses GETDEL (single round trip) rather than GET+DELETE so a concurrent retry
+    within the TTL can't redeem the same token twice.
+    """
+    key = f"{prefix}{token}"
+    if _use_memory():
+        value = _memory_get(key)
+        _memory.pop(key, None)
+        return value
+    return await _client().getdel(key)
+
+
 async def mint_handoff(session_id: str, ttl: int = _HANDOFF_TTL_SECONDS) -> str:
     """Create a short-lived, single-use token that redeems to session_id.
 
@@ -106,48 +130,22 @@ async def mint_handoff(session_id: str, ttl: int = _HANDOFF_TTL_SECONDS) -> str:
     seconds (default 60s; job dashboard links use a longer ttl since they can sit
     unread in chat history).
     """
-    token = secrets.token_urlsafe(24)
-    key = f"{_HANDOFF_PREFIX}{token}"
-    if _use_memory():
-        _memory_set(key, session_id, ex=ttl)
-    else:
-        await _client().set(key, session_id, ex=ttl)
-    return token
+    return await _mint_token(_HANDOFF_PREFIX, session_id, ttl)
 
 
 async def redeem_handoff(token: str) -> str | None:
-    """Atomically fetch-and-delete the session id for a handoff token.
-
-    Uses GETDEL (single round trip) rather than GET+DELETE so a concurrent retry
-    within the 60s TTL can't redeem the same token twice.
-    """
-    key = f"{_HANDOFF_PREFIX}{token}"
-    if _use_memory():
-        value = _memory_get(key)
-        _memory.pop(key, None)
-        return value
-    return await _client().getdel(key)
+    """Atomically fetch-and-delete the session id for a handoff token."""
+    return await _redeem_token(_HANDOFF_PREFIX, token)
 
 
 async def mint_dashboard_handoff(chat_id: int, ttl: int) -> str:
     """Create a single-use dashboard handoff token for a Telegram chat id."""
-    token = secrets.token_urlsafe(24)
-    key = f"{_DASHBOARD_HANDOFF_PREFIX}{token}"
-    if _use_memory():
-        _memory_set(key, str(chat_id), ex=ttl)
-    else:
-        await _client().set(key, str(chat_id), ex=ttl)
-    return token
+    return await _mint_token(_DASHBOARD_HANDOFF_PREFIX, str(chat_id), ttl)
 
 
 async def redeem_dashboard_handoff(token: str) -> int | None:
     """Atomically fetch-and-delete the chat id for a dashboard handoff token."""
-    key = f"{_DASHBOARD_HANDOFF_PREFIX}{token}"
-    if _use_memory():
-        value = _memory_get(key)
-        _memory.pop(key, None)
-    else:
-        value = await _client().getdel(key)
+    value = await _redeem_token(_DASHBOARD_HANDOFF_PREFIX, token)
     if value is None:
         return None
     try:

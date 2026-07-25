@@ -2,6 +2,18 @@ def job_tag(job_id: str) -> str:
     return f"job_{job_id[-4:]}:"
 
 
+def days_ago(iso_str: str | None, *, now=None) -> int:
+    """Days between an ISO 8601 timestamp (``Z`` or offset-aware) and now. 0 on empty/unparseable input."""
+    if not iso_str:
+        return 0
+    from datetime import datetime, timezone
+    try:
+        parsed = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return ((now or datetime.now(timezone.utc)) - parsed).days
+    except Exception:
+        return 0
+
+
 def job_dashboard_url(job_id: str) -> str | None:
     """Absolute dashboard link for a job, or None if DASHBOARD_URL isn't configured."""
     from src.config import settings

@@ -14,7 +14,6 @@ os.environ.setdefault("TELEGRAM_WEBHOOK_SECRET", "test-secret")
 
 from src.services.github import (
     enrich_repo,
-    _fetch_sync,
     _fetch_bundle_meta_sync,
     preprocess_readme,
     fetch_readme,
@@ -56,19 +55,19 @@ _SAMPLE_META = {
 
 
 # ---------------------------------------------------------------------------
-# Test: cache hit — _fetch_sync is never called
+# Test: cache hit — _fetch_bundle_meta_sync is never called
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_enrich_repo_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When Redis has a cached value, _fetch_sync must not be called."""
+    """When Redis has a cached value, _fetch_bundle_meta_sync must not be called."""
     fake_redis = FakeRedis()
     fake_redis._store["github_meta:octocat/Hello-World"] = json.dumps(_SAMPLE_META)
 
     import src.queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
-    with patch("src.services.github._fetch_sync") as mock_fetch:
+    with patch("src.services.github._fetch_bundle_meta_sync") as mock_fetch:
         result = await enrich_repo("octocat", "Hello-World", token="tok")
 
     mock_fetch.assert_not_called()
@@ -81,13 +80,13 @@ async def test_enrich_repo_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_enrich_repo_cache_miss_api_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    """On cache miss, _fetch_sync is called, result is stored in Redis and returned."""
+    """On cache miss, _fetch_bundle_meta_sync is called, result is stored in Redis and returned."""
     fake_redis = FakeRedis()
 
     import src.queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
-    with patch("src.services.github._fetch_sync", return_value=_SAMPLE_META):
+    with patch("src.services.github._fetch_bundle_meta_sync", return_value=_SAMPLE_META):
         result = await enrich_repo("octocat", "Hello-World", token="tok")
 
     assert result is not None
@@ -106,13 +105,13 @@ async def test_enrich_repo_cache_miss_api_success(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_enrich_repo_cache_miss_404(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When _fetch_sync returns None (404), enrich_repo returns None without caching."""
+    """When _fetch_bundle_meta_sync returns None (404), enrich_repo returns None without caching."""
     fake_redis = FakeRedis()
 
     import src.queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
-    with patch("src.services.github._fetch_sync", return_value=None):
+    with patch("src.services.github._fetch_bundle_meta_sync", return_value=None):
         result = await enrich_repo("ghost", "missing-repo", token="tok")
 
     assert result is None
@@ -126,13 +125,13 @@ async def test_enrich_repo_cache_miss_404(monkeypatch: pytest.MonkeyPatch) -> No
 
 @pytest.mark.asyncio
 async def test_enrich_repo_network_error_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When _fetch_sync raises, enrich_repo must return None and not propagate."""
+    """When _fetch_bundle_meta_sync raises, enrich_repo must return None and not propagate."""
     fake_redis = FakeRedis()
 
     import src.queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
-    with patch("src.services.github._fetch_sync", side_effect=ConnectionError("timeout")):
+    with patch("src.services.github._fetch_bundle_meta_sync", side_effect=ConnectionError("timeout")):
         result = await enrich_repo("octocat", "Hello-World", token="tok")
 
     assert result is None

@@ -55,6 +55,21 @@ async def disconnect_google(chat_id: int) -> None:
     await delete_google_token(chat_id)
 
 
+def _credentials_from_refresh_token(
+    refresh_token: str, *, client_id: str, client_secret: str, scopes: list[str]
+) -> Credentials:
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=scopes,
+    )
+    creds.refresh(Request())
+    return creds
+
+
 def build_google_credentials(
     scopes: list[str], *, prefer_service_account: bool = False, chat_id: int | None = None
 ) -> Any:
@@ -67,32 +82,24 @@ def build_google_credentials(
     if chat_id is not None:
         token_payload = load_google_token_sync(chat_id)
         if token_payload:
-            creds = Credentials(
-                token=None,
-                refresh_token=token_payload["refresh_token"],
-                token_uri="https://oauth2.googleapis.com/token",
+            return _credentials_from_refresh_token(
+                token_payload["refresh_token"],
                 client_id=token_payload.get("client_id") or settings.GOOGLE_OAUTH_CLIENT_ID,
                 client_secret=token_payload.get("client_secret") or settings.GOOGLE_OAUTH_CLIENT_SECRET,
                 scopes=scopes,
             )
-            creds.refresh(Request())
-            return creds
 
     if prefer_service_account and os.path.exists(settings.GOOGLE_SERVICE_ACCOUNT_JSON):
         return service_account.Credentials.from_service_account_file(
             settings.GOOGLE_SERVICE_ACCOUNT_JSON, scopes=scopes
         )
     if settings.GOOGLE_OAUTH_REFRESH_TOKEN:
-        creds = Credentials(
-            token=None,
-            refresh_token=settings.GOOGLE_OAUTH_REFRESH_TOKEN,
-            token_uri="https://oauth2.googleapis.com/token",
+        return _credentials_from_refresh_token(
+            settings.GOOGLE_OAUTH_REFRESH_TOKEN,
             client_id=settings.GOOGLE_OAUTH_CLIENT_ID,
             client_secret=settings.GOOGLE_OAUTH_CLIENT_SECRET,
             scopes=scopes,
         )
-        creds.refresh(Request())
-        return creds
     return service_account.Credentials.from_service_account_file(
         settings.GOOGLE_SERVICE_ACCOUNT_JSON, scopes=scopes
     )

@@ -332,8 +332,8 @@ async def answer_callback_query(
     _raise_for_status(response, method="answerCallbackQuery")
 
 
-async def download_photo(file_id: str, *, bot_token: str | None = None) -> tuple[bytes, str]:
-    """Download a Telegram photo by file_id. Returns (raw_bytes, mime_type)."""
+async def _fetch_telegram_file(file_id: str, *, bot_token: str | None = None) -> tuple[bytes, str]:
+    """getFile → /file/bot{token}/{path} two-step. Returns (raw_bytes, file_path)."""
     token = settings.TELEGRAM_BOT_TOKEN if bot_token is None else bot_token
     resp = await _http().get(_endpoint("getFile", bot_token=token), params={"file_id": file_id})
     _raise_for_status(resp, method="getFile")
@@ -341,22 +341,21 @@ async def download_photo(file_id: str, *, bot_token: str | None = None) -> tuple
     dl_url = f"{_API_BASE}/file/bot{token}/{file_path}"
     file_resp = await _http().get(dl_url)
     _raise_for_status(file_resp, method="getFile.download")
+    return file_resp.content, file_path
+
+
+async def download_photo(file_id: str, *, bot_token: str | None = None) -> tuple[bytes, str]:
+    """Download a Telegram photo by file_id. Returns (raw_bytes, mime_type)."""
+    content, file_path = await _fetch_telegram_file(file_id, bot_token=bot_token)
     ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "jpg"
     mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
-    return file_resp.content, mime_map.get(ext, "image/jpeg")
+    return content, mime_map.get(ext, "image/jpeg")
 
 
 async def download_file(file_id: str, *, bot_token: str | None = None) -> bytes:
     """Download any Telegram file by file_id. Returns the raw bytes.
 
-    Same getFile → /file/bot{token}/{path} two-step as download_photo, but
-    format-agnostic (no mime map) — used for document uploads (#151).
+    Format-agnostic (no mime map) — used for document uploads (#151).
     """
-    token = settings.TELEGRAM_BOT_TOKEN if bot_token is None else bot_token
-    resp = await _http().get(_endpoint("getFile", bot_token=token), params={"file_id": file_id})
-    _raise_for_status(resp, method="getFile")
-    file_path: str = resp.json()["result"]["file_path"]
-    dl_url = f"{_API_BASE}/file/bot{token}/{file_path}"
-    file_resp = await _http().get(dl_url)
-    _raise_for_status(file_resp, method="getFile.download")
-    return file_resp.content
+    content, _ = await _fetch_telegram_file(file_id, bot_token=bot_token)
+    return content

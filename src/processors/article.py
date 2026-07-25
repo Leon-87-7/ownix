@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import html
 import json
-import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -15,7 +14,9 @@ from src.telegram.sender import edit_message_text, send_document, send_inline_ke
 from src.services.gemini import extract_json
 from src.utils import dashboard_button_row, job_tag
 from src.utils.logger import get_logger
+from src.utils.markdown import format_promise_gap_section, format_tool_line
 from src.utils.og_image import fetch_og_image_url
+from src.utils.validators import sanitize_filename_chars
 from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
@@ -57,12 +58,8 @@ def _check_paywall(body: str) -> bool:
 
 def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
     """Return a safe filename stem from *title*, falling back to the URL hostname."""
-    if title:
-        safe = re.sub(r"[^a-zA-Z0-9 \-_]", "", title)
-        safe = safe.strip()[:max_len]
-        if safe:
-            return safe
-    return urlparse(url).hostname or "document"
+    safe = sanitize_filename_chars(title, max_len=max_len)
+    return safe or (urlparse(url).hostname or "document")
 
 
 def _get_domain(url: str) -> str:
@@ -119,31 +116,7 @@ def _action_points_section(action_points_raw: str) -> list[str]:
 def _tools_section(tools: list[dict]) -> list[str]:
     if not tools:
         return []
-    parts = ["", "🛠 Tools"]
-    for t in tools:
-        prefix = f"[{html.escape(t.get('type', 'tool'))}]"
-        name = html.escape(t["name"])
-        if t.get("url"):
-            url_attr = html.escape(t["url"], quote=True)
-            name = f'<a href="{url_attr}">{name}</a>'
-        desc = html.escape(t.get("description", ""))
-        parts.append(f"• {prefix} {name}: {desc}")
-    return parts
-
-
-def _promise_gap_section(promise_gap: dict | None) -> list[str]:
-    gaps = promise_gap.get("gaps", []) if promise_gap else []
-    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
-    if not gaps and not hidden:
-        return []
-    parts = ["\n=====PROMISE=GAP====="]
-    if gaps:
-        parts.append("❌ Unfulfilled:")
-        parts += [f"• {html.escape(g)}" for g in gaps]
-    if hidden:
-        parts.append("💎 Hidden value:")
-        parts += [f"• {html.escape(h)}" for h in hidden]
-    return parts
+    return ["", "🛠 Tools"] + [format_tool_line(t) for t in tools]
 
 
 def _build_enrichment_message(
@@ -170,7 +143,7 @@ def _build_enrichment_message(
     ]
     parts += _action_points_section(job.get("ai_action_points") or "")
     parts += _tools_section(tools)
-    parts += _promise_gap_section(promise_gap)
+    parts += format_promise_gap_section(promise_gap)
 
     return "\n".join(p for p in parts if p is not None)
 

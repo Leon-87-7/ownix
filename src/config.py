@@ -113,19 +113,12 @@ class Settings(BaseSettings):
     def parse_chat_ids(self, raw: str) -> tuple[int, ...]:
         """Parse comma-separated Telegram chat IDs, ignoring blanks safely."""
         ids: list[int] = []
-        seen: set[int] = set()
-        for part in raw.split(","):
-            value = part.strip()
-            if not value:
-                continue
+        for value in (part.strip() for part in raw.split(",") if part.strip()):
             try:
-                chat_id = int(value)
+                ids.append(int(value))
             except ValueError as exc:
                 raise ValueError(f"Invalid Telegram chat id: {value!r}") from exc
-            if chat_id not in seen:
-                ids.append(chat_id)
-                seen.add(chat_id)
-        return tuple(ids)
+        return tuple(dict.fromkeys(ids))
 
     @property
     def ops_chat_ids(self) -> tuple[int, ...]:

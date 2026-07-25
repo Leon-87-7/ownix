@@ -17,8 +17,9 @@ from src.services.sheets import append_repo_row, update_repo_row
 from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message
 from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
-from src.utils import dashboard_button_row, job_tag
+from src.utils import dashboard_button_row, days_ago as _days_ago, job_tag
 from src.utils.markdown import _humanize_age
+from src.utils.validators import sanitize_filename_chars
 
 log = get_logger(__name__)
 
@@ -76,16 +77,6 @@ def _prioritize_tree(tree: list[str], limit: int = 300) -> list[str]:
 def _parse_owner_repo(url: str) -> tuple[str, str]:
     parts = [s for s in urlparse(url).path.split("/") if s]
     return parts[0], parts[1]
-
-
-def _days_ago(pushed_at: str | None) -> int:
-    if not pushed_at:
-        return 0
-    try:
-        pushed = datetime.fromisoformat(pushed_at.replace("Z", "+00:00"))
-        return (datetime.now(timezone.utc) - pushed).days
-    except Exception:
-        return 0
 
 
 def _normalize_repo_url(url: str) -> str:
@@ -341,7 +332,7 @@ def _format_summary_message(owner: str, repo: str, analysis: dict, bundle: dict)
 
 def _sanitize_filename(owner: str, repo: str, *, job_id: str = "") -> str:
     raw = f"{owner}-{repo}"
-    sanitized = _re.sub(r"[^a-zA-Z0-9 \-_.]", "", raw).strip("-").strip()[:80]
+    sanitized = sanitize_filename_chars(raw, extra_chars=".", strip_extra="-")
     return f"{sanitized}.md" if sanitized else f"{job_id}.md"
 
 

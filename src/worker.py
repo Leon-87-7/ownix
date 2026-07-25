@@ -17,6 +17,7 @@ On startup runs prd.reaper() + prd.reaper_intent() to release stale 'generating'
 from __future__ import annotations
 
 import asyncio
+import importlib
 import time
 
 from src import database, queue
@@ -90,60 +91,40 @@ async def _handle_video(task: dict) -> None:
         await _notify_failure(job["chat_id"], job_id, "❌ Processing failed. Please try again.")
 
 
-async def _handle_article(task: dict) -> None:
-    job_id = task["job_id"]
-    job = await _load_job_or_log(job_id)
-    if not job:
-        return
-    try:
-        from src.processors import article
-        await article.run(job, skip_document=task.get("skip_document", False))
-    except Exception:
-        log.exception("article_processor_error", job_id=job_id)
-        await database.update_job_status(job_id, "error")
-        await _notify_failure(job["chat_id"], job_id, "❌ Article processing failed. Please try again.")
+def _make_handler(
+    module_name: str, error_event: str, error_message: str, *, pass_skip_document: bool = False
+):
+    """Build a task handler: load job → processor.run(job) → error status + notify on failure."""
+
+    async def handler(task: dict) -> None:
+        job_id = task["job_id"]
+        job = await _load_job_or_log(job_id)
+        if not job:
+            return
+        try:
+            processor = importlib.import_module(f"src.processors.{module_name}")
+            if pass_skip_document:
+                await processor.run(job, skip_document=task.get("skip_document", False))
+            else:
+                await processor.run(job)
+        except Exception:
+            log.exception(error_event, job_id=job_id)
+            await database.update_job_status(job_id, "error")
+            await _notify_failure(job["chat_id"], job_id, error_message)
+
+    return handler
 
 
-async def _handle_repo(task: dict) -> None:
-    job_id = task["job_id"]
-    job = await _load_job_or_log(job_id)
-    if not job:
-        return
-    try:
-        from src.processors import repo
-        await repo.run(job)
-    except Exception:
-        log.exception("repo_processor_error", job_id=job_id)
-        await database.update_job_status(job_id, "error")
-        await _notify_failure(job["chat_id"], job_id, "❌ Repo processing failed. Please try again.")
-
-
-async def _handle_document(task: dict) -> None:
-    job_id = task["job_id"]
-    job = await _load_job_or_log(job_id)
-    if not job:
-        return
-    try:
-        from src.processors import document
-        await document.run(job, skip_document=task.get("skip_document", False))
-    except Exception:
-        log.exception("document_processor_error", job_id=job_id)
-        await database.update_job_status(job_id, "error")
-        await _notify_failure(job["chat_id"], job_id, "❌ Document processing failed. Please try again.")
-
-
-async def _handle_link(task: dict) -> None:
-    job_id = task["job_id"]
-    job = await _load_job_or_log(job_id)
-    if not job:
-        return
-    try:
-        from src.processors import link
-        await link.run(job)
-    except Exception:
-        log.exception("link_processor_error", job_id=job_id)
-        await database.update_job_status(job_id, "error")
-        await _notify_failure(job["chat_id"], job_id, "❌ Link pipeline failed. Please try again.")
+_handle_article = _make_handler(
+    "article", "article_processor_error", "❌ Article processing failed. Please try again.",
+    pass_skip_document=True,
+)
+_handle_repo = _make_handler("repo", "repo_processor_error", "❌ Repo processing failed. Please try again.")
+_handle_document = _make_handler(
+    "document", "document_processor_error", "❌ Document processing failed. Please try again.",
+    pass_skip_document=True,
+)
+_handle_link = _make_handler("link", "link_processor_error", "❌ Link pipeline failed. Please try again.")
 
 
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
