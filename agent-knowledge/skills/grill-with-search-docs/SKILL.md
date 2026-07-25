@@ -70,7 +70,7 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
-Check `docs/seed/FUNCTION_INDEX.md` and `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md` before accepting any "we need to build X" — if X is already indexed, the real question is why the existing one doesn't fit.
+Check `docs/seed/CAPABILITY_MAP.md` (does a module already own this capability?), then `FUNCTION_INDEX.md` and `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md`, before accepting any "we need to build X" — if X is already indexed, the real question is why the existing one doesn't fit. This skill can run without `/pre-grill`, so it gets no staleness check for free; if an entry drives a decision, confirm it against source.
 
 ### Ground third-party challenges in current docs
 

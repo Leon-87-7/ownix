@@ -78,18 +78,60 @@ module. Never coverage-scanned. A row is warranted when a genuinely new
 router during the `GLUE_INDEX_BACKEND` scan. It updates as a *consequence* of
 that scan, never on its own schedule.
 
-## Staleness anchor
+## Staleness anchors
 
-A doc's own last commit is the anchor — not its `**Last Updated:**` line, which
-is prose a human can forget to bump.
+Each of the three scanned docs carries an explicit anchor line, directly under
+its `**Last Updated:**` line:
 
-```bash
-SHA=$(git log -1 --format=%H -- docs/seed/<DOC>.md)
-git diff --name-only "$SHA"..HEAD -- <the doc's in-scope paths>
+```md
+<!-- seed-index: coverage=<sha> drift=<sha> -->
 ```
 
-The result is the **changed set**: every in-scope source file touched since the
-doc was last written. Everything both commands do keys off it.
+Two anchors, because the two modes verify different things and must not lie
+about each other:
+
+- **`coverage`** — every in-scope file up to this sha has been checked for
+  missing/orphaned entries. Bumped by any `/update-seed-index` run.
+- **`drift`** — entry and finding *prose* has been verified against source up
+  to this sha. Bumped **only** by `/update-seed-index --drift`.
+
+A coverage-only run bumping `drift` would silently discard unverified
+suspects, so it must not.
+
+### Computing a changed set
+
+```bash
+# coverage scan
+git diff --name-only <coverage-sha> -- <the doc's in-scope paths>
+
+# suspect scan
+git diff --name-only <drift-sha> -- <the doc's in-scope paths>
+```
+
+Note there is **no `..HEAD`**. `git diff <sha> -- <paths>` compares the sha
+against the *working tree*, so uncommitted edits are included. Uncommitted work
+is exactly when someone is about to consult the index, so it must count.
+
+### Why not `git log -1 -- <doc>`
+
+Deriving the anchor from the doc's own last commit looks simpler and is wrong
+in both directions:
+
+- **It moves on edits that verify nothing.** Fix a typo in `FUNCTION_INDEX.md`
+  and the anchor jumps to now — every un-indexed source change made before that
+  typo fix becomes permanently invisible. The doc silently certifies work
+  nobody did.
+- **It can't distinguish the two modes**, so a cheap coverage run would claim
+  the same freshness as a full drift pass.
+
+An explicit stamp, written only by the skill that did the work, is the only
+version that means what it says.
+
+### Missing anchor
+
+A doc with no anchor line has never been through `/update-seed-index`. Treat it
+as anchored at the doc's first commit — scan everything, and stamp both anchors
+on the first run.
 
 ## Entry grammar
 
@@ -103,8 +145,20 @@ writes it. Neither may vary it.
 **Usage:** one realistic call line
 ```
 
-Current counts, for a sanity check that parsing worked: FUNCTION_INDEX 147,
-GLUE_INDEX_BACKEND 96, GLUE_INDEX_FRONTEND 54.
+The grammar is load-bearing: the parser keys on `#### ` at line start and on
+the three bolded labels. An entry with a blank line between its label lines, a
+missing label, or a wrapped `#### ` heading will parse wrong and surface as a
+phantom gap. `/update-seed-index` must check conformance on every entry it
+writes — that check is cheaper than debugging a false gap later.
+
+**Parse sanity:** a doc parsing to **zero** entries means the grammar changed
+and the parse broke — not that the doc collapsed. Say that, rather than
+reporting every function as missing.
+
+No expected entry counts are recorded here, deliberately. Counts change every
+time `/update-seed-index` adds or removes an entry, so a hardcoded baseline
+would false-alarm on the tool's own successful repairs and need bumping after
+every run. Zero-vs-nonzero is the only threshold that maintains itself.
 
 ## Findings sections
 

@@ -60,9 +60,31 @@ expensive mode; it re-does a slice of the original survey. Fire it deliberately.
    removed, re-homed; findings proposed; the CAPABILITY_MAP row. Then stop and
    wait. No writes before confirmation, no partial application.
 
-6. **Write, then bump.** Apply the approved changes, update each touched doc's
-   `**Last Updated:**` line to today, and leave the docs uncommitted for review.
-   Do not commit; the user decides where these land.
+6. **Write, then stamp.** Apply the approved changes, then for each touched doc:
+
+   - Verify every entry you wrote conforms to the four-line grammar exactly —
+     `#### ` at line start, all three bolded labels present, no blank lines
+     inside the entry. A malformed entry becomes a phantom gap on the next run.
+   - Update `**Last Updated:**` to today.
+   - Stamp the anchors:
+
+     ```md
+     <!-- seed-index: coverage=<sha> drift=<sha> -->
+     ```
+
+     Set `coverage` to current `HEAD` on every run. Set `drift` to `HEAD`
+     **only** under `--drift`, and only if you actually resolved every suspect
+     — a run where the user deferred a finding leaves `drift` where it was.
+     Bumping `drift` is what stops a "verified, no change" suspect from being
+     re-reported forever; bumping it without having verified is how the index
+     starts lying.
+
+   Leave the docs uncommitted for review. Do not commit; the user decides where
+   these land.
+
+   Uncommitted *source* changes stay in the changed set after stamping — a sha
+   can't represent them. That's correct: they keep showing as suspect until
+   they're committed. Don't try to work around it.
 
 ## Rules
 

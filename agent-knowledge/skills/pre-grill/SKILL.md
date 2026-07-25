@@ -45,7 +45,11 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
      and wiring), `CAPABILITY_MAP.md` (which module owns a capability). Check
      these *before* writing a scope bullet that builds something new — if it's
      already indexed, the bullet becomes a "reuse, don't fork" note naming the
-     existing function.
+     existing function — **but only if step 1b found that doc current.** If the
+     check flagged drift, confirm the entry against source (codegraph or the
+     file itself) before turning it into a reuse directive. A stale entry that
+     suppresses genuinely needed work is a worse outcome than a duplicate
+     helper, because nobody goes looking for the thing that never got written.
    - **Symbols/flow** → codegraph first (`codegraph_search`, `codegraph_explore`,
      `codegraph_trace`); fall back to Grep only for literal strings.
    - **Product/spec** → `docs/seed/PRD.md` via the two-step TOC lookup (see
