@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import html
 import json
 import re
@@ -10,11 +9,11 @@ from datetime import datetime, timezone
 from json_repair import repair_json
 
 from src import database
-from src.config import settings
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES, validate_template_choice
 from src.utils import dashboard_button_row, job_tag
 from src.utils.logger import get_logger
+from src.utils.markdown import format_promise_gap_section, format_tool_line
 from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
@@ -226,24 +225,25 @@ async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> tuple[dict 
     The returned transcript_text is the verbatim spoken content extracted alongside
     the template analysis — callers must not make a separate transcription call.
     """
+    from src.services.gemini import GeminiUnavailableError, _call_with_fallback
+
     template = job.get("template") or "summary"
     title = job.get("title", "") or "Untitled"
     prompt = _build_audio_prompt(title, template)
 
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
-        try:
-            raw = await asyncio.to_thread(
-                _call_gemini_audio_sync, audio_b64, mime_type, prompt, key
-            )
-            data = _extract_json(raw)
-            log.info("enrichment_audio_ok", template=template)
-            return data.get("template_analysis"), data.get("transcript", "")
-        except Exception:
-            log.warning("enrichment_audio_key_failed")
-
-    raise EnrichmentUnavailableError("Both Gemini keys failed for audio enrichment")
+    try:
+        raw = await _call_with_fallback(
+            _call_gemini_audio_sync,
+            audio_b64,
+            mime_type,
+            prompt,
+            log_ok="enrichment_audio_ok",
+            log_fail="enrichment_audio_key_failed",
+        )
+    except GeminiUnavailableError as exc:
+        raise EnrichmentUnavailableError("Both Gemini keys failed for audio enrichment") from exc
+    data = _extract_json(raw)
+    return data.get("template_analysis"), data.get("transcript", "")
 
 
 async def transcribe_audio(audio_b64: str, mime_type: str, title: str = "") -> str:
@@ -252,21 +252,22 @@ async def transcribe_audio(audio_b64: str, mime_type: str, title: str = "") -> s
     Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail.
     Returns empty string when Gemini produces no output (silent/wordless clip).
     """
+    from src.services.gemini import GeminiUnavailableError, _call_with_fallback
+
     prompt = _build_transcribe_prompt(title)
 
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
-        try:
-            raw = await asyncio.to_thread(
-                _call_gemini_audio_sync, audio_b64, mime_type, prompt, key
-            )
-            log.info("transcription_ok")
-            return raw.strip()
-        except Exception:
-            log.warning("transcription_key_failed")
-
-    raise EnrichmentUnavailableError("Both Gemini keys failed for audio transcription")
+    try:
+        raw = await _call_with_fallback(
+            _call_gemini_audio_sync,
+            audio_b64,
+            mime_type,
+            prompt,
+            log_ok="transcription_ok",
+            log_fail="transcription_key_failed",
+        )
+    except GeminiUnavailableError as exc:
+        raise EnrichmentUnavailableError("Both Gemini keys failed for audio transcription") from exc
+    return raw.strip()
 
 
 def _escape_html(text: str) -> str:
@@ -361,31 +362,6 @@ def _format_template_analysis(template: str, analysis: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_tool_line(t: dict) -> str:
-    prefix = "$" if t.get("type") == "symbol" else f"[{_escape_html(t.get('type', 'tool'))}]"
-    name = _escape_html(t["name"])
-    if t.get("url"):
-        # URL lives in the href attribute — safe even with underscores/dots.
-        name = f'<a href="{_escape_attr(t["url"])}">{name}</a>'
-    desc = _escape_html(t.get("description", ""))
-    return f"• {prefix} {name}: {desc}"
-
-
-def _promise_gap_block(promise_gap: dict | None) -> list[str]:
-    gaps = promise_gap.get("gaps", []) if promise_gap else []
-    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
-    if not gaps and not hidden:
-        return []
-    lines = ["\n=====PROMISE=GAP====="]
-    if gaps:
-        lines.append("❌ Unfulfilled:")
-        lines.extend(f"• {_escape_html(g)}" for g in gaps)
-    if hidden:
-        lines.append("💎 Hidden value:")
-        lines.extend(f"• {_escape_html(h)}" for h in hidden)
-    return lines
-
-
 def _build_enrichment_message(
     job: dict,
     enrichment: Enrichment,
@@ -396,7 +372,7 @@ def _build_enrichment_message(
     title = _escape_html(job.get("title", "Untitled"))
     drive_url = job.get("drive_url", "")
 
-    tools_lines = [_format_tool_line(t) for t in enrichment.tools_raw]
+    tools_lines = [format_tool_line(t) for t in enrichment.tools_raw]
 
     action_lines = [
         f"• {_escape_html(ap)}" for ap in enrichment.action_points_str.split(" | ") if ap
@@ -431,7 +407,7 @@ def _build_enrichment_message(
         template = job.get("template") or "summary"
         parts.append(_format_template_analysis(template, template_analysis))
 
-    parts += _promise_gap_block(promise_gap)
+    parts += format_promise_gap_section(promise_gap)
 
     return "\n".join(parts)
 

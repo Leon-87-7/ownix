@@ -231,10 +231,10 @@ async def test_route_document_url_blocks_ssrf(patched, monkeypatch, url):
 
 def test_task_for_routes_document_not_video():
     """Regression: the dispatch mapper must not drop a document job into the video task."""
-    from src.telegram import webhook
+    from src.services.jobs import task_for_content_type
 
-    assert webhook._task_for("document") == "document"
-    assert webhook._task_for("repo") == "repo"
-    assert webhook._task_for("article") == "article"
-    assert webhook._task_for("short") == "video"
-    assert webhook._task_for("long") == "video"
+    assert task_for_content_type("document", default="video") == "document"
+    assert task_for_content_type("repo", default="video") == "repo"
+    assert task_for_content_type("article", default="video") == "article"
+    assert task_for_content_type("short", default="video") == "video"
+    assert task_for_content_type("long", default="video") == "video"

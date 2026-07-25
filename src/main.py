@@ -25,28 +25,40 @@ configure_logging()
 log = get_logger(__name__)
 
 
-async def _register_webhook() -> None:
-    from src.config import settings
-
-    if not settings.WEBHOOK_URL:
-        log.warning("webhook_url_not_set", msg="Set WEBHOOK_URL in .env to auto-register")
-        return
-    tg_url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/setWebhook"
+async def register_webhook(
+    token: str, secret: str, url: str, *, ok_event: str, fail_event: str
+) -> None:
+    tg_url = f"https://api.telegram.org/bot{token}/setWebhook"
     payload = {
-        "url": f"{settings.WEBHOOK_URL.rstrip('/')}/webhook",
-        "secret_token": settings.TELEGRAM_WEBHOOK_SECRET,
+        "url": url,
+        "secret_token": secret,
         "allowed_updates": ["message", "callback_query"],
     }
     try:
         resp = await sender._http().post(tg_url, json=payload)
         data = resp.json()
     except Exception:
-        log.exception("ops_webhook_registration_failed", url=payload["url"])
+        log.exception(fail_event, url=payload["url"])
         return
     if data.get("ok"):
-        log.info("webhook_registered", url=payload["url"])
+        log.info(ok_event, url=payload["url"])
     else:
-        log.error("webhook_registration_failed", response=data)
+        log.error(fail_event, response=data)
+
+
+async def _register_webhook() -> None:
+    from src.config import settings
+
+    if not settings.WEBHOOK_URL:
+        log.warning("webhook_url_not_set", msg="Set WEBHOOK_URL in .env to auto-register")
+        return
+    await register_webhook(
+        settings.TELEGRAM_BOT_TOKEN,
+        settings.TELEGRAM_WEBHOOK_SECRET,
+        f"{settings.WEBHOOK_URL.rstrip('/')}/webhook",
+        ok_event="webhook_registered",
+        fail_event="webhook_registration_failed",
+    )
 
 
 async def _register_ops_webhook() -> None:
@@ -64,22 +76,13 @@ async def _register_ops_webhook() -> None:
     if missing:
         log.warning("ops_webhook_missing_config", missing=missing)
         return
-    tg_url = f"https://api.telegram.org/bot{settings.OPS_BOT_TOKEN}/setWebhook"
-    payload = {
-        "url": settings.OPS_WEBHOOK_URL,
-        "secret_token": settings.OPS_WEBHOOK_SECRET,
-        "allowed_updates": ["message", "callback_query"],
-    }
-    try:
-        resp = await sender._http().post(tg_url, json=payload)
-        data = resp.json()
-    except Exception:
-        log.exception("ops_webhook_registration_failed", url=payload["url"])
-        return
-    if data.get("ok"):
-        log.info("ops_webhook_registered", url=payload["url"])
-    else:
-        log.error("ops_webhook_registration_failed", response=data)
+    await register_webhook(
+        settings.OPS_BOT_TOKEN,
+        settings.OPS_WEBHOOK_SECRET,
+        settings.OPS_WEBHOOK_URL,
+        ok_event="ops_webhook_registered",
+        fail_event="ops_webhook_registration_failed",
+    )
 
 
 @asynccontextmanager

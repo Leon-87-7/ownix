@@ -7,13 +7,12 @@ module so the trust-boundary logic is consolidated and directly unit-testable
 """
 from __future__ import annotations
 
-import asyncio
-import ipaddress
-import socket
 from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException, Request
+
+from src.utils.ssrf import is_public_ip, resolve_public_host
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
 REMOTE_PDF_HEADERS = {
@@ -34,17 +33,13 @@ def validate_pdf(data: bytes, name: str = "document.pdf") -> None:
 async def assert_public_host(host: str | None) -> None:
     # SSRF guard: refuse hosts that resolve to non-public addresses (loopback,
     # private, link-local cloud metadata at 169.254.169.254, etc.).
-    # getaddrinfo is blocking — run it off the event loop.
     if not host:
         raise HTTPException(status_code=400, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
-    try:
-        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
-    except socket.gaierror as exc:
-        raise HTTPException(status_code=400, detail={"field": "url", "message": "Could not resolve URL host"}) from exc
-    for *_, sockaddr in infos:
-        ip = ipaddress.ip_address(sockaddr[0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
+    infos = await resolve_public_host(host)
+    if infos is None:
+        raise HTTPException(status_code=400, detail={"field": "url", "message": "Could not resolve URL host"})
+    if not all(is_public_ip(sockaddr[0]) for *_, sockaddr in infos):
+        raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
 
 
 async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:

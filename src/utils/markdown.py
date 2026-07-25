@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from datetime import datetime, timezone
 
 
@@ -24,6 +25,35 @@ def build_transcript_markdown(
         f"---\n\n"
         f"{transcript}\n"
     )
+
+
+def format_promise_gap_section(promise_gap: dict | None) -> list[str]:
+    """Render the '=====PROMISE=GAP=====' block: unfulfilled promises + hidden value."""
+    gaps = promise_gap.get("gaps", []) if promise_gap else []
+    hidden = promise_gap.get("hidden_value", []) if promise_gap else []
+    if not gaps and not hidden:
+        return []
+    lines = ["\n=====PROMISE=GAP====="]
+    if gaps:
+        lines.append("❌ Unfulfilled:")
+        lines += [f"• {html.escape(g)}" for g in gaps]
+    if hidden:
+        lines.append("💎 Hidden value:")
+        lines += [f"• {html.escape(h)}" for h in hidden]
+    return lines
+
+
+def format_tool_line(tool: dict) -> str:
+    """Render one Gemini-extracted tool as an HTML bullet: '• [type] name: desc'.
+
+    A ``$`` prefix (instead of ``[type]``) marks a stock/crypto symbol.
+    """
+    prefix = "$" if tool.get("type") == "symbol" else f"[{html.escape(tool.get('type', 'tool'))}]"
+    name = html.escape(tool.get("name", "Unknown"))
+    if tool.get("url"):
+        name = f'<a href="{html.escape(tool["url"], quote=True)}">{name}</a>'
+    desc = html.escape(tool.get("description", ""))
+    return f"• {prefix} {name}: {desc}"
 
 
 def _humanize_age(days: int) -> str:

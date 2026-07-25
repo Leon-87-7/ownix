@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
@@ -68,6 +69,54 @@ async def _resolve_safe_public_url(url: str) -> tuple[str, str] | None:
         return None
 
 
+async def _fetch_pinned(
+    url: str,
+    *,
+    client: httpx.AsyncClient,
+    log_prefix: str,
+    on_empty_redirect: Callable[[httpx.Response], object],
+    on_success: Callable[[httpx.Response], Awaitable[object]],
+) -> object:
+    """Follow only-public redirects to a pinned IP, then hand the terminal response
+    to a caller-supplied handler. Shared by fetch_public_html and fetch_public_image.
+
+    Routes the TCP connection to the pinned IP so a DNS rebind after our guard
+    check cannot swap in a private address. Preserves the original hostname in
+    Host and (for HTTPS) SNI so the remote server and TLS certificate validation
+    use the right name.
+    """
+    target = url
+    for _ in range(_MAX_REDIRECTS + 1):
+        resolved = await _resolve_safe_public_url(target)
+        if resolved is None:
+            log.info(f"{log_prefix}.fetch_blocked", url=target[:200])
+            return None
+        pinned_ip, hostname = resolved
+        parts = urlsplit(target)
+        pinned_host = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
+        pinned_url = parts._replace(netloc=pinned_host).geturl()
+        extra_headers = {"Host": hostname}
+        extensions: dict = {}
+        if parts.scheme == "https":
+            extensions["sni_hostname"] = hostname
+        async with client.stream(
+            "GET",
+            pinned_url,
+            follow_redirects=False,
+            headers=extra_headers,
+            extensions=extensions,
+        ) as response:
+            if response.is_redirect:
+                location = response.headers.get("location", "")
+                if not location:
+                    return on_empty_redirect(response)
+                target = urljoin(target, location)
+                continue
+            response.raise_for_status()
+            return await on_success(response)
+    return None
+
+
 async def fetch_public_html(
     url: str,
     *,
@@ -80,56 +129,34 @@ async def fetch_public_html(
         follow_redirects=False,
         headers={"User-Agent": _USER_AGENT},
     )
+
+    async def on_success(response: httpx.Response) -> PublicHtmlResult | None:
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+        if content_type and content_type not in {"text/html", "application/xhtml+xml"}:
+            log.info(
+                "public_html.content_type_rejected",
+                url=str(response.url)[:200],
+                content_type=content_type[:80],
+            )
+            return None
+        chunks: list[bytes] = []
+        remaining = _MAX_BYTES
+        async for chunk in response.aiter_bytes():
+            if remaining <= 0:
+                break
+            chunks.append(chunk[:remaining])
+            remaining -= len(chunks[-1])
+        markup = b"".join(chunks).decode("utf-8", errors="replace")
+        return PublicHtmlResult(html=markup, final_url=str(response.url))
+
     try:
-        target = url
-        for _ in range(_MAX_REDIRECTS + 1):
-            resolved = await _resolve_safe_public_url(target)
-            if resolved is None:
-                log.info("public_html.fetch_blocked", url=target[:200])
-                return None
-            pinned_ip, hostname = resolved
-            # Route the TCP connection to the pinned IP so a DNS rebind after
-            # our guard check cannot swap in a private address.  Preserve the
-            # original hostname in Host and (for HTTPS) SNI so that the remote
-            # server and TLS certificate validation use the right name.
-            parts = urlsplit(target)
-            pinned_url = parts._replace(netloc=pinned_ip).geturl()
-            extra_headers = {"Host": hostname}
-            extensions: dict = {}
-            if parts.scheme == "https":
-                extensions["sni_hostname"] = hostname
-            async with active_client.stream(
-                "GET",
-                pinned_url,
-                follow_redirects=False,
-                headers=extra_headers,
-                extensions=extensions,
-            ) as response:
-                if response.is_redirect:
-                    location = response.headers.get("location", "")
-                    if not location:
-                        return PublicHtmlResult(html="", final_url=str(response.url))
-                    target = urljoin(target, location)
-                    continue
-                response.raise_for_status()
-                content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
-                if content_type and content_type not in {"text/html", "application/xhtml+xml"}:
-                    log.info(
-                        "public_html.content_type_rejected",
-                        url=str(response.url)[:200],
-                        content_type=content_type[:80],
-                    )
-                    return None
-                chunks: list[bytes] = []
-                remaining = _MAX_BYTES
-                async for chunk in response.aiter_bytes():
-                    if remaining <= 0:
-                        break
-                    chunks.append(chunk[:remaining])
-                    remaining -= len(chunks[-1])
-                markup = b"".join(chunks).decode("utf-8", errors="replace")
-                return PublicHtmlResult(html=markup, final_url=str(response.url))
-        return None
+        return await _fetch_pinned(
+            url,
+            client=active_client,
+            log_prefix="public_html",
+            on_empty_redirect=lambda response: PublicHtmlResult(html="", final_url=str(response.url)),
+            on_success=on_success,
+        )
     except Exception as exc:
         log.info("public_html.fetch_failed", url=url, error=str(exc)[:120])
         return None
@@ -156,56 +183,33 @@ async def fetch_public_image(
         follow_redirects=False,
         headers={"User-Agent": _USER_AGENT},
     )
+
+    async def on_success(response: httpx.Response) -> PublicImageResult | None:
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type not in _ALLOWED_IMAGE_TYPES:
+            log.info(
+                "public_image.content_type_rejected",
+                url=str(response.url)[:200],
+                content_type=content_type[:80],
+            )
+            return None
+        chunks: list[bytes] = []
+        remaining = _MAX_IMAGE_BYTES
+        async for chunk in response.aiter_bytes():
+            if remaining <= 0:
+                break
+            chunks.append(chunk[:remaining])
+            remaining -= len(chunks[-1])
+        return PublicImageResult(content=b"".join(chunks), content_type=content_type)
+
     try:
-        target = url
-        for _ in range(_MAX_REDIRECTS + 1):
-            resolved = await _resolve_safe_public_url(target)
-            if resolved is None:
-                log.info("public_image.fetch_blocked", url=target[:200])
-                return None
-            pinned_ip, hostname = resolved
-            parts = urlsplit(target)
-            pinned_url = parts._replace(netloc=pinned_ip).geturl()
-            extra_headers = {"Host": hostname}
-            extensions: dict = {}
-            if parts.scheme == "https":
-                extensions["sni_hostname"] = hostname
-            async with active_client.stream(
-                "GET",
-                pinned_url,
-                follow_redirects=False,
-                headers=extra_headers,
-                extensions=extensions,
-            ) as response:
-                if response.is_redirect:
-                    location = response.headers.get("location", "")
-                    if not location:
-                        return None
-                    target = urljoin(target, location)
-                    continue
-                response.raise_for_status()
-                content_type = (
-                    response.headers.get("content-type", "")
-                    .split(";", 1)[0]
-                    .strip()
-                    .lower()
-                )
-                if content_type not in _ALLOWED_IMAGE_TYPES:
-                    log.info(
-                        "public_image.content_type_rejected",
-                        url=str(response.url)[:200],
-                        content_type=content_type[:80],
-                    )
-                    return None
-                chunks: list[bytes] = []
-                remaining = _MAX_IMAGE_BYTES
-                async for chunk in response.aiter_bytes():
-                    if remaining <= 0:
-                        break
-                    chunks.append(chunk[:remaining])
-                    remaining -= len(chunks[-1])
-                return PublicImageResult(content=b"".join(chunks), content_type=content_type)
-        return None
+        return await _fetch_pinned(
+            url,
+            client=active_client,
+            log_prefix="public_image",
+            on_empty_redirect=lambda response: None,
+            on_success=on_success,
+        )
     except Exception as exc:
         log.info("public_image.fetch_failed", url=url, error=str(exc)[:120])
         return None

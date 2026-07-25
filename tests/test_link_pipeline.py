@@ -38,4 +38,4 @@ def test_extract_essential_og_collection_in_one_pass():
 
 
 def test_link_content_type_dispatches_to_link_task():
-    assert task_for_content_type("link") == "link"
+    assert task_for_content_type("link", default="link") == "link"

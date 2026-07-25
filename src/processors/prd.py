@@ -10,6 +10,7 @@ from src import database
 from src.config import settings
 from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
+from src.utils.validators import slugify
 from src.services.gemini import extract_json
 
 log = get_logger(__name__)
@@ -263,12 +264,6 @@ def _build_prd_prompt(job: dict, intent_text: str | None = None) -> str:
     )
 
 
-def _build_auto_prompt(job: dict) -> str:
-    return _build_prd_prompt(job)
-
-
-def _build_intent_prompt(job: dict, intent_text: str) -> str:
-    return _build_prd_prompt(job, intent_text)
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +304,7 @@ async def run_auto_resend(job_id: str) -> None:
         return
 
     md_content = build_prd_markdown(prd_data)
-    slug = re.sub(r"[^a-z0-9]+", "_", (prd_data.get("project") or "prd").lower())[:40].strip("_")
+    slug = slugify(prd_data.get("project") or "prd", 40)
     filename = f"{slug}_{job_id[-4:]}_auto.md"
 
     from src.services.drive import update_file
@@ -535,7 +530,7 @@ async def run_prd(
     # g. Drive upload (create on first run, update in place thereafter)
     from src.services.drive import upload_file, update_file
 
-    slug = re.sub(r"[^a-z0-9]+", "_", (prd_data.get("project") or "prd").lower())[:40].strip("_")
+    slug = slugify(prd_data.get("project") or "prd", 40)
     filename = f"{slug}_{job_id[-4:]}{filename_suffix}"
     cached_file_id = job.get(drive_file_col)
     try:
@@ -583,7 +578,7 @@ async def run_prd(
 async def run_auto(job_id: str) -> None:
     """Generate, upload, log and deliver a Mini-PRD for a Technical Tutorial job."""
     await run_prd(job_id, slot="auto", model=settings.PRD_AUTO_MODEL,
-                  build_prompt=_build_auto_prompt)
+                  build_prompt=_build_prd_prompt)
 
 
 async def run_intent(job_id: str) -> None:
@@ -601,4 +596,4 @@ async def run_intent(job_id: str) -> None:
         await send_message(job["chat_id"], "⚠️ No transcript available — can't generate PRD.")
         return
     await run_prd(job_id, slot="intent", model=settings.PRD_INTENT_MODEL,
-                  build_prompt=lambda j: _build_intent_prompt(j, intent_text))
+                  build_prompt=lambda j: _build_prd_prompt(j, intent_text))

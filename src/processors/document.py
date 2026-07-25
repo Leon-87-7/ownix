@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import html
 import json
-import re
 from datetime import datetime, timezone
 
 from src import database
@@ -19,6 +18,8 @@ from src.telegram.sender import send_document, send_inline_keyboard, send_messag
 from src.services.gemini import extract_json
 from src.utils import dashboard_button_row, job_tag
 from src.utils.logger import get_logger
+from src.utils.markdown import format_tool_line
+from src.utils.validators import sanitize_filename_chars
 
 log = get_logger(__name__)
 
@@ -120,19 +121,13 @@ def _build_enrichment_message(job: dict, tools: list[dict], references: list[str
     if tools:
         parts.append("")
         parts.append("🛠 Tools")
-        for t in tools:
-            prefix = f"[{html.escape(t.get('type', 'tool'))}]"
-            name = html.escape(t["name"])
-            if t.get("url"):
-                name = f'<a href="{html.escape(t["url"], quote=True)}">{name}</a>'
-            parts.append(f"• {prefix} {name}: {html.escape(t.get('description', ''))}")
+        parts += [format_tool_line(t) for t in tools]
 
     return "\n".join(parts)
 
 
 def _safe_filename(title: str, max_len: int = 80) -> str:
-    safe = re.sub(r"[^a-zA-Z0-9 \-_]", "", title or "").strip()[:max_len]
-    return safe or "document"
+    return sanitize_filename_chars(title, max_len=max_len) or "document"
 
 
 async def _deliver(job: dict, text: str, tools: list[dict], references: list[str]) -> None:
