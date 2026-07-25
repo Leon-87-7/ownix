@@ -18,6 +18,7 @@ from src.services.drive import upload_file
 from src.utils.logger import get_logger
 from src.utils.og_image import extract_og_image_url
 from src.utils.public_html import fetch_public_html
+from src.utils.validators import slugify as _slugify
 
 log = get_logger(__name__)
 
@@ -303,12 +304,6 @@ def _github_owner_repo(url: str) -> tuple[str, str] | None:
     if len(segments) < 2:
         return None
     return segments[0], segments[1]
-
-
-def _slugify(title: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", title.lower())
-    slug = re.sub(r"^_+|_+$", "", slug)
-    return slug[:80]
 
 
 async def init_db() -> None:

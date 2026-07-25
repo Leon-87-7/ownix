@@ -48,6 +48,7 @@ from src.utils.validators import (
     normalize_email,
     normalize_repo_url,
     is_fetchable_url,
+    sanitize_filename_chars,
     _ARTICLE_HINT,
     _REPO_HINT,
     is_valid_domain_name,
@@ -706,21 +707,10 @@ async def _cmd_template(ctx: SlashCtx) -> None:
             "Instagram Reels, and TikTok videos.",
         )
         return
-    job_id = await database.create_job(
-        chat_id=ctx.chat_id,
-        url=url,
-        content_type=pipeline,
-        message_id=ctx.message_id,
-        template=template,
+    result = await create_and_enqueue_job(
+        ctx.chat_id, url, pipeline, template=template, message_id=ctx.message_id
     )
-    await database.update_job_status(
-        job_id,
-        "pending",
-        template_detection_method="explicit_command",
-    )
-    await queue.enqueue(
-        {"task": task_for_content_type(pipeline, default="video"), "job_id": job_id}
-    )
+    job_id = result["id"]
     await send_message(
         ctx.chat_id,
         f"📥 Received\n✨ Kicking off Gemini analysis ({template})\njob_{job_id[-4:]}",
@@ -856,17 +846,9 @@ async def _cmd_force(ctx: SlashCtx) -> None:
 
 
 def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
-    """Return a safe filename stem from *title*, falling back to the URL hostname.
-
-    Keeps ``[a-zA-Z0-9 \\-_]``, truncates to *max_len* chars.
-    """
-    if title:
-        safe = re.sub(r"[^a-zA-Z0-9 \-_]", "", title)
-        safe = safe.strip()[:max_len]
-        if safe:
-            return safe
-    # Fallback: use hostname from URL
-    return urlparse(url).hostname or "document"
+    """Return a safe filename stem from *title*, falling back to the URL hostname."""
+    safe = sanitize_filename_chars(title, max_len=max_len)
+    return safe or (urlparse(url).hostname or "document")
 
 
 async def _cmd_download_md(ctx: SlashCtx) -> None:

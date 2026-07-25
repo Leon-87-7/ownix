@@ -14,7 +14,7 @@ def task_for_content_type(content_type: str | None, *, default: str | None) -> s
     """Worker task name for a pipeline / content_type. short/long collapse to 'video'."""
     if content_type in {"short", "long"}:
         return "video"
-    if content_type in {"article", "repo", "document"}:
+    if content_type in {"article", "repo", "document", "link"}:
         return content_type
     return default
 

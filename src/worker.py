@@ -91,10 +91,21 @@ async def _handle_video(task: dict) -> None:
         await _notify_failure(job["chat_id"], job_id, "❌ Processing failed. Please try again.")
 
 
+# Explicit whitelist — _make_handler only ever imports one of these fixed,
+# hardcoded dotted paths, never a caller/task-controlled string.
+_PROCESSOR_MODULES = {
+    "article": "src.processors.article",
+    "repo": "src.processors.repo",
+    "document": "src.processors.document",
+    "link": "src.processors.link",
+}
+
+
 def _make_handler(
     module_name: str, error_event: str, error_message: str, *, pass_skip_document: bool = False
 ):
     """Build a task handler: load job → processor.run(job) → error status + notify on failure."""
+    dotted_path = _PROCESSOR_MODULES[module_name]
 
     async def handler(task: dict) -> None:
         job_id = task["job_id"]
@@ -102,7 +113,7 @@ def _make_handler(
         if not job:
             return
         try:
-            processor = importlib.import_module(f"src.processors.{module_name}")
+            processor = importlib.import_module(dotted_path)
             if pass_skip_document:
                 await processor.run(job, skip_document=task.get("skip_document", False))
             else:

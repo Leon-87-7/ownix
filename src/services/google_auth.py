@@ -85,7 +85,9 @@ def build_google_credentials(
             return _credentials_from_refresh_token(
                 token_payload["refresh_token"],
                 client_id=token_payload.get("client_id") or settings.GOOGLE_OAUTH_CLIENT_ID,
-                client_secret=token_payload.get("client_secret") or settings.GOOGLE_OAUTH_CLIENT_SECRET,
+                client_secret=(
+                    token_payload.get("client_secret") or settings.GOOGLE_OAUTH_CLIENT_SECRET
+                ),
                 scopes=scopes,
             )
 

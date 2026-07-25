@@ -49,7 +49,7 @@ def format_tool_line(tool: dict) -> str:
     A ``$`` prefix (instead of ``[type]``) marks a stock/crypto symbol.
     """
     prefix = "$" if tool.get("type") == "symbol" else f"[{html.escape(tool.get('type', 'tool'))}]"
-    name = html.escape(tool["name"])
+    name = html.escape(tool.get("name", "Unknown"))
     if tool.get("url"):
         name = f'<a href="{html.escape(tool["url"], quote=True)}">{name}</a>'
     desc = html.escape(tool.get("description", ""))

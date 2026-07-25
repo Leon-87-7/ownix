@@ -93,7 +93,8 @@ async def _fetch_pinned(
             return None
         pinned_ip, hostname = resolved
         parts = urlsplit(target)
-        pinned_url = parts._replace(netloc=pinned_ip).geturl()
+        pinned_host = f"[{pinned_ip}]" if ":" in pinned_ip else pinned_ip
+        pinned_url = parts._replace(netloc=pinned_host).geturl()
         extra_headers = {"Host": hostname}
         extensions: dict = {}
         if parts.scheme == "https":
