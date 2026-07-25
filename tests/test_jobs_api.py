@@ -372,3 +372,12 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
     )
     assert response["items"] == []
     assert response["limit"] == 1000
+
+
+def test_post_jobs_routes_to_create_job() -> None:
+    # Regression: the decorator once sat on _create_link_job, so POST /api/jobs
+    # took chat_id/url as query params and never saw the body or the session.
+    post = next(
+        r for r in jobs.jobs_router.routes if r.path == "/api/jobs" and "POST" in r.methods
+    )
+    assert post.endpoint is jobs.create_job
