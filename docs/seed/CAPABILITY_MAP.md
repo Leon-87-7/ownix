@@ -31,6 +31,9 @@ the lookup the rest of `docs/seed/` doesn't provide. Same facts, opposite index.
 
 For per-module detail (what each file owns, what calls it), see `MODULE_MAP.md`.
 For individual utility/service functions worth reusing (not orchestration —
-the layer underneath), see `FUNCTION_INDEX.md`. For why a technology was
-chosen, see `TECHSTACK.md`. For domain vocabulary, see `CONTEXT.md` at the
-repo root — this file doesn't redefine terms it already covers.
+the layer underneath), see `FUNCTION_INDEX.md`. For the orchestration/glue
+layer itself (processors, API routes, Telegram dispatch, page/component
+composition), see `GLUE_INDEX_BACKEND.md` and `GLUE_INDEX_FRONTEND.md`. For
+why a technology was chosen, see `TECHSTACK.md`. For domain vocabulary, see
+`CONTEXT.md` at the repo root — this file doesn't redefine terms it already
+covers.

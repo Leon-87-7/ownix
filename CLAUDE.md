@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 vig — Video Intelligence Gateway. A Python (FastAPI + SQLite + Redis) service replacing a 60+ node n8n workflow. A Telegram bot ingests URLs and files and routes them through typed pipelines — short videos (Reels / TikTok / YouTube Shorts), long YouTube videos, dev articles, GitHub repos, PDF documents, and photo OCR — enriches them with Gemini, stores results in Google Drive + Sheets + GCS, and accumulates a semantic link graph ("Second Brain"). A Next.js dashboard ("The Operator's Console") under `web/` browses the results, and a second "Ops" Telegram bot handles user/invite administration.
 
-Full spec: `docs/seed/PRD.md`, `docs/seed/ARCHITECTURE.md`, `docs/seed/TECHSTACK.md`; dashboard spec: `docs/seed/WEB-PRD.md`. Capability-to-module lookup: `docs/seed/CAPABILITY_MAP.md`. Utility/service function reference (what exists in `src/services/`, `src/utils/`, `web/lib/` before writing new helpers): `docs/seed/FUNCTION_INDEX.md`. Domain glossary and decisions: `CONTEXT.md` (repo root) + `docs/adr/`.
+Full spec: `docs/seed/PRD.md`, `docs/seed/ARCHITECTURE.md`, `docs/seed/TECHSTACK.md`; dashboard spec: `docs/seed/WEB-PRD.md`. Capability-to-module lookup: `docs/seed/CAPABILITY_MAP.md`. Utility/service function reference (what exists in `src/services/`, `src/utils/`, `web/lib/` before writing new helpers): `docs/seed/FUNCTION_INDEX.md`. Orchestration/wiring layer (processors, API routes, Telegram dispatch, page/component composition): `docs/seed/GLUE_INDEX_BACKEND.md` + `docs/seed/GLUE_INDEX_FRONTEND.md`. Domain glossary and decisions: `CONTEXT.md` (repo root) + `docs/adr/`.
 
 ## Commands
 

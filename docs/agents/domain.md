@@ -24,7 +24,8 @@ Single-context repo:
 │   ├── agents/                         ← this skill's output (issue tracker, labels, domain rules)
 │   └── seed/                           ← product specs: README.md (entry point), PRD.md, WEB-PRD.md,
 │                                          ARCHITECTURE.md, MODULE_MAP.md, CAPABILITY_MAP.md,
-│                                          FUNCTION_INDEX.md, TECHSTACK.md
+│                                          FUNCTION_INDEX.md, GLUE_INDEX_BACKEND.md,
+│                                          GLUE_INDEX_FRONTEND.md, TECHSTACK.md
 └── src/
 ```
 
