@@ -22,7 +22,9 @@ Single-context repo:
 │   │   ├── 0001-event-sourced-orders.md
 │   │   └── 0002-postgres-for-write-model.md
 │   ├── agents/                         ← this skill's output (issue tracker, labels, domain rules)
-│   └── seed/                           ← initial product specs (PRD.md, ARCHITECTURE.md, TECHSTACK.md)
+│   └── seed/                           ← product specs: README.md (entry point), PRD.md, WEB-PRD.md,
+│                                          ARCHITECTURE.md, MODULE_MAP.md, CAPABILITY_MAP.md,
+│                                          FUNCTION_INDEX.md, TECHSTACK.md
 └── src/
 ```
 
