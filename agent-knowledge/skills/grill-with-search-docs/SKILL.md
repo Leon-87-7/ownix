@@ -70,6 +70,8 @@ When domain relationships are being discussed, stress-test them with specific sc
 
 When the user states how something works, check whether the code agrees. If you find a contradiction, surface it: "Your code cancels entire Orders, but you just said partial cancellation is possible — which is right?"
 
+Check `docs/seed/FUNCTION_INDEX.md` and `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md` before accepting any "we need to build X" — if X is already indexed, the real question is why the existing one doesn't fit.
+
 ### Ground third-party challenges in current docs
 
 When you're about to challenge a point that depends on a third-party tool's real behavior — greenfield or already integrated — do not grill from memory or from existing code paths, both of which go stale. This is a hard rule, not a suggestion.

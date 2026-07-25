@@ -33,8 +33,19 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
    bullet under `## Inbox` in `docs/TASK.md` first, then continue. With no
    argument, skip straight to step 1.
 1. **Read `docs/TASK.md`.** Collect every raw idea. If there are none, say so and stop.
+1b. **Run `/check-seed-index`** before leaning on the indexes in step 2. It is
+   read-only and silent when they're current. If it reports drift, note which
+   briefs lean on the affected doc and treat those entries as unverified —
+   but do **not** stop to fix them; `/update-seed-index` is a separate,
+   user-fired session.
 2. **Ground each idea before writing a word.** Never guess a path or symbol.
    Per idea, find the real code/docs it touches:
+   - **Does it already exist?** → `docs/seed/FUNCTION_INDEX.md` (utility/service
+     helpers), `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md` (orchestration
+     and wiring), `CAPABILITY_MAP.md` (which module owns a capability). Check
+     these *before* writing a scope bullet that builds something new — if it's
+     already indexed, the bullet becomes a "reuse, don't fork" note naming the
+     existing function.
    - **Symbols/flow** → codegraph first (`codegraph_search`, `codegraph_explore`,
      `codegraph_trace`); fall back to Grep only for literal strings.
    - **Product/spec** → `docs/seed/PRD.md` via the two-step TOC lookup (see
