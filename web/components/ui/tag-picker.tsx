@@ -108,6 +108,7 @@ export function IconPicker({
       <button
         type="button"
         onClick={() => onSelect(undefined)}
+        aria-pressed={!value}
         className={`rounded border px-2 py-1 text-xs ${!value ? 'border-signal text-ink' : 'border-line text-muted'}`}
       >
         None
@@ -120,6 +121,7 @@ export function IconPicker({
             type="button"
             onClick={() => onSelect(name)}
             aria-label={`Icon ${name}`}
+            aria-pressed={value === name}
             className={`rounded border p-1.5 ${value === name ? 'border-signal' : 'border-line'}`}
           >
             <Icon
