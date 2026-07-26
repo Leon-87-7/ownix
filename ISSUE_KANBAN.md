@@ -121,6 +121,7 @@ Ordered by unblocked-first, then dependency chain.
 | [#317](https://github.com/Leon-87-7/vig/issues/317) | fix(telegram): .md documents preview as mojibake (â€”) — UTF-8 BOM + strip Gemini em-dashes       | Telegram / Gemini        | —                |
 | [#365](https://github.com/Leon-87-7/vig/issues/365) | Next.js 16 core upgrade: deps + Turbopack SVGR config | Web / Next16 | — |
 | [#414](https://github.com/Leon-87-7/ownix/issues/414) | test_sheets_append_short_row fails: export_blocked() not mocked | Tests / Sheets | — |
+| [#436](https://github.com/Leon-87-7/ownix/issues/436) | fix(api): cache job thumbnail responses (ETag + Cache-Control) | API | — |
 
 ---
 
@@ -532,6 +533,9 @@ Installable PWA (grill 2026-07-23 — task #6 from docs/TASK.md)
 └── #423 share-target intake — manifest share_target → Submit URL dialog prefill ◄── #421 (share sheet lists installed PWAs only)
 #422 offline fallback — /offline page + hand-rolled sw.js (independent)
 Critical path: #421 → #423; #422 parallel
+
+Thumbnail cache-header fix (ADR-0025 follow-up — /grill-with-docs session 2026-07-26)
+#436 fix(api): cache job thumbnail responses (ETag + Cache-Control) — independent, no blockers
 ```
 
 ---

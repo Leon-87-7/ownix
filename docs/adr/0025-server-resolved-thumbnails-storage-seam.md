@@ -103,3 +103,36 @@ source URLs that remain public. The backfill path is to re-fetch frames through
 the frame sidecar (`frames.fetch_frames` / `short_frames`) and persist a selected
 frame via the same thumbnail storage seam introduced here. See
 [`scripts/backfill_short_thumbnails.py`](../../scripts/backfill_short_thumbnails.py).
+
+### 2026-07-26: Missing cache headers, not a rendering problem
+
+A request to "make thumbnails SSR" (to fix a multi-second pop-in flash on the
+feed's All tab) turned out to be a caching bug, not a rendering one. `/api/jobs`
+already resolves `thumbnail_url` synchronously and cheaply (one batched
+`get_thumbnail_job_ids` lookup, no per-item I/O) — the job list itself was never
+the bottleneck. `GET /api/jobs/{id}/thumbnail`, which serves the persisted
+IG/TikTok best-frame blob, had **no `Cache-Control` or `ETag`** — every page load
+re-downloaded every short's thumbnail from scratch, uncached, queued behind the
+browser's per-host connection cap. SSR would not have touched this: it only
+changes when the `<img src>` HTML exists, not how long the browser's own image
+fetch takes.
+
+Fix: both `GET /api/jobs/{id}/thumbnail` and its anonymous-preview twin
+`GET /api/preview/jobs/{id}/thumbnail` now share one response helper that adds
+`Cache-Control: private, max-age=86400, must-revalidate` plus an `ETag`, and
+handle `If-None-Match` with a bare `304`. (The preview twin previously had its
+own `max-age=300` with no `ETag` — a drift from the owned route that predates
+this fix; both now match.)
+
+The ETag hashes the stored **bytes** (`sha256`) rather than reading
+`job_thumbnails.created_at`: `save_thumbnail`'s `ON CONFLICT(job_id) DO UPDATE`
+overwrites `bytes`/`mime`/`width`/`height` but never touches `created_at`, so a
+reprocess (`/force <url>`, same `job_id` in place) or the backfill script can
+silently swap the underlying frame without that column changing. A
+timestamp-derived ETag would have kept validating a stale cached image forever
+after such a swap; hashing the content is correct regardless of which write path
+touched it. A 24h `max-age` was chosen over something shorter because
+correctness no longer depends on it (the hash always self-corrects on the next
+revalidation) — it only trades off request volume against how long a
+reprocess-driven change might sit unnoticed in an already-warm browser cache,
+which is an acceptable trade for a low-traffic, per-`chat_id` private dashboard.
