@@ -15,7 +15,7 @@ import {
   PenLine,
   TagX,
 } from 'lucide-react';
-import { PRESET_COLORS } from '@/components/ui/tag-picker';
+import { PRESET_COLORS, IconPicker } from '@/components/ui/tag-picker';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 
 const DEFAULT_COLOR = '#8b5cf6';
@@ -108,45 +108,53 @@ function TagForm({
           <label className="text-xs font-medium text-body">
             Color
           </label>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="grid w-fit grid-cols-6 gap-2 sm:grid-cols-9">
-              {PRESET_COLORS.map((c) => {
-                const selected = c === values.color;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() =>
-                      setValues((v) => ({ ...v, color: c }))
-                    }
-                    aria-label={`Color ${c}`}
-                    aria-pressed={selected}
-                    className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-surface' : 'hover:scale-110'}`}
-                    style={{ backgroundColor: c }}
-                  />
-                );
-              })}
-            </div>
-            <div className="flex gap-2">
-              {onCancel && (
+          <div className="grid w-fit grid-cols-6 gap-2 sm:grid-cols-9">
+            {PRESET_COLORS.map((c) => {
+              const selected = c === values.color;
+              return (
                 <button
+                  key={c}
                   type="button"
-                  onClick={onCancel}
-                  className="h-8 rounded-md px-3.5 text-[13px] font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                type="submit"
-                disabled={submitting}
-                className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
-              >
-                {submitting ? 'Saving…' : submitLabel}
-              </button>
-            </div>
+                  onClick={() =>
+                    setValues((v) => ({ ...v, color: c }))
+                  }
+                  aria-label={`Color ${c}`}
+                  aria-pressed={selected}
+                  className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-surface' : 'hover:scale-110'}`}
+                  style={{ backgroundColor: c }}
+                />
+              );
+            })}
           </div>
         </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-body">
+          Icon (optional)
+        </label>
+        <IconPicker
+          value={values.icon}
+          color={values.color}
+          onSelect={(icon) => setValues((v) => ({ ...v, icon }))}
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-8 rounded-md px-3.5 text-[13px] font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+        >
+          {submitting ? 'Saving…' : submitLabel}
+        </button>
       </div>
     </form>
   );
