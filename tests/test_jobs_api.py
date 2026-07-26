@@ -1,7 +1,11 @@
+import asyncio
 import inspect
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from src.api import jobs
 from src.api.jobs import is_persistable_short_platform, resolve_thumbnail
@@ -381,3 +385,133 @@ def test_post_jobs_routes_to_create_job() -> None:
         r for r in jobs.jobs_router.routes if r.path == "/api/jobs" and "POST" in r.methods
     )
     assert post.endpoint is jobs.create_job
+
+
+# ---------------------------------------------------------------------------
+# GET /api/jobs/{id}/thumbnail — cache headers (issue #436)
+# ---------------------------------------------------------------------------
+
+
+USER_A = {"id": 1, "username": "alice"}
+USER_B = {"id": 2, "username": "bob"}
+
+
+@pytest.fixture
+def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+
+    Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+    store) so the fixture works regardless of the local SESSION_BACKEND
+    (memory vs redis) — hand-seeding a FakeRedis store, like
+    tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+    since resolve() then reads an in-process dict instead.
+    """
+    db_file = tmp_path / "jobs_test.db"
+    monkeypatch.setenv("DB_PATH", str(db_file))
+    monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+    monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+
+    from src import database
+
+    async def _setup() -> tuple[str, str]:
+        await database.init_db()
+        await database.set_user_status(USER_A["id"], "approved")
+        await database.set_user_status(USER_B["id"], "approved")
+        return await session_module.mint(USER_A), await session_module.mint(USER_B)
+
+    from src.api.jobs import jobs_router
+    from src.auth.middleware import SessionMiddleware
+    from src.auth import session as session_module
+
+    test_app = FastAPI()
+    test_app.add_middleware(SessionMiddleware)
+    test_app.include_router(jobs_router)
+
+    session_a, session_b = asyncio.run(_setup())
+
+    client = TestClient(test_app, raise_server_exceptions=True)
+    client.session_a = session_a  # type: ignore[attr-defined]
+    client.session_b = session_b  # type: ignore[attr-defined]
+    return client
+
+
+def _insert_thumbnail_job(job_id: str, chat_id: int) -> None:
+    async def run() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO jobs (id, chat_id, url, content_type, status, title, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    chat_id,
+                    "https://www.instagram.com/reel/abc/",
+                    "short",
+                    "done",
+                    f"title {job_id}",
+                    "2026-01-01 00:00:00",
+                ),
+            )
+            await conn.commit()
+        await database.save_thumbnail(job_id, b"\xff\xd8fakejpeg", mime="image/jpeg")
+
+    asyncio.run(run())
+
+
+class TestJobThumbnailCaching:
+    def test_first_request_sets_cache_control_and_etag(self, jobs_client: TestClient) -> None:
+        _insert_thumbnail_job("s1", chat_id=1)
+
+        jobs_client.cookies.set("vig_session", jobs_client.session_a)
+        resp = jobs_client.get("/api/jobs/s1/thumbnail")
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("image/jpeg")
+        assert resp.headers["cache-control"] == "private, max-age=86400, must-revalidate"
+        assert resp.headers["etag"]
+
+    @pytest.mark.parametrize(
+        "header_value",
+        [
+            "{etag}",
+            "*",
+            '"stale", {etag}',
+            "W/{etag}",
+        ],
+    )
+    def test_matching_if_none_match_returns_304(
+        self, jobs_client: TestClient, header_value: str
+    ) -> None:
+        _insert_thumbnail_job("s1", chat_id=1)
+        jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+        first = jobs_client.get("/api/jobs/s1/thumbnail")
+        etag = first.headers["etag"]
+
+        second = jobs_client.get(
+            "/api/jobs/s1/thumbnail",
+            headers={"If-None-Match": header_value.format(etag=etag)},
+        )
+        assert second.status_code == 304
+        assert second.content == b""
+        assert second.headers["etag"] == etag
+
+    def test_mismatched_if_none_match_returns_200(self, jobs_client: TestClient) -> None:
+        _insert_thumbnail_job("s1", chat_id=1)
+        jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+        resp = jobs_client.get(
+            "/api/jobs/s1/thumbnail", headers={"If-None-Match": '"stale"'}
+        )
+        assert resp.status_code == 200
+        assert resp.content == b"\xff\xd8fakejpeg"
+
+    def test_foreign_job_thumbnail_still_forbidden(self, jobs_client: TestClient) -> None:
+        _insert_thumbnail_job("s1", chat_id=1)
+        jobs_client.cookies.set("vig_session", jobs_client.session_b)
+
+        resp = jobs_client.get("/api/jobs/s1/thumbnail")
+        assert resp.status_code == 403

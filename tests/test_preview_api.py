@@ -446,6 +446,53 @@ class TestPreviewThumbnail:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("image/jpeg")
         assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+        assert resp.headers["cache-control"] == "private, max-age=86400, must-revalidate"
+        assert resp.headers["etag"]
+
+    @pytest.mark.parametrize(
+        "header_value",
+        [
+            "{etag}",
+            "*",
+            '"stale", {etag}',
+            "W/{etag}",
+        ],
+    )
+    def test_thumbnail_matching_if_none_match_returns_304(
+        self, preview_client: TestClient, header_value: str
+    ) -> None:
+        from src import database
+
+        _seed([{"job_id": "s1"}])
+        asyncio.run(database.save_thumbnail("s1", b"\xff\xd8fakejpeg", mime="image/jpeg"))
+
+        first = preview_client.get("/api/preview/jobs/s1/thumbnail", cookies=PREVIEW_COOKIE)
+        etag = first.headers["etag"]
+
+        second = preview_client.get(
+            "/api/preview/jobs/s1/thumbnail",
+            cookies=PREVIEW_COOKIE,
+            headers={"If-None-Match": header_value.format(etag=etag)},
+        )
+        assert second.status_code == 304
+        assert second.content == b""
+        assert second.headers["etag"] == etag
+
+    def test_thumbnail_mismatched_if_none_match_returns_200(
+        self, preview_client: TestClient
+    ) -> None:
+        from src import database
+
+        _seed([{"job_id": "s1"}])
+        asyncio.run(database.save_thumbnail("s1", b"\xff\xd8fakejpeg", mime="image/jpeg"))
+
+        resp = preview_client.get(
+            "/api/preview/jobs/s1/thumbnail",
+            cookies=PREVIEW_COOKIE,
+            headers={"If-None-Match": '"stale"'},
+        )
+        assert resp.status_code == 200
+        assert resp.content == b"\xff\xd8fakejpeg"
 
     def test_list_rewrites_stored_thumbnail_to_preview_route(
         self, preview_client: TestClient

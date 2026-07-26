@@ -20,6 +20,7 @@ from src.api.jobs import (
     detail_fields_for,
     is_persistable_short_platform,
     resolve_thumbnail,
+    thumbnail_response,
 )
 from src.config import settings
 
@@ -249,19 +250,10 @@ async def get_preview_thumbnail(job_id: str, request: Request) -> Response:
     thumbnail = await database.get_thumbnail(job_id)
     if thumbnail is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    # Same MIME allowlist as the owned route: never echo active content types.
-    mime = (
-        thumbnail["mime"]
-        if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES
-        else "image/jpeg"
-    )
-    return Response(
-        content=thumbnail["bytes"],
-        media_type=mime,
-        headers={
-            "Cache-Control": "private, max-age=300",
-            "X-Robots-Tag": "noindex, nofollow",
-        },
+    return thumbnail_response(
+        thumbnail,
+        request,
+        extra_headers={"X-Robots-Tag": "noindex, nofollow"},
     )
 
 

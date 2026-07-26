@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
@@ -528,6 +529,48 @@ def detail_fields_for(content_type: str) -> tuple[str, ...]:
     return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
 
 
+def thumbnail_response(
+    thumbnail: dict, request: Request, *, extra_headers: dict[str, str] | None = None
+) -> Response:
+    """Build a cached image Response for a stored thumbnail row.
+
+    ETag hashes the stored bytes rather than a timestamp column: save_thumbnail's
+    ON CONFLICT(job_id) DO UPDATE overwrites bytes/mime/width/height but never
+    bumps job_thumbnails.created_at, so a reprocess or backfill can swap the
+    frame without that column changing — a timestamp-derived ETag would keep
+    validating a stale image forever after such a swap (see ADR-0025 follow-up).
+    """
+    # Never echo back a non-image content type, even for rows stored before the
+    # save-time allowlist existed — keeps the browser from sniffing active content.
+    mime = (
+        thumbnail["mime"] if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES else "image/jpeg"
+    )
+    etag = f'"{hashlib.sha256(thumbnail["bytes"]).hexdigest()}"'
+    if _if_none_match_matches(request.headers.get("if-none-match"), etag):
+        # RFC 7232 §4.1: a 304 should repeat the ETag it would have sent on a 200.
+        return Response(status_code=304, headers={**(extra_headers or {}), "ETag": etag})
+    headers = {
+        "Cache-Control": "private, max-age=86400, must-revalidate",
+        "ETag": etag,
+        **(extra_headers or {}),
+    }
+    return Response(content=thumbnail["bytes"], media_type=mime, headers=headers)
+
+
+def _if_none_match_matches(if_none_match: str | None, etag: str) -> bool:
+    if if_none_match is None:
+        return False
+    for validator in if_none_match.split(","):
+        validator = validator.strip()
+        if validator == "*":
+            return True
+        if validator.startswith("W/"):
+            validator = validator[2:].strip()
+        if validator == etag:
+            return True
+    return False
+
+
 @jobs_router.get("/{job_id}/thumbnail")
 async def get_job_thumbnail(job_id: str, request: Request) -> Response:
     """Return a persisted thumbnail for an owned job."""
@@ -535,12 +578,7 @@ async def get_job_thumbnail(job_id: str, request: Request) -> Response:
     thumbnail = await database.get_thumbnail(job_id)
     if thumbnail is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    # Never echo back a non-image content type, even for rows stored before the
-    # save-time allowlist existed — keeps the browser from sniffing active content.
-    mime = (
-        thumbnail["mime"] if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES else "image/jpeg"
-    )
-    return Response(content=thumbnail["bytes"], media_type=mime)
+    return thumbnail_response(thumbnail, request)
 
 
 @jobs_router.get("/{job_id}")
