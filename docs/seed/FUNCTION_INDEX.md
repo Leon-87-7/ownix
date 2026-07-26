@@ -1,6 +1,7 @@
 # vig — Function Index
 
 **Last Updated:** 2026-07-25
+<!-- seed-index: coverage=bd806a4 drift=bd806a4 -->
 
 Catalog of the utility/service layer in `src/` and `web/` — the functions that
 already exist but don't show up anywhere else in `docs/seed/`, so they get

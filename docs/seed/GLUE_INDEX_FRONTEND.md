@@ -1,6 +1,7 @@
 # vig — Frontend Glue-Layer Index
 
 **Last Updated:** 2026-07-25
+<!-- seed-index: coverage=bd806a4 drift=bd806a4 -->
 
 Covers `web/app/**` route pages/layouts and the "wiring" components in
 `web/components/` — the ones that compose hooks + API data + child

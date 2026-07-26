@@ -1,6 +1,7 @@
 # vig — Backend Glue-Layer Index
 
-**Last Updated:** 2026-07-25
+**Last Updated:** 2026-07-26
+<!-- seed-index: coverage=bd806a4 drift=bd806a4 -->
 
 Covers `src/processors/`, `src/api/`, `src/auth/`, `src/telegram/`,
 `src/main.py`, `src/worker.py` — the orchestration layer `FUNCTION_INDEX.md`
@@ -13,18 +14,16 @@ explicitly excluded. Cross-references that file by name for anything in
 
 ## Read this first — surprising findings
 
-1. **`POST /api/jobs` is wired to the wrong function — confirmed live bug.**
-   In `src/api/jobs.py`, the `@jobs_router.post("")` decorator (line 139) sits
-   directly above the private helper `_create_link_job(chat_id: int, url: str)`,
-   not above `create_job(request: Request, body: JobCreateRequest)` (line 206,
-   undecorated, zero callers per CodeGraph). As written, FastAPI registers
-   `_create_link_job` as the `POST /api/jobs` handler — it treats `chat_id`
-   and `url` as required query params and never sees `JobCreateRequest`'s body
-   or `request.state.user`, so short/long/article/repo job creation from the
-   dashboard (the whole point of `create_job`/`_create_pipeline_job`) can't
-   run as intended. No test file hits `POST /api/jobs` (checked
-   `tests/test_jobs_api.py` and a repo-wide grep). **Not yet fixed** — flagged
-   for a deliberate decision, not touched by this documentation pass.
+1. **`POST /api/jobs` was wired to the wrong function for the entire first
+   survey — fixed in #434.** The `@jobs_router.post("")` decorator sat above the
+   private helper `_create_link_job(chat_id, url)` instead of
+   `create_job(request, body)`, so FastAPI registered the helper as the handler:
+   it took `chat_id`/`url` as query params and never saw the request body or
+   `request.state.user`. Dashboard short/long/article/repo creation could not
+   work. It survived because **no test exercised `POST /api/jobs` at all** —
+   `tests/test_jobs_api.py` now asserts the route's endpoint binding directly.
+   Worth remembering as the shape of bug this index exists to surface: every
+   function involved existed, was named correctly, and lived in the right file.
 2. **The "Freestyle" flow is one shared arming mechanism reused by five content
    types.** `chat_state` (`awaiting_freestyle` / `awaiting_intent`) is armed by
    three different entry points (`/freestyle <url>`, the `✍️ Freestyle` button,
@@ -412,14 +411,19 @@ count chips don't shift when a tab filter is applied.
 that translate its `ValueError` into a 422.
 **Entry point:** dashboard "stuck jobs" recovery panel.
 
-#### `create_job(request, body) -> dict` — intended `POST /api/jobs` — `src/api/jobs.py`
+#### `create_job(request, body) -> dict` — `POST /api/jobs` — `src/api/jobs.py`
 **Does:** Dashboard job creation using the shared Telegram ingest core
 (`create_and_enqueue_job`). Branches on `body.content_type == "link"` to
 `_create_link_job` (Add-Link, no pipeline detection) vs `_create_pipeline_job`
 (detects short/long/article/repo from the URL, rejects `document` — those
-belong in the Doc Parser). **See finding #1 above — the route decorator is
-misapplied to `_create_link_job`, so this function currently has zero real callers.**
-**Called from:** (intended) `POST /api/jobs`; actually uncalled per CodeGraph, and no test exercises the route.
+belong in the Doc Parser).
+**Entry point:** dashboard Submit-URL / Ingest-Link dialogs.
+
+#### `is_persistable_short_platform(url) -> bool` — `src/api/jobs.py`
+**Does:** True for Instagram and TikTok URLs — the two short platforms whose CDN
+thumbnails expire, so a frame has to be persisted locally instead of hot-linked.
+Host-suffix match, so `vt.tiktok.com` and `www.` variants count.
+**Called from:** `resolve_thumbnail` and `list_jobs` (this file), `_load_corpus` in `src/api/preview.py`.
 
 #### `resolve_thumbnail(job, stored_ids=None) -> tuple[str|None, ThumbnailKind|None]` — `src/api/jobs.py`
 **Does:** Server-side thumbnail URL resolution per content type: article →
@@ -447,6 +451,13 @@ batches thumbnail resolution after the main query via `get_thumbnail_job_ids`.
 Feed-scope filter as `list_jobs` — shares `_job_scope_where` with it so
 prev/next navigation can't drift from what's actually visible in the list.
 **Entry point:** dashboard job detail page "Previous/Next" buttons.
+
+#### `get_job_thumbnail` — `GET /api/jobs/{id}/thumbnail` — `src/api/jobs.py`
+**Does:** Serves persisted thumbnail bytes for an owned job, 404 when none was
+stored. Coerces any stored MIME outside `database.ALLOWED_THUMBNAIL_MIMES` back to
+`image/jpeg`, so rows written before that allowlist existed can't get the browser
+sniffing active content.
+**Entry point:** the `/api/jobs/{id}/thumbnail` URL `resolve_thumbnail` hands out for persisted Instagram/TikTok thumbnails.
 
 #### `get_job` — `GET /api/jobs/{id}` — `src/api/jobs.py`
 **Does:** Full job detail, field set chosen by `detail_fields_for(content_type)`
