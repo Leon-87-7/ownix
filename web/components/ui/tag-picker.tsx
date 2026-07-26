@@ -176,7 +176,10 @@ export function TagMenu({
 
   return (
     <>
-      <DropdownMenu.Root>
+      {/* modal={false}: the create Dialog mounts while this menu unmounts; with
+          both modal, Radix's body pointer-events lock can stick after close
+          (page freezes on mobile). Non-modal menu → only the Dialog locks. */}
+      <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
           {trigger ?? (
             <button
