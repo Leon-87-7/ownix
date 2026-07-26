@@ -8,4 +8,4 @@ Interview me relentlessly about every aspect of this plan until we reach a share
 
 Ask the questions one at a time, waiting for feedback on each question before continuing. Asking multiple questions at once is bewildering.
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
+If a question can be answered by exploring the codebase, explore the codebase instead. Start in `docs/seed/` — `CAPABILITY_MAP.md` (which module owns a capability), `FUNCTION_INDEX.md` (which helper already exists), `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md` (where it wires in) — before reading source. If the plan proposes building something already listed there, that is your next question, not a task.
