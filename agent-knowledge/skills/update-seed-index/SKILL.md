@@ -62,10 +62,14 @@ expensive mode; it re-does a slice of the original survey. Fire it deliberately.
 
 6. **Write, then stamp.** Apply the approved changes, then for each touched doc:
 
-   - Verify every entry you wrote conforms to the four-line grammar exactly —
-     `#### ` at line start, all three bolded labels present, no blank lines
-     inside the entry. A malformed entry becomes a phantom gap on the next run.
-   - Update `**Last Updated:**` to today.
+   - Verify every entry you wrote matches **that doc's** grammar (the helper
+     documents two shapes) — `#### ` at line start, the labels that doc
+     actually uses, no blank lines inside the entry. A malformed entry becomes
+     a phantom gap on the next run. Never reformat existing entries to match
+     another doc's shape.
+   - Update `**Last Updated:**` to today **only if the doc's content changed**.
+     A doc that was already current and received only an anchor stamp keeps its
+     date — see the helper on why the two must not move together.
    - Stamp the anchors:
 
      ```md

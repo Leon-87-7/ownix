@@ -98,6 +98,12 @@ about each other:
 A coverage-only run bumping `drift` would silently discard unverified
 suspects, so it must not.
 
+The anchors are **not** the `**Last Updated:**` line and must not be kept in
+step with it. `Last Updated` records when the doc's *content* last changed; the
+anchors record how far its content has been *verified*. A doc that was already
+current and received only a stamp keeps its old date — dating it today because
+a check ran is the false-freshness signal the anchors exist to replace.
+
 ### Computing a changed set
 
 ```bash
@@ -135,8 +141,13 @@ on the first run.
 
 ## Entry grammar
 
-Each indexed function is exactly four lines. Detection parses this; correction
-writes it. Neither may vary it.
+**Two shapes, not one.** Every entry opens with `#### ` at line start followed
+by the symbol in backticks — that heading is what the parser counts, and it is
+the only part common to all three docs. The label lines differ by doc.
+
+**`FUNCTION_INDEX.md` and `GLUE_INDEX_FRONTEND.md`** — three labels. Write all
+three on a new entry; a few existing ones merge several symbols under one
+heading and share labels:
 
 ```md
 #### `function_name(key_args) -> ReturnType`
@@ -145,11 +156,31 @@ writes it. Neither may vary it.
 **Usage:** one realistic call line
 ```
 
-The grammar is load-bearing: the parser keys on `#### ` at line start and on
-the three bolded labels. An entry with a blank line between its label lines, a
-missing label, or a wrapped `#### ` heading will parse wrong and surface as a
-phantom gap. `/update-seed-index` must check conformance on every entry it
-writes — that check is cheaper than debugging a false gap later.
+**`GLUE_INDEX_BACKEND.md`** — `**Does:**` plus *one* of `**Called from:**` (for
+helpers) or `**Entry point:**` (for routes, naming what actually triggers them).
+`**Usage:**` is rare and optional. The heading carries the route and file
+inline:
+
+```md
+#### `handler_name` — `GET /api/thing/{id}` — `src/api/thing.py`
+**Does:** Plain English, 1-2 sentences.
+**Entry point:** what actually calls this route.
+```
+
+Measured on the current docs, so this describes them rather than prescribing at
+them: `Usage` appears on 147/147 FUNCTION_INDEX entries and 54/54
+GLUE_INDEX_FRONTEND entries, but only 8/98 in GLUE_INDEX_BACKEND — which
+carries `Entry point` on 43. Writing the three-label shape into the backend
+index would leave new entries inconsistent with ~90 neighbours.
+
+Those counts drift as entries are added and are here to show the *contrast*
+between the two shapes, not as a checksum. Nothing verifies them; don't treat a
+mismatch as a defect, and re-measure before quoting them.
+
+The grammar is load-bearing: the parser keys on `#### ` at line start and on the
+bolded labels. A blank line inside an entry, a missing `**Does:**`, or a wrapped
+`#### ` heading parses wrong and surfaces as a phantom gap. Conformance means
+matching **that doc's** shape — never reformat one index to match another's.
 
 **Parse sanity:** a doc parsing to **zero** entries means the grammar changed
 and the parse broke — not that the doc collapsed. Say that, rather than
