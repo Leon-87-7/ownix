@@ -16,7 +16,10 @@ log = get_logger(__name__)
 controls_router = APIRouter(prefix="/api/controls", tags=["controls"])
 
 
-TagIcon = Literal["Brain", "Code2", "Database", "FileText", "Globe", "Lightbulb", "Link2"]
+TagIcon = Literal[
+    "Brain", "Code2", "Database", "PackageOpen", "FileText", "Globe", "Lightbulb", "Link2",
+    "Cog", "HatGlasses", "PawPrint", "Paintbrush", "ChessPawn", "Anvil", "Brush", "Container",
+]
 
 
 class TagIn(BaseModel):

@@ -93,6 +93,46 @@ export function TagMark({
   );
 }
 
+/** Shared "None" + swatch-button icon grid used by every tag create/edit form. */
+export function IconPicker({
+  value,
+  color,
+  onSelect,
+}: {
+  value: string | null | undefined;
+  color: string;
+  onSelect: (icon: string | undefined) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => onSelect(undefined)}
+        className={`rounded border px-2 py-1 text-xs ${!value ? 'border-signal text-ink' : 'border-line text-muted'}`}
+      >
+        None
+      </button>
+      {TAG_ICON_NAMES.map((name) => {
+        const Icon = TAG_ICONS[name];
+        return (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onSelect(name)}
+            aria-label={`Icon ${name}`}
+            className={`rounded border p-1.5 ${value === name ? 'border-signal' : 'border-line'}`}
+          >
+            <Icon
+              className="h-4 w-4"
+              style={{ color }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Check({ className }: { className?: string }) {
   return (
     <svg
@@ -315,32 +355,11 @@ function CreateTagModal({
             <label className="text-xs font-medium text-body">
               Icon (optional)
             </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setIcon('')}
-                className={`rounded border px-2 py-1 text-xs ${icon === '' ? 'border-signal text-ink' : 'border-line text-muted'}`}
-              >
-                None
-              </button>
-              {TAG_ICON_NAMES.map((name) => {
-                const Icon = TAG_ICONS[name];
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setIcon(name)}
-                    aria-label={`Icon ${name}`}
-                    className={`rounded border p-1.5 ${icon === name ? 'border-signal' : 'border-line'}`}
-                  >
-                    <Icon
-                      className="h-4 w-4"
-                      style={{ color }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            <IconPicker
+              value={icon}
+              color={color}
+              onSelect={(next) => setIcon(next ?? '')}
+            />
           </div>
           {error && (
             <p className="text-xs text-status-error">{error}</p>
