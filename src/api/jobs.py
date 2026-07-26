@@ -546,7 +546,7 @@ def thumbnail_response(
         thumbnail["mime"] if thumbnail["mime"] in database.ALLOWED_THUMBNAIL_MIMES else "image/jpeg"
     )
     etag = f'"{hashlib.sha256(thumbnail["bytes"]).hexdigest()}"'
-    if request.headers.get("if-none-match") == etag:
+    if _if_none_match_matches(request.headers.get("if-none-match"), etag):
         # RFC 7232 §4.1: a 304 should repeat the ETag it would have sent on a 200.
         return Response(status_code=304, headers={**(extra_headers or {}), "ETag": etag})
     headers = {
@@ -555,6 +555,20 @@ def thumbnail_response(
         **(extra_headers or {}),
     }
     return Response(content=thumbnail["bytes"], media_type=mime, headers=headers)
+
+
+def _if_none_match_matches(if_none_match: str | None, etag: str) -> bool:
+    if if_none_match is None:
+        return False
+    for validator in if_none_match.split(","):
+        validator = validator.strip()
+        if validator == "*":
+            return True
+        if validator.startswith("W/"):
+            validator = validator[2:].strip()
+        if validator == etag:
+            return True
+    return False
 
 
 @jobs_router.get("/{job_id}/thumbnail")

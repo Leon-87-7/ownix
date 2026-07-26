@@ -473,14 +473,28 @@ class TestJobThumbnailCaching:
         assert resp.headers["cache-control"] == "private, max-age=86400, must-revalidate"
         assert resp.headers["etag"]
 
-    def test_matching_if_none_match_returns_304(self, jobs_client: TestClient) -> None:
+    @pytest.mark.parametrize(
+        "header_value",
+        [
+            "{etag}",
+            "*",
+            '"stale", {etag}',
+            "W/{etag}",
+        ],
+    )
+    def test_matching_if_none_match_returns_304(
+        self, jobs_client: TestClient, header_value: str
+    ) -> None:
         _insert_thumbnail_job("s1", chat_id=1)
         jobs_client.cookies.set("vig_session", jobs_client.session_a)
 
         first = jobs_client.get("/api/jobs/s1/thumbnail")
         etag = first.headers["etag"]
 
-        second = jobs_client.get("/api/jobs/s1/thumbnail", headers={"If-None-Match": etag})
+        second = jobs_client.get(
+            "/api/jobs/s1/thumbnail",
+            headers={"If-None-Match": header_value.format(etag=etag)},
+        )
         assert second.status_code == 304
         assert second.content == b""
         assert second.headers["etag"] == etag

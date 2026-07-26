@@ -449,8 +449,17 @@ class TestPreviewThumbnail:
         assert resp.headers["cache-control"] == "private, max-age=86400, must-revalidate"
         assert resp.headers["etag"]
 
+    @pytest.mark.parametrize(
+        "header_value",
+        [
+            "{etag}",
+            "*",
+            '"stale", {etag}',
+            "W/{etag}",
+        ],
+    )
     def test_thumbnail_matching_if_none_match_returns_304(
-        self, preview_client: TestClient
+        self, preview_client: TestClient, header_value: str
     ) -> None:
         from src import database
 
@@ -463,7 +472,7 @@ class TestPreviewThumbnail:
         second = preview_client.get(
             "/api/preview/jobs/s1/thumbnail",
             cookies=PREVIEW_COOKIE,
-            headers={"If-None-Match": etag},
+            headers={"If-None-Match": header_value.format(etag=etag)},
         )
         assert second.status_code == 304
         assert second.content == b""

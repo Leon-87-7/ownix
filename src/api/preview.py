@@ -250,7 +250,11 @@ async def get_preview_thumbnail(job_id: str, request: Request) -> Response:
     thumbnail = await database.get_thumbnail(job_id)
     if thumbnail is None:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return thumbnail_response(thumbnail, request, extra_headers={"X-Robots-Tag": "noindex, nofollow"})
+    return thumbnail_response(
+        thumbnail,
+        request,
+        extra_headers={"X-Robots-Tag": "noindex, nofollow"},
+    )
 
 
 @preview_router.get("/jobs/{job_id}")
