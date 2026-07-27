@@ -97,8 +97,28 @@ describe("PreviewGrid", () => {
       expect(image).toHaveAttribute("loading", index < 10 ? "eager" : "lazy");
       if (index < 4) expect(image).toHaveAttribute("fetchpriority", "high");
       else expect(image).not.toHaveAttribute("fetchpriority");
-      if (index < 10) expect(image).toHaveAttribute("decoding", "async");
+      if (index < 4) expect(image).toHaveAttribute("decoding", "async");
       else expect(image).not.toHaveAttribute("decoding");
     });
+  });
+  it("uses the unfiltered feed positions for preload priorities", () => {
+    const [laterJob, preloadedJob] = jobsWithThumbnails(2);
+    const { container } = render(
+      <PreviewGrid
+        jobs={[laterJob, preloadedJob]}
+        preloadIndexes={new Map([
+          [laterJob.id, 25],
+          [preloadedJob.id, 3],
+        ])}
+      />,
+    );
+    const [laterImage, preloadedImage] = Array.from(
+      container.querySelectorAll("img"),
+    );
+
+    expect(laterImage).toHaveAttribute("loading", "lazy");
+    expect(laterImage).not.toHaveAttribute("fetchpriority");
+    expect(preloadedImage).toHaveAttribute("loading", "eager");
+    expect(preloadedImage).toHaveAttribute("fetchpriority", "high");
   });
 });

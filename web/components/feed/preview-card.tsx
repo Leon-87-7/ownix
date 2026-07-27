@@ -60,7 +60,7 @@ function Thumbnail({
           className="h-full w-full object-cover"
           loading={index < 10 ? "eager" : "lazy"}
           fetchPriority={index < 4 ? "high" : undefined}
-          decoding={index < 10 ? "async" : undefined}
+          decoding={index < 4 ? "async" : undefined}
           onError={() => setFailed(true)}
         />
       ) : (
