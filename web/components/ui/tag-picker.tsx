@@ -34,20 +34,21 @@ interface TagSummary {
   icon?: string | null;
 }
 
-// OKLCH-picked global tag hues. All pass >=3:1 non-text contrast against
-// #0d0e10, #16181c, and #202329; hues 30°–90° are intentionally excluded.
+// Hue-ordered global tag colors. All pass >=3:1 non-text contrast against
+// #0d0e10, #16181c, and #202329.
 export const PRESET_COLORS = [
-  '#f87171', // oklch hue ≈ 22
-  '#fb7185', // ≈ 11
-  '#f472b6', // ≈ 0/350
-  '#e879f9', // ≈ 328
-  '#c084fc', // ≈ 304
-  '#a78bfa', // ≈ 293
-  '#8b5cf6', // ≈ 286
-  '#60a5fa', // ≈ 252
-  '#22d3ee', // ≈ 215
-  '#2dd4bf', // ≈ 190
-  '#4ade80', // ≈ 150
+  '#f87171', // red
+  '#fb923c', // orange
+  '#facc15', // yellow
+  '#4ade80', // green
+  '#2dd4bf', // cyan-green
+  '#22d3ee', // cyan
+  '#60a5fa', // blue
+  '#8b5cf6', // purple
+  '#c084fc', // violet
+  '#f472b6', // pink
+  '#a16207', // brown
+  '#f4f1eb', // white
 ];
 const DEFAULT_COLOR = '#8b5cf6';
 
@@ -339,7 +340,7 @@ function CreateTagModal({
             <label className="text-xs font-medium text-body">
               Color
             </label>
-            <div className="mx-auto grid w-fit grid-cols-6 gap-2 p-2 sm:grid-cols-9">
+            <div className="mx-auto grid w-fit grid-cols-6 gap-1.5 p-2 sm:grid-cols-9">
               {PRESET_COLORS.map((c) => {
                 const selected = c === color;
                 return (
@@ -349,7 +350,7 @@ function CreateTagModal({
                     onClick={() => setColor(c)}
                     aria-label={`Color ${c}`}
                     aria-pressed={selected}
-                    className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-surface' : 'hover:scale-110'}`}
+                    className={`h-5 w-5 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-1 ring-offset-surface' : 'hover:scale-110'}`}
                     style={{ backgroundColor: c }}
                   />
                 );
