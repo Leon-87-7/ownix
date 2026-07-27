@@ -550,7 +550,7 @@ def thumbnail_response(
         # RFC 7232 §4.1: a 304 should repeat the ETag it would have sent on a 200.
         return Response(status_code=304, headers={**(extra_headers or {}), "ETag": etag})
     headers = {
-        "Cache-Control": "private, max-age=86400, must-revalidate",
+        "Cache-Control": "private, max-age=2592000, must-revalidate",
         "ETag": etag,
         **(extra_headers or {}),
     }

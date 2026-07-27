@@ -470,7 +470,7 @@ class TestJobThumbnailCaching:
 
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("image/jpeg")
-        assert resp.headers["cache-control"] == "private, max-age=86400, must-revalidate"
+        assert resp.headers["cache-control"] == "private, max-age=2592000, must-revalidate"
         assert resp.headers["etag"]
 
     @pytest.mark.parametrize(

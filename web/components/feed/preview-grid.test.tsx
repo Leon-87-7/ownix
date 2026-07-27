@@ -32,6 +32,15 @@ const landscapeJob: JobSummary = {
   thumbnail_kind: "landscape",
 };
 
+function jobsWithThumbnails(count: number): JobSummary[] {
+  return Array.from({ length: count }, (_, index) => ({
+    ...landscapeJob,
+    id: `job_${index}`,
+    title: `Job ${index}`,
+    thumbnail_url: `https://img.youtube.com/vi/${index}/hqdefault.jpg`,
+  }));
+}
+
 function cardOf(name: RegExp) {
   return screen.getByRole("link", { name }).parentElement;
 }
@@ -77,5 +86,19 @@ describe("PreviewGrid", () => {
     const card = cardOf(/portrait short/i);
     expect(card?.innerHTML).toContain("aspect-[9/16]");
     expect(card?.innerHTML).not.toContain("aspect-video");
+  });
+
+  it("eager-loads the first ten thumbnails and prioritizes the first four", () => {
+    const { container } = render(<PreviewGrid jobs={jobsWithThumbnails(11)} />);
+    const images = Array.from(container.querySelectorAll("img"));
+
+    expect(images).toHaveLength(11);
+    images.forEach((image, index) => {
+      expect(image).toHaveAttribute("loading", index < 10 ? "eager" : "lazy");
+      if (index < 4) expect(image).toHaveAttribute("fetchpriority", "high");
+      else expect(image).not.toHaveAttribute("fetchpriority");
+      if (index < 10) expect(image).toHaveAttribute("decoding", "async");
+      else expect(image).not.toHaveAttribute("decoding");
+    });
   });
 });

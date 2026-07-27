@@ -32,10 +32,11 @@ export function PreviewGrid({
 }) {
   return (
     <div className={GRID_CLASS[variant]}>
-      {jobs.map((job) => (
+      {jobs.map((job, index) => (
         <PreviewCard
           key={job.id}
           job={job}
+          index={index}
           contentType={contentType}
           status={status}
           variant={variant === "shorts" ? "compact" : variant === "bento" ? "bento" : "default"}

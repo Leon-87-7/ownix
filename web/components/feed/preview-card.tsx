@@ -19,6 +19,7 @@ export type PreviewCardVariant = "default" | "bento" | "compact";
 
 interface PreviewCardProps {
   job: JobSummary;
+  index: number;
   platformGlyph?: ReactNode;
   contentType?: string;
   status?: string;
@@ -28,9 +29,11 @@ interface PreviewCardProps {
 
 function Thumbnail({
   job,
+  index,
   variant,
 }: {
   job: JobSummary;
+  index: number;
   variant: PreviewCardVariant;
 }) {
   const [failed, setFailed] = useState(false);
@@ -55,7 +58,9 @@ function Thumbnail({
           src={job.thumbnail_url ?? ""}
           alt=""
           className="h-full w-full object-cover"
-          loading="lazy"
+          loading={index < 10 ? "eager" : "lazy"}
+          fetchPriority={index < 4 ? "high" : undefined}
+          decoding={index < 10 ? "async" : undefined}
           onError={() => setFailed(true)}
         />
       ) : (
@@ -79,6 +84,7 @@ function Thumbnail({
 
 export function PreviewCard({
   job,
+  index,
   platformGlyph,
   contentType,
   status,
@@ -117,7 +123,7 @@ export function PreviewCard({
           variant === "bento" ? "sm:min-h-0 sm:flex-1" : ""
         }`}
       >
-        <Thumbnail job={job} variant={variant} />
+        <Thumbnail job={job} index={index} variant={variant} />
       </div>
 
       {/* bento: the thumbnail wrapper is the flexible region; elsewhere the
