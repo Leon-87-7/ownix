@@ -478,6 +478,14 @@ enrichment job.
 > `DELETE /api/jobs/{job_id}` endpoint; this task extends the surface (cards,
 > swipe, Telegram message deletion, "don't show again"). Decide the endpoint
 > contract once.
+>
+> **Endpoint contract settled 2026-07-27 in task 33's grill** — `DELETE
+> /api/jobs/{job_id}` → 204, hard delete (job row + cascades + `links`
+> de-index), cloud artifacts purged asynchronously via a `job_purge` envelope,
+> allowed from any status. See ADR-0042. Two carry-overs for this task: the
+> reusable `web/components/ui/confirm-dialog.tsx` it introduces (reuse it for
+> swipe/cards rather than forking), and the note that the five-table cascade
+> does **not** cover `links` — this task's grounding says otherwise.
 
 > Touches the same job-card real estate as task 7's dense-table thinking and task 11's per-URL
 > tagging — no shared decision, just adjacent surface area.
@@ -1015,8 +1023,10 @@ the long pipeline stops offering PRD/spec creation.
 
 ## 33. Permanent delete button at the bottom of the job details page (dashboard-only)
 
-> **Grill:** `/grilling` — pure product/UX; the endpoint shape and cascade
-> mechanics are already pinned below.
+> **Grilled 2026-07-27.** ~~Pure product/UX; the endpoint shape and cascade
+> mechanics are already pinned below.~~ It was not pure product/UX — the grill
+> found the cascade claim incomplete and the scope grew to a full cloud purge.
+> See the Correction and Resolved blocks below, plus ADR-0042.
 
 > **Grill together with task 19.** This is the narrow first slice of task 19's
 > full delete surface: details page only, dashboard-only (Telegram messages
@@ -1031,35 +1041,69 @@ cluster `JobActionsBar`, `page.tsx:497`, rendered at `page.tsx:676`). There is
 no DELETE endpoint for jobs in `src/api/jobs.py` (verified 2026-07-27). Five
 child tables already cascade on job delete (`ON DELETE CASCADE` — task 19's
 grounding): `job_thumbnails`, `job_annotations`, `job_tags`, `space_urls`,
-`document_outputs`, so a `DELETE FROM jobs WHERE id = ?` is complete on the DB
-side. Ownership lookup exists via `get_owned_job` (`src/api/deps.py`).
+`document_outputs`. Ownership lookup exists via `get_owned_job`
+(`src/api/deps.py`).
+
+> **Correction (grill, 2026-07-27):** "a `DELETE FROM jobs WHERE id = ?` is
+> complete on the DB side" was wrong. `links.source_job` (`database.py:179`) is
+> `TEXT NOT NULL` with **no FK** and does not cascade, so a row-only delete
+> leaves the job in `/find` and the Brain graph. Cloud artifacts are likewise
+> untouched — Drive docs, the GCS objects behind `document_outputs.gcs_key`
+> (`database.py:282`), and the Sheets row — and **no delete primitive exists**
+> in `storage.py` / `drive.py` / `sheets.py` today. Job thumbnails are *not*
+> cloud artifacts: `job_thumbnails.bytes` is a SQLite BLOB (`database.py:101`),
+> so the cascade already disposes of them.
 
 **Wanted:** a delete button at the bottom of the job details page that, behind a
 hard confirmation, permanently deletes the job from the DB (no soft-delete/trash
 tier) and leaves the page.
 
-**Backend**
+**Resolved 2026-07-27 (grill).** Full rationale in ADR-0042; glossary terms
+[[Job delete]] / [[Job purge]] and invariants 14–15 in `CONTEXT.md`.
 
-- Add `DELETE /api/jobs/{job_id}` to `src/api/jobs.py`: `get_owned_job` for
-  ownership, then `DELETE FROM jobs WHERE id = ?` — cascades cover the five
-  child tables. No Telegram-side calls (task 19 owns message deletion).
+**Backend — `DELETE /api/jobs/{job_id}`, 204 No Content**
+
+- Ownership via `get_owned_job`; `204` matches the existing
+  `@spaces_router.delete(..., status_code=204)` precedent (`src/api/spaces.py:129`).
+- Synchronous half: capture the job's artifact refs, then `DELETE FROM jobs
+  WHERE id = ?` (five tables cascade) **plus** `DELETE FROM links WHERE
+  source_job = ?` to de-index the Brain.
+- Asynchronous half: enqueue a `job_purge` task envelope **carrying those refs**
+  (the row is gone by the time the worker runs) and delete the Drive documents,
+  GCS objects and Sheets row from the worker — retryable, never fails the click.
+  Needs three new service functions; Sheets rows are found by URL (no row index
+  is stored), miss is logged and skipped.
+- Allowed from **any** status. Add a drop-if-missing guard in `src/worker.py`
+  after `BRPOP`: if the job row is gone, log and skip the envelope. This is what
+  makes deleting a `pending` job safe — the pipeline is not idempotent, so
+  re-running it would upload fresh artifacts for a purged job. A job already
+  mid-pipeline is not interrupted (no live cancellation exists); that window can
+  still orphan artifacts, accepted for now.
+- No Telegram-side calls (task 19 owns message deletion).
 
 **UI**
 
-- A delete button at the **bottom** of the details page, below the existing
-  content — not inside `JobActionsBar`.
-- Confirmation — **reuse, don't fork a third pattern**: the repo has two —
-  `window.confirm` (the existing delete-confirm precedent,
-  `web/app/(dashboard)/spaces/[id]/page.tsx:31`) and the
-  `web/components/ui/dialog.tsx` primitive. Pick one in grill.
-- DESIGN.md is normative: signal orange means *act here* and is rationed —
-  settle the destructive-action color in grill rather than minting one inline.
-- On success, navigate off the now-dead page (the job row is gone).
-
-**Open questions** (resolve in grill)
-
-- Confirmation mechanism: `window.confirm` (matches the spaces delete) or a
-  styled `ui/dialog.tsx` confirm with an explicit destructive button?
-- Destructive color: does delete get an error-red treatment, or signal orange
-  (it *is* the page's primary "act here")? DESIGN.md's signal rule decides.
-- Post-delete destination: back to `/feed`, or `router.back()`?
+- Trigger at the **bottom** of the details page, below the existing content —
+  not inside `JobActionsBar`. Quiet treatment: ghost border + `text-status-error`,
+  identical to `spaces/[id]/page.tsx:78`, so it never competes with the amber in
+  `JobActionsBar`.
+- Delete-zone layout (2026-07-27): one row — **trigger · 1px vertical divider ·
+  warning text** — under a hairline top border. Divider is `border-line`,
+  `align-self: stretch`; the trigger is `flex-shrink: 0` so the warning wraps
+  instead of squeezing it. Stacks to a column below ~620px, divider hidden.
+- Confirmation: new reusable `web/components/ui/confirm-dialog.tsx` built on the
+  `ui/dialog.tsx` primitive, with an explicit destructive button. This is the
+  repo's **first** styled confirm — the four existing `window.confirm` sites
+  (spaces delete, Google disconnect `sidebar.tsx:252`, clear-failed ×2 in
+  `submit-job.tsx`) are deliberately **not** migrated. Task 19 reuses this
+  component for its surfaces.
+- Destructive color: the dialog's confirm button is a solid `#f87171` fill with
+  near-black `#1b1309` text — the product's only filled red, existing only
+  behind a modal. Add a `button-danger` token to DESIGN.md, which currently
+  defines no destructive button (note: DESIGN.md's action color is Index Amber
+  `#d99a45`, not the `#f6921e` quoted in older briefs).
+- Failure: mirror the spaces pattern — a small `text-status-error` line under
+  the button, no toast.
+- Post-delete: `router.back()`, guarded — `if (window.history.length > 1)
+  router.back(); else router.push('/feed')`, so a deep link, bookmark or hard
+  refresh doesn't strand the user on a dead page or bounce them out of the app.

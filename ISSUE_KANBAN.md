@@ -109,6 +109,12 @@
 | [#421](https://github.com/Leon-87-7/ownix/issues/421) | feat(web): PWA installability — complete the manifest (start_url /feed, id) | Web / PWA | — |
 | [#422](https://github.com/Leon-87-7/ownix/issues/422) | feat(web): offline fallback — /offline page + hand-rolled sw.js | Web / PWA | — |
 | [#423](https://github.com/Leon-87-7/ownix/issues/423) | feat(web): share-target intake — manifest share_target prefills the Submit URL dialog | Web / Feed | #421 |
+| [#441](https://github.com/Leon-87-7/ownix/issues/441) | feat(web): eager-load the first 10 feed preview cards | Web / Feed | — |
+| [#442](https://github.com/Leon-87-7/ownix/issues/442) | feat(web): thumbnail preload SSR head start for the Feed | Web / Feed | #441 |
+| [#443](https://github.com/Leon-87-7/ownix/issues/443) | fix(api): extend stored thumbnail cache to 30 days | API / Thumbnails | — |
+| [#444](https://github.com/Leon-87-7/ownix/issues/444) | feat(web): permanent delete on the job details page | Web / Jobs | — |
+| [#445](https://github.com/Leon-87-7/ownix/issues/445) | fix(worker): drop task envelopes whose job row is gone | Worker / Queue | #444 |
+| [#446](https://github.com/Leon-87-7/ownix/issues/446) | feat(worker): job_purge — delete the job's Drive, GCS and Sheets artifacts | Purge / Cloud | #444 |
 
 ---
 
@@ -536,6 +542,19 @@ Critical path: #421 → #423; #422 parallel
 
 Thumbnail cache-header fix (ADR-0025 follow-up — /grill-with-docs session 2026-07-26)
 #436 fix(api): cache job thumbnail responses (ETag + Cache-Control) — independent, no blockers
+
+Feed thumbnail preload — <300ms first thumbnails (grill-with-docs 2026-07-27 — ADR-0041; CONTEXT.md `Feed thumbnail preload`)
+#441 eager-load the first 10 preview cards (root, unblocked)
+└── #442 thumbnail preload SSR head start ◄── #441 (preloads consumed only once the first-10 imgs are eager)
+#443 extend stored thumbnail cache to 30 days (independent) ◄── also #436 (builds on the merged cache helper)
+Critical path: #441 → #442; #443 parallel
+
+Job delete + cloud purge (docs/TASK.md task 33 — grill-with-docs 2026-07-27; ADR-0042; CONTEXT.md `Job delete` / `Job purge`, invariants 14–15)
+#444 permanent delete on the job details page (root, unblocked — owns DELETE /api/jobs/{id}, the links de-index, and ui/confirm-dialog.tsx)
+├── #445 drop task envelopes whose job row is gone (needs a delete to race against)
+└── #446 job_purge — Drive, GCS and Sheets artifacts (extends the same endpoint with the async half)
+Critical path: #444 → {#445, #446}
+Note: task 19 (full delete surface — cards, swipe, Telegram message deletion) builds on #444's endpoint and confirm dialog; not yet broken into issues.
 ```
 
 ---
