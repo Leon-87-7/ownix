@@ -136,9 +136,12 @@ pre-repalette). Next serves `app/manifest.json` automatically — no
 > **Grill:** `/grilling` — pure product/UX; the ForceGraph ref methods are
 > already pinned in the brief.
 
-`web/components/brain-graph.tsx` renders `react-force-graph-2d` from
-`/api/brain/graph`, highlighting search matches in signal orange. There are no
-user-facing controls today (no zoom, recenter, or filtering).
+> **Grounded:** 2026-07-27
+
+`web/components/brain/brain-graph.tsx` renders `react-force-graph-2d` from
+`GET /api/brain/graph` (`src/api/brain.py:34`), highlighting search matches in
+signal orange. There are no user-facing controls today (no zoom, recenter, or
+filtering).
 
 **Wanted:** an on-canvas controls overlay for navigating the graph.
 
@@ -288,13 +291,17 @@ tags(id) ON DELETE CASCADE, PRIMARY KEY(link_id, tag_id))` — mirrors
 > **Grill:** `/grilling` — pure design decisions (which plate `#2A2312`
 > replaces, ramp re-derivation, WCAG re-verification).
 
-The design tokens have a single source: `web/tailwind.config.ts` defines
-`signal.DEFAULT: '#f6921e'` plus the cool plate ladder `canvas: '#0b0c0f'` →
-`surface: '#14161a'` → `raised: '#1c1f25'` (`tailwind.config.ts:12-27`). The same
-values are normative in `DESIGN.md`'s frontmatter, and the ~39 `web/` consumers
+> **Grounded:** 2026-07-27 — re-vision: a repalette has **already shipped**
+> since this brief was written; the values below are the current source of truth.
+
+The design tokens have a single source: `web/tailwind.config.ts`
+(`tailwind.config.ts:9-29`) now defines `signal.DEFAULT: '#d99a45'` (ramp
+`bright #efb566`, `deep #a57534`, `onsignal #1b1309`), the plate ladder
+`canvas: '#0d0e10'` → `surface: '#16181c'` → `raised: '#202329'`, **plus a new
+`contrasignal` family** (`#94e6ee` / `#9ec9ff` / `#649ca1`) this brief predates.
+The same values are normative in `DESIGN.md`'s frontmatter, and `web/` consumers
 use Tailwind classes (`bg-signal`, `text-signal`, `bg-canvas`…), so they inherit
-the change without edits. `DESIGN.md` also pins a derived signal ramp:
-`signal-bright #ffa83d`, `signal-deep #b96a06`, `onsignal #16100a`.
+any change without edits.
 
 **Wanted:** the signal color becomes `#FFBE0B` and "the dark color" becomes
 `#2A2312`, applied at the token source so the whole console repalettes.
@@ -312,6 +319,9 @@ the change without edits. `DESIGN.md` also pins a derived signal ramp:
 - "The dark color" is ambiguous — the plate ladder is three cool darks
   (`canvas`/`surface`/`raised`). Does `#2A2312` replace `canvas` (the page floor),
   the whole ladder (re-derive all three), or a specific plate?
+- **Is this task still wanted at all?** A repalette to `#d99a45` shipped after
+  this brief was written — was that the answer to this idea (making this
+  superseded), or is the `#FFBE0B`/`#2A2312` direction still the goal?
 - `#2A2312` is a **warm** near-black (yellow/red cast), which breaks DESIGN.md's
   stated "cool near-black chassis" identity. Intended pivot to a warm chassis, or
   should the cool ladder stay and only the signal change?
@@ -404,17 +414,24 @@ satisfying Google's homepage requirements so branding verification passes.
 
 ## 16. Link pipeline — bare URLs get a native Telegram preview + a Brain Links row
 
-> **Grill:** `/grill-with-docs` — domain-model call (extending the `Pipeline`
-> enum and the `ingest_links` contract).
+> **Grill:** `/grill-with-docs` — domain-model call (what auto-routes into the
+> ADR-0039 link pipeline vs. staying rejected).
 
-`detect_pipeline` (`src/utils/validators.py:50`) only recognizes short/long/article/repo/document
-(`Pipeline = Literal[...]`, `validators.py:8`) — anything else is `"rejected"`, and `_route_url`
-(`src/telegram/webhook.py:1348`) sends every rejected URL straight to `_reject_url`
-(`webhook.py:1274`): a canned "Unsupported URL" reply, no job, no persistence. Meanwhile the
-`links` table (`src/database.py:151`) and `ingest_links` (`src/brain.py:282`) already do exactly
-"capture a URL, dedupe by canonical URL, store title/topic" — but today only get fed from
-enrichment output, 5 callers all in `src/processors/article.py` and `src/processors/prd.py`,
-never from a raw user-pasted link.
+> **Grounded:** 2026-07-27 — re-vision: **most of this shipped as ADR-0039.** A
+> full link pipeline now exists: `src/processors/link.py` (fetches OG tags,
+> ingests one Brain link, verifies persistence), worker dispatch `"link"`
+> (`src/worker.py:100,209`), fed by the explicit `/addlink` command
+> (`_cmd_addlink`, `src/telegram/webhook.py:751`) via
+> `create_and_enqueue_job(chat_id, url, "link", ...)` (`webhook.py:762`) —
+> `"link"` is a content_type assigned outside `detect_pipeline` (the `Pipeline`
+> literal at `validators.py:8` is unchanged). **The remaining delta is only the
+> trigger:** bare unrecognized URLs still die in `_reject_url`.
+
+`_route_url` (`src/telegram/webhook.py:1564`) still sends every URL
+`detect_pipeline` (`src/utils/validators.py:89`) rejects straight to
+`_reject_url` (`webhook.py:1489`): a canned "Unsupported URL" reply
+(`webhook.py:1500`), no job, no persistence — even though the machinery to
+capture it now exists one call away.
 
 **Wanted:** sending a bare URL that isn't a video/article/repo/document gets a native Telegram
 link-preview card in reply and a row in the Brain Links table on the dashboard — capture only, no
@@ -422,35 +439,30 @@ enrichment job.
 
 **Backend**
 
-- Extend `Pipeline` (`validators.py:8`) with a new value (e.g. `"link"`), or repurpose part of the
-  current `"rejected"` tail of `detect_pipeline` (`validators.py:73-100`) — decide which URLs move
-  from rejected to accepted (see Open questions).
-- New branch in `_route_url` (`webhook.py:1348`) beside `_route_document_url`/`_route_article`/
-  `_route_repo` that calls `ingest_links` (`src/brain.py:282`) with a single-item list, then
-  replies via `send_message` (`src/telegram/sender.py:101`) with the raw URL as the message text —
-  no caller currently sets `disable_web_page_preview`, so Telegram's default native preview card is
-  the off-the-shelf behavior here; no custom preview rendering needed.
-- `ingest_links` requires `topic` and `source_job_id` (used to look up the source job's URL for the
-  Obsidian `.md`, `_get_source_job_info`, `brain.py:423`) — a bare link has neither. Resolve before
-  wiring the call (see Open questions).
+- **Reuse, don't fork:** new branch in `_route_url` (`webhook.py:1564`) that routes would-be-rejected
+  URLs through the exact call `/addlink` makes — `create_and_enqueue_job(chat_id, url, "link",
+  message_id=...)` (`webhook.py:762`). No new processor, no `Pipeline` extension needed;
+  `create_and_enqueue_job` already owns dedup (ADR-0033 — a URL already captured under any
+  content_type returns the existing job).
+- Native preview reply via `send_message` (`src/telegram/sender.py:130`) with the raw URL as the
+  message text — no caller sets `disable_web_page_preview`, so Telegram's default preview card is
+  the off-the-shelf behavior.
+- ~~topic/source_job_id for a jobless link~~ — answered by shipped code: the link *job* anchors
+  `source_job_id`, and `ingest_links` (`src/brain.py:542`) takes the flattened OG collection as
+  `topic` (see `link.py:37-41`).
 
 **UI**
 
-- No new component: `LinksTable` (`web/app/(dashboard)/brain/page.tsx`) and `GET /api/brain/links`
-  (`src/api/brain.py`) already render the `links` table as-is. Confirm whatever `topic`/`title`
-  Backend resolves for link-only rows doesn't break that table's existing display assumptions.
+- Nothing to build: `/addlink` rows already render in the Links table (`GET /api/brain/links`,
+  `src/api/brain.py:39`); auto-routed rows are the same shape.
 
 **Open questions** (resolve in grill)
 
 - Scope: every URL `detect_pipeline` currently rejects, or a narrower class (exclude bare domains,
-  search-result URLs, non-http schemes)?
-- What populates `ingest_links`'s `topic` and `source_job_id` for a link with no enrichment job —
-  empty/placeholder topic, a lightweight job row created just to anchor `source_job_id`, or does
-  `ingest_links`/`_build_obsidian_md` get adapted to tolerate a missing source job?
+  search-result URLs, non-http schemes)? `/addlink` gates on `is_fetchable_url` — same bar here?
 - Precedence: if a pasted URL also matches an allowlisted article domain, does full article
   enrichment still win, or does "just save + preview" only apply when nothing else claims the URL?
-- Spam/dedup: does this need the same recent-submission guard other pipelines get
-  (`find_recent_job_by_url`), scoped to `links.url` instead of `jobs`?
+- Does `/addlink` stay as the explicit escape hatch once bare URLs auto-capture, or retire?
 
 ## 17. Persistent account/status affordance — Google connection state + Telegram identity ✅ DONE — issued #292–#295, merged PR #296
 
@@ -461,30 +473,35 @@ enrichment job.
 > **Grill:** `/grilling` — UX semantics (swipe, confirm, undo); no external or
 > domain-model hinge.
 
+> **Grill together with task 33.** Task 33 is the narrow first slice (details
+> page only, dashboard-only, no Telegram deletion, no swipe) and owns the shared
+> `DELETE /api/jobs/{job_id}` endpoint; this task extends the surface (cards,
+> swipe, Telegram message deletion, "don't show again"). Decide the endpoint
+> contract once.
+
 > Touches the same job-card real estate as task 7's dense-table thinking and task 11's per-URL
 > tagging — no shared decision, just adjacent surface area.
 
-Jobs render as cards in two places: `JobCard` (`web/components/job-card.tsx:22-51`, Feed's list
-view) and `PreviewCard` (`web/components/feed/preview-card.tsx:53-119`, Feed's grid view via
-`PreviewGrid`, `web/components/feed/preview-grid.tsx`), plus the full job details page
-(`web/app/(dashboard)/jobs/[id]/page.tsx`). Both card components already carry a
-`pointer-events-auto` overlay island for `JobCardTags` (`job-card.tsx:45-47`,
-`preview-card.tsx:109-114`) sitting above a full-card `<Link>` overlay (`job-card.tsx:30`,
-`preview-card.tsx:75-79`) — the established pattern for "an interactive control on a
-whole-card-is-a-link card."
+> **Grounded:** 2026-07-27
 
-There is **no DELETE endpoint for jobs today** (`src/api/jobs.py` only has
-`DELETE /{job_id}/tags/{tag_id}`, line 342-354). The `jobs` table
-(`src/database.py:35-92`) has `chat_id` (line 37), `message_id` (line 38, the operator's original
-Telegram message) and `bot_message_id` (line 74, the bot's reply) — both are plain `INTEGER`
-columns with no Telegram-side deletion ever issued against them. Five child tables cascade on job
-delete already (`ON DELETE CASCADE`): `job_thumbnails` (line 99), `job_annotations` (line 220),
-`job_tags` (line 227), `space_urls` (line 248), `document_outputs` (line 268) — a `DELETE FROM
-jobs WHERE id = ?` is enough on the DB side. `src/telegram/sender.py` has no `deleteMessage` call;
-every Bot API call goes through `_post_and_parse` (`sender.py:70-98`), the same helper
-`send_message` (`sender.py:101`) uses — a `delete_message(chat_id, message_id)` following that
-pattern is the natural way to add it. Auth/ownership for a job lookup already exists via
-`get_owned_job` (`src/api/deps.py:7`).
+Jobs render as cards in two places: `JobCard` (`web/components/feed/job-card.tsx`, Feed's list
+view) and `PreviewCard` (`web/components/feed/preview-card.tsx`, Feed's grid view via
+`PreviewGrid`, `web/components/feed/preview-grid.tsx`), plus the full job details page
+(`web/app/(dashboard)/jobs/[id]/page.tsx`). Both card components carry a
+`pointer-events-auto` overlay island for `JobCardTags` sitting above a full-card `<Link>`
+overlay — the established pattern for "an interactive control on a whole-card-is-a-link card."
+
+There is **no DELETE endpoint for jobs today** (re-verified 2026-07-27: `src/api/jobs.py` has only
+`DELETE /{job_id}/tags/{tag_id}`, `jobs.py:423`). The `jobs` table (`src/database.py:35`) has
+`chat_id`, `message_id` (the operator's original Telegram message) and `bot_message_id` (the bot's
+reply) — plain `INTEGER` columns with no Telegram-side deletion ever issued against them. Five
+child tables cascade on job delete already (`ON DELETE CASCADE`): `job_thumbnails`,
+`job_annotations`, `job_tags` (`database.py:238`), `space_urls`, `document_outputs` — a `DELETE
+FROM jobs WHERE id = ?` is enough on the DB side. `src/telegram/sender.py` still has no
+`deleteMessage` call; every Bot API call goes through `_post_and_parse` (`sender.py:98`), the same
+helper `send_message` (`sender.py:130`) uses — a `delete_message(chat_id, message_id)` following
+that pattern is the natural way to add it. Auth/ownership for a job lookup already exists via
+`get_owned_job` (`src/api/deps.py`).
 
 **Wanted:** a delete action reachable from every job instance (Feed row, Feed grid card, job
 details page) that removes the job from the DB and deletes its message(s) from the Telegram chat,
@@ -502,22 +519,23 @@ addition.
   calling it for both `message_id` and `bot_message_id` when present. Telegram's `deleteMessage`
   can fail (message too old, already deleted, etc.) — decide whether that's swallowed (DB delete
   still succeeds) or surfaced.
-- **"Don't show again" persistence:** `src/database.py` already has a generic per-chat
-  `get_user_setting`/`set_user_setting` (`database.py:1232-1249`, used today for the Brain links
-  view and recovery-notification toggle) — reuse that instead of introducing browser
-  `localStorage` (grep confirms **no** `localStorage` usage anywhere in `web/` today, so there's no
-  existing client-side preference pattern to fork either way).
+- **"Don't show again" persistence:** `src/database.py` has a generic per-chat
+  `get_user_setting`/`set_user_setting` (`database.py:1326-1341`, used today for the Brain links
+  view and recovery-notification toggle). Drift note 2026-07-27: `localStorage` **is** now used in
+  `web/app/(dashboard)/feed/page.tsx`, so a client-side preference pattern exists too — pick
+  server-side (`user_setting`, follows the chat across devices) vs. the feed page's `localStorage`
+  precedent in grill.
 
 **UI**
 
 - Desktop: a delete control in the same `pointer-events-auto` overlay slot `JobCardTags` occupies
-  on `JobCard`/`PreviewCard`, plus one on the job details page's `JobActionsBar`
-  (`page.tsx:223-235`).
-- Confirm dialog: the repo's only existing confirm pattern is a bare `window.confirm()`
-  (`web/components/sidebar.tsx:290-291`, Google disconnect) — no "don't show again" checkbox
-  support in that primitive, so this needs a real dialog (candidate: extend
-  `web/components/ExportModal.tsx:38-80`'s focus-trap/Escape pattern rather than forking a new
-  one).
+  on `JobCard`/`PreviewCard`. The job details page's delete control is owned by task 33 —
+  this task adds the card surfaces on top of it.
+- Confirm dialog: `window.confirm()` is used in three places now (`web/components/shell/sidebar.tsx:252`,
+  `web/app/(dashboard)/spaces/[id]/page.tsx:31` — a delete confirm, `web/components/feed/submit-job.tsx`),
+  but none supports a "don't show again" checkbox — so this needs a real dialog. Drift note
+  2026-07-27: a shared `web/components/ui/dialog.tsx` primitive has shipped since this brief —
+  reuse it (don't extend `ui/export-modal.tsx` as originally suggested).
 - Mobile swipe-left: **no gesture library is installed** (`web/package.json` has no
   framer-motion/react-use-gesture/similar) — this is native touch-event handling (`touchstart`/
   `touchmove`/`touchend`) or a new dependency, not a drop-in.
@@ -612,62 +630,53 @@ receive_ email with them — likely from a new address under `leondev.xyz`.
 
 > **Grill:** `/grill-with-docs` — hinges on ADR-0031's invite-gate flow.
 
-Closes the missed-push gap recorded in task 21 / `docs/headless CRM.md`: when a
-`pending` user submits their email, `_notify_operator_invite`
-(`src/telegram/webhook.py:1384`) pushes the Operator **one** message with inline
-✅ Approve / 🚫 Block buttons — and if that push is missed, nothing re-surfaces
-it. `list_pending_users` (`src/database.py:1773`, oldest-first) still has zero
-production callers.
+> **Grounded:** 2026-07-27 — re-vision: **this feature has effectively
+> shipped**, on the Ops bot rather than the main bot. `src/services/ops_bot.py`
+> now handles `/pending` (lists all pending users, `ops_bot.py:305-306`),
+> `/users [pending|approved|blocked|email …]` (`ops_bot.py:313`), and
+> `/approve_pending <domain>` with a confirm step and batch approve
+> (`ops_bot.py:326`, `_approve_pending_ids` `ops_bot.py:236`,
+> `approve_pending_domain` `ops_bot.py:289`). Invite cards go out via
+> `src/services/invite_notifications.py` with `ops_invite_approve` /
+> `ops_invite_block` callbacks (`ops_bot.py:115`). The original premise — "if
+> the push is missed, nothing re-surfaces it" — no longer holds.
 
-**Wanted:** the Operator types `/pending` and gets the approve/block card
-re-sent for every user still awaiting a decision.
+**Wanted (original):** the Operator types `/pending` and gets the approve/block
+card re-sent for every user still awaiting a decision.
 
-**Backend**
+**Remaining delta, if any:** the Ops-bot `/pending` output is a text listing
+(`deliver_rows`/`format_rows`), not re-sent per-user cards with inline
+✅ Approve / 🚫 Block buttons — one-tap approval exists only on the original
+invite card and via the `/approve_pending <domain>` batch path.
 
-- New handler registered in `_SLASH_TABLE` (`webhook.py:1078`), dispatched by
-  `_dispatch_slash` (`webhook.py:1098`) with the existing `SlashCtx`.
-- **Reuse, don't fork — the whole feature is plumbing that exists:**
-  `list_pending_users` supplies the rows; the per-user card (name · email ·
-  @username + `invite_approve:{chat_id}` / `invite_block:{chat_id}` buttons) is
-  exactly what `_notify_operator_invite` renders — loop it (or extract its
-  rendering) per pending row via `send_inline_keyboard`
-  (`src/telegram/sender.py:160`). The callback side (`_cb_invite_decision`,
-  `webhook.py:448`) needs **zero** changes.
-- **Gate is the one new pattern:** no slash command is Operator-gated today —
-  `OPERATOR_CHAT_ID` is only checked in the callback handler (`webhook.py:452`)
-  and in `_notify_operator_invite`. `/pending` is the first Operator-only
-  command, so the `ctx.chat_id != settings.OPERATOR_CHAT_ID` refusal happens
-  inside the handler (mirroring `webhook.py:452`'s check + log-and-refuse
-  shape).
+**Open questions** (resolve in grill — or skip the grill entirely)
 
-**Open questions** (resolve in grill)
-
-- Non-operator sends `/pending`: silent ignore (like an unknown command) or an
-  explicit "not authorized" reply? (The callback path answers "Not
-  authorized." — same posture here?)
-- One message per pending user (N pushes for N users) or one message listing
-  all with per-row button pairs stacked in a single keyboard? Any cap for a
-  long backlog (the repo-picker precedent caps at 5)?
-- Empty state: what does `/pending` say when nobody is waiting?
-- Does `/pending` get a line in `_HELP_TEXT` (visible to everyone) or stay an
-  undocumented Operator command?
+- Is the text listing + domain-batch approve enough to close this task as
+  shipped, or is per-row one-tap approve/block in the `/pending` output still
+  wanted?
+- If kept: does that belong in the Ops bot (`handle_ops_command`) — the main
+  bot (this brief's original home) is presumably wrong now that user admin
+  lives on the Ops bot?
 
 ## 23. Gemini resilience — model downgrade, 429 requeue-with-backoff, second provider
 
 > **Grill:** `/grill-with-search-docs` — hinges on google-genai SDK error
 > types and OpenRouter/Groq API docs.
 
+> **Grounded:** 2026-07-27 — re-verified: no retry/backoff/attempt logic has
+> been added anywhere in `gemini.py` or the queue envelope since the brief.
+
 Every Gemini call funnels through `_call_with_fallback`
-(`src/services/gemini.py:164`): it tries `GEMINI_FREE_API_KEY` then
+(`src/services/gemini.py:167`): it tries `GEMINI_FREE_API_KEY` then
 `GEMINI_PAID_API_KEY`, catches **every** exception identically (no 429/quota
 inspection, no backoff), and raises `GeminiUnavailableError`. Callers in
 `src/processors/*` catch that and fail the job; the worker's `_handle_*`
-wrappers (`src/worker.py:45-131`) then send the user "❌ … Please try again."
+wrappers (`src/worker.py:47-187`) then send the user "❌ … Please try again."
 Model census: 9 call sites hardcode `gemini-2.5-flash`, one uses
 `gemini-2.5-flash-lite`, PRD uses `PRD_AUTO_MODEL` (flash) /
-`PRD_INTENT_MODEL` (pro) from `src/config.py:82-83`, embeddings
+`PRD_INTENT_MODEL` (pro) from `src/config.py:95-96`, embeddings
 `GEMINI_EMBEDDING_MODEL`. The queue envelope is `{task, job_id}` only
-(`src/queue.py:48`) — no attempt counter, no delayed-requeue mechanism.
+(`src/queue.py:48-51`) — no attempt counter, no delayed-requeue mechanism.
 
 **Wanted:** a Gemini quota hit or outage degrades (cheaper model → wait and
 retry → other provider) instead of failing the job on first contact.
@@ -723,6 +732,11 @@ retry → other provider) instead of failing the job on first contact.
 > the new brand string, the cutover ordering (URL vs. code-rename vs. new bot),
 > and whether old hosts keep redirecting.
 
+> **Grounded:** 2026-07-27 — re-verified: `ownix.leondev.xyz` appears nowhere in
+> `docs/ops/` — the migration hasn't started. Sequencing input: the GitHub repo
+> already renamed `vig` → `ownix` (2026-07-18, old URLs redirect), so the
+> rebrand trio is no longer starting from zero.
+
 Today the browser only ever talks to `app.leondev.xyz` (Vercel: Next.js +
 middleware), which rewrites `/api/*` to `api.leondev.xyz` (Cloudflare Tunnel →
 FastAPI) — see `docs/ops/vercel-deploy.md:9-19`. The host is baked into: the
@@ -766,13 +780,18 @@ Telegram login widget still working, and docs/env updated to match.
 > a code/service rename, the URL move (25), and a new bot handle (27) should
 > cut over in a deliberate sequence, not piecemeal.
 
+> **Grounded:** 2026-07-27 — re-vision: the **GitHub repo rename is already
+> done** (`Leon-87-7/ownix` since 2026-07-18, old URLs redirect), and the
+> new-brand naming already has a precedent in code: the `ownix_preview` cookie
+> (ADR-0035). Everything else below re-verified as still `vig`.
+
 "vig" is stamped across build/deploy identifiers, not the API surface. Known
-occurrences: `web/package.json` name `vig-web`; `docker-compose.yml` image
-`vig-app`, containers `vig-api`/`vig-worker`/`vig-transcript`/`vig-cloudflared`/`vig-redis`,
-network `vig-network`; the session cookie `vig_session` (`src/api/auth.py`); the
-GitHub repo `Leon-87-7/vig`; the SVG lockup `vig_logo_lockup.svg`; and `CLAUDE.md`/docs
-prose. HTTP paths are already brand-neutral (`/api/*`), so routes likely need no
-change.
+occurrences: `web/package.json` name `vig-web` (`package.json:2`);
+`docker-compose.yml` — 15 `vig-*` occurrences (image, containers, network); the
+session cookie `vig_session` (`COOKIE_NAME`, `src/auth/middleware.py:12` — not
+`src/api/auth.py` as previously cited); the SVG lockup `vig_logo_lockup.svg`;
+and `CLAUDE.md`/docs prose. HTTP paths are already brand-neutral (`/api/*`), so
+routes likely need no change.
 
 **Wanted:** internal identifiers, package/deploy names, and repo metadata read
 "Ownix" instead of "vig", without breaking sessions or deployments.
@@ -783,8 +802,9 @@ change.
   names — cosmetic but touch CI, GHCR image tags, and the VPS compose file.
 - **Session cookie `vig_session`:** renaming it logs everyone out on cutover
   (the cookie name is the session key). Rename vs. keep-as-legacy-name is a real call.
-- **GitHub repo rename** `vig` → `ownix`: GitHub auto-redirects old remotes, but
-  issue/PR references, badges, and `docs/agents/*` `Leon-87-7/vig` literals need a sweep.
+- **GitHub repo rename** `vig` → `ownix`: ~~done 2026-07-18~~ — what remains is
+  the literal sweep: issue/PR references, badges, and any `Leon-87-7/vig`
+  literals still in `docs/agents/*` and elsewhere.
 - **Docs/terminology:** `CLAUDE.md`, `CONTEXT.md`, ADRs — the domain vocabulary.
 
 **Open questions** (resolve in grill)
@@ -804,10 +824,16 @@ change.
 > **Grill together with tasks 25 and 26** — the Ownix rebrand. A new bot handle
 > is the third cutover surface alongside the URL (25) and the code rename (26).
 
-The bot is a single webhook service (`src/telegram/webhook.py`), with
-user-facing brand strings in help/command copy (e.g. the intake help text at
-`webhook.py:1555`). The BotFather identity (bot username, display name, token)
-lives outside the repo; the token is an env var consumed by `sender.py`.
+> **Grounded:** 2026-07-27 — drift note: there are **two** bots now, not one —
+> the main intake bot (`src/telegram/webhook.py`) and the Ops bot
+> (`/webhook/ops`, handlers in `src/services/ops_bot.py`). The rebrand scope
+> must decide whether the Ops bot's BotFather identity rebrands too.
+
+The main bot is a webhook service (`src/telegram/webhook.py`), with
+user-facing brand strings in help/command copy (the intake/help text at
+`webhook.py:584`, `:707`, `:833`, `:1430`, `:1500`). The BotFather identity
+(bot username, display name, token) lives outside the repo; the token is an
+env var consumed by `sender.py`.
 
 **Wanted:** a Telegram bot whose handle/name/branding reads "Ownix", so the bot
 and dashboard present one brand.
@@ -837,6 +863,13 @@ and dashboard present one brand.
 > behavior) plus _task 24_'s already-shipped command launcher (`Submit URL`,
 > `Ingest Docs`, `Open Links` — issued #333–#336). Grill's first job is to find
 > what, if anything, remains once those two are counted.
+
+> **Grounded:** 2026-07-27 — re-vision: **`POST /api/jobs` already exists**
+> (`src/api/jobs.py:206`) and the Feed's Submit URL dialog (`SubmitJobProvider`,
+> `web/components/feed/submit-job.tsx`) already shipped with task 24 — so task
+> 4's core deliverable appears largely built, which shrinks this task's
+> possible delta even further. Task 4 should probably be audited for DONE
+> before this is grilled at all.
 
 The bot flow is: send a URL → `detect_pipeline` classifies it
 (`src/utils/validators.py`) → a job is created + enqueued → templates
@@ -933,28 +966,38 @@ One settings flag + default-status change when community trust allows it.
 > **Grill:** `/grill-with-docs` — two changes to the pipeline domain model (the
 > `Pipeline` classifier and a processor's post-job offer).
 
+> **Grounded:** 2026-07-27 — drift note: the "Build Spec" offer is **not
+> long-video-only**. It's rendered from three sites: `long_video.py:146`,
+> `enrichment.py:404,517` (the short-pipeline enrichment path), and
+> `prd.py:326,446` (the PRD flow re-offering itself). Removing it from the long
+> pipeline alone leaves the others — the "retire PRD entirely?" open question
+> below is now the load-bearing one.
+
 Two independent pipeline edits bundled in one idea:
 
 1. **IG carousels are currently rejected.** `_match_short`
-   (`src/utils/validators.py:123-133`) matches `instagram.com/reel/` only;
-   `instagram.com/p/{id}` falls through to `"rejected"` (docstring `validators.py:90`),
+   (`src/utils/validators.py:146`) matches `instagram.com/reel/` only;
+   `instagram.com/p/{id}` falls through to `"rejected"` (docstring `validators.py:110`),
    and the bot help text advertises "Instagram Reels (not /p/ carousels)"
-   (`src/telegram/webhook.py:1555`).
+   (`src/telegram/webhook.py:1500`).
 2. **The long pipeline offers PRD creation.** After a long video processes,
-   `src/processors/long_video.py:145` presents a "📐 Build Spec" inline button
+   `src/processors/long_video.py:146` presents a "📐 Build Spec" inline button
    (`prd_build_spec:{job_id}`) alongside "Run Gemini", wired to the PRD flow
-   (`src/processors/prd.py`).
+   (`src/processors/prd.py`; callback `_cb_prd_build_spec`, `webhook.py:297`,
+   registered at `webhook.py:490`).
 
 **Wanted:** `instagram.com/p/` carousels get accepted by the short pipeline, and
 the long pipeline stops offering PRD/spec creation.
 
 **Backend**
 
-- Extend `_match_short` (`validators.py:131`) to also match `instagram.com/p/`,
-  and update the `detect_pipeline` docstring + the help copy (`webhook.py:1555`).
-- Remove the "Build Spec" offer from `long_video.py:145` and trace the now-dead
-  `prd_build_spec` callback handler + whether `src/processors/prd.py` still has
-  any caller afterward (short/article PRD paths, if any, must not break).
+- Extend `_match_short` (`validators.py:146`) to also match `instagram.com/p/`,
+  and update the `detect_pipeline` docstring (`validators.py:110`) + the help
+  copy (`webhook.py:1500`).
+- Remove the "Build Spec" offer from `long_video.py:146` — but note the same
+  button is also rendered from `enrichment.py:404,517` and `prd.py:326,446`, so
+  the `prd_build_spec` callback (`webhook.py:297,490`) is **not** dead after
+  this removal; only a full PRD retirement would orphan it.
 
 **Open questions** (resolve in grill)
 
@@ -969,3 +1012,54 @@ the long pipeline stops offering PRD/spec creation.
   other callers?
 
 ## 32. Standalone link identity — per-URL description + search that doesn't leak siblings ✅ ISSUED TO GITHUB #381 #384 #385 - ✅DONE
+
+## 33. Permanent delete button at the bottom of the job details page (dashboard-only)
+
+> **Grill:** `/grilling` — pure product/UX; the endpoint shape and cascade
+> mechanics are already pinned below.
+
+> **Grill together with task 19.** This is the narrow first slice of task 19's
+> full delete surface: details page only, dashboard-only (Telegram messages
+> deliberately untouched), no swipe gesture, no "don't show again". This task
+> owns the shared `DELETE /api/jobs/{job_id}` endpoint; task 19 extends the UI
+> surfaces on top of it. Decide the endpoint contract once.
+
+> **Grounded:** 2026-07-27
+
+The job details page is `web/app/(dashboard)/jobs/[id]/page.tsx` (actions
+cluster `JobActionsBar`, `page.tsx:497`, rendered at `page.tsx:676`). There is
+no DELETE endpoint for jobs in `src/api/jobs.py` (verified 2026-07-27). Five
+child tables already cascade on job delete (`ON DELETE CASCADE` — task 19's
+grounding): `job_thumbnails`, `job_annotations`, `job_tags`, `space_urls`,
+`document_outputs`, so a `DELETE FROM jobs WHERE id = ?` is complete on the DB
+side. Ownership lookup exists via `get_owned_job` (`src/api/deps.py`).
+
+**Wanted:** a delete button at the bottom of the job details page that, behind a
+hard confirmation, permanently deletes the job from the DB (no soft-delete/trash
+tier) and leaves the page.
+
+**Backend**
+
+- Add `DELETE /api/jobs/{job_id}` to `src/api/jobs.py`: `get_owned_job` for
+  ownership, then `DELETE FROM jobs WHERE id = ?` — cascades cover the five
+  child tables. No Telegram-side calls (task 19 owns message deletion).
+
+**UI**
+
+- A delete button at the **bottom** of the details page, below the existing
+  content — not inside `JobActionsBar`.
+- Confirmation — **reuse, don't fork a third pattern**: the repo has two —
+  `window.confirm` (the existing delete-confirm precedent,
+  `web/app/(dashboard)/spaces/[id]/page.tsx:31`) and the
+  `web/components/ui/dialog.tsx` primitive. Pick one in grill.
+- DESIGN.md is normative: signal orange means *act here* and is rationed —
+  settle the destructive-action color in grill rather than minting one inline.
+- On success, navigate off the now-dead page (the job row is gone).
+
+**Open questions** (resolve in grill)
+
+- Confirmation mechanism: `window.confirm` (matches the spaces delete) or a
+  styled `ui/dialog.tsx` confirm with an explicit destructive button?
+- Destructive color: does delete get an error-red treatment, or signal orange
+  (it *is* the page's primary "act here")? DESIGN.md's signal rule decides.
+- Post-delete destination: back to `/feed`, or `router.back()`?

@@ -64,7 +64,9 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 5. **Move briefs into the numbered `## Briefs` list**; delete the consumed
    one-liners from `## Inbox`. Renumber only new entries; leave existing tasks'
    numbers stable — numbers are permanent, even once a brief is later archived.
-6. **Stop and recommend a grill** (see "Handoff"). Do not start grilling.
+6. **Staleness sweep** — re-vision briefs older than a month (see "Staleness
+   re-vision" below).
+7. **Stop and recommend a grill** (see "Handoff"). Do not start grilling.
 
 ### House structure for a brief
 
@@ -74,6 +76,8 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 > **Grill:** `/<grill skill>` — <one-clause reason it fits (see Handoff mapping)>
 
 > **Grill together with task X.** <the shared decision>   ← only if entangled
+
+> **Grounded:** YYYY-MM-DD   ← stamped when written; re-stamped by each re-vision
 
 <Context: where this lives today, in 1-3 sentences, with real file refs
 like `src/telegram/webhook.py` and the function/symbol names.>
@@ -88,6 +92,30 @@ like `src/telegram/webhook.py` and the function/symbol names.>
 - <a genuinely undecided product/design/scope call — phrased as a question>
 - <do NOT answer these; they are the grill's input>
 ```
+
+### Staleness re-vision (briefs older than a month)
+
+A brief's grounding decays as the codebase moves. Any **unmarked** brief whose
+`> **Grounded:**` date is more than one month old — or that has no `Grounded`
+stamp at all (legacy briefs; a `Grilled YYYY-MM-DD` date in a callout counts as
+the grounding date if present) — is **stale** and gets re-visioned during every
+fatten run, after the Inbox is handled:
+
+- **Re-verify every claim against the codebase aspects it leans on:** the cited
+  file/symbol refs (codegraph, not grep), the seed files
+  (`FUNCTION_INDEX.md`, `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md`,
+  `CAPABILITY_MAP.md`, `PRD.md` via the TOC lookup), `CONTEXT.md`, and
+  `docs/adr/` — an ADR or CONTEXT.md entry written since the brief may have
+  settled or contradicted one of its assumptions.
+- **Update what drifted, in place:** fix moved/renamed refs, turn scope bullets
+  into "reuse, don't fork" notes when the thing has since shipped, and note
+  when shipped work or a new ADR has answered part of the brief. Do **not**
+  resolve open questions — that stays the grill's job; a re-vision may *add*
+  an open question that drift exposed.
+- **Re-stamp** `> **Grounded:**` with today's date (add the line if missing).
+- **Never touch marked briefs** (`✅ DONE` / `✅ ISSUED`), same as everywhere else.
+- Report which briefs were re-visioned and what actually drifted (a clean
+  re-verify is worth one line: "task N re-verified, no drift").
 
 ### Rules (the pre-grill posture)
 
