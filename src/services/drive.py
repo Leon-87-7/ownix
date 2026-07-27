@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any
 
 from google.auth.exceptions import RefreshError
@@ -126,6 +127,38 @@ async def update_file(
         return ""
     log.info("drive_updated", file_id=file_id)
     return link
+
+
+_DRIVE_ID_RE = re.compile(r"/d/([A-Za-z0-9_-]+)")
+
+
+def file_id_from_url(url: str | None) -> str | None:
+    """Pull a Drive file id out of a webViewLink (`…/d/<id>/…`); None if absent.
+
+    The main job's Drive doc is stored only as its `drive_url` webViewLink — the
+    file id from upload is discarded — so a Job purge recovers the id from there.
+    """
+    if not url:
+        return None
+    match = _DRIVE_ID_RE.search(url)
+    return match.group(1) if match else None
+
+
+def _delete_sync(file_id: str, chat_id: int) -> None:
+    _build_service(chat_id).files().delete(fileId=file_id, supportsAllDrives=True).execute()
+
+
+async def delete_file(file_id: str, *, chat_id: int) -> None:
+    """Permanently delete a per-user Drive artifact."""
+    try:
+        await asyncio.to_thread(_delete_sync, file_id, chat_id)
+    except RefreshError as exc:
+        await _handle_refresh_error(chat_id, exc)
+        raise
+    except HttpError as exc:
+        _degrade_or_raise(chat_id, exc, "drive_delete_failed", file_id=file_id)
+        raise
+    log.info("drive_deleted", file_id=file_id, chat_id=chat_id)
 
 
 def _gdoc_sync(markdown: str, name: str, folder_id: str, chat_id: int | None = None) -> str:

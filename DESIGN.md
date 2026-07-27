@@ -119,6 +119,13 @@ components:
     backgroundColor: '{colors.signal-bright}'
     textColor: '{colors.on-signal}'
     rounded: '{rounded.md}'
+  button-danger:
+    backgroundColor: '{colors.status-error}'
+    textColor: '#1b1309'
+    typography: '{typography.button}'
+    rounded: '{rounded.md}'
+    padding: '0px 14px'
+    height: '32px'
   button-ghost:
     backgroundColor: 'transparent'
     textColor: '{colors.ink}'
@@ -356,6 +363,7 @@ float. Overlays do.
 - **Shape:** Compact product radius (6px), 32px tall, 13px/500 Inter labels.
 - **Primary:** Index Amber fill (`#d99a45`) with near-black text (`#1b1309`). Use for the main action on a surface: add to Index, save, submit, retry, invite, or contribute.
 - **Secondary / Ghost:** Transparent with 1px hairline border and ink text; hover raises the plate (`#202329`).
+- **Danger:** Status Error red (`#f87171`) with near-black text (`#1b1309`), reserved for the destructive confirmation inside a dialog.
 - **Hover / Focus:** All interactive elements share a 2px Index Amber focus ring (`outline: 2px solid #d99a45; outline-offset: 2px`). Transitions run 150ms ease-out.
 - **Disabled:** Surface fill, muted text, no amber glow, and no dimmed amber.
 

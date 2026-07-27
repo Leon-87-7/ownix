@@ -2190,6 +2190,15 @@ async def delete_space(*, chat_id: int, space_id: str) -> bool:
     )
 
 
+async def delete_job(job_id: str) -> bool:
+    """Hard-delete a job and manually de-index its Brain links atomically."""
+    async with connection() as conn:
+        cursor = await conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
+        await conn.commit()
+        return cursor.rowcount > 0
+
+
 async def add_space_url(*, space_id: str, job_id: str) -> bool:
     """Pin a job into a space. sort_order = max+1. Idempotent (INSERT OR IGNORE)."""
     await _execute(

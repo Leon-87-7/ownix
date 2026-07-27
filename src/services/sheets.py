@@ -152,6 +152,48 @@ def _update_sync(tab_name: str, row_idx: int, values: list, chat_id: int | None 
     ).execute()
 
 
+def _delete_row_by_url_sync(url: str, chat_id: int) -> bool:
+    service = _build_service(chat_id)
+    spreadsheet_id = user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID
+    metadata = service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))"
+    ).execute()
+    for sheet in metadata.get("sheets", []):
+        properties = sheet["properties"]
+        title = properties["title"]
+        rows = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, range=f"'{title}'!A:Z"
+        ).execute().get("values", [])
+        for row_index, row in enumerate(rows):
+            if url not in row:
+                continue
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": [{"deleteDimension": {"range": {
+                    "sheetId": properties["sheetId"],
+                    "dimension": "ROWS",
+                    "startIndex": row_index,
+                    "endIndex": row_index + 1,
+                }}}]},
+            ).execute()
+            return True
+    return False
+
+
+async def delete_row_by_url(url: str, *, chat_id: int, job_id: str) -> bool:
+    """Delete the first per-user Sheets row containing a job URL."""
+    try:
+        deleted = await asyncio.to_thread(_delete_row_by_url_sync, url, chat_id)
+    except RefreshError:
+        await handle_google_refresh_error(chat_id)
+        raise
+    if deleted:
+        log.info("sheets_job_purge_deleted", job_id=job_id)
+    else:
+        log.info("sheets_job_purge_row_not_found", job_id=job_id)
+    return deleted
+
+
 async def append_short_row(job: dict) -> None:
     """Append one row to the 'Short Video Analysis' tab of GOOGLE_SHEETS_ID.
 

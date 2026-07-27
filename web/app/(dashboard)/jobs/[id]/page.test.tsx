@@ -3,9 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import JobDetailPage from './page';
 
+const routerBack = vi.fn();
+const routerPush = vi.fn();
+
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'j1' }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), back: routerBack }),
   usePathname: () => '/jobs/j1',
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -18,6 +21,9 @@ vi.mock('@/lib/hooks/useJobAnnotation', () => ({
 }));
 vi.mock('@/lib/hooks/useJobTags', () => ({
   useJobTags: vi.fn(),
+}));
+vi.mock('@/lib/restricted/context', () => ({
+  useRestrictedMode: vi.fn(() => ({ restricted: false, showRestrictedToast: vi.fn() })),
 }));
 vi.mock('@/components/ui/tag-picker', () => ({
   TagMenu: () => <div data-testid="tag-menu">TagMenu</div>,
@@ -37,10 +43,12 @@ vi.mock('next/dynamic', () => ({
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
 import { useJobTags } from '@/lib/hooks/useJobTags';
+import { useRestrictedMode } from '@/lib/restricted/context';
 
 const mockUseJobDetail = vi.mocked(useJobDetail);
 const mockUseJobAnnotation = vi.mocked(useJobAnnotation);
 const mockUseJobTags = vi.mocked(useJobTags);
+const mockUseRestrictedMode = vi.mocked(useRestrictedMode);
 
 const JOB = {
   id: 'j1',
@@ -95,7 +103,13 @@ function setupMocks(
   } as ReturnType<typeof useJobTags>);
 }
 
-beforeEach(() => { setupMocks(); });
+beforeEach(() => {
+  setupMocks();
+  mockUseRestrictedMode.mockReturnValue({ restricted: false, showRestrictedToast: vi.fn() });
+  routerBack.mockReset();
+  routerPush.mockReset();
+  vi.unstubAllGlobals();
+});
 
 describe('CopyButton', () => {
   it('does not warn about setState after unmount when copy timer is pending', async () => {
@@ -143,6 +157,35 @@ describe('JobDetailPage', () => {
   it('renders job title when loaded', () => {
     render(<JobDetailPage />);
     expect(screen.getByText('My Awesome Video')).toBeTruthy();
+  });
+
+  it('deletes after confirmation and navigates back', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    window.history.pushState({}, '', '/feed');
+    window.history.pushState({}, '', '/jobs/j1');
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/jobs/j1', { method: 'DELETE' });
+      expect(routerBack).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('shows the inline failure and closes the dialog', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() => expect(screen.getByText(/couldn't delete/i)).toBeInTheDocument());
+    expect(screen.queryByText('Permanently delete this job?')).toBeNull();
+  });
+
+  it('hides the delete zone in restricted mode', () => {
+    mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
+    render(<JobDetailPage />);
+    expect(screen.queryByRole('button', { name: 'Delete job' })).toBeNull();
   });
 
   it('renders content type and status badges', () => {

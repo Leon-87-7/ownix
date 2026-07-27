@@ -200,6 +200,11 @@ async def _handle_prd_intent(task: dict) -> None:
         )
 
 
+async def _handle_job_purge(task: dict) -> None:
+    from src.processors import purge
+    await purge.run(task)
+
+
 _TASK_HANDLERS = {
     "enrichment": _handle_enrichment,
     "video": _handle_video,
@@ -210,10 +215,18 @@ _TASK_HANDLERS = {
     "prd_auto": _handle_prd_auto,
     "prd_auto_resend": _handle_prd_auto_resend,
     "prd_intent": _handle_prd_intent,
+    "job_purge": _handle_job_purge,
 }
+
+_ROWLESS_TASKS = {"job_purge"}  # operate on a job that is already deleted
 
 
 async def _dispatch(task: dict) -> None:
+    if task["task"] not in _ROWLESS_TASKS:
+        job = await database.get_job(task["job_id"])
+        if job is None:
+            log.info("job_gone_skipped", job_id=task["job_id"], task=task["task"])
+            return
     handler = _TASK_HANDLERS.get(task["task"])
     if handler is None:
         log.error("unknown_task", task=task["task"], job_id=task["job_id"])

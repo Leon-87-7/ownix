@@ -49,3 +49,8 @@ async def download(key: str) -> bytes:
 
 async def exists(key: str) -> bool:
     return await asyncio.to_thread(lambda: _bucket().blob(key).exists())
+
+
+async def delete(key: str) -> None:
+    """Delete an object from the configured storage bucket."""
+    await asyncio.to_thread(lambda: _bucket().blob(key).delete())
