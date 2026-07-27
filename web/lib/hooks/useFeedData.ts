@@ -113,6 +113,9 @@ export function useFeedData(initialContentType = '', restricted = false) {
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
+  // The server preload component always uses the first unfiltered jobs. Keep
+  // their positions even in server mode, where the rendered list is filtered.
+  const [preloadJobs, setPreloadJobs] = useState<JobSummary[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +177,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
         setServerMode(false);
         setAllJobs(jobs);
       }
+      setPreloadJobs(jobs);
     } catch (e) {
       if (reqId !== reqIdRef.current) return;
       setError(e instanceof Error ? e.message : 'Unknown error');
@@ -238,6 +242,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
         const { jobs } = await fetchAllJobs(restricted);
         if (reqId !== reqIdRef.current) return;
         setAllJobs(jobs);
+        setPreloadJobs(jobs);
       }
     } catch {
       // swallow during background polling
@@ -291,6 +296,11 @@ export function useFeedData(initialContentType = '', restricted = false) {
     [serverMode, allJobs, ctFilter],
   );
 
+  const preloadIndexes = useMemo(
+    () => new Map(preloadJobs.map((job, index) => [job.id, index])),
+    [preloadJobs],
+  );
+
   // -------------------------------------------------------------------------
   // Unified returned values
   // -------------------------------------------------------------------------
@@ -311,5 +321,6 @@ export function useFeedData(initialContentType = '', restricted = false) {
     loading,
     error,
     reload,
+    preloadIndexes,
   };
 }

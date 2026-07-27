@@ -152,6 +152,7 @@ function FeedPageContent() {
     loading,
     error,
     reload,
+    preloadIndexes,
   } = useFeedData(urlContentType, restricted);
   const {
     openIntake,
@@ -610,6 +611,7 @@ function FeedPageContent() {
             (showPreviewGrid ? (
               <PreviewGrid
                 jobs={displayedJobs}
+                preloadIndexes={preloadIndexes}
                 contentType={ctFilter}
                 status={stFilter}
                 variant={
