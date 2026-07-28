@@ -6,10 +6,11 @@
 ## Required context — read these first, in this order
 
 1. `docs/plans/2026-07-13-next14-to-16-migration.md` — the authoritative
-   migration plan. Its step order, the Turbopack SVGR rule, and the
-   "verify-only / don't pre-fix" list are binding where they differ from the
-   issue bodies. Two notes in it are now **stale** — see "Already-verified
-   state" below before acting on them.
+   migration plan, **re-verified against `main` on 2026-07-28**. Its step
+   order, the Turbopack SVGR rule, the sync-`cookies()` fix in
+   `app/page.tsx`, and the "verify-only / don't pre-fix" list are binding
+   where they differ from the issue bodies (the issues predate the
+   re-verification).
 2. `CLAUDE.md` (repo root) — the `web/` layout and the web commands
    (`npm run dev` / `test` / `test:run` / `test:coverage` / `lint` / `build`).
    Note `web/` components live under `web/components/<area>/` — kebab-case, no
@@ -22,30 +23,34 @@
    also has an AI-triage comment restating that the **Next.js ESLint plugin
    rules must stay active** in the new config (do not just delete linting).
 
-## Already-verified state (trust this over stale line numbers in the docs)
-
-Re-checked against current `main` on 2026-07-28:
+## Already-verified state (re-checked against `main`, 2026-07-28)
 
 - `web/next.config.js:15-28` — the `webpack()` SVGR block is present exactly as
   the plan describes. Replace it (do not keep both — a webpack config present
   fails `next build` under Turbopack in 16).
 - `web/package.json:9` — `"lint": "next lint"`; `"test:run": "vitest run"`.
-  No ESLint config file exists in `web/`.
+  No ESLint config file exists in `web/`. (Open PR #401 configures ESLint on
+  Next 14 — see the plan's Step 4 note; don't produce a competing config.)
 - `web/middleware.ts` — exports `function middleware(...)` + `const config`
   matcher; `web/middleware.test.ts` exists. Both must be renamed.
-- **STALE #1:** the plan/issue point at `components/sidebar.tsx:109` for the
-  `eslint-disable @next/next/no-img-element` comment. That file is now
-  `web/components/shell/sidebar.tsx` and the disable is at **line 116**.
-  The same `@next/next/no-img-element` disable also appears in
+- `web/app/page.tsx:69` — `cookies().get('vig_session')` called
+  **synchronously** in the sync `LandingPage` server component. Next 16
+  removes sync `cookies()`; this must become `async function LandingPage` +
+  `await cookies()` as part of #365.
+- The `eslint-disable @next/next/no-img-element` comment lives at
+  `web/components/shell/sidebar.tsx:116` and also in
   `web/components/feed/preview-card.tsx`, `web/components/feed/links-table.tsx`,
   `web/components/shell/auth-shell.tsx`, and `web/components/ui/platform-icon.tsx`.
   Consequence: the new flat config **must keep the `@next/next` plugin's
   `no-img-element` rule active** so all five disables stay meaningful — don't
   produce a config where the rule no longer fires.
-- **STALE #2:** the plan's "Pre-existing bug found during planning"
-  (`components/svg/telegram-icon.tsx` rendering `next/image` with a remote SVG)
-  is **already fixed** — that file is now a pure inline `<svg>` with no
-  `next/image` and no remote URL. **No action; do not re-introduce a fix for it.**
+- `components/svg/telegram-icon.tsx` is a pure inline `<svg>` — the
+  remote-`next/image` bug the plan once flagged is resolved. **No action; do
+  not re-introduce a fix for it.**
+- A first Next 16 attempt already happened: the async-route-params fix
+  survived (PR #362 — `jobs/[id]` / `spaces/[id]` already use `useParams()`),
+  but a **logout regression** forced the revert to Next 14 (PR #363). Logout
+  is the known regression surface for this migration.
 
 ## Key decisions already made (do not relitigate)
 
@@ -89,6 +94,9 @@ verification gate. Each slice must leave the app building and green
   `turbopack.rules['*.svg']` rule above. Keep `output: "standalone"` and the
   `rewrites()` block untouched.
 - Resolve peer-dep fallout on the watchlist packages at install time.
+- Fix the sync-`cookies()` holdout: `app/page.tsx:64-69` — make `LandingPage`
+  an `async function` and `await cookies()`. Keep the session-aware CTA
+  behavior (signed-in vs "Look inside") identical.
 - `app/opengraph-image.tsx:7` sets `export const runtime = 'edge'`
   (**verify-only** — root route, no params, should still build). Drop the
   `runtime` export **only if** it breaks the build; nodejs runs `ImageResponse`
@@ -136,16 +144,18 @@ and not yours to sign off. Your part is the mechanical half:
 Then **report** what the human still needs to run themselves: `npx next dev`
 click-through of `/` → login gate → `/feed` → `/jobs/[id]` → `/spaces/[id]` →
 `/restricted?exit` (exercises the proxy rename, SVGR components, and the
-ADR-0035 restricted-mode cookie path), plus `docker build web/` for the
-standalone deploy. Do not fabricate results for those two — flag them as
-pending human verification.
+ADR-0035 restricted-mode cookie path), the **logout flow** (sign in →
+`/logout` → session gone — the regression that reverted the first Next 16
+attempt, PR #363), the landing CTA in both signed-in/out states (the
+`await cookies()` fix), plus `docker build web/` for the standalone deploy.
+Do not fabricate results for these — flag them as pending human verification.
 
 ## Hard constraints
 
 - No commits, no pushes, no PRs, no branch creation — **working tree only.**
 - Touch only `web/` (and `docs/` if you must note something). Do not refactor
   unrelated components in a file you opened for one rename, and do not "fix"
-  the already-resolved `telegram-icon.tsx` (STALE #2).
+  the already-resolved `telegram-icon.tsx` (see Already-verified state).
 - Do not drop linting to satisfy #366 — the Next ESLint plugin rules stay on.
 - Web commands are `npm run test:run` / `npm run build` / `npm run lint` from
   `web/`. If you run any **backend** Python tests, never route them through the
