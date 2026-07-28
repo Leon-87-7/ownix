@@ -115,6 +115,10 @@
 | [#444](https://github.com/Leon-87-7/ownix/issues/444) | feat(web): permanent delete on the job details page | Web / Jobs | — |
 | [#445](https://github.com/Leon-87-7/ownix/issues/445) | fix(worker): drop task envelopes whose job row is gone | Worker / Queue | #444 |
 | [#446](https://github.com/Leon-87-7/ownix/issues/446) | feat(worker): job_purge — delete the job's Drive, GCS and Sheets artifacts | Purge / Cloud | #444 |
+| [#449](https://github.com/Leon-87-7/ownix/issues/449) | feat(jobs): hold a pending user's links as un-enqueued 'held' jobs | Jobs / Invite | — |
+| [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth | — |
+| [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval | Jobs / Ops | #449 |
+| [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved | Telegram / Copy | #449 |
 
 ---
 
@@ -555,6 +559,14 @@ Job delete + cloud purge (docs/TASK.md task 33 — grill-with-docs 2026-07-27; A
 └── #446 job_purge — Drive, GCS and Sheets artifacts (extends the same endpoint with the async half)
 Critical path: #444 → {#445, #446}
 Note: task 19 (full delete surface — cards, swipe, Telegram message deletion) builds on #444's endpoint and confirm dialog; not yet broken into issues.
+
+Streamline new-user signup — pending is a preview, not a wall (docs/TASK.md task 29 — grilled 2026-07-23, re-grounded 2026-07-28)
+#449 hold a pending user's links as un-enqueued 'held' jobs (root, unblocked — owns the jobs.status CHECK rebuild and the FSM note)
+├── #451 flush held jobs to the queue on invite approval (both approve paths share one helper)
+└── #452 invite waiting copy says links sent now are saved (only true once #449 lands)
+#450 pending sessions get the preview dashboard + queue banner (independent — reuses the ADR-0035 restricted plane)
+Critical path: #449 → {#451, #452}; #450 parallel
+Note: web-side submission for pending users and the INVITE_AUTO_APPROVE flag are deliberately out of scope; #352 (auto-approve) is the related open idea.
 ```
 
 ---

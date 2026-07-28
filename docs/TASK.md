@@ -88,47 +88,6 @@ and `/freestyle`).
 
 ## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423
 
-> **Grilled 2026-07-23** — all open questions resolved below.
-
-Scope is the `web/` Next.js app (app router).
-
-**Wanted:** the dashboard is installable, has a minimal offline fallback, and is
-an Android share-sheet URL intake target.
-
-**Already shipped** (found in grill): `web/app/manifest.json` exists with name,
-maskable 192/512 icons (`web/public/web-app-manifest-*.png`), `display:
-standalone`, and `theme_color`/`background_color` `#0d0e10` — which matches the
-current `canvas` token (`web/tailwind.config.ts:9`; the brief's `#0b0c0f` was
-pre-repalette). Next serves `app/manifest.json` automatically — no
-`layout.tsx` wiring needed.
-
-**Remaining work**
-
-- Manifest: add `start_url: "/feed"` (per task 14's routing — sidesteps the
-  `/` redirect), `id`, and the `share_target` below.
-- **SW (resolved): tiny hand-rolled `web/public/sw.js`, no dependency.**
-  Verified in grill: Chrome (108+ mobile / 112+ desktop) no longer requires a
-  service worker for installability — manifest + HTTPS is the whole bar, so
-  `next-pwa`/Workbox has nothing to buy. The SW exists only for the offline
-  fallback: precache one `/offline` page, serve it when a navigation fetch
-  fails. No `/api/*` caching, no payload caching — live-data console, stale
-  data is worse than none. Skip SW registration when `NEXT_PUBLIC_API_MOCK=1`
-  (MSW's `mockServiceWorker.js` owns scope `/` in mock mode).
-- **Share target (resolved):** manifest-only, `method: "GET"`,
-  `action: "/feed"`, params `share_title`/`share_text`/`share_url`. iOS Safari
-  has no `share_target` for home-screen PWAs — iPhone intake stays the
-  Telegram-bot share flow (already works); an iOS Shortcut opening
-  `/feed?share_url=…` is a zero-code user-side option later.
-- **Receiving handoff (resolved):** Feed reads the `share_*` params, extracts
-  the first URL (`share_url`, falling back to a URL regex over `share_text` —
-  Android apps commonly put the URL in `text`), opens the existing Submit URL
-  dialog (`SubmitJobProvider`) prefilled so the operator picks the template,
-  then `router.replace('/feed')` strips the params. A share arriving while
-  logged out loses the URL (middleware drops the query on the `/login` 307) —
-  accepted; installed PWAs hold their session cookie.
-- **Web push (resolved): out.** Telegram is the notification channel; push
-  handlers can be added to the SW later without rework.
-
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306 - ✅DONE
 
 ## 8. Controls UI on the Brain search graph
@@ -900,72 +859,7 @@ as web interactions.
 - Real-time parity: does the web flow need live status push (the bot edits its
   message as the job progresses), or is Feed's existing polling enough?
 
-## 29. Streamline new-user signup — pending is a preview, not a wall
-
-> Resolves this brief's original open questions (was: "Test a new user-approval
-> workflow"). Answer: a _changed_ approval UX. What's wrong with the current
-> gate is not the approval tap (task 22 covers missed pushes) — it's what the
-> new user experiences between signup and approval: a dead wall, and their
-> first links get discarded. Approval stays Telegram-only (task 21's ruling
-> stands). Constraints kept: Telegram login, email collection for community.
-
-**What already works (verified 2026-07-23, don't rebuild):** Telegram widget
-(`web/components/shell/telegram-login-widget.tsx`) → `POST /api/auth/telegram`
-(`src/api/auth.py:127`) mints a session for *any* status and lands on `/feed`.
-`InviteGate` (`web/components/shell/invite-gate.tsx:211`) fetches
-`/api/auth/me`; a user with no email gets the **in-browser** `EmailModal` →
-`PUT /api/auth/email` (`src/api/auth.py:252`) → ops-bot card with ✅ Approve /
-🚫 Block (`src/services/invite_notifications.py`, callback
-`src/telegram/webhook.py:1740`). Approval flips `users.status` and DMs "You're
-in, send a link." So email-in-browser and one-tap approval exist — no separate
-`/welcome` page needed.
-
-**Gap A — pending users hit a dead wall.** `GateScreen`
-(`invite-gate.tsx:50`) renders "Pending approval" and nothing else, while a
-full read-only preview experience already exists for *anonymous* visitors
-(ADR-0035: `/restricted` mints the `ownix_preview` cookie, `isRestrictedRequest`
-in `web/lib/restricted/server.ts:31`, `RestrictedFacade` pages, `/api/preview`
-corpus). Fix: pending sessions get that preview dashboard instead of the wall,
-topped with a queue-status banner ("You're in the queue — approval usually
-within a few hours; you'll get a Telegram hello. Meanwhile: install the app,
-send the bot your first link."). Wiring: `_login_telegram_user` deletes the
-preview cookie unconditionally (`auth.py:72`) — keep it (or re-mint) for
-non-approved users so the dashboard layout's restricted flag engages; then
-`InviteGate` renders `children` + banner for `pending` instead of
-`GateScreen`. `blocked` keeps the wall.
-
-**Gap B — a pending user's links are thrown away.** `_invite_gate_allows`
-(`src/telegram/webhook.py:1407`) answers pending users with a waiting message
-and drops the link. Fix: for `pending` users *with an email on file*, create
-the job with a new `held` status and **don't enqueue** (`database.create_job`
-`src/database.py:1424` inserts `'pending'` today — parameterize or update
-after insert); reply "Saved — it processes the moment you're in." On approval
-— both paths: `ops_invite_approve` callback (`webhook.py:1765`) and
-`_approve_pending_ids` (`src/services/ops_bot.py:236`) — select the user's
-`held` jobs, set them `pending`, enqueue. `job_recovery` and any status scans
-must ignore `held` (it's not stuck — it's parked). Job FSM note for
-CONTEXT.md: `held` sits before `pending`, only reachable pre-approval.
-Web-side submission for pending users is **out of scope** — the preview feed
-is read-only and Telegram is the ingest surface; revisit only if asked.
-
-**Gap C — copy.** Every state names what happens next. The banner (Gap A)
-covers web; bot-side, the waiting message
-(`_INVITE_WAITING_MESSAGE_TEMPLATE`) should mention that links sent now are
-saved for when they're in (true once Gap B lands).
-
-**Order:** B (backend hold/flush + tests) → A (preview-for-pending + banner) →
-C (copy sweep). B and A are independently shippable.
-
-**Acceptance:** a fresh Telegram identity can: log in → type email in the
-browser modal → browse the preview feed with the queue banner → send the bot a
-link and get the "saved" reply → on operator approve, the held job processes
-and the user gets the existing "You're in" DM with their first result close
-behind.
-
-**Optional follow-up (not in scope):** an `INVITE_AUTO_APPROVE` env flag that
-flips the model from approve-by-default-wait to ban-by-exception — new users
-land `approved`, the ops card becomes a notification with a Block button.
-One settings flag + default-status change when community trust allows it.
+## 29. Streamline new-user signup — pending is a preview, not a wall ✅ ISSUED TO GITHUB #449 #450 #451 #452
 
 ## 30. Link-level tags in the Links table + mobile color-badge redesign ✅ ISSUED TO GITHUB #382 #383 #386 #387 - ✅DONE
 

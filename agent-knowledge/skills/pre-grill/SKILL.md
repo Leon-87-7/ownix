@@ -1,6 +1,7 @@
 ---
 name: pre-grill
 disable-model-invocation: true
+argument-hint: '["idea" ...] · mark-done "task N" · mark-archive "task N" · archive'
 description: Fatten one-line feature ideas in docs/TASK.md into grounded technical briefs ready for a grilling session — anchored to real files via codegraph, with scope split by layer and the genuinely undecided calls surfaced as Open questions (not resolved). Also handles cleanup — mark a brief done and/or archive its finished body to docs/archive/TASK-archive.md, leaving a title-only stub behind in TASK.md. Use only when explicitly invoked as /pre-grill, or when the user asks to "fatten", "flesh out", "brief up", "prep my ideas for grilling", "mark this task done", or "archive finished briefs".
 ---
 
@@ -14,7 +15,7 @@ skill. Do **not** resolve the open questions — that is the grill's job.
 ## Two modes, chosen by the invocation
 
 - **No args, or one or more quoted idea strings** → **fatten mode**.
-- **`--mark-d`, `--mark-a`, or `--archive`** → **cleanup mode**. These never
+- **`mark-done`, `mark-archive`, or `archive`** → **cleanup mode**. These never
   touch the Inbox or write briefs — they only change status markers and move
   finished bodies to the archive.
 
@@ -33,7 +34,7 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
    bullet under `## Inbox` in `docs/TASK.md` first, then continue. With no
    argument, skip straight to step 1.
 1. **Read `docs/TASK.md`.** Collect every raw idea. If there are none, say so and stop.
-1b. **Run `/check-seed-index`** before leaning on the indexes in step 2. It is
+   1b. **Run `/check-seed-index`** before leaning on the indexes in step 2. It is
    read-only and silent when they're current. If it reports drift, note which
    briefs lean on the affected doc and treat those entries as unverified —
    but do **not** stop to fix them; `/update-seed-index` is a separate,
@@ -43,7 +44,7 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
    - **Does it already exist?** → `docs/seed/FUNCTION_INDEX.md` (utility/service
      helpers), `GLUE_INDEX_BACKEND.md` / `GLUE_INDEX_FRONTEND.md` (orchestration
      and wiring), `CAPABILITY_MAP.md` (which module owns a capability). Check
-     these *before* writing a scope bullet that builds something new — if it's
+     these _before_ writing a scope bullet that builds something new — if it's
      already indexed, the bullet becomes a "reuse, don't fork" note naming the
      existing function — **but only if step 1b found that doc current.** If the
      check flagged drift, confirm the entry against source (codegraph or the
@@ -60,7 +61,7 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 3. **Write the brief** for each idea using the house structure below.
 4. **Detect entanglements.** When two briefs share state, ownership, ordering, or
    a schema, add a reciprocal `> **Grill together with task X.**` callout at the
-   top of *both*, naming the shared decision.
+   top of _both_, naming the shared decision.
 5. **Move briefs into the numbered `## Briefs` list**; delete the consumed
    one-liners from `## Inbox`. Renumber only new entries; leave existing tasks'
    numbers stable — numbers are permanent, even once a brief is later archived.
@@ -75,20 +76,22 @@ under `## Inbox`, or a numbered task with no **Context / Wanted / Scope** body.
 
 > **Grill:** `/<grill skill>` — <one-clause reason it fits (see Handoff mapping)>
 
-> **Grill together with task X.** <the shared decision>   ← only if entangled
+> **Grill together with task X.** <the shared decision> ← only if entangled
 
-> **Grounded:** YYYY-MM-DD   ← stamped when written; re-stamped by each re-vision
+> **Grounded:** YYYY-MM-DD ← stamped when written; re-stamped by each re-vision
 
 <Context: where this lives today, in 1-3 sentences, with real file refs
 like `src/telegram/webhook.py` and the function/symbol names.>
 
 **Wanted:** <one sentence — the outcome, not the implementation.>
 
-**Backend / API / Data / UI**   ← use only the layers this idea actually touches
+**Backend / API / Data / UI** ← use only the layers this idea actually touches
+
 - <concrete scope, each bullet anchored to a real file/endpoint/component>
 - <call out "reuse, don't fork" when logic already exists elsewhere>
 
 **Open questions** (resolve in grill)
+
 - <a genuinely undecided product/design/scope call — phrased as a question>
 - <do NOT answer these; they are the grill's input>
 ```
@@ -110,7 +113,7 @@ fatten run, after the Inbox is handled:
 - **Update what drifted, in place:** fix moved/renamed refs, turn scope bullets
   into "reuse, don't fork" notes when the thing has since shipped, and note
   when shipped work or a new ADR has answered part of the brief. Do **not**
-  resolve open questions — that stays the grill's job; a re-vision may *add*
+  resolve open questions — that stays the grill's job; a re-vision may _add_
   an open question that drift exposed.
 - **Re-stamp** `> **Grounded:**` with today's date (add the line if missing).
 - **Never touch marked briefs** (`✅ DONE` / `✅ ISSUED`), same as everywhere else.
@@ -151,13 +154,14 @@ to brief number `5` — pull the first integer out of the string, ignore the res
 
 A brief is **marked** when its `## N. <title>` header line ends with
 `✅ <status>` (e.g. `✅ DONE`, `✅ ISSUED TO GITHUB #238`). A brief is
-**archived** when it's marked *and* has no body left between its header and
+**archived** when it's marked _and_ has no body left between its header and
 the next `## ` header (or the section's closing `---`) in `TASK.md` — the
 body already lives in `docs/archive/TASK-archive.md`.
 
-### `--mark-d "task NN" ["task XX" ...]`
+### `mark-done "task NN" ["task XX" ...]`
 
 For each selector, in order:
+
 - Resolve the brief number. If no such brief exists under `## Briefs`, skip it
   with a warning and keep processing the rest of the list.
 - If already marked, no-op with a message ("task N already marked — nothing
@@ -168,11 +172,12 @@ For each selector, in order:
 
 Report what was marked, what was already marked (no-op), and what was skipped.
 
-### `--mark-a "task NN" ["task XX" ...]`
+### `mark-archive "task NN" ["task XX" ...]`
 
-Same selector resolution, not-found, and no-overwrite rules as `--mark-d`. For
+Same selector resolution, not-found, and no-overwrite rules as `mark-done`. For
 each valid selector:
-- If unmarked, stamp `✅ DONE` on the header (same as `--mark-d`). If already
+
+- If unmarked, stamp `✅ DONE` on the header (same as `mark-done`). If already
   marked, leave the existing marker as-is.
 - Move its full body (everything between the header and the next `## `/`---`)
   to the end of `docs/archive/TASK-archive.md`, verbatim, under its existing
@@ -182,12 +187,12 @@ each valid selector:
 
 Report what was marked+archived, and what was skipped.
 
-### `--archive` (no selector — blanket sweep)
+### `archive` (no selector — blanket sweep)
 
 Scan every numbered brief under `## Briefs`. For every one that is **marked
 but not yet archived** (a marker on the header, and a body still present),
 move its body to the end of `docs/archive/TASK-archive.md` verbatim (same
-archive step as `--mark-a`), leaving the bare header behind. This flag never
+archive step as `mark-archive`), leaving the bare header behind. This flag never
 marks anything itself — it only archives what's already marked. If nothing
 qualifies, say so and stop.
 
