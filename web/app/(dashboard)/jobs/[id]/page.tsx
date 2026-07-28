@@ -486,7 +486,7 @@ function JobHeader({
           </Tooltip>
         )}
         {tags && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             {tags}
           </div>
         )}
