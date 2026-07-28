@@ -482,7 +482,7 @@ async def test_invite_gate_prompts_for_email_and_drops_first_url(
     state = await db.get_chat_state(100)
     assert state is not None
     assert state["mode"] == "awaiting_email"
-    assert "what's your email" in sent.await_args.args[1]
+    assert "send your email" in sent.await_args.args[1]
 
 
 @pytest.mark.asyncio
@@ -523,7 +523,98 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
     assert buttons[0][0]["callback_data"] == "ops_invite_approve:100"
     assert buttons[0][1]["callback_data"] == "ops_invite_block:100"
     assert kwargs.get("parse_mode") is None
-    assert "still waiting on the operator" in sent.await_args.args[1].lower()
+    assert "in the queue with the operator" in sent.await_args.args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_pending_user_with_email_saves_supported_url_as_held(temp_db, monkeypatch):
+    from src import database as db
+    from src.telegram import webhook
+
+    await db.set_user_email(100, "user@example.com")
+    sent = AsyncMock()
+    enqueued = AsyncMock()
+    monkeypatch.setattr(webhook, "send_message", sent)
+    monkeypatch.setattr("src.queue.enqueue", enqueued)
+
+    allowed = await webhook._invite_gate_allows(
+        100,
+        "https://youtu.be/dQw4w9WgXcQ",
+        {"first_name": "Ada", "last_name": None, "username": "ada"},
+    )
+
+    assert allowed is False
+    jobs = await db.get_recent_jobs(100, 5)
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "held"
+    enqueued.assert_not_awaited()
+    sent.assert_awaited_with(100, "Saved — it processes the moment you're in.")
+
+
+@pytest.mark.asyncio
+async def test_pending_user_resending_the_same_url_holds_it_once(temp_db, monkeypatch):
+    from src import database as db
+    from src.telegram import webhook
+
+    await db.set_user_email(100, "user@example.com")
+    sent = AsyncMock()
+    monkeypatch.setattr(webhook, "send_message", sent)
+
+    identity = {"first_name": "Ada", "last_name": None, "username": "ada"}
+    for _ in range(2):
+        await webhook._invite_gate_allows(100, "https://youtu.be/dQw4w9WgXcQ", identity)
+
+    jobs = await db.get_recent_jobs(100, 5)
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "held"
+    # The promise is repeated, so the user never learns they were deduped.
+    sent.assert_awaited_with(100, "Saved — it processes the moment you're in.")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["hi", "/help", ""])
+async def test_pending_user_non_url_gets_waiting_message_not_url_error(
+    temp_db, monkeypatch, text
+):
+    """Greetings, slash commands and the photo/document routes (text="") are not
+    failed URL attempts — they get the queue status, the waiting template's
+    second send site (#452)."""
+    from src import database as db
+    from src.telegram import webhook
+
+    await db.set_user_email(100, "user@example.com")
+    sent = AsyncMock()
+    monkeypatch.setattr(webhook, "send_message", sent)
+
+    allowed = await webhook._invite_gate_allows(
+        100, text, {"first_name": "Ada", "last_name": None, "username": "ada"}
+    )
+
+    assert allowed is False
+    assert await db.get_recent_jobs(100, 5) == []
+    body = sent.await_args.args[1]
+    assert "Unsupported URL" not in body
+    assert "in the queue" in body
+
+
+@pytest.mark.asyncio
+async def test_pending_user_unsupported_url_still_gets_the_url_error(temp_db, monkeypatch):
+    from src import database as db
+    from src.telegram import webhook
+
+    await db.set_user_email(100, "user@example.com")
+    sent = AsyncMock()
+    monkeypatch.setattr(webhook, "send_message", sent)
+
+    allowed = await webhook._invite_gate_allows(
+        100,
+        "https://example.com/not-a-pipeline",
+        {"first_name": "Ada", "last_name": None, "username": "ada"},
+    )
+
+    assert allowed is False
+    assert await db.get_recent_jobs(100, 5) == []
+    assert "Unsupported URL" in sent.await_args.args[1]
 
 
 @pytest.mark.asyncio
@@ -783,7 +874,7 @@ async def test_callback_reprocess_rejects_blocked_chat(temp_db, monkeypatch):
     )
 
     create_job.assert_not_awaited()
-    sent.assert_awaited_once_with(100, "Access blocked.")
+    sent.assert_awaited_once_with(100, webhook._INVITE_BLOCKED_MESSAGE)
     answered.assert_awaited_once_with("CB", text="Access restricted.")
 
 
@@ -2032,6 +2123,14 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
     monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
     await database.set_user_status(778, "pending")
+    held_id = await database.create_job(
+        chat_id=778,
+        url="https://youtu.be/dQw4w9WgXcQ",
+        content_type="long",
+        status="held",
+    )
+    enqueue = AsyncMock()
+    monkeypatch.setattr("src.services.jobs.queue.enqueue", enqueue)
 
     response = c.post(
         "/webhook/ops",
@@ -2041,6 +2140,8 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
 
     assert response.status_code == 200
     assert await database.get_user_status(778) == "approved"
+    assert (await database.get_job(held_id))["status"] == "pending"
+    enqueue.assert_awaited_once_with({"task": "video", "job_id": held_id})
     user_messages = [c for c in fake_http.calls if c["json"].get("chat_id") == 778]
     assert user_messages and "bottest-token/sendMessage" in user_messages[0]["url"]
     assert any(
@@ -2238,9 +2339,7 @@ async def test_ops_approve_pending_domain_commits_before_best_effort_notificatio
     assert notify.await_count == 2
 
 
-async def test_ops_approve_pending_callback_uses_previewed_user_cohort(
-    client, monkeypatch
-) -> None:
+async def test_ops_approve_pending_callback_uses_previewed_user_cohort(client, monkeypatch) -> None:
     c, fake_redis, fake_http = client
     monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
@@ -2255,9 +2354,7 @@ async def test_ops_approve_pending_callback_uses_previewed_user_cohort(
     )
 
     assert preview.status_code == 200
-    keyboard_calls = [
-        call for call in fake_http.calls if "botops-token/sendMessage" in call["url"]
-    ]
+    keyboard_calls = [call for call in fake_http.calls if "botops-token/sendMessage" in call["url"]]
     callback_data = keyboard_calls[-1]["json"]["reply_markup"]["inline_keyboard"][0][0][
         "callback_data"
     ]
@@ -2378,6 +2475,7 @@ async def test_ops_unknown_command_returns_command_list(client, monkeypatch) -> 
     messages = [call["json"].get("text", "") for call in fake_http.calls]
     assert any("/pending" in text and "/approve_pending" in text for text in messages)
 
+
 def test_callback_rejects_foreign_template_pick_sync(tmp_path, monkeypatch):
     import asyncio
     from unittest.mock import AsyncMock
@@ -2396,7 +2494,11 @@ def test_callback_rejects_foreign_template_pick_sync(tmp_path, monkeypatch):
         monkeypatch.setattr(q, "enqueue", enqueued)
         monkeypatch.setattr("src.telegram.webhook.answer_callback_query", answered)
         await webhook._handle_callback(
-            {"id": "CB", "data": "template_pick:summary:J_FOREIGN", "message": {"chat": {"id": 200}}}
+            {
+                "id": "CB",
+                "data": "template_pick:summary:J_FOREIGN",
+                "message": {"chat": {"id": 200}},
+            }
         )
         enqueued.assert_not_awaited()
         answered.assert_awaited_once()

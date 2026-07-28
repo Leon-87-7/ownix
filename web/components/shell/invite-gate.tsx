@@ -62,6 +62,18 @@ function GateScreen({
   );
 }
 
+function QueueStatusBanner() {
+  return (
+    <aside
+      role="status"
+      className="border-b border-line bg-raised px-4 py-3 text-center text-sm leading-6 text-body"
+    >
+      You&apos;re in the queue — approval usually within a few hours; you&apos;ll get a Telegram
+      hello. Meanwhile: install the app, send the bot your first link.
+    </aside>
+  );
+}
+
 function EmailModal({
   onSaved,
 }: {
@@ -264,17 +276,17 @@ export function InviteGate({
   }
 
   const needsEmail = !user.email;
-  const approved = user.status === 'approved';
-  const canShowDashboard = approved && !needsEmail;
+  const canShowDashboard = user.status !== 'blocked' && !needsEmail;
 
   return (
     <SessionUserContext.Provider value={user}>
       {canShowDashboard ? (
-        children
+        <>
+          {user.status === 'pending' && <QueueStatusBanner />}
+          {children}
+        </>
       ) : user.status === 'blocked' ? (
         <GateScreen status="blocked" />
-      ) : user.status === 'pending' ? (
-        <GateScreen status="pending" />
       ) : null}
       {needsEmail && user.status !== 'blocked' && (
         <EmailModal

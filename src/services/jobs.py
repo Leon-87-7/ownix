@@ -19,6 +19,39 @@ def task_for_content_type(content_type: str | None, *, default: str | None) -> s
     return default
 
 
+async def flush_held_jobs(chat_id: int) -> int:
+    """Release and enqueue every held job owned by an approved chat."""
+    rows = await database._fetch_dicts(
+        "SELECT id, content_type FROM jobs WHERE chat_id = ? AND status = 'held' ORDER BY created_at, id",
+        (chat_id,),
+    )
+    enqueued = 0
+    for row in rows:
+        job_id = row["id"]
+        changed = await database._execute_rowcount(
+            "UPDATE jobs SET status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND chat_id = ? AND status = 'held'",
+            (job_id, chat_id),
+        )
+        if changed != 1:
+            continue
+        try:
+            await queue.enqueue(
+                {
+                    "task": task_for_content_type(row["content_type"], default=row["content_type"]),
+                    "job_id": job_id,
+                }
+            )
+        except Exception:
+            await database._execute_rowcount(
+                "UPDATE jobs SET status = 'held', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND chat_id = ? AND status = 'pending'",
+                (job_id, chat_id),
+            )
+            log.exception("held_job_enqueue_failed", chat_id=chat_id, job_id=job_id)
+            continue
+        enqueued += 1
+    return enqueued
+
+
 async def create_and_enqueue_job(
     chat_id: int,
     url: str,

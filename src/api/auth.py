@@ -69,7 +69,18 @@ async def _login_telegram_user(payload: TelegramPayload, response: Response) -> 
         max_age=_COOKIE_MAX_AGE,
         path="/",
     )
-    response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    status = await database.get_user_status(payload.id)
+    if status != "pending":
+        response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    else:
+        response.set_cookie(
+            key="ownix_preview",
+            value="1",
+            httponly=True,
+            secure=settings.SESSION_COOKIE_SECURE,
+            samesite="lax",
+            path="/",
+        )
     log.info("auth.telegram_login", tg_id=payload.id, username=payload.username)
     return {"ok": True}
 

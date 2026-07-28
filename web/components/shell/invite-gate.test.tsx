@@ -114,7 +114,7 @@ describe("InviteGate", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/auth/me")).toHaveLength(1);
   });
 
-  it("shows the pending screen instead of dashboard content for pending users", async () => {
+  it("shows dashboard content and the queue banner for pending users", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -136,8 +136,11 @@ describe("InviteGate", () => {
       </InviteGate>,
     );
 
-    expect(await screen.findByText("Pending approval")).toBeTruthy();
-    expect(screen.queryByText("Dashboard feed")).toBeNull();
+    expect(await screen.findByText("Dashboard feed")).toBeTruthy();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "You're in the queue — approval usually within a few hours; you'll get a Telegram hello. Meanwhile: install the app, send the bot your first link.",
+    );
+    expect(screen.queryByText("Pending approval")).toBeNull();
   });
 
   it("shows a one-field email modal once and persists the email", async () => {
@@ -179,7 +182,8 @@ describe("InviteGate", () => {
     await waitFor(() => {
       expect(screen.queryByLabelText("Email")).toBeNull();
     });
-    expect(screen.getByText("Pending approval")).toBeTruthy();
+    expect(screen.getByText("Dashboard feed")).toBeTruthy();
+    expect(screen.getByRole("status")).toBeTruthy();
   });
 
   it('does not redirect on transient session-check failure and shows retry', async () => {

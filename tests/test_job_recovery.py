@@ -47,7 +47,9 @@ async def _insert_job(
 
 
 @pytest.mark.asyncio
-async def test_recovery_summary_scopes_to_content_type(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_recovery_summary_scopes_to_content_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     await _init_tmp_db(tmp_path, monkeypatch)
     await _insert_job("short_pending_stale", content_type="short", status="pending", age_minutes=20)
     await _insert_job("short_pending_fresh", content_type="short", status="pending", age_minutes=1)
@@ -92,6 +94,34 @@ async def test_retry_pending_uses_cutoff_task_mapping_and_scope(
         "skipped_non_retryable": 0,
     }
     assert enqueued == [{"task": "video", "job_id": "short_stale"}]
+
+
+@pytest.mark.asyncio
+async def test_held_jobs_are_invisible_to_pending_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _init_tmp_db(tmp_path, monkeypatch)
+    await _insert_job("held_stale", status="held", age_minutes=20)
+    enqueued: list[dict] = []
+
+    async def fake_enqueue(task: dict) -> None:
+        enqueued.append(task)
+
+    monkeypatch.setattr(job_recovery.queue, "enqueue", fake_enqueue)
+
+    assert await job_recovery.recovery_summary(1, "short") == {
+        "stale_pending": 0,
+        "error_jobs": 0,
+        "stale_in_flight": 0,
+    }
+    assert await job_recovery.retry_pending(1, "short") == {
+        "scanned": 0,
+        "enqueued": 0,
+        "skipped_fresh": 0,
+        "skipped_non_retryable": 0,
+    }
+    assert enqueued == []
+    assert (await database.get_job("held_stale"))["status"] == "held"
 
 
 @pytest.mark.asyncio
@@ -148,7 +178,9 @@ async def test_retry_error_reaps_filters_retries_and_cancels_replacements(
 ) -> None:
     await _init_tmp_db(tmp_path, monkeypatch)
     await _insert_job("article_error", content_type="article", status="error")
-    await _insert_job("long_error", content_type="long", status="error", transcript="stored transcript")
+    await _insert_job(
+        "long_error", content_type="long", status="error", transcript="stored transcript"
+    )
     await _insert_job("short_error", content_type="short", status="error")
     await _insert_job("short_processing", content_type="short", status="processing", age_minutes=20)
     await _insert_job("long_processing", content_type="long", status="processing", age_minutes=20)

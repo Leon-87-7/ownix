@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
     CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document', 'link')),
-    CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),
+    CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
     CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
     CHECK(telegram_delivery IN ('off','on'))
@@ -1170,6 +1170,31 @@ _MIGRATIONS.append(
     ]
 )
 
+# v34 → v35: park pre-approval submissions as held jobs (#449).
+_V35_CREATE = _V33_CREATE.replace("jobs_v33", "jobs_v35").replace(
+    "CHECK(status IN ('pending','processing','transcript_done','enriching','done','error','cancelled')),",
+    "CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),")
+_V35_COLS = _V33_COLS
+
+
+async def _migrate_v34_v35(conn: aiosqlite.Connection) -> None:
+    """Widen the job status CHECK to include held via selective column copy."""
+    # Same FK dance as _migrate_v22_v23 (#231): with foreign_keys ON, DROP TABLE
+    # jobs implicit-DELETEs every row first, cascade-wiping the ON DELETE CASCADE
+    # children (document_outputs, job_thumbnails). PRAGMA foreign_keys is a no-op
+    # inside a transaction, so commit out of any open one before toggling.
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        await _rebuild_jobs_table(conn, _V35_CREATE, "jobs_v35", _V35_COLS)
+        await conn.commit()
+    finally:
+        await conn.rollback()
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+
+_MIGRATIONS.append(_migrate_v34_v35)
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1455,16 +1480,17 @@ async def create_job(
     message_id: int | None = None,
     template: str | None = None,
     freestyle_prompt: str | None = None,
+    status: str = "pending",
 ) -> str:
-    """Insert a new job row with status='pending' and return the job_id."""
+    """Insert a new job row with the requested initial status and return its ID."""
     job_id = generate_id()
     async with connection() as conn:
         await conn.execute(
             """
             INSERT INTO jobs (id, chat_id, message_id, url, content_type, status, template, freestyle_prompt)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, chat_id, message_id, url, content_type, template, freestyle_prompt),
+            (job_id, chat_id, message_id, url, content_type, status, template, freestyle_prompt),
         )
         await conn.commit()
     log.info("job_created", job_id=job_id, chat_id=chat_id, content_type=content_type)

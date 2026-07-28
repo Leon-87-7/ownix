@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from src import database, queue
 from src.config import settings
+from src.services.jobs import flush_held_jobs
 from src.telegram import sender
 from src.utils.logger import get_logger
 
@@ -265,6 +266,10 @@ async def _approve_pending_ids(target_ids: list[int]) -> int:
                 approved_rows.append(dict(row))
         await conn.commit()
     for row in approved_rows:
+        try:
+            await flush_held_jobs(int(row["tg_id"]))
+        except Exception:
+            log.exception("ops_batch_approval_held_job_flush_failed", tg_id=row.get("tg_id"))
         try:
             await sender.send_message(int(row["tg_id"]), "You're in, send a link.")
         except Exception:
