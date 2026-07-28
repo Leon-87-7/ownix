@@ -70,7 +70,7 @@ async def _login_telegram_user(payload: TelegramPayload, response: Response) -> 
         path="/",
     )
     status = await database.get_user_status(payload.id)
-    if status == "approved":
+    if status != "pending":
         response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
     else:
         response.set_cookie(

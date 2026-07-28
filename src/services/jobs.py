@@ -47,7 +47,7 @@ async def flush_held_jobs(chat_id: int) -> int:
                 (job_id, chat_id),
             )
             log.exception("held_job_enqueue_failed", chat_id=chat_id, job_id=job_id)
-            raise
+            continue
         enqueued += 1
     return enqueued
 

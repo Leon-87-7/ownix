@@ -462,6 +462,24 @@ class TestSessionMiddleware:
         status = asyncio.run(database.get_user_status(99999))
         assert status == "pending"
 
+    def test_blocked_telegram_login_does_not_receive_preview_cookie(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.TELEGRAM_BOT_TOKEN", TOKEN)
+        asyncio.run(database.set_user_status(100001, "blocked"))
+        payload = _make_payload(TOKEN, id="100001", username="blocked_user")
+
+        resp = auth_client.post("/api/auth/telegram", json=payload)
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        set_cookie = resp.headers.get("set-cookie", "")
+        assert "vig_session=" in set_cookie
+        assert "ownix_preview=1" not in set_cookie
+        assert "ownix_preview=" in set_cookie
+        assert "Max-Age=0" in set_cookie
+
     def test_dev_login_is_disabled_by_default(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
