@@ -245,7 +245,12 @@ export function InviteGate({
       if (checking) return;
       checking = true;
       try {
-        const res = await fetch('/api/auth/me');
+        let res: Response;
+        try {
+          res = await fetch('/api/auth/me');
+        } catch {
+          return;
+        }
         if (res.status === 401 || res.status === 403) {
           router.replace('/login');
           return;

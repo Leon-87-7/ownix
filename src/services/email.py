@@ -71,7 +71,10 @@ async def send_welcome_email(user: dict) -> bool:
                 "Your Feed is live here:",
                 feed_url,
                 "",
-                "Send the Ownix Telegram bot any link you want to save. We'll process it and add it to your Feed.",
+                (
+                    "Send the Ownix Telegram bot any link you want to save. "
+                    "We'll process it and add it to your Feed."
+                ),
                 "",
                 "Leon",
             ]
