@@ -459,8 +459,8 @@ function JobHeader({
           <StatusBadge label={job.status} />
         </div>
       </div>
-      {/* URL on the left, tag row right-aligned under the badges. */}
-      <div className="mt-1 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+      {/* URL, then the tag row stacked below it (not squeezed beside a wrapping URL). */}
+      <div className="mt-1 flex flex-col items-start gap-2">
         {/^https?:\/\//i.test(job.url) ? (
           <Tooltip
             content={job.url}
@@ -470,7 +470,7 @@ function JobHeader({
               href={job.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="min-w-0 flex-1 break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline"
+              className="max-w-full break-all font-mono text-xs text-muted transition-ui hover:text-signal hover:underline"
             >
               {displayUrl}
             </a>
@@ -480,13 +480,13 @@ function JobHeader({
             content={job.url}
             mono
           >
-            <p className="min-w-0 flex-1 break-all font-mono text-xs text-muted">
+            <p className="max-w-full break-all font-mono text-xs text-muted">
               {displayUrl}
             </p>
           </Tooltip>
         )}
         {tags && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {tags}
           </div>
         )}
