@@ -25,7 +25,7 @@ from src.config import settings
 from src.services import storage
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
-from src.services.jobs import create_and_enqueue_job, task_for_content_type
+from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_content_type
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
@@ -97,10 +97,14 @@ def _admin_label() -> str:
     return settings.ADMIN_CONTACT_NAME or "the operator"
 
 
-_INVITE_EMAIL_PROMPT_TEMPLATE = "VIG is invite-only — what's your email so {admin} can approve you?"
-_INVITE_WAITING_MESSAGE_TEMPLATE = "Still waiting on {admin}."
+_INVITE_EMAIL_PROMPT_TEMPLATE = (
+    "Ownix is invite-only — send your email so {admin} can review your request next."
+)
+_INVITE_WAITING_MESSAGE_TEMPLATE = (
+    "You're in the queue with {admin}. Links you send meanwhile are saved and process on approval."
+)
 _INVITE_APPROVED_MESSAGE = "You're in, send a link."
-_INVITE_BLOCKED_MESSAGE = "Access blocked."
+_INVITE_BLOCKED_MESSAGE = "Access blocked. There is no next step for this account."
 
 
 @dataclass
@@ -1401,7 +1405,31 @@ async def _invite_gate_allows(
         await send_message(chat_id, _INVITE_EMAIL_PROMPT_TEMPLATE.format(admin=_admin_label()))
         return False
 
-    await send_message(chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label()))
+    pipeline = detect_pipeline(text, frozenset(await database.list_allowed_domains(chat_id)))
+    if pipeline == "rejected":
+        # Only an actual URL attempt earns the error. Greetings, slash commands and
+        # the photo/document routes (which call the gate with text="") get the queue
+        # status instead — this is the waiting template's second send site.
+        if text.strip().lower().startswith(("http://", "https://")):
+            await send_message(
+                chat_id,
+                "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+                "Instagram Reels, TikTok videos, and allowlisted article domains.",
+            )
+        else:
+            await send_message(
+                chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label())
+            )
+        return False
+
+    url = normalize_repo_url(text) if pipeline == "repo" else text
+    # Same dedup rule as create_and_enqueue_job (ADR-0033): a waiting user resending
+    # the same link is the expected behavior, and must not queue it twice on approval.
+    if not await database.find_recent_job_by_url(chat_id, url):
+        await database.create_job(
+            chat_id=chat_id, url=url, content_type=pipeline, status="held"
+        )
+    await send_message(chat_id, "Saved — it processes the moment you're in.")
     return False
 
 
@@ -1703,6 +1731,11 @@ async def _ops_cb_invite_decision(
         return
     await ops_bot.answer_ops_callback(cq_id, status.capitalize())
     await _settle_ops_invite_card(chat_id, message_id, status, target_chat_id)
+    if status == "approved":
+        try:
+            await flush_held_jobs(target_chat_id)
+        except Exception:
+            log.exception("ops_invite.held_job_flush_failed", target_chat_id=target_chat_id)
     try:
         await send_message(
             target_chat_id,

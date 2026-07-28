@@ -254,6 +254,46 @@ async def test_fresh_install_sets_user_version(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_v35_migration_preserves_jobs_and_children_and_accepts_held(
+    tmp_path, monkeypatch
+) -> None:
+    from src import database as db
+
+    db_file = str(tmp_path / "v34.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await db.init_db()
+    pending_id = await db.create_job(chat_id=1, url="https://youtu.be/abc", content_type="long")
+    done_id = await db.create_job(chat_id=1, url="https://youtu.be/def", content_type="long")
+    await db.update_job_status(done_id, "done")
+    async with db.connection() as conn:
+        await conn.execute(
+            "INSERT INTO job_thumbnails (job_id, bytes, mime) VALUES (?, ?, ?)",
+            (pending_id, b"image", "image/jpeg"),
+        )
+        await conn.commit()
+        await conn.execute("PRAGMA foreign_keys=OFF")
+        await db._rebuild_jobs_table(conn, db._V33_CREATE, "jobs_v33", db._V33_COLS)
+        await conn.execute("PRAGMA user_version = 34")
+        await conn.commit()
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    await db.init_db()
+
+    assert (await db.get_job(pending_id))["status"] == "pending"
+    assert (await db.get_job(done_id))["status"] == "done"
+    held_id = await db.create_job(
+        chat_id=1, url="https://youtu.be/ghi", content_type="long", status="held"
+    )
+    assert (await db.get_job(held_id))["status"] == "held"
+    async with db.connection() as conn:
+        child = await (
+            await conn.execute("SELECT bytes FROM job_thumbnails WHERE job_id = ?", (pending_id,))
+        ).fetchone()
+    assert child is not None and child[0] == b"image"
+
+
+@pytest.mark.asyncio
 async def test_migration_from_version_zero_adds_columns(tmp_path, monkeypatch) -> None:
     """A DB at user_version=0 with an existing jobs table must have new columns added."""
     db_file = str(tmp_path / "old.db")
@@ -907,6 +947,7 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
 # link_tags (#382) + tag icon (#386) + palette remap (#383)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_link_tags_attach_detach_round_trip(temp_db):
     from src import database as db
@@ -918,7 +959,9 @@ async def test_link_tags_attach_detach_round_trip(temp_db):
         )
         await conn.commit()
 
-    tag = await db.create_tag(chat_id=1, name="svg", meaning="vector art", color="#f87171", icon="Code2")
+    tag = await db.create_tag(
+        chat_id=1, name="svg", meaning="vector art", color="#f87171", icon="Code2"
+    )
     assert tag["icon"] == "Code2"
 
     await db.attach_link_tag("l1", tag["id"])
@@ -943,7 +986,9 @@ async def test_update_tag_preserves_and_clears_icon(temp_db):
     stored = await db.get_tag(1, tag["id"])
     assert stored is not None and stored["icon"] == "Brain"
 
-    await db.update_tag(chat_id=1, tag_id=tag["id"], name="ui", meaning="", color="#60a5fa", icon=None)
+    await db.update_tag(
+        chat_id=1, tag_id=tag["id"], name="ui", meaning="", color="#60a5fa", icon=None
+    )
     stored = await db.get_tag(1, tag["id"])
     assert stored is not None and stored["icon"] is None
 
