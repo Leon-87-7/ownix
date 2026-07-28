@@ -199,9 +199,9 @@ describe('JobDetailPage', () => {
     expect(screen.getByText('https://www.youtube.com/watch?v=test123')).toBeTruthy();
   });
 
-  it('renders Open this file in Drive link', () => {
+  it('renders Open in Drive link', () => {
     render(<JobDetailPage />);
-    expect(screen.getByText(/open this file in drive/i)).toBeTruthy();
+    expect(screen.getByText(/open in drive/i)).toBeTruthy();
   });
 
   it('renders enrichment field labels', () => {

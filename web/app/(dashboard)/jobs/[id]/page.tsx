@@ -535,7 +535,7 @@ function JobActionsBar({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
           >
-            Open this file in Drive{' '}
+            Open in Drive{' '}
             <OwnixShareIcon
               className="h-[18px] w-[18px]"
               aria-hidden="true"
@@ -550,7 +550,7 @@ function JobActionsBar({
             className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
           >
             <GoogleDriveIcon className="h-3.5 w-3.5" />
-            Open Ownix folder{' '}
+            Ownix folder{' '}
             <OwnixShareIcon
               className="h-[18px] w-[18px]"
               aria-hidden="true"
