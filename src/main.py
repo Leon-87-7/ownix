@@ -85,6 +85,28 @@ async def _register_ops_webhook() -> None:
     )
 
 
+async def _drain_purge_outbox() -> None:
+    """Drain pending purge tasks from the outbox to Redis.
+
+    Runs every 30 seconds. Tasks are written to the outbox atomically with job deletion,
+    and this drainer moves them to Redis, ensuring purge tasks cannot be lost even when
+    Redis is temporarily unavailable.
+    """
+    pending = await database.list_pending_purge_tasks()
+    if not pending:
+        return
+    for record in pending:
+        task_id = record["id"]
+        task_payload = record["task_payload"]
+        try:
+            await queue.enqueue(task_payload)
+            await database.mark_purge_task_enqueued(task_id)
+            log.info("purge_task_drained", job_id=task_payload["job_id"], task_id=task_id)
+        except Exception:
+            # Retry on next drain cycle. Do not mark as enqueued.
+            log.exception("purge_task_drain_failed", job_id=task_payload["job_id"], task_id=task_id)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from src.config import settings
@@ -93,14 +115,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await database.init_db()
     from src import brain
 
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    scheduler = AsyncIOScheduler()
+    # Drain purge_tasks outbox to Redis every 30 seconds.
+    scheduler.add_job(_drain_purge_outbox, "interval", seconds=30)
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         await brain.init_db()
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-        scheduler = AsyncIOScheduler()
         scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
-        scheduler.start()
-        log.info("brain_scheduler_started")
+    scheduler.start()
+    log.info("scheduler_started")
     await _register_webhook()
     await _register_ops_webhook()
     log.info("api_ready")

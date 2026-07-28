@@ -10,7 +10,7 @@ from google.auth.exceptions import RefreshError
 
 from src.config import settings
 from src.services.google_auth import build_google_service, handle_google_refresh_error
-from src.services.google_workspace import user_sheet_id
+from src.services.google_workspace import existing_user_sheet_id, user_sheet_id
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -150,6 +150,56 @@ def _update_sync(tab_name: str, row_idx: int, values: list, chat_id: int | None 
         valueInputOption="USER_ENTERED",
         body={"values": [values]},
     ).execute()
+
+
+def _delete_row_by_url_sync(url: str, chat_id: int) -> bool:
+    """Delete the first Sheets row containing the job URL.
+
+    Uses existing_user_sheet_id() to avoid provisioning a new sheet just to delete
+    from it. Returns early when no sheet exists.
+    """
+    service = _build_service(chat_id)
+    spreadsheet_id = existing_user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID
+    if not spreadsheet_id:
+        # No user sheet and no fallback configured: nothing to delete from.
+        return False
+    metadata = service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))"
+    ).execute()
+    for sheet in metadata.get("sheets", []):
+        properties = sheet["properties"]
+        title = properties["title"]
+        rows = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, range=f"'{title}'!A:Z"
+        ).execute().get("values", [])
+        for row_index, row in enumerate(rows):
+            if url not in row:
+                continue
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={"requests": [{"deleteDimension": {"range": {
+                    "sheetId": properties["sheetId"],
+                    "dimension": "ROWS",
+                    "startIndex": row_index,
+                    "endIndex": row_index + 1,
+                }}}]},
+            ).execute()
+            return True
+    return False
+
+
+async def delete_row_by_url(url: str, *, chat_id: int, job_id: str) -> bool:
+    """Delete the first per-user Sheets row containing a job URL."""
+    try:
+        deleted = await asyncio.to_thread(_delete_row_by_url_sync, url, chat_id)
+    except RefreshError:
+        await handle_google_refresh_error(chat_id)
+        raise
+    if deleted:
+        log.info("sheets_job_purge_deleted", job_id=job_id)
+    else:
+        log.info("sheets_job_purge_row_not_found", job_id=job_id)
+    return deleted
 
 
 async def append_short_row(job: dict) -> None:

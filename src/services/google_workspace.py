@@ -80,3 +80,14 @@ def user_sheet_id(chat_id: int | None) -> str | None:
             drive = build_google_service("drive", "v3", ["https://www.googleapis.com/auth/drive.file"], chat_id=chat_id)
             drive.files().update(fileId=sheet_id, addParents=folder_id, fields="id", supportsAllDrives=True).execute()
         return sheet_id
+
+
+def existing_user_sheet_id(chat_id: int | None) -> str | None:
+    """Return the user's sheet ID if it exists, without provisioning a new one.
+
+    Use this for read-only or delete operations where creating a new sheet would be
+    inappropriate. Falls back to settings.GOOGLE_SHEETS_ID when no user sheet exists.
+    """
+    if chat_id is None or not has_google_connection_sync(chat_id):
+        return None
+    return _get(chat_id, SHEET_KEY)

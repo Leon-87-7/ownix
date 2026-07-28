@@ -9,9 +9,9 @@ from urllib.parse import parse_qs, urlparse
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from src import database
+from src import database, queue
 from src.api.deps import get_owned_job
-from src.services import job_recovery
+from src.services import drive, job_recovery
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
 from src.templates import PROMPT_TEMPLATES
@@ -588,3 +588,34 @@ async def get_job(job_id: str, request: Request) -> dict:
 
     fields = detail_fields_for(job.get("content_type", ""))
     return {k: job.get(k) for k in fields}
+
+
+@jobs_router.delete("/{job_id}", status_code=204)
+async def delete_job(job_id: str, request: Request) -> Response:
+    """Job delete: remove owned database state and durably record its Job purge.
+
+    The purge task is written to a transactional outbox in the same transaction as the
+    delete, ensuring it cannot be lost even if Redis is unavailable. A background drainer
+    moves tasks from the outbox to Redis.
+    """
+    job = await get_owned_job(job_id, request)
+    outputs = await database.list_document_outputs(job_id)
+    purge_task = {
+        "task": "job_purge",
+        "job_id": job_id,
+        "chat_id": job["chat_id"],
+        "drive_file_ids": [
+            file_id
+            for file_id in (
+                drive.file_id_from_url(job.get("drive_url")),
+                job.get("prd_auto_drive_file_id"),
+                job.get("prd_intent_drive_file_id"),
+            )
+            if file_id
+        ],
+        "gcs_keys": [output["gcs_key"] for output in outputs if output.get("gcs_key")],
+        "url": job.get("url"),
+    }
+    # Atomically delete the job and record the purge task in the outbox.
+    await database.delete_job(job_id, purge_payload=purge_task)
+    return Response(status_code=204)

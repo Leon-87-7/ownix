@@ -35,6 +35,7 @@ import { useRestrictedMode } from '@/lib/restricted/context';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -575,6 +576,9 @@ export default function JobDetailPage() {
   // hook that resolves the route id synchronously (matches doc-parser/[id]).
   const { id } = useParams<{ id: string }>();
   const { restricted } = useRestrictedMode();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const { job, fetchState } = useJobDetail(id, restricted);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     id,
@@ -646,6 +650,21 @@ export default function JobDetailPage() {
     );
   });
 
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteFailed(false);
+    try {
+      const response = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Job delete failed');
+      if (window.history.length > 1) router.back();
+      else router.push('/feed');
+    } catch {
+      setDeleteFailed(true);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <PageShell width="narrow">
       <JobHeader
@@ -705,6 +724,36 @@ export default function JobDetailPage() {
             onSave={handleSave}
           />
         ))}
+      {!restricted && (
+        <div className="border-t border-line pt-5">
+          <div className="flex items-stretch gap-4 max-[620px]:flex-col">
+            <div className="flex-shrink-0 space-y-2">
+              <ConfirmDialog
+                title="Permanently delete this job?"
+                description="This removes the job, its notes, tags and Brain link, and schedules its cloud files for deletion. This can't be undone."
+                confirmLabel="Delete permanently"
+                pending={deleting}
+                onConfirm={handleDelete}
+                trigger={
+                  <button className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-status-error transition-ui hover:bg-raised">
+                    Delete job
+                  </button>
+                }
+              />
+              {deleteFailed && (
+                <p className="text-xs text-status-error">
+                  Couldn&apos;t delete — try again.
+                </p>
+              )}
+            </div>
+            <div className="border-l border-line max-[620px]:hidden" />
+            <p className="text-sm text-body">
+              Permanently removes this job, its notes, tags and Brain link, and
+              its files in Drive, Sheets and storage. This can&apos;t be undone.
+            </p>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

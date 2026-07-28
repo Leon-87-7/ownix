@@ -461,6 +461,65 @@ def _insert_thumbnail_job(job_id: str, chat_id: int) -> None:
     asyncio.run(run())
 
 
+def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[dict] = []
+
+    async def fake_enqueue(task: dict) -> None:
+        captured.append(task)
+
+    monkeypatch.setattr(jobs.queue, "enqueue", fake_enqueue)
+    _insert_thumbnail_job("pending-delete", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET status='pending', "
+                "drive_url='https://drive.google.com/file/d/drive-1/view', "
+                "prd_auto_drive_file_id='drive-2', url='https://example.com/job' WHERE id=?",
+                ("pending-delete",),
+            )
+            await conn.execute(
+                "INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at) "
+                "VALUES (?, ?, ?, '2026-01-01', '2026-01-01', '2026-01-01')",
+                ("link-1", "https://example.com/link", "pending-delete"),
+            )
+            await conn.commit()
+        await database.add_document_output("pending-delete", "raw_txt", "parsed/key.txt")
+
+    asyncio.run(seed())
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    response = jobs_client.delete("/api/jobs/pending-delete")
+
+    assert response.status_code == 204
+    assert asyncio.run(jobs.database.get_job("pending-delete")) is None
+    assert asyncio.run(jobs.database._fetch_one(
+        "SELECT id FROM links WHERE source_job = ?", ("pending-delete",)
+    )) is None
+    assert captured == [{
+        "task": "job_purge",
+        "job_id": "pending-delete",
+        "chat_id": 1,
+        "drive_file_ids": ["drive-1", "drive-2"],
+        "gcs_keys": ["parsed/key.txt"],
+        "url": "https://example.com/job",
+    }]
+
+
+def test_delete_job_unknown_and_foreign_leave_rows_intact(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(jobs.queue, "enqueue", lambda _task: None)
+    _insert_thumbnail_job("owned-by-a", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_b)
+    assert jobs_client.delete("/api/jobs/owned-by-a").status_code == 403
+    assert asyncio.run(jobs.database.get_job("owned-by-a")) is not None
+    assert jobs_client.delete("/api/jobs/missing").status_code == 404
+    assert asyncio.run(jobs.database.get_job("owned-by-a")) is not None
+
+
 class TestJobThumbnailCaching:
     def test_first_request_sets_cache_control_and_etag(self, jobs_client: TestClient) -> None:
         _insert_thumbnail_job("s1", chat_id=1)

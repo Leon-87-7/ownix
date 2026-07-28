@@ -1,4 +1,4 @@
-﻿import { PreviewCard } from "@/components/feed/preview-card";
+import { PreviewCard } from "@/components/feed/preview-card";
 import type { JobSummary } from "@/components/feed/job-card";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
