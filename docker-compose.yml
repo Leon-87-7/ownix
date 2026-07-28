@@ -4,6 +4,8 @@ services:
     image: vig-app
     container_name: vig-api
     env_file: .env
+    environment:
+      - TZ=Asia/Jerusalem
     ports:
       - '8000:8000'
     volumes:
@@ -23,6 +25,8 @@ services:
     image: vig-app
     container_name: vig-worker
     env_file: .env
+    environment:
+      - TZ=Asia/Jerusalem
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

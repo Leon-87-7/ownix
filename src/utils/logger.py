@@ -9,11 +9,15 @@ from src.config import settings
 def configure_logging() -> None:
     level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
     logging.basicConfig(stream=sys.stdout, level=level, format="%(message)s")
+    # ponytail: APScheduler logs every tick of every interval job at INFO. Idle ticks
+    # carry no information; job failures are ERROR on the same logger and still show.
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso", utc=True),
+            # Local time — container TZ is set in docker-compose (Asia/Jerusalem).
+            structlog.processors.TimeStamper(fmt="iso", utc=False),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
