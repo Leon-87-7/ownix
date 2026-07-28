@@ -37,7 +37,7 @@ Two things made "just `DELETE FROM jobs`" wrong:
 
 A third problem is timing: there is no live cancellation in this system. The
 worker checks only process-level `asyncio.CancelledError`, and the video
-pipeline is not idempotent (see invariant 8 / ADR-0010). Deleting a `pending`
+pipeline is not idempotent (see invariant 12 / ADR-0010). Deleting a `pending`
 job would leave its envelope in Redis and let the whole pipeline run afterwards,
 uploading brand-new Drive and Sheets artifacts for a job the user just purged.
 

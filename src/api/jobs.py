@@ -592,7 +592,12 @@ async def get_job(job_id: str, request: Request) -> dict:
 
 @jobs_router.delete("/{job_id}", status_code=204)
 async def delete_job(job_id: str, request: Request) -> Response:
-    """Job delete: remove owned database state and enqueue its Job purge."""
+    """Job delete: remove owned database state and durably record its Job purge.
+
+    The purge task is written to a transactional outbox in the same transaction as the
+    delete, ensuring it cannot be lost even if Redis is unavailable. A background drainer
+    moves tasks from the outbox to Redis.
+    """
     job = await get_owned_job(job_id, request)
     outputs = await database.list_document_outputs(job_id)
     purge_task = {
@@ -611,11 +616,6 @@ async def delete_job(job_id: str, request: Request) -> Response:
         "gcs_keys": [output["gcs_key"] for output in outputs if output.get("gcs_key")],
         "url": job.get("url"),
     }
-    await database.delete_job(job_id)
-    try:
-        await queue.enqueue(purge_task)
-    except Exception:
-        # Job purge is best-effort: queue/cloud availability never resurrects
-        # database state or turns the user's completed Job delete into an error.
-        log.exception("job_purge_enqueue_failed", job_id=job_id)
+    # Atomically delete the job and record the purge task in the outbox.
+    await database.delete_job(job_id, purge_payload=purge_task)
     return Response(status_code=204)

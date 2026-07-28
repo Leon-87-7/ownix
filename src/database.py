@@ -288,6 +288,17 @@ CREATE INDEX IF NOT EXISTS idx_document_outputs_job_id ON document_outputs(job_i
 -- Singular kinds (raw_txt/raw_md/summary/clean) are one-per-job and upserted;
 -- freestyle accumulates as history, so it's excluded from the uniqueness rule.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_document_outputs_singular ON document_outputs(job_id, kind) WHERE kind <> 'freestyle';
+
+-- Transactional outbox for durable Job purge enqueuing.
+CREATE TABLE IF NOT EXISTS purge_tasks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          TEXT NOT NULL,
+    chat_id         INTEGER NOT NULL,
+    task_payload    TEXT NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    enqueued_at     TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_purge_tasks_enqueued ON purge_tasks(enqueued_at);
 """
 
 
@@ -1143,6 +1154,21 @@ async def _migrate_v32_v33(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v32_v33)
+
+# v33 → v34: purge_tasks outbox for durable Job purge enqueuing (issue #2)
+_MIGRATIONS.append(
+    [
+        """CREATE TABLE IF NOT EXISTS purge_tasks (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id          TEXT NOT NULL,
+            chat_id         INTEGER NOT NULL,
+            task_payload    TEXT NOT NULL,
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            enqueued_at     TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_purge_tasks_enqueued ON purge_tasks(enqueued_at)",
+    ]
+)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -2190,11 +2216,20 @@ async def delete_space(*, chat_id: int, space_id: str) -> bool:
     )
 
 
-async def delete_job(job_id: str) -> bool:
-    """Hard-delete a job and manually de-index its Brain links atomically."""
+async def delete_job(job_id: str, purge_payload: dict[str, Any] | None = None) -> bool:
+    """Hard-delete a job and manually de-index its Brain links atomically.
+
+    If purge_payload is provided, it is written to the purge_tasks outbox in the same
+    transaction, ensuring durable purge acceptance before the delete commits.
+    """
     async with connection() as conn:
         cursor = await conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
+        if purge_payload:
+            await conn.execute(
+                "INSERT INTO purge_tasks (job_id, chat_id, task_payload) VALUES (?, ?, ?)",
+                (purge_payload["job_id"], purge_payload["chat_id"], json.dumps(purge_payload)),
+            )
         await conn.commit()
         return cursor.rowcount > 0
 
@@ -2219,6 +2254,20 @@ async def remove_space_url(*, space_id: str, job_id: str) -> bool:
             (space_id, job_id),
         )
         > 0
+    )
+
+
+async def list_pending_purge_tasks() -> list[dict[str, Any]]:
+    """Return all purge tasks that have not yet been enqueued to Redis."""
+    rows = await _fetch_all("SELECT id, task_payload FROM purge_tasks WHERE enqueued_at IS NULL ORDER BY created_at")
+    return [{"id": row["id"], "task_payload": json.loads(row["task_payload"])} for row in rows]
+
+
+async def mark_purge_task_enqueued(task_id: int) -> None:
+    """Mark a purge task as successfully enqueued to Redis."""
+    await _execute(
+        "UPDATE purge_tasks SET enqueued_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (task_id,),
     )
 
 

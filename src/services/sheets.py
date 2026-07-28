@@ -10,7 +10,7 @@ from google.auth.exceptions import RefreshError
 
 from src.config import settings
 from src.services.google_auth import build_google_service, handle_google_refresh_error
-from src.services.google_workspace import user_sheet_id
+from src.services.google_workspace import existing_user_sheet_id, user_sheet_id
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -153,8 +153,16 @@ def _update_sync(tab_name: str, row_idx: int, values: list, chat_id: int | None 
 
 
 def _delete_row_by_url_sync(url: str, chat_id: int) -> bool:
+    """Delete the first Sheets row containing the job URL.
+
+    Uses existing_user_sheet_id() to avoid provisioning a new sheet just to delete
+    from it. Returns early when no sheet exists.
+    """
     service = _build_service(chat_id)
-    spreadsheet_id = user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID
+    spreadsheet_id = existing_user_sheet_id(chat_id) or settings.GOOGLE_SHEETS_ID
+    if not spreadsheet_id:
+        # No user sheet and no fallback configured: nothing to delete from.
+        return False
     metadata = service.spreadsheets().get(
         spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))"
     ).execute()

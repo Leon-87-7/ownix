@@ -12,7 +12,7 @@
    the two disagree.**
 2. `CONTEXT.md` — glossary entries **Job delete** and **Job purge** (next to
    **Clear failed**, which is the thing this is *not*), plus **Key Invariants**
-   8, 14 and 15. Use this vocabulary verbatim in code comments and log events.
+   12, 15 and 16. Use this vocabulary verbatim in code comments and log events.
 3. `CLAUDE.md` (repo root) — layout, component-folder rules, test/lint commands.
    Run pytest via the PowerShell path, never through the `rtk` hook
    (`.claude/rules/rtk-tests.md`).
@@ -95,7 +95,7 @@ must run **both** statements:
 - `DELETE FROM links WHERE source_job = ?` — the Brain de-index.
 
 FK enforcement is per-connection (`PRAGMA foreign_keys=ON` in `connection()`,
-invariant 12) — the cascade silently does nothing without it, so run both
+invariant 13) — the cascade silently does nothing without it, so run both
 statements inside one `connection()` context.
 
 **Frontend.** `web/app/(dashboard)/jobs/[id]/page.tsx`. `JobActionsBar` is
@@ -191,7 +191,7 @@ silently swallow every purge. Add the exemption set in this slice even though
 Why this matters: deleting a `pending` job leaves its envelope in the Redis
 `video_jobs` list (`src/queue.py:28`). Without the guard the worker pops it and
 runs the whole pipeline for a job that no longer exists — and because the video
-pipeline is not idempotent (invariant 8 / ADR-0010) that uploads fresh Drive
+pipeline is not idempotent (invariant 12 / ADR-0010) that uploads fresh Drive
 documents and appends a new Sheets row. The `UPDATE` writes that follow are
 silent no-ops against the missing row, so nothing surfaces the problem.
 

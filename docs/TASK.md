@@ -1059,7 +1059,7 @@ hard confirmation, permanently deletes the job from the DB (no soft-delete/trash
 tier) and leaves the page.
 
 **Resolved 2026-07-27 (grill).** Full rationale in ADR-0042; glossary terms
-[[Job delete]] / [[Job purge]] and invariants 14–15 in `CONTEXT.md`.
+[[Job delete]] / [[Job purge]] and invariants 15–16 in `CONTEXT.md`.
 
 **Backend — `DELETE /api/jobs/{job_id}`, 204 No Content**
 
