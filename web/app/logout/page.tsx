@@ -15,6 +15,10 @@ export default function LogoutPage() {
         <h2 className="text-balance text-2xl font-semibold tracking-[-0.02em] text-ink">
           Session closed
         </h2>
+        <p className="mt-2 text-center text-sm leading-6 text-body">
+          Ownix is signed out. Telegram may still remember this
+          browser&apos;s Telegram account for the next sign-in.
+        </p>
         <Link
           href="/login"
           className="mt-7 inline-flex min-h-10 items-center justify-center rounded-md bg-signal px-5 text-sm font-medium text-onsignal transition-[background-color,transform] duration-150 ease-out-quart hover:bg-signal-bright active:scale-[0.96] focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"

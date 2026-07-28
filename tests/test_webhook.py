@@ -527,6 +527,34 @@ async def test_invite_gate_captures_email_notifies_operator_and_keeps_pending(
 
 
 @pytest.mark.asyncio
+async def test_dev_invite_notification_uses_dev_callbacks_and_input_email(
+    temp_db, monkeypatch
+):
+    from src import database as db
+    from src.services import ops_bot
+
+    monkeypatch.setattr("src.config.settings.OPS_DEV_CHAT_IDS", "555")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "")
+    keyboard = AsyncMock()
+    monkeypatch.setattr("src.services.ops_bot.send_ops_keyboard", keyboard)
+
+    await db.upsert_user(tg_id=321, first_name="New Guy")
+
+    assert await ops_bot.notify_invite(321, "dev-input@example.com", dev=True)
+
+    keyboard.assert_awaited_once()
+    args, kwargs = keyboard.await_args
+    assert args[0] == 555
+    assert "LOCAL/DEV INVITE" in args[1]
+    assert "dev-input@example.com" in args[1]
+    assert "chat 321" in args[1]
+    buttons = args[2]
+    assert buttons[0][0]["callback_data"] == "ops_dev_invite_approve:321"
+    assert buttons[0][1]["callback_data"] == "ops_dev_invite_block:321"
+    assert kwargs.get("parse_mode") is None
+
+
+@pytest.mark.asyncio
 async def test_pending_user_with_email_saves_supported_url_as_held(temp_db, monkeypatch):
     from src import database as db
     from src.telegram import webhook
@@ -2115,6 +2143,50 @@ async def test_ops_unauthorized_invite_callback_does_not_mutate_user(client, mon
     assert any("botops-token/answerCallbackQuery" in call["url"] for call in fake_http.calls)
 
 
+async def test_ops_invite_callback_reports_missing_local_invite(client, monkeypatch) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:959067823", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user(959067823) is None
+    assert any(
+        call["json"].get("text") == "Invite not found on this backend."
+        for call in fake_http.calls
+    )
+
+
+async def test_ops_dev_invite_callback_allows_dev_chat_to_approve(client, monkeypatch) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "")
+    monkeypatch.setattr("src.config.settings.OPS_DEV_CHAT_IDS", "901")
+    await database.set_user_email(781, "dev-781@local.test")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_dev_invite_approve:781", chat_id=901),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(781) == "approved"
+    assert any(
+        call["json"].get("text") == "Approved"
+        for call in fake_http.calls
+        if "botops-token/answerCallbackQuery" in call["url"]
+    )
+    assert not any("bottest-token/sendMessage" in call["url"] for call in fake_http.calls)
+
+
 async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_message(
     client, monkeypatch
 ) -> None:
@@ -2122,7 +2194,9 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
     monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
     monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
-    await database.set_user_status(778, "pending")
+    welcome_email = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_welcome_email", welcome_email)
+    await database.set_user_email(778, "approved@example.com")
     held_id = await database.create_job(
         chat_id=778,
         url="https://youtu.be/dQw4w9WgXcQ",
@@ -2140,10 +2214,44 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
 
     assert response.status_code == 200
     assert await database.get_user_status(778) == "approved"
+    welcome_email.assert_awaited_once()
+    assert welcome_email.await_args.args[0]["email"] == "approved@example.com"
     assert (await database.get_job(held_id))["status"] == "pending"
     enqueue.assert_awaited_once_with({"task": "video", "job_id": held_id})
     user_messages = [c for c in fake_http.calls if c["json"].get("chat_id") == 778]
     assert user_messages and "bottest-token/sendMessage" in user_messages[0]["url"]
+    assert any(
+        "botops-token/editMessageReplyMarkup" in call["url"]
+        and call["json"]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Approved"
+        for call in fake_http.calls
+    )
+
+
+async def test_ops_invite_callback_answer_failure_does_not_abort_approval(
+    client, monkeypatch
+) -> None:
+    c, _, fake_http = client
+    monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
+    monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
+    monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    monkeypatch.setattr(
+        "src.services.ops_bot.sender.answer_callback_query",
+        AsyncMock(side_effect=RuntimeError("callback expired")),
+    )
+    welcome_email = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_welcome_email", welcome_email)
+    await database.set_user_email(782, "approved-late@example.com")
+
+    response = c.post(
+        "/webhook/ops",
+        json=_ops_callback("ops_invite_approve:782", chat_id=900),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "ops-secret"},
+    )
+
+    assert response.status_code == 200
+    assert await database.get_user_status(782) == "approved"
+    welcome_email.assert_awaited_once()
+    assert welcome_email.await_args.args[0]["email"] == "approved-late@example.com"
     assert any(
         "botops-token/editMessageReplyMarkup" in call["url"]
         and call["json"]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Approved"

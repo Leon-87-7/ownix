@@ -25,6 +25,7 @@ from src.config import settings
 from src.services import storage
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
+from src.services.email import send_welcome_email
 from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_content_type
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
@@ -1696,9 +1697,24 @@ async def _settle_ops_invite_card(
 _OPS_MUTATING_PREFIXES = {
     "ops_invite_approve",
     "ops_invite_block",
+    "ops_dev_invite_approve",
+    "ops_dev_invite_block",
     "ops_approve_pending",
     "ops_approve_pending_cancel",
 }
+
+_OPS_INVITE_DECISION_PREFIXES = {
+    "ops_invite_approve",
+    "ops_invite_block",
+    "ops_dev_invite_approve",
+    "ops_dev_invite_block",
+}
+
+
+def _ops_callback_can_mutate(prefix: str, sender_chat_id: int) -> bool:
+    if prefix.startswith("ops_dev_invite_"):
+        return ops_bot.can_admin(sender_chat_id) or ops_bot.can_dev_invite(sender_chat_id)
+    return ops_bot.can_admin(sender_chat_id)
 
 
 async def _ops_cb_invite_decision(
@@ -1709,7 +1725,7 @@ async def _ops_cb_invite_decision(
     except ValueError:
         await ops_bot.answer_ops_callback(cq_id, "Invalid invite action.")
         return
-    status = "approved" if prefix == "ops_invite_approve" else "blocked"
+    status = "approved" if prefix.endswith("_approve") else "blocked"
     async with database.connection() as conn:
         cur = await conn.execute(
             """
@@ -1722,12 +1738,17 @@ async def _ops_cb_invite_decision(
         )
         await conn.commit()
     if cur.rowcount != 1:
-        current_status = await database.get_user_status(target_chat_id)
+        current_user = await database.get_user(target_chat_id)
+        current_status = (
+            str(current_user.get("status")) if current_user is not None else "missing"
+        )
         if current_status in {"approved", "blocked"}:
             await _settle_ops_invite_card(chat_id, message_id, current_status, target_chat_id)
             await ops_bot.answer_ops_callback(cq_id, f"Already {current_status}.")
+        elif current_user is None:
+            await ops_bot.answer_ops_callback(cq_id, "Invite not found on this backend.")
         else:
-            await ops_bot.answer_ops_callback(cq_id, "Already decided.")
+            await ops_bot.answer_ops_callback(cq_id, "Invite is still pending. Try again.")
         return
     await ops_bot.answer_ops_callback(cq_id, status.capitalize())
     await _settle_ops_invite_card(chat_id, message_id, status, target_chat_id)
@@ -1736,10 +1757,39 @@ async def _ops_cb_invite_decision(
             await flush_held_jobs(target_chat_id)
         except Exception:
             log.exception("ops_invite.held_job_flush_failed", target_chat_id=target_chat_id)
+        try:
+            approved_user = await database.get_user(target_chat_id)
+            if approved_user is not None:
+                await send_welcome_email(approved_user)
+        except Exception:
+            log.exception("ops_invite.welcome_email_failed", target_chat_id=target_chat_id)
+    if prefix.startswith("ops_dev_invite_"):
+        log.info(
+            "ops_invite.dev_user_outcome_notification_skipped",
+            target_chat_id=target_chat_id,
+            status=status,
+        )
+        return
     try:
         await send_message(
             target_chat_id,
             _INVITE_APPROVED_MESSAGE if status == "approved" else _INVITE_BLOCKED_MESSAGE,
+        )
+    except httpx.HTTPStatusError as exc:
+        description = ""
+        with suppress(Exception):
+            description = str(exc.response.json().get("description") or "")
+        if "chat not found" in description.lower():
+            log.warning(
+                "ops_invite.user_outcome_chat_not_found",
+                target_chat_id=target_chat_id,
+                status=status,
+            )
+            return
+        log.exception(
+            "ops_invite.user_outcome_notification_failed",
+            target_chat_id=target_chat_id,
+            status=status,
         )
     except Exception:
         log.exception(
@@ -1781,7 +1831,7 @@ async def _handle_ops_callback(callback: dict) -> None:
     if prefix in _OPS_MUTATING_PREFIXES:
         sender_id = (callback.get("from") or {}).get("id")
         sender_chat_id = _int_or_none(sender_id)
-        if sender_chat_id is None or not ops_bot.can_admin(sender_chat_id):
+        if sender_chat_id is None or not _ops_callback_can_mutate(prefix, sender_chat_id):
             log.warning(
                 "ops_callback.unauthorized",
                 sender_id=sender_id,
@@ -1791,7 +1841,7 @@ async def _handle_ops_callback(callback: dict) -> None:
             await ops_bot.answer_ops_callback(cq_id, "Not authorized.")
             return
 
-    if prefix in {"ops_invite_approve", "ops_invite_block"}:
+    if prefix in _OPS_INVITE_DECISION_PREFIXES:
         await _ops_cb_invite_decision(cq_id, chat_id, message_id, prefix, payload)
     elif prefix == "ops_invite_status":
         await ops_bot.answer_ops_callback(cq_id, "Already decided.")

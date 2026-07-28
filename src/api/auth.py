@@ -43,7 +43,9 @@ class TelegramPayload(BaseModel):
     hash: str
 
 
-async def _login_telegram_user(payload: TelegramPayload, response: Response) -> dict:
+async def _login_telegram_user(
+    payload: TelegramPayload, response: Response, *, source: str | None = None
+) -> dict:
     await database.upsert_user(
         tg_id=payload.id,
         username=payload.username,
@@ -58,6 +60,8 @@ async def _login_telegram_user(payload: TelegramPayload, response: Response) -> 
         "username": payload.username,
         "photo_url": payload.photo_url,
     }
+    if source:
+        session_user["source"] = source
     session_id = await session_store.mint(session_user)
 
     response.set_cookie(
@@ -211,14 +215,7 @@ async def dev_login(response: Response) -> dict:
         auth_date=int(time.time()),
         hash="dev-login-bypasses-widget-hmac",
     )
-    result = await _login_telegram_user(payload, response)
-    await database.set_user_email(payload.id, f"dev-{payload.id}@local.test")
-    if settings.OPS_DEV_NOTIFICATIONS:
-        try:
-            await notify_operator_invite(payload.id, f"dev-{payload.id}@local.test", dev=True)
-        except Exception:
-            log.exception("invite.dev_operator_notification_failed", tg_id=payload.id)
-    return result
+    return await _login_telegram_user(payload, response, source="dev_login")
 
 
 @auth_router.post("/dev-approve")
@@ -269,8 +266,14 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
     await database.set_user_email(tg_id, email)
     status = await database.get_user_status(tg_id)
     if status == "pending":
+        is_dev_login = request.state.user.get("source") == "dev_login"
         try:
-            await notify_operator_invite(tg_id, email)
+            await notify_operator_invite(tg_id, email, dev=is_dev_login)
         except Exception:
-            log.exception("invite.operator_notification_failed", tg_id=tg_id)
+            log.exception(
+                "invite.dev_operator_notification_failed"
+                if is_dev_login
+                else "invite.operator_notification_failed",
+                tg_id=tg_id,
+            )
     return {"email": email, "status": status}

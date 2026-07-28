@@ -5,9 +5,16 @@ import { InviteGate, useSessionUser } from "./invite-gate";
 
 const navigationMock = vi.hoisted(() => ({
   replace: vi.fn(),
-  router: null as null | { replace: ReturnType<typeof vi.fn> },
+  refresh: vi.fn(),
+  router: null as null | {
+    replace: ReturnType<typeof vi.fn>;
+    refresh: ReturnType<typeof vi.fn>;
+  },
 }));
-navigationMock.router = { replace: navigationMock.replace };
+navigationMock.router = {
+  replace: navigationMock.replace,
+  refresh: navigationMock.refresh,
+};
 
 vi.mock("next/navigation", () => ({
   useRouter: () => navigationMock.router,
@@ -15,9 +22,11 @@ vi.mock("next/navigation", () => ({
 
 beforeEach(() => {
   navigationMock.replace.mockClear();
+  navigationMock.refresh.mockClear();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -50,6 +59,36 @@ describe("InviteGate", () => {
     expect(await screen.findByText("Dashboard feed")).toBeTruthy();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
     expect(navigationMock.replace).not.toHaveBeenCalledWith("/login");
+  });
+
+  it("still asks for email for restricted signed-in pending users", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: 1,
+              email: null,
+              status: "pending",
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    render(
+      <InviteGate
+        restricted
+        hasSession
+      >
+        <div>Preview feed</div>
+      </InviteGate>,
+    );
+
+    expect(await screen.findByRole("dialog", { name: /email required/i })).toBeTruthy();
+    expect(screen.queryByText("Preview feed")).toBeNull();
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/auth/me");
   });
 
   it("renders dashboard children for approved users with an email", async () => {
@@ -138,9 +177,50 @@ describe("InviteGate", () => {
 
     expect(await screen.findByText("Dashboard feed")).toBeTruthy();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "You're in the queue — approval usually within a few hours; you'll get a Telegram hello. Meanwhile: install the app, send the bot your first link.",
+      "You're in the queue — approval usually within a few hours; you'll get a Telegram hello and this page will unlock automatically. Meanwhile: install the app, send the bot your first link.",
     );
     expect(screen.queryByText("Pending approval")).toBeNull();
+  });
+
+  it("auto-refreshes the app shell when a pending user becomes approved", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 1,
+            email: "user@example.com",
+            status: "pending",
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 1,
+            email: "user@example.com",
+            status: "approved",
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <InviteGate>
+        <div>Dashboard feed</div>
+      </InviteGate>,
+    );
+
+    expect(await screen.findByText("Dashboard feed")).toBeTruthy();
+
+    window.dispatchEvent(new Event("focus"));
+
+    await waitFor(() => {
+      expect(navigationMock.refresh).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("shows a one-field email modal once and persists the email", async () => {

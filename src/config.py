@@ -105,6 +105,16 @@ class Settings(BaseSettings):
     # Falls back to generic phrasing when unset so a fresh deploy is not stuck with a specific name.
     ADMIN_CONTACT_NAME: str = ""
 
+    # Transactional email. Optional; approval still succeeds if unset or if
+    # sending fails.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "Ownix"
+    SMTP_STARTTLS: bool = True
+
     # Comma-separated proxy peer CIDRs whose forwarded client-IP headers may be
     # trusted for anonymous preview rate limiting. Keep narrow unless the API is
     # only reachable through that proxy network.

@@ -31,7 +31,10 @@ function SkeletonPreviewCard() {
 
 export function SkeletonList() {
   return (
-    <div className="space-y-2" aria-hidden="true">
+    <div
+      className="space-y-2"
+      aria-hidden="true"
+    >
       <SkeletonRow />
       <SkeletonRow />
       <SkeletonRow />
@@ -43,7 +46,10 @@ export function SkeletonList() {
 
 export function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+    <div
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      aria-hidden="true"
+    >
       <SkeletonPreviewCard />
       <SkeletonPreviewCard />
       <SkeletonPreviewCard />
@@ -54,15 +60,39 @@ export function SkeletonGrid() {
   );
 }
 
-export function SkeletonLine({ width = 'w-2/3' }: { width?: string }) {
-  return <div className={`h-4 ${width} animate-pulse rounded bg-raised`} aria-hidden="true" />;
+export function SkeletonLine({
+  width = 'w-2/3',
+}: {
+  width?: string;
+}) {
+  return (
+    <div
+      className={`h-4 ${width} animate-pulse rounded bg-raised`}
+      aria-hidden="true"
+    />
+  );
 }
 
-export function SkeletonBlock({ className = 'h-24 w-full' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg border border-line bg-surface ${className}`} aria-hidden="true" />;
+export function SkeletonBlock({
+  className = 'h-24 w-full',
+}: {
+  className?: string;
+}) {
+  return (
+    <div
+      className={`animate-pulse rounded-lg border border-line bg-surface ${className}`}
+      aria-hidden="true"
+    />
+  );
 }
 
-export function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function ErrorBanner({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-line bg-status-error-tint px-4 py-3">
       <p className="text-sm text-status-error">{message}</p>
@@ -76,12 +106,20 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry: ()
   );
 }
 
-export function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () => void }) {
+export function EmptyState({
+  hasFilters,
+  onClear,
+}: {
+  hasFilters: boolean;
+  onClear: () => void;
+}) {
   return (
     <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
       {hasFilters ? (
         <>
-          <p className="text-sm font-medium text-ink">No jobs match these filters</p>
+          <p className="text-sm font-medium text-ink">
+            No jobs match these filters
+          </p>
           <p className="mt-1 text-sm text-body">
             Try widening the search, or clear everything below.
           </p>
@@ -96,7 +134,8 @@ export function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onCle
         <>
           <p className="text-sm font-medium text-ink">No jobs yet</p>
           <p className="mt-1 text-sm text-body">
-            Send a video, article, or repo URL to the Telegram bot — it will land here as it processes.
+            Send a video, article, or repo URL to the Telegram bot —
+            it will land here as it processes.
           </p>
         </>
       )}
