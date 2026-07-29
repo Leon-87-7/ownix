@@ -1,18 +1,27 @@
 'use client';
 
-import { useRef } from 'react';
+import { Fragment, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { Share, Sparkles, Search } from 'lucide-react';
+import { Share, Fingerprint, Search } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 // The product's canonical triad (CONTEXT.md `Restricted mode`, AppHeader rhythm
-// block): Collect / Own / Recall mapped to Index / Feed / Brain. These are the
-// same three beats ADR-0038's mini-game taught by making the visitor perform
-// them — share -> AI pass -> store/reuse — expressed as a scroll-driven stepper
-// instead of a Rive state machine.
+// block): Collect / Own / Recall. These are the same three beats ADR-0038's
+// mini-game taught by making the visitor perform them — share -> AI pass ->
+// store/reuse — expressed as a scroll-driven stepper instead of a Rive state
+// machine.
+//
+// Surfaces are Index / Feed / SEARCH, deliberately NOT Index / Feed / Brain.
+// The Second Brain is the *shared* semantic link graph; step 3 describes
+// searching your own private Index, so labelling it BRAIN would sell a private
+// action as the collective layer. Search is where the recall actually happens.
+//
+// `body` is an array of lines, not a string with "\n" — JSX collapses newlines
+// inside a string to a single space, so the break has to be structural. One
+// sentence per line: the breaks are authored rhythm, not wrapping.
 const STEPS = [
   {
     id: 'collect',
@@ -20,26 +29,38 @@ const STEPS = [
     surface: 'INDEX',
     icon: Share,
     title: 'Share it from wherever you found it.',
-    body: 'Instagram, YouTube, TikTok, GitHub, a PDF, a plain link. Hit share, pick Ownix. Three taps, then keep scrolling.',
-    meta: 'short ◉ long ◉ article ◉ repo ◉ document',
+    body: [
+      'Instagram, YouTube, TikTok, GitHub, a PDF, a plain link.',
+      'Hit share, pick Ownix, keep scrolling.',
+    ],
+    meta: 'reels ◉ videos ◉ articles ◉ repos ◉ PDFs',
   },
   {
     id: 'own',
     kicker: 'OWN',
     surface: 'FEED',
-    icon: Sparkles,
-    title: "Ownix reads it so you don't have to.",
-    body: 'Transcript, summary, every link it mentioned, tags. Yours in about a minute — and it lands in your own Google Drive as markdown.',
+    icon: Fingerprint,
+    title: 'The AI reads it. You still know it.',
+    body: [
+      'AI usually puts your own material at arm’s length.',
+      'Not here: ',
+      'your prompt decides what gets pulled out,',
+      'your tags decide what it means to you.',
+      'Markdown in your own Google Drive, about a minute later.',
+    ],
     meta: 'transcript ◉ summary ◉ links ◉ tags',
   },
   {
     id: 'recall',
     kicker: 'RECALL',
-    surface: 'BRAIN',
+    surface: 'SEARCH',
     icon: Search,
-    title: 'Find it again — even from a glimpse.',
-    body: 'Search by title, tag, thumbnail, or whatever you actually remember. Copy one segment, or take the whole .md straight into your AI.',
-    meta: 'search ◉ copy ◉ export',
+    title: 'Find it again, even from a glimpse.',
+    body: [
+      'Search by title, tag, or whatever you actually remember - or just scan the feed and spot the thumbnail.',
+      'Copy one segment, or take the whole .md straight into your AI.',
+    ],
+    meta: 'copy a segment ◉ copy all ◉ grab the .md',
   },
 ] as const;
 
@@ -61,6 +82,7 @@ const STEPS = [
 export function OnboardingStepper() {
   const root = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const cta = useRef<HTMLDivElement>(null);
 
   useGSAP(
     () => {
@@ -102,14 +124,23 @@ export function OnboardingStepper() {
           // autoAlpha: autoAlpha sets visibility:hidden, which would pull the
           // un-reached steps out of the accessibility tree. Screen readers
           // should get all three in order regardless of scroll position.
-          gsap.set(steps, {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-          });
+          // Stack the steps into a single grid cell rather than absolutely
+          // positioning them. The cell sizes itself to the tallest step, so the
+          // stage needs no hand-tuned min-height — which would otherwise go
+          // stale the moment any step's copy or the CTA changes height.
+          gsap.set(stage.current, { display: 'grid' });
+          gsap.set(steps, { gridArea: '1 / 1' });
           gsap.set(steps.slice(1), { opacity: 0, y: 28 });
           gsap.set(fills.slice(1), { scaleX: 0 });
+
+          // autoAlpha (opacity + visibility) is deliberate HERE, and is exactly
+          // what the steps must NOT use. A cta the visitor hasn't reached yet
+          // should be genuinely absent — not announced by a screen reader, not
+          // reachable by Tab, not clickable through a transparent layer.
+          // `visibility: hidden` covers all three in one property and reverses
+          // cleanly when the visitor scrubs back up. Step *content* is the
+          // opposite case: it should stay readable regardless of scroll.
+          if (cta.current) gsap.set(cta.current, { autoAlpha: 0 });
 
           const tl = gsap.timeline({
             scrollTrigger: {
@@ -145,7 +176,11 @@ export function OnboardingStepper() {
             })
               // The rail fill spans the whole hand-off so progress stays legible
               // during the gap when neither step is visible.
-              .to(fills[i], { scaleX: 1, duration: 0.7, ease: 'none' }, '<')
+              .to(
+                fills[i],
+                { scaleX: 1, duration: 0.7, ease: 'none' },
+                '<',
+              )
               .to(steps[i], {
                 opacity: 1,
                 y: 0,
@@ -153,6 +188,17 @@ export function OnboardingStepper() {
                 ease: 'power2.out',
               })
               .addLabel(STEPS[i].id);
+          }
+
+          // Rides in with the final step's fade-in ('<' = start of the previous
+          // tween), so the exit appears exactly when the story finishes rather
+          // than costing the visitor extra scroll to discover.
+          if (cta.current) {
+            tl.to(
+              cta.current,
+              { autoAlpha: 1, duration: 0.35, ease: 'power2.out' },
+              '<',
+            );
           }
         },
       );
@@ -163,9 +209,15 @@ export function OnboardingStepper() {
   return (
     <div ref={root}>
       {/* Progress rail. Signal marks current position, consistent with active
-          nav (DESIGN.md: amber = act here / you are here), not decoration. */}
+          nav (DESIGN.md: amber = act here / you are here), not decoration.
+
+          Shown only when the timeline is actually driving it — same condition
+          as the matchMedia query. Stacked visitors (mobile, reduced motion,
+          no JS) see every step at once, so a three-segment progress indicator
+          sitting permanently at 100% would be decoration claiming to be state,
+          and it spends signal amber on something that isn't a position. */}
       <ol
-        className="mb-8 grid grid-cols-3 gap-2"
+        className="mb-8 hidden grid-cols-3 gap-2 sm:motion-safe:grid"
         aria-hidden="true"
       >
         {STEPS.map((step) => (
@@ -176,45 +228,108 @@ export function OnboardingStepper() {
                 className="h-full w-full origin-left bg-signal"
               />
             </div>
-            <span className="mt-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+            {/* 0.06em, not DESIGN.md's +0.4px. That token is specified for
+                badge text, where caps sit inside a tinted pill; standing bare
+                at 11px it works out to 0.036em, below the 5% floor all-caps
+                needs before the letters start crowding. */}
+            <span className="mt-2 block font-mono text-mono-label font-medium tracking-[0.06em] text-muted">
               {step.kicker}
             </span>
           </li>
         ))}
       </ol>
 
-      {/* Stage. min-height reserves the tallest step so the pinned viewport
-          doesn't resize as steps swap; in the stacked fallback it's harmless. */}
+      {/* Stage. Flow-stacked with real spacing by default; GSAP flips it to a
+          single-cell grid when pinning, which auto-sizes to the tallest step.
+          No fixed height in either mode, so cards fit whatever the copy is. */}
       <div
         ref={stage}
-        className="relative sm:min-h-[300px]"
+        className="flex flex-col gap-6"
       >
-        {STEPS.map((step) => {
+        {STEPS.map((step, i) => {
           const Icon = step.icon;
+          const isLast = i === STEPS.length - 1;
           return (
             <article
               key={step.id}
               data-step
-              className="mb-6 rounded-lg border border-line bg-surface p-6 last:mb-0 sm:mb-0"
+              className="rounded-lg border border-line bg-surface p-5 sm:p-6"
             >
               <div className="mb-3 flex items-center gap-3">
                 <Icon
                   aria-hidden="true"
                   className="h-5 w-5 shrink-0 text-contrasignal"
                 />
-                <span className="font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
+                <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
                   {step.surface}
                 </span>
               </div>
-              <h3 className="text-pretty mb-3 max-w-[24ch] text-[clamp(20px,3vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink">
+              {/* balance, not pretty: `pretty` only fixes orphans, which is a
+                  prose problem. A 2-3 line heading wants even line lengths.
+
+                  Capped at 24px, not 28px. The section h2 above tops out at
+                  28px, so the old clamp made this h3 exactly the same size as
+                  its own parent heading at any viewport ≥933px — a hierarchy
+                  inversion, and the two sit on screen together while pinned. */}
+              <h3 className="text-balance mb-3 max-w-[24ch] text-[clamp(1.25rem,2.6vw,1.5rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
                 {step.title}
               </h3>
-              <p className="text-pretty max-w-[58ch] text-[15px] leading-relaxed text-body">
-                {step.body}
+              {/* <br /> rather than separate <p>s: these are one paragraph
+                  broken for rhythm, not three paragraphs. Screen readers read
+                  it as continuous prose either way, and it keeps a single
+                  measure/leading for the block. */}
+              {/* 16px, up from 15px. This is the landing page — brand register,
+                  where the text IS the product — not the dashboard's dense
+                  14px data surfaces. The hero paragraph is already `text-base`,
+                  so 15px here made the same role two different sizes.
+
+                  +0.01em is light-on-dark compensation: pale type on a dark
+                  plate reads lighter and tighter than it measures. `leading-
+                  relaxed` already covers the line-height half of that. */}
+              <p className="text-pretty max-w-[58ch] text-base leading-relaxed tracking-[0.01em] text-body">
+                {step.body.map((line, li) => (
+                  <Fragment key={`${step.id}-${li}`}>
+                    {li > 0 && <br />}
+                    {line}
+                  </Fragment>
+                ))}
               </p>
-              <p className="mt-4 font-mono text-[11px] text-muted">
+              {/* DESIGN.md's mono-meta token (12px/400), not mono-label
+                  (11px/500). This line is metadata, not a label — it was
+                  borrowing the label's size with the meta's weight, which is
+                  neither token and left three different roles sharing 11px. */}
+              <p className="mt-4 font-mono text-xs text-muted">
                 {step.meta}
               </p>
+
+              {/* The pinned section is the most engaged a visitor gets, and
+                  without an exit it dead-ends into #showcase with the hero CTA
+                  long since scrolled away. Ghost treatment, not signal — this
+                  is the section's escape hatch, not a second primary CTA
+                  competing with the hero.
+
+                  Lives inside the final step's card, but carries its own ref so
+                  the timeline can drive it with `autoAlpha` independently of the
+                  step's `opacity`. That distinction is load-bearing: the step
+                  fades on opacity alone so its text stays in the accessibility
+                  tree at all times, whereas this link must be genuinely absent
+                  until reached — `visibility: hidden` keeps it unfocusable and
+                  unclickable behind the earlier steps. In the stacked fallback
+                  the matchMedia branch never runs, so it simply renders at the
+                  bottom of step three's card. */}
+              {isLast && (
+                <div
+                  ref={cta}
+                  className="mt-5"
+                >
+                  <a
+                    href="#invite"
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
+                  >
+                    Get an invite
+                  </a>
+                </div>
+              )}
             </article>
           );
         })}

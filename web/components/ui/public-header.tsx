@@ -37,7 +37,7 @@ export default function PublicHeader() {
         </Link>
         <Link
           href="/login"
-          className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${focusRing}`}
+          className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${focusRing}`}
         >
           Sign in
         </Link>

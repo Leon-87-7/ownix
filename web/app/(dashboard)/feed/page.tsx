@@ -455,7 +455,7 @@ function FeedPageContent() {
         <section className="rounded-lg border border-line bg-surface p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-mono text-[11px] font-medium text-muted">
+              <p className="font-mono text-mono-label font-medium text-muted">
                 Connected service
               </p>
               <h2 className="mt-1 text-lg font-semibold text-ink">
@@ -469,7 +469,7 @@ function FeedPageContent() {
             <a
               href="/api/google/connect"
               aria-label="Connect Google"
-              className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
+              className="inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
             >
               Connect to <GoogleIcon className="ml-2 h-4 w-4" />
             </a>
@@ -549,7 +549,7 @@ function FeedPageContent() {
           <div className="mb-3 flex items-center gap-3">
             <h2 className="text-base font-semibold text-ink">Jobs</h2>
             <span
-              className="inline-flex items-center rounded border border-line px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-wider text-muted"
+              className="inline-flex items-center rounded border border-line px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-wider text-muted"
               aria-live="polite"
             >
               {countLabel}

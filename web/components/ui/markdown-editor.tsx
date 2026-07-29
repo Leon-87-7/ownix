@@ -75,7 +75,7 @@ export default function MarkdownEditor({ initialMarkdown, onSave }: MarkdownEdit
 
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
-      <span className="mb-2 block font-mono text-[11px] font-medium uppercase tracking-wider text-muted">
+      <span className="mb-2 block font-mono text-mono-label font-medium uppercase tracking-wider text-muted">
         Notes
       </span>
       <div

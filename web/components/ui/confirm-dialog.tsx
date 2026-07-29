@@ -48,7 +48,7 @@ export function ConfirmDialog({
               ref={cancelRef}
               type="button"
               disabled={pending}
-              className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised disabled:opacity-50"
+              className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised disabled:opacity-50"
             >
               Cancel
             </button>
@@ -60,7 +60,7 @@ export function ConfirmDialog({
               await onConfirm();
               setOpen(false);
             }}
-            className="h-8 rounded-md bg-status-error px-3 text-[13px] font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
+            className="h-8 rounded-md bg-status-error px-3 text-button font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
           >
             {pending ? 'Deleting…' : confirmLabel}
           </button>

@@ -43,7 +43,7 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
             type="button"
             onClick={handleDelete}
             disabled={deleting}
-            className="text-[13px] font-medium text-status-error transition-ui hover:underline disabled:opacity-50"
+            className="text-button font-medium text-status-error transition-ui hover:underline disabled:opacity-50"
           >
             {deleting ? "Deleting…" : "Confirm"}
           </button>
@@ -51,7 +51,7 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
             type="button"
             onClick={() => setConfirming(false)}
             disabled={deleting}
-            className="text-[13px] font-medium text-muted transition-ui hover:text-ink"
+            className="text-button font-medium text-muted transition-ui hover:text-ink"
           >
             Cancel
           </button>

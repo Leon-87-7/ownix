@@ -43,8 +43,8 @@ export const metadata: Metadata = {
 // pointer-device buttons the design system specifies.
 const touchTarget =
   '[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5';
-const btnGhost = `inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-[13px] font-medium leading-none text-ink transition-ui hover:bg-raised ${touchTarget}`;
-const btnSignal = `inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-[13px] font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep ${touchTarget}`;
+const btnGhost = `inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised ${touchTarget}`;
+const btnSignal = `inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep ${touchTarget}`;
 const linkClasses =
   'inline-block transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface [@media(pointer:coarse)]:py-3';
 
@@ -94,7 +94,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
+              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
             >
               Sign in
             </Link>
@@ -118,7 +118,11 @@ export default function LandingPage() {
             className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(13,14,16,0.75)_0%,rgba(13,14,16,0)_100%)] lg:bg-[linear-gradient(100deg,rgba(13,14,16,0.96)_0%,rgba(13,14,16,0.88)_55%,rgba(13,14,16,0.45)_80%,rgba(13,14,16,0.12)_100%)]"
           />
           <div className="mx-auto max-w-[960px] px-6">
-            <h1 className="hero-rise mb-6 max-w-[16ch] text-[clamp(30px,6vw,52px)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
+            {/* Golden-ratio hero. The paragraph below is 1rem, so the floor is
+                exactly φ × body (1.618rem) and the ceiling is φ² (2.618rem) —
+                both ends derived from the body size rather than picked by eye.
+                Replaces an arbitrary 30→52px clamp. */}
+            <h1 className="hero-rise mb-6 max-w-[16ch] text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
               You watched it. You liked it.{' '}
               <span className="text-muted">You lost it.</span>
             </h1>
@@ -160,18 +164,20 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="demo"
-              className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Three taps. Nothing new to learn.
             </h2>
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
               It&apos;s the share sheet you already use - aimed at
               Ownix instead of a friend. Mid-doomscroll, mid-commute,
-              mid-anything: share it, keep scrolling. Ownix does the
-              reading.
+              mid-anything.
             </p>
 
             <OnboardingStepper />
+            <div className="mt-6 min-w-0 flex-1">
+              <WordmarkMarquee />
+            </div>
 
             <div
               role="group"
@@ -181,7 +187,7 @@ export default function LandingPage() {
               {indexBadges.map(([label, color]) => (
                 <span
                   key={label}
-                  className={`rounded-sm border border-line px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-[0.4px] ${color}`}
+                  className={`rounded-sm border border-line px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-[0.4px] ${color}`}
                 >
                   {label}
                 </span>
@@ -197,12 +203,12 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="showcase"
-              className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Doomscroll in, engineering standards out.
             </h2>
 
-            <div className="mb-8 max-w-[68ch] text-[15px] leading-relaxed">
+            <div className="mb-8 max-w-[68ch] text-prose leading-relaxed">
               <p className="text-pretty mb-4">
                 &quot;&ensp;An Instagram reel about post-launch
                 support was about to fly past me, like everything
@@ -211,7 +217,7 @@ export default function LandingPage() {
                 the support-playbook rules for another project
                 I&apos;m building.&ensp;&quot;
               </p>
-              <p className="text-pretty mb-4 ml-2 border-l-2 border-line pl-4 text-[15px] leading-relaxed text-muted">
+              <p className="text-pretty mb-4 ml-2 border-l-2 border-line pl-4 text-prose leading-relaxed text-muted">
                 A reel became rules in a production codebase.
               </p>
               <p className="flex items-center gap-2 font-mono text-xs text-muted">
@@ -237,10 +243,10 @@ export default function LandingPage() {
                 />
 
                 <div className="flex items-center justify-between border-b border-line px-3 py-2">
-                  <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.4px] text-muted">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
                     20260711_144906_48FB971E_transcript.md
                   </span>
-                  <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-[0.4px] text-status-done">
+                  <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-[0.4px] text-status-done">
                     DONE
                   </span>
                 </div>
@@ -287,7 +293,7 @@ export default function LandingPage() {
                   className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-line bg-canvas p-1.5 shadow-md"
                 />
                 <div className="flex items-center justify-between border-b border-line px-3 py-2">
-                  <span className="min-w-0 truncate font-mono text-[11px] tracking-[0.4px] text-muted">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
                     AGENTS.md
                   </span>
                 </div>
@@ -312,7 +318,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <p className="text-pretty mt-6 max-w-[58ch] text-[15px] leading-relaxed">
+            <p className="text-pretty mt-6 max-w-[58ch] text-prose leading-relaxed">
               Every item in your Index has copy-a-segment and
               copy-all, or grab the whole{' '}
               <code className="rounded-sm border border-line bg-surface px-[5px] py-px font-mono text-xs text-ink">
@@ -330,35 +336,36 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
               <div>
-                <span className="mb-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
+                {/* <span className="mb-2 block font-mono text-mono-label font-medium tracking-[0.4px] text-contrasignal">
                   INDEX
-                </span>
+                </span> */}
                 <h2
                   id="features"
-                  className="text-pretty mb-3 max-w-[16ch] text-[clamp(24px,4vw,36px)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
+                  className="text-pretty mb-3 max-w-[16ch] text-[clamp(1.5rem,4vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
                 >
                   Reverse the feed, Own it.
                 </h2>
-                <p className="text-pretty max-w-[52ch] text-[15px] leading-relaxed text-body">
+                <p className="text-pretty max-w-[52ch] text-prose leading-relaxed text-body">
                   Reels, long videos, articles, repos, screenshots -
                   share it once and it becomes a searchable Index
                   entry: transcript, summary, links, agent-ready
                   markdown.
                 </p>
-                <p className="mt-3 font-mono text-[11px] text-muted">
+                <p className="mt-3 font-mono text-mono-label text-muted">
                   short ◉ long ◉ article ◉ repo
                 </p>
               </div>
 
               <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
                 <div className="py-4 first:pt-0 md:py-5">
-                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                  <br />
+                  {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     FEED
-                  </span>
-                  <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
+                  </span> */}
+                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
                     Your personal search-engine
                   </h3>
-                  <p className="text-pretty text-[14px] leading-relaxed text-body">
+                  <p className="text-pretty text-copy leading-relaxed text-body">
                     Every item lands in your Feed. Filter by type,
                     search by title or tag, open anything to grab its
                     full transcript or copy a segment straight into
@@ -366,19 +373,19 @@ export default function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                  {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     DOCS
-                  </span>
-                  <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
+                  </span> */}
+                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
                     That PDF you saved and never reopened?
                   </h3>
-                  <p className="text-pretty text-[14px] leading-relaxed text-body">
+                  <p className="text-pretty text-copy leading-relaxed text-body">
                     Upload it - or paste the link - and the Docs page
                     reads it for you: parsed text, a structured
                     briefing, a clean rewrite. All markdown, all ready
                     for your AI.
                   </p>
-                  <p className="mt-2 font-mono text-[11px] text-muted">
+                  <p className="mt-2 font-mono text-mono-label text-muted">
                     pdf today ◉ word / spreadsheet / presentation /
                     image - soon
                   </p>
@@ -390,7 +397,7 @@ export default function LandingPage() {
 
         <div className="mx-auto flex max-w-[960px] items-center justify-center gap-3 border-t border-line p-6">
           <MessageSquareQuote className="h-4 w-6 shrink-0" />
-          <p className="text-pretty text-[13px] text-muted leading-normal">
+          <p className="text-pretty text-button text-muted leading-normal">
             A shared Brain is growing quietly underneath all of this -
             early members shape it.
           </p>
@@ -403,11 +410,11 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="stats"
-              className="mb-4 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               It compounds - and it&apos;s yours.
             </h2>
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
               One month of casual saving, no effort beyond the share
               button:
             </p>
@@ -420,10 +427,10 @@ export default function LandingPage() {
                   key={cap}
                   className="rounded-lg border border-line bg-surface px-4 py-3"
                 >
-                  <span className="mb-1 block font-mono text-[11px] font-medium uppercase tracking-[0.4px] text-muted">
+                  <span className="mb-1 block font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
                     {cap}
                   </span>
-                  <span className="text-[28px] font-semibold leading-[1.1] text-ink tabular-nums">
+                  <span className="text-stat font-semibold leading-[1.1] text-ink tabular-nums">
                     <CountUp
                       value={val}
                       delay={i * 80}
@@ -433,8 +440,29 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <div className="mb-6 overflow-hidden rounded-lg border border-line bg-surface">
-              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
+              As I was building Ownix I once needed a frontend
+              component library I&apos;d seen weeks earlier -
+              couldn&apos;t remember its name, just a glimpse of the
+              homepage. Searched my Index instead of my memory, and
+              there it was in the link table.
+            </p>
+
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
+              Don&apos;t remember the title either? Search by tag,
+              thumbnail, or whatever you do remember, and pull up
+              every link a video ever mentioned - long after it
+              scrolled away.
+            </p>
+
+            {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item
+              in the Ownix feed. Sits after the recall paragraphs rather than
+              between the tiles and them: the tiles claim volume, the paragraphs
+              say why volume matters, and the clip is the "here it is actually
+              happening" payoff. Capped to the section's 58ch column so it lines
+              up with the prose instead of spanning the full 960px and snapping
+              the reader's eye back out to full width. */}
+            <div className="mb-6 mx-auto max-w-[58ch] overflow-hidden rounded-lg border border-line bg-surface">
               <DemoVideo
                 src="/demo-capture.mp4"
                 poster="/demo-poster.jpg"
@@ -450,21 +478,6 @@ export default function LandingPage() {
                 </span>
               </div>
             </div>
-
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              As I was building Ownix I once needed a frontend
-              component library I&apos;d seen weeks earlier -
-              couldn&apos;t remember its name, just a glimpse of the
-              homepage. Searched my Index instead of my memory, and
-              there it was in the link table.
-            </p>
-
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              Don&apos;t remember the title either? Search by tag,
-              thumbnail, or whatever you do remember, and pull up
-              every link a video ever mentioned - long after it
-              scrolled away.
-            </p>
 
             <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
               <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
@@ -490,11 +503,11 @@ export default function LandingPage() {
             <div className="rounded-lg border border-line bg-surface p-8">
               <h2
                 id="h-invite"
-                className="mb-3 text-[clamp(22px,3.4vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+                className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
               >
                 Invite-only for now.
               </h2>
-              <p className="text-pretty mb-6 max-w-[52ch] text-[15px] leading-relaxed">
+              <p className="text-pretty mb-6 max-w-[52ch] text-prose leading-relaxed">
                 Sign in with Telegram and the Ownix bot asks for your
                 email. I approve every member personally, usually
                 within a few hours. Then you&apos;ll get a hello from
@@ -535,7 +548,7 @@ export default function LandingPage() {
                   articles to Telegram, and it lands transcribed and
                   searchable in your Index.
                 </span>
-                <p className="mt-6 text-balance text-center text-[17px] font-medium leading-normal text-ink">
+                <p className="mt-6 text-balance text-center text-lead font-medium leading-normal text-ink">
                   Your internet. Own it. &ensp;Reuse it. Find it
                   &ensp;
                   <span className="italic">even from a glimpse.</span>

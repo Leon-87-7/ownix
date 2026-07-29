@@ -31,7 +31,7 @@ export default function OfflinePage() {
           style={{
             fontFamily:
               "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: '12px',
+            fontSize: '0.75rem',
             textTransform: 'uppercase',
             letterSpacing: '0.24em',
             color: '#948e84',
@@ -44,7 +44,7 @@ export default function OfflinePage() {
           style={{
             marginTop: '16px',
             marginBottom: 0,
-            fontSize: '24px',
+            fontSize: '1.5rem',
             fontWeight: 600,
             letterSpacing: '-0.01em',
           }}
@@ -55,8 +55,8 @@ export default function OfflinePage() {
           style={{
             marginTop: '12px',
             marginBottom: 0,
-            fontSize: '14px',
-            lineHeight: '24px',
+            fontSize: '0.875rem',
+            lineHeight: '1.5rem',
             color: '#c6c1b8',
           }}
         >
@@ -74,7 +74,7 @@ export default function OfflinePage() {
             border: '1px solid #30343d',
             background: '#0d0e10',
             padding: '0 12px',
-            fontSize: '14px',
+            fontSize: '0.875rem',
             fontWeight: 500,
             color: '#c6c1b8',
             textDecoration: 'none',

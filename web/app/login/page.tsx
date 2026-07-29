@@ -28,7 +28,7 @@ export default function LoginPage() {
           className="mt-5 w-full px-3 py-2 text-center text-sm text-muted"
           aria-disabled="true"
         >
-          <div className="inline-flex h-8 items-center justify-center rounded-md bg-signal-deep/80 px-3.5 text-[13px] font-medium text-onsignal">
+          <div className="inline-flex h-8 items-center justify-center rounded-md bg-signal-deep/80 px-3.5 text-button font-medium text-onsignal">
             Connect to <GoogleIcon className="ml-2 h-4 w-4" />
           </div>
           <span className="ml-2">locked until approval</span>

@@ -143,7 +143,7 @@ function TagForm({
           <button
             type="button"
             onClick={onCancel}
-            className="h-8 rounded-md px-3.5 text-[13px] font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+            className="h-8 rounded-md px-3.5 text-button font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
           >
             Cancel
           </button>
@@ -151,7 +151,7 @@ function TagForm({
         <button
           type="submit"
           disabled={submitting}
-          className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+          className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
         >
           {submitting ? 'Saving…' : submitLabel}
         </button>
@@ -384,7 +384,7 @@ function DomainTab({
           <button
             type="submit"
             disabled={adding}
-            className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+            className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
           >
             {adding ? 'Adding…' : 'Add'}
           </button>

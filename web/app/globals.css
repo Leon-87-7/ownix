@@ -12,6 +12,18 @@
     }
   }
 
+  /* GSAP documents native smooth scrolling as breaking ScrollTrigger's
+     start/end calculations on resize, so the landing stepper needs it off —
+     but only where the stepper actually pins. This is deliberately the exact
+     same query `gsap.matchMedia()` uses in onboarding-stepper.tsx; a global
+     override would trade a desktop-only landing workaround for the loss of
+     smooth anchor jumps on every other route and every mobile width. */
+  @media (min-width: 640px) and (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
   :root {
     --sb-track-color: theme("colors.surface");
     --sb-thumb-color: theme("colors.line.DEFAULT");

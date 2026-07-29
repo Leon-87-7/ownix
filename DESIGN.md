@@ -41,19 +41,19 @@ colors:
 typography:
   display:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-    fontSize: '24px'
+    fontSize: '1.5rem'
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: '-0.5px'
   headline:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-    fontSize: '20px'
+    fontSize: '1.25rem'
     fontWeight: 600
     lineHeight: 1.25
     letterSpacing: '-0.25px'
   title:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-    fontSize: '16px'
+    fontSize: '1rem'
     fontWeight: 600
     lineHeight: 1.4
   body:
@@ -73,7 +73,7 @@ typography:
     lineHeight: 1.4
   stat-value:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-    fontSize: '28px'
+    fontSize: '1.75rem'
     fontWeight: 600
     lineHeight: 1.1
     fontFeature: 'tnum'
@@ -84,13 +84,13 @@ typography:
     lineHeight: 1.4
   mono-label:
     fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
-    fontSize: '11px'
+    fontSize: '0.6875rem'
     fontWeight: 500
     lineHeight: 1.4
     letterSpacing: '0.4px'
   button:
     fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-    fontSize: '13px'
+    fontSize: '0.8125rem'
     fontWeight: 500
     lineHeight: 1.0
 rounded:
@@ -321,15 +321,30 @@ system facts: IDs, timestamps, URLs, statuses, counts, and compact metadata.
 
 ### Hierarchy
 
-- **Display** (600, 24px, 1.2, -0.5px): Page titles. One per screen.
-- **Headline** (600, 20px, 1.25, -0.25px): Section heads inside a page.
-- **Title** (600, 16px, 1.4): Card and panel titles, item titles in detail view.
-- **Body** (400, 14px, 1.5): Default UI text. Long prose caps at 65–75ch; data surfaces may run denser.
-- **Body Strong** (500, 14px): Nav items, emphasized inline text, table-row emphasis.
-- **Label** (500, 12px): Form labels and filter group labels — sentence case, never tracked-uppercase.
-- **Stat Value** (600, 28px, tabular-nums): Summary tiles. Always `tnum` so counts align.
-- **Mono Meta** (400, 12px, JetBrains Mono): Timestamps, IDs, URLs, counts, and compact generated facts.
-- **Mono Label** (500, 11px, +0.4px, JetBrains Mono, uppercase permitted): Badge text and table headers only.
+Sizes are **rem**, never px, so type honours the reader's browser font-size
+setting — a px size silently ignores it. The px figures below are the rendered
+equivalents at a default 16px root, for reference only. Each role has a named
+Tailwind token (`text-display`-style utilities are generated from the `fontSize`
+scale in `tailwind.config.ts`); reach for the role name, never an arbitrary
+`text-[0.8125rem]`, which is just a px value wearing a different hat.
+
+- **Display** (600, 1.5rem / 24px, 1.2, -0.5px) — token `text-display`: Page titles. One per screen.
+- **Headline** (600, 1.25rem / 20px, 1.25, -0.25px) — token `text-headline`: Section heads inside a page.
+- **Title** (600, 1rem / 16px, 1.4) — token `text-title`: Card and panel titles, item titles in detail view.
+- **Body** (400, 0.875rem / 14px, 1.5) — token `text-copy`: Default UI text. Long prose caps at 65–75ch; data surfaces may run denser. (Named `copy`, not `body`, because `text-body` is already the body *colour*.)
+- **Body Strong** (500, 0.875rem / 14px) — token `text-copy`: Nav items, emphasized inline text, table-row emphasis.
+- **Label** (500, 0.75rem / 12px) — token `text-label`: Form labels and filter group labels — sentence case, never tracked-uppercase.
+- **Stat Value** (600, 1.75rem / 28px, tabular-nums) — token `text-stat`: Summary tiles. Always `tnum` so counts align.
+- **Mono Meta** (400, 0.75rem / 12px, JetBrains Mono) — token `text-label`: Timestamps, IDs, URLs, counts, and compact generated facts.
+- **Mono Label** (500, 0.6875rem / 11px, JetBrains Mono, uppercase permitted) — token `text-mono-label`: Badge text and table headers only. Tracking is +0.4px **inside a badge**; standing bare on a surface, all-caps at this size wants ≥0.05em or the letters crowd.
+
+### Landing-only sizes
+
+The marketing surface runs a step larger than the console and adds three roles
+the dashboard has no use for: `text-micro` (0.625rem / 10px, dense chips),
+`text-prose` (0.9375rem / 15px, section body), and `text-lead` (1.0625rem /
+17px, the closing line). Landing headings are fluid `clamp()`; the hero is
+golden-ratio derived from its own paragraph — floor φ×1rem, ceiling φ².
 
 ### Named Rules
 

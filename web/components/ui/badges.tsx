@@ -20,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-status-cancelled-tint text-status-cancelled",
 };
 
-const badgeBase = "inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-wider";
+const badgeBase = "inline-block rounded px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-wider";
 
 export function TypeBadge({ label }: { label: string }) {
   const hue = CONTENT_TYPE_COLORS[label] ?? "text-body";

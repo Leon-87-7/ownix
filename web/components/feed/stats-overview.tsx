@@ -76,7 +76,7 @@ function BreakdownGroup({
         {rows.map((r) => (
           <span
             key={r.key}
-            className="flex items-baseline gap-1.5 text-[13px]"
+            className="flex items-baseline gap-1.5 text-button"
           >
             <span className="text-body">{r.label}</span>
             <span

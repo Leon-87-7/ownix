@@ -73,7 +73,7 @@ function Thumbnail({
             size={22}
             className="relative text-muted"
           />
-          <span className="relative font-mono text-[11px] font-medium uppercase tracking-wider text-muted">
+          <span className="relative font-mono text-mono-label font-medium uppercase tracking-wider text-muted">
             {job.content_type || display}
           </span>
         </div>

@@ -36,7 +36,7 @@ export default function PreviewMotif({
               d="M 88,88 m -66,0 a 66,66 0 1,1 132,0 a 66,66 0 1,1 -132,0"
             />
           </defs>
-          <text className="fill-muted font-mono text-[10px] font-medium tracking-[0.18em]">
+          <text className="fill-muted font-mono text-micro font-medium tracking-[0.18em]">
             <textPath
               href={`#${ringId}`}
               startOffset="0"
