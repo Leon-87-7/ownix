@@ -117,7 +117,7 @@ function CreateForm({
       <button
         type="submit"
         disabled={submitting}
-        className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+        className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
       >
         {submitting ? 'Creating…' : 'Create template'}
       </button>
@@ -224,7 +224,7 @@ function UserTemplateRow({
             <button
               type="submit"
               disabled={saving}
-              className="h-8 rounded-md bg-signal px-3 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+              className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
@@ -237,7 +237,7 @@ function UserTemplateRow({
                   extra_instructions: template.extra_instructions,
                 });
               }}
-              className="h-8 rounded-md px-3 text-[13px] font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+              className="h-8 rounded-md px-3 text-button font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
             >
               Cancel
             </button>
@@ -354,7 +354,7 @@ function PromptsWorkspace() {
                         </span>
                       )}
                     </div>
-                    <span className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-wider text-muted">
+                    <span className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-wider text-muted">
                       built-in
                     </span>
                   </li>

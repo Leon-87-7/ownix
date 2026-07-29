@@ -90,7 +90,7 @@ export function ContextTab({ spaceId }: { spaceId: string }) {
         <button
           onClick={handleAddBlob}
           disabled={addingBlob}
-          className="h-9 rounded-md bg-signal px-4 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+          className="h-9 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
         >
           {addingBlob ? 'Adding…' : 'Add context'}
         </button>

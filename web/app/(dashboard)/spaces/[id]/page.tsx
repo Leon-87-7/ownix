@@ -73,9 +73,9 @@ export default function SpaceDetailPage() {
           </div>
           <div className="space-y-2">
             <div className="flex gap-2">
-              <button onClick={() => setShowExport(true)} className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised">Export</button>
-              <button onClick={startEdit} className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised">Edit</button>
-              <button onClick={handleDelete} disabled={deleting} className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50">{deleting ? "Deleting…" : "Delete"}</button>
+              <button onClick={() => setShowExport(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised">Export</button>
+              <button onClick={startEdit} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised">Edit</button>
+              <button onClick={handleDelete} disabled={deleting} className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50">{deleting ? "Deleting…" : "Delete"}</button>
             </div>
             {deleteFailed && <p className="text-xs text-status-error">Couldn&apos;t delete — try again.</p>}
           </div>
@@ -94,8 +94,8 @@ export default function SpaceDetailPage() {
               <input id="edit-color" type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="h-9 w-12 cursor-pointer rounded-md border border-line bg-canvas p-0.5" />
             </div>
             <div className="flex gap-2">
-              <button type="submit" disabled={editSaving} className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted">{editSaving ? "Saving…" : "Save"}</button>
-              <button type="button" onClick={cancelEdit} className="h-8 rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised">Cancel</button>
+              <button type="submit" disabled={editSaving} className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted">{editSaving ? "Saving…" : "Save"}</button>
+              <button type="button" onClick={cancelEdit} className="h-8 rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised">Cancel</button>
             </div>
           </div>
         </form>

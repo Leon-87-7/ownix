@@ -62,13 +62,13 @@ export function AppHeader() {
             <span className="text-sm font-medium italic text-body">
               Recall.
             </span>
-            <span className="font-mono text-[11px] tracking-wide text-contrasignal-bright">
+            <span className="font-mono text-mono-label tracking-wide text-contrasignal-bright">
               Index.
             </span>
-            <span className="font-mono text-[11px] tracking-wide text-contrasignal-bright">
+            <span className="font-mono text-mono-label tracking-wide text-contrasignal-bright">
               Feed.
             </span>
-            <span className="font-mono text-[11px] tracking-wide text-contrasignal-bright">
+            <span className="font-mono text-mono-label tracking-wide text-contrasignal-bright">
               Brain.
             </span>
           </div>

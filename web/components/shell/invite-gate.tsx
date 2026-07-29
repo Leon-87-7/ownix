@@ -171,7 +171,7 @@ function EmailModal({
           <button
             type="submit"
             disabled={saving}
-            className="h-8 rounded-md bg-signal px-3 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:bg-raised disabled:text-muted"
+            className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:cursor-not-allowed disabled:bg-raised disabled:text-muted"
           >
             {saving ? 'Saving...' : 'Save email'}
           </button>
@@ -318,7 +318,7 @@ export function InviteGate({
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 h-8 rounded-md bg-signal px-3 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright"
+            className="mt-4 h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright"
           >
             Retry
           </button>

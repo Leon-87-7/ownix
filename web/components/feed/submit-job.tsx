@@ -180,7 +180,7 @@ function CommandShortcut({ keys }: { keys: string }) {
       {keys.split(' ').map((key, i) => (
         <kbd
           key={i}
-          className="rounded border border-line bg-canvas px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-contrasignal-deep"
+          className="rounded border border-line bg-canvas px-1.5 py-0.5 font-mono text-micro uppercase tracking-wide text-contrasignal-deep"
         >
           {key}
         </kbd>

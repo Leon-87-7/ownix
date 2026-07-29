@@ -161,18 +161,18 @@ function LinkDetails({
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="mb-1 block break-all font-mono text-[11px] text-ink transition-ui hover:text-signal hover:underline"
+              className="mb-1 block break-all font-mono text-mono-label text-ink transition-ui hover:text-signal hover:underline"
             >
               {link.url}
             </a>
           ) : (
-            <span className="mb-1 block break-all font-mono text-[11px] text-muted">
+            <span className="mb-1 block break-all font-mono text-mono-label text-muted">
               {link.url}
             </span>
           ))}
         {description}
         {expanded && link.topic && (
-          <span className="mt-1 block text-[11px] text-muted">
+          <span className="mt-1 block text-mono-label text-muted">
             From: {link.topic}
           </span>
         )}
@@ -181,7 +181,7 @@ function LinkDetails({
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
-        className="relative shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-ui before:absolute before:-inset-x-2 before:-inset-y-2.5 hover:bg-raised hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]"
+        className="relative shrink-0 rounded border border-line px-1.5 py-0.5 text-micro font-medium text-muted transition-ui before:absolute before:-inset-x-2 before:-inset-y-2.5 hover:bg-raised hover:text-ink focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96]"
       >
         {expanded ? 'Less' : 'More'}
       </button>
@@ -314,7 +314,7 @@ function TableCard({
         <LinkUrl link={link} />
         <LinkTagCluster link={link} />
       </div>
-      <div className="mt-2 font-mono text-[11px] tabular-nums text-muted">
+      <div className="mt-2 font-mono text-mono-label tabular-nums text-muted">
         Last seen{' '}
         {formatDateCompact(link.last_seen ?? link.first_seen)}
       </div>
@@ -496,7 +496,7 @@ function LinkPreviewPanel({
                 .filter(Boolean)
                 .join(' — ')}
             >
-              <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-[11px] text-body">
+              <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-mono-label text-body">
                 <TagMark
                   tag={tag}
                   className="h-3 w-3"
@@ -575,7 +575,7 @@ export function LinksTable({
             Extracted links
           </h2>
           <span
-            className="inline-flex items-center rounded border border-line px-1.5 py-0.5 font-mono text-[11px] font-medium tracking-wider text-muted"
+            className="inline-flex items-center rounded border border-line px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-wider text-muted"
             aria-live="polite"
           >
             {linksCountLabel(state, query, data.total)}
@@ -630,7 +630,7 @@ export function LinksTable({
                     className="px-4 py-3 font-medium"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-mono text-[11px] font-normal uppercase tracking-wider text-muted">
+                      <span className="font-mono text-mono-label font-normal uppercase tracking-wider text-muted">
                         ↑↓ navigate
                       </span>
                       <button
@@ -703,7 +703,7 @@ export function LinksTable({
                             <LinkUrl link={link} />
                             <LinkTagCluster link={link} />
                           </div>
-                          <span className="font-mono text-[11px] tabular-nums text-muted">
+                          <span className="font-mono text-mono-label tabular-nums text-muted">
                             {formatDateCompact(
                               link.last_seen ?? link.first_seen,
                             )}
@@ -744,7 +744,7 @@ export function LinksTable({
           <button
             type="submit"
             disabled={pending}
-            className="h-10 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
+            className="h-10 rounded-lg border border-line bg-surface px-3 text-button font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
           >
             Go
           </button>
@@ -754,7 +754,7 @@ export function LinksTable({
             type="button"
             disabled={!hasPrevious || pending}
             onClick={() => setPage((value) => Math.max(0, value - 1))}
-            className="h-10 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
+            className="h-10 rounded-lg border border-line bg-surface px-3 text-button font-medium text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:text-muted disabled:opacity-50"
           >
             Previous
           </button>
@@ -762,7 +762,7 @@ export function LinksTable({
             type="button"
             disabled={!hasNext || pending}
             onClick={() => setPage((value) => value + 1)}
-            className="h-10 rounded-lg bg-signal px-3 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:scale-[0.96] disabled:bg-surface disabled:text-muted"
+            className="h-10 rounded-lg bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:scale-[0.96] disabled:bg-surface disabled:text-muted"
           >
             Next
           </button>

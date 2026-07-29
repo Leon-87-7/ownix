@@ -70,7 +70,7 @@ export function NoPreviewRing({
             d="M 88,88 m -66,0 a 66,66 0 1,1 132,0 a 66,66 0 1,1 -132,0"
           />
         </defs>
-        <text className="fill-muted font-mono text-[15px] font-medium tracking-[0.18em]">
+        <text className="fill-muted font-mono text-prose font-medium tracking-[0.18em]">
           {/* ponytail: overfill the ring and let the closed path clip the
               excess — no textLength, so long labels never get squeezed. */}
           <textPath href={`#${ringId}`} startOffset="0">

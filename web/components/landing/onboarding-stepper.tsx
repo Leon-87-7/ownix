@@ -228,7 +228,11 @@ export function OnboardingStepper() {
                 className="h-full w-full origin-left bg-signal"
               />
             </div>
-            <span className="mt-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+            {/* 0.06em, not DESIGN.md's +0.4px. That token is specified for
+                badge text, where caps sit inside a tinted pill; standing bare
+                at 11px it works out to 0.036em, below the 5% floor all-caps
+                needs before the letters start crowding. */}
+            <span className="mt-2 block font-mono text-mono-label font-medium tracking-[0.06em] text-muted">
               {step.kicker}
             </span>
           </li>
@@ -256,18 +260,33 @@ export function OnboardingStepper() {
                   aria-hidden="true"
                   className="h-5 w-5 shrink-0 text-contrasignal"
                 />
-                <span className="font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
+                <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
                   {step.surface}
                 </span>
               </div>
-              <h3 className="text-pretty mb-3 max-w-[24ch] text-[clamp(20px,3vw,28px)] font-semibold leading-tight tracking-[-0.25px] text-ink">
+              {/* balance, not pretty: `pretty` only fixes orphans, which is a
+                  prose problem. A 2-3 line heading wants even line lengths.
+
+                  Capped at 24px, not 28px. The section h2 above tops out at
+                  28px, so the old clamp made this h3 exactly the same size as
+                  its own parent heading at any viewport ≥933px — a hierarchy
+                  inversion, and the two sit on screen together while pinned. */}
+              <h3 className="text-balance mb-3 max-w-[24ch] text-[clamp(1.25rem,2.6vw,1.5rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
                 {step.title}
               </h3>
               {/* <br /> rather than separate <p>s: these are one paragraph
                   broken for rhythm, not three paragraphs. Screen readers read
                   it as continuous prose either way, and it keeps a single
                   measure/leading for the block. */}
-              <p className="text-pretty max-w-[58ch] text-[15px] leading-relaxed text-body">
+              {/* 16px, up from 15px. This is the landing page — brand register,
+                  where the text IS the product — not the dashboard's dense
+                  14px data surfaces. The hero paragraph is already `text-base`,
+                  so 15px here made the same role two different sizes.
+
+                  +0.01em is light-on-dark compensation: pale type on a dark
+                  plate reads lighter and tighter than it measures. `leading-
+                  relaxed` already covers the line-height half of that. */}
+              <p className="text-pretty max-w-[58ch] text-base leading-relaxed tracking-[0.01em] text-body">
                 {step.body.map((line, li) => (
                   <Fragment key={`${step.id}-${li}`}>
                     {li > 0 && <br />}
@@ -275,7 +294,11 @@ export function OnboardingStepper() {
                   </Fragment>
                 ))}
               </p>
-              <p className="mt-4 font-mono text-[11px] text-muted">
+              {/* DESIGN.md's mono-meta token (12px/400), not mono-label
+                  (11px/500). This line is metadata, not a label — it was
+                  borrowing the label's size with the meta's weight, which is
+                  neither token and left three different roles sharing 11px. */}
+              <p className="mt-4 font-mono text-xs text-muted">
                 {step.meta}
               </p>
 
@@ -301,7 +324,7 @@ export function OnboardingStepper() {
                 >
                   <a
                     href="#invite"
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-[13px] font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                   >
                     Get an invite
                   </a>

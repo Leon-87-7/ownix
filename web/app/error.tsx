@@ -17,7 +17,7 @@ export default function AppError({
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
       <section className="w-full max-w-md rounded-lg border border-line bg-surface p-6 text-center">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-status-error">
+        <p className="font-mono text-mono-label font-medium uppercase tracking-[0.04em] text-status-error">
           Error
         </p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Something went wrong</h1>
@@ -28,13 +28,13 @@ export default function AppError({
           <button
             type="button"
             onClick={reset}
-            className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
+            className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
           >
             Try again
           </button>
           <a
             href="/"
-            className="inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+            className="inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             Back to feed
           </a>

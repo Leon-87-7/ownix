@@ -293,7 +293,7 @@ function FieldCard({
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-muted">
+        <span className="font-mono text-mono-label font-medium uppercase tracking-wider text-muted">
           {label}
         </span>
         <CopyButton
@@ -533,7 +533,7 @@ function JobActionsBar({
             href={job.drive_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+            className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             Open in Drive{' '}
             <OwnixShareIcon
@@ -547,7 +547,7 @@ function JobActionsBar({
             href={folderUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             <GoogleDriveIcon className="h-3.5 w-3.5" />
             Ownix folder{' '}
@@ -735,7 +735,7 @@ export default function JobDetailPage() {
                 pending={deleting}
                 onConfirm={handleDelete}
                 trigger={
-                  <button className="h-8 rounded-md border border-line px-3 text-[13px] font-medium text-status-error transition-ui hover:bg-raised">
+                  <button className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised">
                     Delete job
                   </button>
                 }

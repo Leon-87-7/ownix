@@ -98,7 +98,7 @@ export function ErrorBanner({
       <p className="text-sm text-status-error">{message}</p>
       <button
         onClick={onRetry}
-        className="h-8 shrink-0 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
+        className="h-8 shrink-0 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
       >
         Retry
       </button>
@@ -125,7 +125,7 @@ export function EmptyState({
           </p>
           <button
             onClick={onClear}
-            className="mt-4 h-8 rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+            className="mt-4 h-8 rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             Clear filters
           </button>

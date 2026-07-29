@@ -65,7 +65,7 @@ export function PublicShell({
             })}
             <Link
               href="/login"
-              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui duration-200 hover:bg-signal-deep hover:text-onsignal ${focusRing}`}
+              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal-deep hover:text-onsignal ${focusRing}`}
             >
               Sign in
             </Link>
@@ -91,7 +91,7 @@ export function LegalLayout({
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start">
       <div className="min-w-0">{children}</div>
       <aside className="hidden border-l border-line pl-6 lg:sticky lg:top-8 lg:block">
-        <p className="font-mono text-[11px] font-medium text-muted">
+        <p className="font-mono text-mono-label font-medium text-muted">
           Legal document
         </p>
         <nav
@@ -142,7 +142,7 @@ export function LegalTitle({
 }) {
   return (
     <header className="mb-8 border-b border-line pb-7">
-      <p className="mb-3 font-mono text-[11px] font-medium text-muted">
+      <p className="mb-3 font-mono text-mono-label font-medium text-muted">
         Ownix legal
       </p>
       <h1 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl">

@@ -52,7 +52,7 @@ function ResultRow({ result }: { result: BrainResult }) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-ink">{result.title}</span>
         {result.topic && (
-          <span className="rounded border border-line px-2 py-0.5 font-mono text-[11px] font-medium tracking-wider text-body">
+          <span className="rounded border border-line px-2 py-0.5 font-mono text-mono-label font-medium tracking-wider text-body">
             {result.topic}
           </span>
         )}
@@ -129,7 +129,7 @@ export default function BrainPage() {
           onClick={handleRun}
           disabled={loading}
           aria-label="Run search"
-          className="h-9 rounded-md bg-signal px-4 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+          className="h-9 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
         >
           {loading ? (
             <span className="flex items-center gap-2">

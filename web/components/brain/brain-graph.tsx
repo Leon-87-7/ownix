@@ -202,7 +202,7 @@ export function BrainGraph({ results, searchState }: { results: SearchResult[]; 
           <div className="pointer-events-auto max-w-[22rem] rounded-lg bg-canvas/90 p-3 shadow-overlay ring-1 ring-line backdrop-blur">
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-ink">Topics</span>
-              <span className="font-mono text-[11px] text-muted tabular-nums">{visibleTopicCount}/{topics.length}</span>
+              <span className="font-mono text-mono-label text-muted tabular-nums">{visibleTopicCount}/{topics.length}</span>
             </div>
             <div role="group" aria-label="Topics" className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1">
               {topics.map((topic) => {

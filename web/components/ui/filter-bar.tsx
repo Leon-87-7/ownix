@@ -120,7 +120,7 @@ export function SegmentedTabs({
         const labelText = tab.badge
           ? `${tab.label} (${tab.badge})`
           : `${tab.label} ${tab.count ?? ''}`.trim();
-        const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-[13px] font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${
+        const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-button font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${
           active
             ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
             : tab.disabled
@@ -137,12 +137,12 @@ export function SegmentedTabs({
             )}
             <span>{tab.label}</span>
             {tab.badge ? (
-              <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
+              <span className="font-mono text-micro uppercase tracking-wide text-muted">
                 {tab.badge}
               </span>
             ) : tab.count !== undefined ? (
               <span
-                className={`rounded border bg-on-signal px-1 py-0.5 font-mono text-[11px] tabular-nums text-contrasignal-deep sm:px-1.5 ${active ? 'border-onsignal/30 text-onsignal' : 'border-line'}`}
+                className={`rounded border bg-on-signal px-1 py-0.5 font-mono text-mono-label tabular-nums text-contrasignal-deep sm:px-1.5 ${active ? 'border-onsignal/30 text-onsignal' : 'border-line'}`}
               >
                 {tab.count}
               </span>
@@ -206,7 +206,7 @@ function FilterButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`h-7 rounded-md px-3 text-[13px] font-medium transition-ui ${
+      className={`h-7 rounded-md px-3 text-button font-medium transition-ui ${
         active
           ? 'bg-contrasignal-deep text-onsignal hover:bg-contrasignal'
           : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
@@ -344,7 +344,7 @@ export function FilterBar({
             onClick={() => setFiltersOpen((o) => !o)}
             aria-expanded={filtersOpen}
             aria-controls="status-filter-bar"
-            className="mx-auto self-start text-[13px] font-medium text-muted transition-ui hover:text-ink sm:hidden"
+            className="mx-auto self-start text-button font-medium text-muted transition-ui hover:text-ink sm:hidden"
           >
             Filters{' '}
             <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>

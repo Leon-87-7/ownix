@@ -374,14 +374,14 @@ function CreateTagModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-8 rounded-md px-3.5 text-[13px] font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+              className="h-8 rounded-md px-3.5 text-button font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+              className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
             >
               {submitting ? 'Creating…' : 'Create'}
             </button>

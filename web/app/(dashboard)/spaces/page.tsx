@@ -62,7 +62,7 @@ function SpacesWorkspace() {
         action={
           <button
             onClick={showForm ? resetForm : openForm}
-            className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
+            className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
           >
             {showForm ? 'Cancel' : 'New Collection'}
           </button>
@@ -146,14 +146,14 @@ function SpacesWorkspace() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="h-8 rounded-md bg-signal px-3.5 text-[13px] font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+                className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
               >
                 {submitting ? 'Creating…' : 'Create'}
               </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="h-8 rounded-md border border-line px-3.5 text-[13px] font-medium text-ink transition-ui hover:bg-raised"
+                className="h-8 rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
               >
                 Cancel
               </button>

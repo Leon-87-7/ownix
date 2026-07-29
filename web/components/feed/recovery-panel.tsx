@@ -22,7 +22,7 @@ function RecoveryButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="h-8 rounded-md border border-line bg-surface px-3 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink active:bg-canvas disabled:cursor-not-allowed disabled:border-line disabled:bg-canvas disabled:text-muted"
+      className="h-8 rounded-md border border-line bg-surface px-3 text-label font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink active:bg-canvas disabled:cursor-not-allowed disabled:border-line disabled:bg-canvas disabled:text-muted"
     >
       {children}
     </button>
@@ -102,7 +102,7 @@ export function RecoveryPanel({
           type="button"
           disabled={disabled}
           onClick={() => void reload()}
-          className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-7 rounded-md border border-line bg-surface px-2.5 text-label font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
         >
           Retry
         </button>
@@ -117,7 +117,7 @@ export function RecoveryPanel({
         aria-expanded={open}
         aria-controls="recovery-actions"
         onClick={() => setOpen((current) => !current)}
-        className="h-8 rounded-md border border-status-error/40 bg-status-error-tint px-3 font-mono text-[11px] font-medium text-status-error tabular-nums transition-ui hover:border-status-error hover:bg-status-error-tint/80"
+        className="h-8 rounded-md border border-status-error/40 bg-status-error-tint px-3 font-mono text-mono-label font-medium text-status-error tabular-nums transition-ui hover:border-status-error hover:bg-status-error-tint/80"
       >
         {attentionCount} need attention
       </button>
@@ -131,7 +131,7 @@ export function RecoveryPanel({
           className="flex flex-wrap items-center gap-2"
         >
           {summary.stale_in_flight > 0 && (
-            <span className="font-mono text-[11px] text-muted">
+            <span className="font-mono text-mono-label text-muted">
               {summary.stale_in_flight} stale in-flight
             </span>
           )}
@@ -171,7 +171,7 @@ export function RecoveryPanel({
             type="button"
             disabled={disabled}
             onClick={() => void reload()}
-            className="h-7 rounded-md border border-line bg-surface px-2.5 text-[12px] font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-7 rounded-md border border-line bg-surface px-2.5 text-label font-medium text-body transition-ui hover:border-line-strong hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             Retry
           </button>

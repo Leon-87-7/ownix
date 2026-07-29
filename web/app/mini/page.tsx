@@ -78,7 +78,7 @@ export default function MiniAppPage() {
             <div>
               <h1 className="text-balance text-2xl font-semibold tracking-[-0.02em]">Connect Google inside Ownix</h1>
             </div>
-            <span className="rounded-md border border-telegram-blue/40 bg-telegram-blue/10 px-2 py-1 font-mono text-[11px] text-telegram-blue">TG</span>
+            <span className="rounded-md border border-telegram-blue/40 bg-telegram-blue/10 px-2 py-1 font-mono text-mono-label text-telegram-blue">TG</span>
           </div>
 
           <div className="rounded-lg border border-line bg-canvas p-4">

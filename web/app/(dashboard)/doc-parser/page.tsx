@@ -107,7 +107,7 @@ function FormatHelp() {
               className="block"
             >
               <span className="text-muted">{label}</span>{' '}
-              <span className="font-mono text-[11px] text-body">
+              <span className="font-mono text-mono-label text-body">
                 {exts}
               </span>
             </span>
