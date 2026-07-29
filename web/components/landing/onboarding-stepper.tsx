@@ -4,7 +4,7 @@ import { Fragment, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { Share, Fingerprint, Search } from 'lucide-react';
+import { Shapes, Fingerprint, BookOpenCheck } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -22,16 +22,16 @@ gsap.registerPlugin(ScrollTrigger, useGSAP);
 // `body` is an array of lines, not a string with "\n" — JSX collapses newlines
 // inside a string to a single space, so the break has to be structural. One
 // sentence per line: the breaks are authored rhythm, not wrapping.
-const STEPS = [
+export const STEPS = [
   {
     id: 'collect',
     kicker: 'COLLECT',
     surface: 'INDEX',
-    icon: Share,
+    icon: Shapes,
     title: 'Share it from wherever you found it.',
     body: [
       'Instagram, YouTube, TikTok, GitHub, a PDF, a plain link.',
-      'Hit share, pick Ownix, keep scrolling.',
+      'Hit share, pick the Ownix Telegram bot, keep scrolling.',
     ],
     meta: 'reels ◉ videos ◉ articles ◉ repos ◉ PDFs',
   },
@@ -42,11 +42,9 @@ const STEPS = [
     icon: Fingerprint,
     title: 'The AI reads it. You still know it.',
     body: [
-      'AI usually puts your own material at arm’s length.',
-      'Not here: ',
-      'your prompt decides what gets pulled out,',
+      'Your prompt decides what gets pulled out,',
       'your tags decide what it means to you.',
-      'Markdown in your own Google Drive, about a minute later.',
+      'Markdown in your own Google Drive, a minute later.',
     ],
     meta: 'transcript ◉ summary ◉ links ◉ tags',
   },
@@ -54,10 +52,10 @@ const STEPS = [
     id: 'recall',
     kicker: 'RECALL',
     surface: 'SEARCH',
-    icon: Search,
+    icon: BookOpenCheck,
     title: 'Find it again, even from a glimpse.',
     body: [
-      'Search by title, tag, or whatever you actually remember - or just scan the feed and spot the thumbnail.',
+      'Search by title, tag, or just scan the feed and spot the thumbnail.',
       'Copy one segment, or take the whole .md straight into your AI.',
     ],
     meta: 'copy a segment ◉ copy all ◉ grab the .md',
