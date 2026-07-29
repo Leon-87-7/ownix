@@ -85,7 +85,9 @@ const config: Config = {
         prose: '0.9375rem', // 15px — landing section body
         title: '1rem', // 16px — DESIGN.md Title
         lead: '1.0625rem', // 17px — landing closing line
+        headline: '1.25rem', // 20px — DESIGN.md Headline
         stat: '1.75rem', // 28px — DESIGN.md Stat Value
+        display: '1.5rem', // 24px — DESIGN.md Display
       },
       transitionTimingFunction: {
         'out-quart': 'cubic-bezier(0.25, 1, 0.5, 1)',

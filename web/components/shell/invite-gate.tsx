@@ -252,6 +252,10 @@ export function InviteGate({
           return;
         }
         if (res.status === 401 || res.status === 403) {
+          // Guard on `alive` like the success path below: an in-flight poll
+          // that resolves after the effect tore down would otherwise navigate
+          // a component that is already unmounted.
+          if (!alive) return;
           router.replace('/login');
           return;
         }

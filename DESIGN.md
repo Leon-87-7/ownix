@@ -328,8 +328,8 @@ Tailwind token (`text-display`-style utilities are generated from the `fontSize`
 scale in `tailwind.config.ts`); reach for the role name, never an arbitrary
 `text-[0.8125rem]`, which is just a px value wearing a different hat.
 
-- **Display** (600, 1.5rem / 24px, 1.2, -0.5px): Page titles. One per screen.
-- **Headline** (600, 1.25rem / 20px, 1.25, -0.25px): Section heads inside a page.
+- **Display** (600, 1.5rem / 24px, 1.2, -0.5px) — token `text-display`: Page titles. One per screen.
+- **Headline** (600, 1.25rem / 20px, 1.25, -0.25px) — token `text-headline`: Section heads inside a page.
 - **Title** (600, 1rem / 16px, 1.4) — token `text-title`: Card and panel titles, item titles in detail view.
 - **Body** (400, 0.875rem / 14px, 1.5) — token `text-copy`: Default UI text. Long prose caps at 65–75ch; data surfaces may run denser. (Named `copy`, not `body`, because `text-body` is already the body *colour*.)
 - **Body Strong** (500, 0.875rem / 14px) — token `text-copy`: Nav items, emphasized inline text, table-row emphasis.

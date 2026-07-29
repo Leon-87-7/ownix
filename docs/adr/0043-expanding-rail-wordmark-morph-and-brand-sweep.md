@@ -51,18 +51,52 @@ desktop — correct for a modal, hostile for persistent nav.
 layout. `sessionStorage` is unreadable during SSR, so the initial render is
 always collapsed and an effect restores it — see decision 5.
 
-**3. The wordmark is Bespoke Stencil Medium Italic**, loaded via
-`next/font/local` (Fontshare/ITF, *not* Google Fonts — `next/font/google` does
-not apply), **subsetted to the five glyphs `O w n i x`** since the face is only
-ever used for one word. Fontshare fonts are free for commercial use and
-self-hostable; outlining the `O` is derivative artwork, not font redistribution.
+**3. The wordmark is Bespoke Stencil Medium Italic — contingent on resolving
+its licence first.** Bespoke Stencil is a Fontshare **Closed Source** face
+governed by the ITF Free Font License, *not* the SIL OFL. That licence is more
+restrictive than "free for commercial use" implies, and two clauses bear
+directly on the delivery mechanism this ADR originally specified:
 
-**4. The morph is mark → `O` only.** A stencil `O` is an **open ring** — the
-counter connects to the outside through the stencil breaks, so there is no
-separate inner contour. Open ring → open ring is **1 subpath → 1 subpath**, the
-case MorphSVG handles with perfect fidelity and no `shapeIndex` tuning. `wnix`
-stays **real text**, so it remains selectable and keeps its accessible name
-(the link already carries `aria-label="Ownix home"`).
+- **Modification** — the FFL prohibits altering the font software "without
+  prior written consent". **Subsetting to five glyphs is a modification.**
+- **Transmission** — it prohibits transmitting the font software over the
+  internet "for font serving or font replacement" without prior written
+  consent. **Self-hosting a `.woff2` via `next/font/local` is exactly that.**
+
+What the FFL *does* explicitly permit is using the fonts for **logos and the
+creation of vector files**. So outlining the `O` into the SVG mark is fine; it
+is the live `wnix` text served as a webfont that is not.
+
+Three viable paths, to be settled **before** any implementation:
+
+1. Serve via Fontshare's own webfont API — the delivery route the licence
+   contemplates. Costs the third-party request `next/font/local` avoids.
+2. Obtain written ITF authorisation for self-hosting + subsetting, and record
+   it here.
+3. Pick a face whose licence permits both outright (SIL OFL), keeping the
+   stencil *form* as the selection criterion rather than this specific file.
+
+Until one is chosen, treat the typeface as **provisional**. The reasoning that
+selected it (open-ring `O`, weight 500 under the 600 Ceiling, industrial rather
+than decorative) still holds and would carry to an OFL substitute.
+
+**4. The morph is mark → `O` only, which requires isolating the mark subpath.**
+A stencil `O` is an **open ring** — the counter connects to the outside through
+the stencil breaks, so there is no separate inner contour. Open ring → open
+ring is the case MorphSVG handles with perfect fidelity.
+
+But `ownix-logo.svg` is **one `<path>` carrying four subpaths**, and MorphSVG
+does *not* silently morph only the first. It maps subpaths automatically —
+`map: "size" | "position" | "complexity"` — so handing it the whole path would
+animate all four. The mark subpath must therefore be **extracted into its own
+`<path>` element**, leaving the other three static, which the plugin's docs
+name as the robust route when automatic mapping is insufficient. (Configuring
+`map`/`shapeIndex` is the alternative, but per-segment index arrays are fragile
+under later edits to the artwork.) Splitting the SVG is a prerequisite of this
+decision, not an implementation detail.
+
+`wnix` stays **real text**, so it remains selectable and keeps its accessible
+name (the link already carries `aria-label="Ownix home"`).
 
 **5. The morph plays only on user toggle.** Session restore and
 `prefers-reduced-motion: reduce` both call `.progress(1)` — end state, zero

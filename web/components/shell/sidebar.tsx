@@ -125,7 +125,7 @@ function Avatar({
   return (
     <span
       aria-hidden="true"
-      className={`flex items-center justify-center rounded-full bg-raised font-mono text-mono-label font-medium text-body ${className ?? ''}`}
+      className={`flex items-center justify-center rounded-full bg-raised font-mono text-label font-medium text-body ${className ?? ''}`}
     >
       {(user.first_name?.[0] ?? '?').toUpperCase()}
     </span>
@@ -485,7 +485,7 @@ export function Sidebar() {
                     {user.first_name ?? 'Signed in'}
                   </span>
                   {user.username && (
-                    <p className="truncate font-mono text-mono-label text-muted">
+                    <p className="truncate font-mono text-label text-muted">
                       @{user.username}
                     </p>
                   )}
@@ -556,7 +556,7 @@ export function Sidebar() {
                 ) : null}
               </div>
               {disconnectFailed && (
-                <p className="mt-1 pl-[34px] text-mono-label text-status-error">
+                <p className="mt-1 pl-[34px] text-label text-status-error">
                   Couldn&apos;t disconnect — try again.
                 </p>
               )}
