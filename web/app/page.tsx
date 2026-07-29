@@ -8,6 +8,7 @@ import { HeroGradient } from '@/components/landing/hero-gradient';
 import { AppSlot } from '@/components/landing/app-slot';
 import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
+import { MobileOnboardingStepper } from '@/components/landing/mobile-onboarding-stepper';
 import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
@@ -158,12 +159,12 @@ export default function LandingPage() {
         </header>
 
         <section
-          aria-labelledby="demo"
-          className="border-t border-line py-12"
+          aria-labelledby="onboarding"
+          className="border-t border-line py-6"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
-              id="demo"
+              id="onboarding"
               className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Three taps. Nothing new to learn.
@@ -174,7 +175,10 @@ export default function LandingPage() {
               mid-anything.
             </p>
 
-            <OnboardingStepper />
+            <MobileOnboardingStepper />
+            <div className="hidden sm:block">
+              <OnboardingStepper />
+            </div>
             <div className="mt-6 min-w-0 flex-1">
               <WordmarkMarquee />
             </div>
