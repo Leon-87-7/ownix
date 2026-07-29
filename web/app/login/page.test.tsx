@@ -49,6 +49,16 @@ describe('LoginPage', () => {
     expect(screen.getByText('Loading Telegram sign-in')).toBeInTheDocument();
   });
 
+  it('explains that the remembered Telegram account is separate from the Ownix session', () => {
+    render(<LoginPage />);
+
+    expect(
+      screen.getByText(
+        'Telegram may remember the account shown here. Ownix signs you in only after you choose it.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('shows a fallback when the Telegram widget fails to load', async () => {
     render(<LoginPage />);
 

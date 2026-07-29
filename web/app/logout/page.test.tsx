@@ -9,6 +9,11 @@ describe('LogoutPage', () => {
 
     expect(screen.getByText('Session closed')).toBeInTheDocument();
     expect(
+      screen.getByText(
+        "Ownix is signed out. Telegram may still remember this browser's Telegram account for the next sign-in.",
+      ),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole('link', { name: 'Sign in with Telegram' }),
     ).toHaveAttribute('href', '/login');
   });

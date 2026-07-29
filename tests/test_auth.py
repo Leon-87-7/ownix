@@ -505,6 +505,9 @@ class TestSessionMiddleware:
         assert "vig_session=" in resp.headers["set-cookie"]
         status = asyncio.run(database.get_user_status(123456789))
         assert status == "pending"
+        user = asyncio.run(database.get_user(123456789))
+        assert user is not None
+        assert user["email"] is None
 
     def test_dev_login_quiet_by_default(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
@@ -537,20 +540,24 @@ class TestSessionMiddleware:
         assert resp.status_code == 200
         assert asyncio.run(database.get_user_status(123456792)) == "approved"
 
-    def test_dev_login_sends_marked_ops_card_when_enabled(
+    def test_dev_login_email_save_sends_marked_ops_card_with_input_email(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         notify = AsyncMock()
         monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
         monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
-        monkeypatch.setattr("src.api.auth.settings.OPS_DEV_NOTIFICATIONS", True)
         monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
         monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456791)
 
-        resp = auth_client.post("/api/auth/dev-login")
+        login = auth_client.post("/api/auth/dev-login")
+        assert login.status_code == 200
+        notify.assert_not_awaited()
+
+        resp = auth_client.put("/api/auth/email", json={"email": "Typed@Example.COM"})
 
         assert resp.status_code == 200
-        notify.assert_awaited_once_with(123456791, "dev-123456791@local.test", dev=True)
+        assert resp.json()["email"] == "typed@example.com"
+        notify.assert_awaited_once_with(123456791, "typed@example.com", dev=True)
 
 
 class TestAuthRouter:
@@ -613,7 +620,7 @@ class TestAuthRouter:
         db_user = asyncio.run(database.get_user(101))
         assert db_user is not None
         assert db_user["email"] == "user@example.com"
-        notify.assert_awaited_once_with(101, "user@example.com")
+        notify.assert_awaited_once_with(101, "user@example.com", dev=False)
 
     def test_set_email_does_not_notify_for_approved_user(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch

@@ -25,15 +25,19 @@ export default async function DashboardLayout({
   // blip, which would swap their Feed for the preview corpus. When both
   // cookies are present, ask the backend — approved sessions get their own
   // Feed (ADR-0035 §1), while pending/blocked sessions stay restricted.
+  const hasSession = Boolean(cookieStore.get('vig_session')?.value);
   const restricted = await isRestrictedRequest({
     hasPreviewCookie: cookieStore.get('ownix_preview')?.value === '1',
-    hasSession: Boolean(cookieStore.get('vig_session')?.value),
+    hasSession,
     cookieHeader: (await headers()).get('cookie') ?? '',
   });
   return (
     <TooltipProvider>
       <RestrictedModeProvider restricted={restricted}>
-        <InviteGate restricted={restricted}>
+        <InviteGate
+          restricted={restricted}
+          hasSession={hasSession}
+        >
           <GoogleStatusProvider>
             <SubmitJobProvider>
               <div className="flex h-screen overflow-hidden">

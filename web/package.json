@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@milkdown/core": "^7.21.1",
     "@milkdown/crepe": "^7.21.2",
     "@milkdown/ctx": "^7.21.1",
@@ -21,6 +22,7 @@
     "@radix-ui/react-dropdown-menu": "^2.1.18",
     "@radix-ui/react-tooltip": "^1.2.9",
     "fuse.js": "^7.4.0",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.21.0",
     "next": "^14.2.29",
     "react": "^18",

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from src import database, queue
 from src.config import settings
+from src.services.email import send_welcome_email
 from src.services.jobs import flush_held_jobs
 from src.telegram import sender
 from src.utils.logger import get_logger
@@ -42,6 +43,10 @@ def admin_chat_ids() -> tuple[int, ...]:
 
 def dev_notification_chat_ids() -> tuple[int, ...]:
     return settings.ops_dev_chat_ids or settings.ops_admin_chat_ids
+
+
+def can_dev_invite(chat_id: int) -> bool:
+    return chat_id in set(dev_notification_chat_ids())
 
 
 def can_read(chat_id: int) -> bool:
@@ -79,7 +84,10 @@ async def send_ops_document(
 
 
 async def answer_ops_callback(cq_id: str, text: str | None = None) -> None:
-    await sender.answer_callback_query(cq_id, text=text, bot_token=settings.OPS_BOT_TOKEN)
+    try:
+        await sender.answer_callback_query(cq_id, text=text, bot_token=settings.OPS_BOT_TOKEN)
+    except Exception:
+        log.warning("ops_callback_answer_failed", callback_query_id=cq_id)
 
 
 async def edit_ops_reply_markup(chat_id: int, message_id: int, buttons: list[list[dict]]) -> None:
@@ -107,14 +115,16 @@ async def notify_invite(chat_id: int, email: str, *, dev: bool = False) -> bool:
         return False
     user = await database.get_user(chat_id) or {"tg_id": chat_id}
     text = invite_card_text(user, email, dev=dev)
+    approve_prefix = "ops_dev_invite_approve" if dev else "ops_invite_approve"
+    block_prefix = "ops_dev_invite_block" if dev else "ops_invite_block"
     for target in targets:
         await send_ops_keyboard(
             target,
             text,
             [
                 [
-                    {"text": "✅ Approve", "callback_data": f"ops_invite_approve:{chat_id}"},
-                    {"text": "🚫 Block", "callback_data": f"ops_invite_block:{chat_id}"},
+                    {"text": "✅ Approve", "callback_data": f"{approve_prefix}:{chat_id}"},
+                    {"text": "🚫 Block", "callback_data": f"{block_prefix}:{chat_id}"},
                 ]
             ],
         )
@@ -274,6 +284,10 @@ async def _approve_pending_ids(target_ids: list[int]) -> int:
             await sender.send_message(int(row["tg_id"]), "You're in, send a link.")
         except Exception:
             log.exception("ops_batch_approval_notification_failed", tg_id=row.get("tg_id"))
+        try:
+            await send_welcome_email(row)
+        except Exception:
+            log.exception("ops_batch_approval_welcome_email_failed", tg_id=row.get("tg_id"))
     return len(approved_rows)
 
 

@@ -69,7 +69,8 @@ function QueueStatusBanner() {
       className="border-b border-line bg-raised px-4 py-3 text-center text-sm leading-6 text-body"
     >
       You&apos;re in the queue — approval usually within a few hours; you&apos;ll get a Telegram
-      hello. Meanwhile: install the app, send the bot your first link.
+      hello and this page will unlock automatically. Meanwhile: install the app,
+      send the bot your first link.
     </aside>
   );
 }
@@ -183,9 +184,11 @@ function EmailModal({
 export function InviteGate({
   children,
   restricted = false,
+  hasSession = false,
 }: {
   children: React.ReactNode;
   restricted?: boolean;
+  hasSession?: boolean;
 }) {
   const router = useRouter();
   const [user, setUser] = useState<InviteUser | null>(null);
@@ -198,7 +201,7 @@ export function InviteGate({
       setLoading(false);
       return;
     }
-    if (restricted) {
+    if (restricted && !hasSession) {
       setLoading(false);
       return;
     }
@@ -228,9 +231,62 @@ export function InviteGate({
     return () => {
       alive = false;
     };
-  }, [router, restricted]);
+  }, [router, restricted, hasSession]);
 
-  if (restricted) {
+  useEffect(() => {
+    if (mockModeEnabled() || user?.status !== 'pending' || !user.email) {
+      return;
+    }
+
+    let alive = true;
+    let checking = false;
+
+    async function checkApproval() {
+      if (checking) return;
+      checking = true;
+      try {
+        let res: Response;
+        try {
+          res = await fetch('/api/auth/me');
+        } catch {
+          return;
+        }
+        if (res.status === 401 || res.status === 403) {
+          router.replace('/login');
+          return;
+        }
+        if (!res.ok) return;
+        const next = (await res.json()) as InviteUser;
+        if (!alive) return;
+        setUser(next);
+        if (next.status === 'approved') {
+          router.refresh();
+        }
+      } finally {
+        checking = false;
+      }
+    }
+
+    const interval = window.setInterval(() => {
+      void checkApproval();
+    }, 5000);
+    const onFocus = () => {
+      void checkApproval();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void checkApproval();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      alive = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [router, user?.email, user?.status]);
+
+  if (restricted && !hasSession) {
     return (
       <SessionUserContext.Provider value={null}>
         {children}

@@ -19,6 +19,11 @@ export default function LoginPage() {
           <TelegramLoginWidget />
         </div>
 
+        <p className="mt-2 text-center text-xs leading-5 text-muted">
+          Telegram may remember the account shown here. Ownix signs you
+          in only after you choose it.
+        </p>
+
         <div
           className="mt-5 w-full px-3 py-2 text-center text-sm text-muted"
           aria-disabled="true"

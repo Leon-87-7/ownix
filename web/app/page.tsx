@@ -8,6 +8,7 @@ import { HeroGradient } from '@/components/landing/hero-gradient';
 import { AppSlot } from '@/components/landing/app-slot';
 import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
+import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
@@ -170,23 +171,7 @@ export default function LandingPage() {
               reading.
             </p>
 
-            <div className="overflow-hidden rounded-lg border border-line bg-surface">
-              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
-              <DemoVideo
-                src="/demo-capture.mp4"
-                poster="/demo-poster.jpg"
-                className="block aspect-video w-full border-b border-line bg-canvas"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
-                <span className="font-mono text-xs text-body">
-                  11:32 shared ◉{' '}
-                  <b className="font-medium text-status-done">
-                    11:32 reel analysis ready
-                  </b>{' '}
-                  ◉ 11:33 landed in Dashboard
-                </span>
-              </div>
-            </div>
+            <OnboardingStepper />
 
             <div
               role="group"
@@ -446,6 +431,24 @@ export default function LandingPage() {
                   </span>
                 </div>
               ))}
+            </div>
+
+            <div className="mb-6 overflow-hidden rounded-lg border border-line bg-surface">
+              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
+              <DemoVideo
+                src="/demo-capture.mp4"
+                poster="/demo-poster.jpg"
+                className="block aspect-video w-full border-b border-line bg-canvas"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
+                <span className="font-mono text-xs text-body">
+                  11:32 shared ◉{' '}
+                  <b className="font-medium text-status-done">
+                    11:32 reel analysis ready
+                  </b>{' '}
+                  ◉ 11:33 landed in Dashboard
+                </span>
+              </div>
             </div>
 
             <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
