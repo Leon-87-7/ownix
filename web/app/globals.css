@@ -8,7 +8,7 @@
      The reduced-motion block below already forces scroll-behavior: auto. */
   @media (prefers-reduced-motion: no-preference) {
     html {
-      scroll-behavior: smooth;
+      scroll-behavior: auto !important;
     }
   }
 

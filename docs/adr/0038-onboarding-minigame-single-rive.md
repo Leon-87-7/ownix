@@ -1,9 +1,10 @@
 ---
 adr: "0038"
 title: Onboarding mini-game as a single interactive Rive state machine
-status: accepted
+status: superseded by ADR-0044
 date: 2026-07-20
 supersedes: "0037"
+superseded-by: "0044"
 ---
 
 ## Context

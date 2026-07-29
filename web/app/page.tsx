@@ -167,11 +167,13 @@ export default function LandingPage() {
             <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
               It&apos;s the share sheet you already use - aimed at
               Ownix instead of a friend. Mid-doomscroll, mid-commute,
-              mid-anything: share it, keep scrolling. Ownix does the
-              reading.
+              mid-anything.
             </p>
 
             <OnboardingStepper />
+            <div className="mt-6 min-w-0 flex-1">
+              <WordmarkMarquee />
+            </div>
 
             <div
               role="group"
@@ -330,9 +332,9 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
               <div>
-                <span className="mb-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
+                {/* <span className="mb-2 block font-mono text-[11px] font-medium tracking-[0.4px] text-contrasignal">
                   INDEX
-                </span>
+                </span> */}
                 <h2
                   id="features"
                   className="text-pretty mb-3 max-w-[16ch] text-[clamp(24px,4vw,36px)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
@@ -352,9 +354,10 @@ export default function LandingPage() {
 
               <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
                 <div className="py-4 first:pt-0 md:py-5">
-                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                  <br />
+                  {/* <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
                     FEED
-                  </span>
+                  </span> */}
                   <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
                     Your personal search-engine
                   </h3>
@@ -366,9 +369,9 @@ export default function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
+                  {/* <span className="mb-1 block font-mono text-[11px] font-medium tracking-[0.4px] text-muted">
                     DOCS
-                  </span>
+                  </span> */}
                   <h3 className="mb-1 text-[16px] font-semibold leading-snug text-ink">
                     That PDF you saved and never reopened?
                   </h3>
@@ -433,8 +436,29 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <div className="mb-6 overflow-hidden rounded-lg border border-line bg-surface">
-              {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item in the Ownix feed. */}
+            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+              As I was building Ownix I once needed a frontend
+              component library I&apos;d seen weeks earlier -
+              couldn&apos;t remember its name, just a glimpse of the
+              homepage. Searched my Index instead of my memory, and
+              there it was in the link table.
+            </p>
+
+            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
+              Don&apos;t remember the title either? Search by tag,
+              thumbnail, or whatever you do remember, and pull up
+              every link a video ever mentioned - long after it
+              scrolled away.
+            </p>
+
+            {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item
+              in the Ownix feed. Sits after the recall paragraphs rather than
+              between the tiles and them: the tiles claim volume, the paragraphs
+              say why volume matters, and the clip is the "here it is actually
+              happening" payoff. Capped to the section's 58ch column so it lines
+              up with the prose instead of spanning the full 960px and snapping
+              the reader's eye back out to full width. */}
+            <div className="mb-6 mx-auto max-w-[58ch] overflow-hidden rounded-lg border border-line bg-surface">
               <DemoVideo
                 src="/demo-capture.mp4"
                 poster="/demo-poster.jpg"
@@ -450,21 +474,6 @@ export default function LandingPage() {
                 </span>
               </div>
             </div>
-
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              As I was building Ownix I once needed a frontend
-              component library I&apos;d seen weeks earlier -
-              couldn&apos;t remember its name, just a glimpse of the
-              homepage. Searched my Index instead of my memory, and
-              there it was in the link table.
-            </p>
-
-            <p className="text-pretty mb-6 max-w-[58ch] text-[15px] leading-relaxed">
-              Don&apos;t remember the title either? Search by tag,
-              thumbnail, or whatever you do remember, and pull up
-              every link a video ever mentioned - long after it
-              scrolled away.
-            </p>
 
             <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
               <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
