@@ -225,34 +225,34 @@
 /* Mobile onboarding stepper (components/landing/mobile-onboarding-stepper.tsx).
    The section holds the viewport while the visitor taps through the three steps,
    then releases — the same read as the desktop ScrollTrigger pin, built from
-   `position: sticky` rather than a second ScrollTrigger. Sticky costs no JS and
-   never takes the scroll away from the finger: a visitor who doesn't want to
-   tap keeps scrolling and the section lets go.
+   `position: sticky` inside a taller runway. Sticky costs no JS and never takes
+   the scroll away from the finger: a visitor who doesn't want to tap keeps
+   scrolling and the section lets go.
 
-   The stuck card sizes itself to its own content — no forced `min-height:
-   100svh`. An earlier version centered the card inside a full-viewport-tall
-   box, which put dead space on both sides of it: above the card before scroll
-   reaches the section, and below the card before the section releases into the
-   marquee — visible at rest, not just mid-gesture. The hold now lives entirely
-   in `.stepper-runway`'s `padding-bottom`: the extra scroll distance the card
-   stays pinned for before the container ends.
-
-   Two guards, both load-bearing, which is why this is CSS and not stacked
+   Two guards, both load-bearing, which is why this is CSS and not six stacked
    Tailwind variants:
 
-   - `min-height: 640px` — below this (a landscape phone) skip sticky
-     altogether. A card taller than a short viewport would otherwise pin itself
-     off the bottom edge, putting the invite link out of reach.
+   - `min-height: 640px` — the stuck child is at least one viewport tall, and a
+     sticky element TALLER than the viewport parks its own bottom permanently
+     off-screen, which would put the invite link out of reach. Below this height
+     (landscape phones) the stepper stays in normal document flow.
    - `prefers-reduced-motion: no-preference` — mirrors the desktop timeline's own
-     matchMedia query, so both breakpoints fall back to plain flow together. */
+     matchMedia query, so both breakpoints fall back to plain flow together.
+
+   Runway is 100svh (the stuck child) + one ~26svh beat per step. Recompute if
+   STEPS grows past three. */
 @media (min-height: 640px) and (prefers-reduced-motion: no-preference) {
   .stepper-runway {
-    padding-bottom: 24svh;
+    height: 180svh;
   }
 
   .stepper-stick {
     position: sticky;
     top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100svh;
   }
 }
 
