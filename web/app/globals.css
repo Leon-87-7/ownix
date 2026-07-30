@@ -241,14 +241,14 @@
 
    Runway is 100svh (the stuck child) + one ~26svh beat per step. Recompute if
    STEPS grows past three. */
-@media (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+@media (min-height: 320px) and (prefers-reduced-motion: no-preference) {
   .stepper-runway {
     height: 180svh;
   }
 
   .stepper-stick {
     position: sticky;
-    top: 0;
+    top: 24px;
     display: flex;
     flex-direction: column;
     justify-content: center;

@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { STEPS } from './onboarding-stepper';
+import { WordmarkMarquee } from './wordmark-marquee';
 
 /**
  * Tappable onboarding stepper for the mobile breakpoint (`sm:hidden`).
@@ -49,6 +50,14 @@ export function MobileOnboardingStepper() {
           six lines of plain CSS. See the `.stepper-stick` block there. */}
       <div className="stepper-runway">
         <div className="stepper-stick">
+          <h2 className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
+            Three taps. Nothing new to learn.
+          </h2>
+          <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
+            It&apos;s the share sheet you already use - aimed at Ownix
+            instead of a friend. Mid-doomscroll, mid-commute,
+            mid-anything.
+          </p>
           <div className="mb-4 rounded-lg border border-line bg-surface p-2">
             <ol
               className="grid grid-cols-3 gap-2"
@@ -124,7 +133,9 @@ export function MobileOnboardingStepper() {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => setActiveIndex((index) => Math.max(0, index - 1))}
+              onClick={() =>
+                setActiveIndex((index) => Math.max(0, index - 1))
+              }
               disabled={isFirst}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
             >
@@ -162,6 +173,9 @@ export function MobileOnboardingStepper() {
           >
             Get an invite
           </a>
+          <div className="mt-6 min-w-0 flex-1">
+            <WordmarkMarquee />
+          </div>
         </div>
       </div>
     </div>

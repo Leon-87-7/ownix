@@ -163,27 +163,29 @@ export default function LandingPage() {
           className="border-t border-line py-6"
         >
           <div className="mx-auto max-w-[960px] px-6">
-            <h2
-              id="onboarding"
-              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
-            >
-              Three taps. Nothing new to learn.
-            </h2>
-            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
-              It&apos;s the share sheet you already use - aimed at
-              Ownix instead of a friend. Mid-doomscroll, mid-commute,
-              mid-anything.
-            </p>
+            <div className="hidden sm:block">
+              <h2
+                id="onboarding"
+                className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              >
+                Three taps. Nothing new to learn.
+              </h2>
+              <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
+                It&apos;s the share sheet you already use - aimed at
+                Ownix instead of a friend. Mid-doomscroll,
+                mid-commute, mid-anything.
+              </p>
+            </div>
 
             <MobileOnboardingStepper />
             <div className="hidden sm:block">
               <OnboardingStepper />
             </div>
-            <div className="mt-6 min-w-0 flex-1">
+            <div className="mt-6 min-w-0 flex-1 hidden sm:block">
               <WordmarkMarquee />
             </div>
 
-            <div
+            {/* <div
               role="group"
               className="mt-6 flex flex-wrap gap-2"
               aria-label="What Ownix indexes"
@@ -196,7 +198,7 @@ export default function LandingPage() {
                   {label}
                 </span>
               ))}
-            </div>
+            </div> */}
           </div>
         </section>
 
