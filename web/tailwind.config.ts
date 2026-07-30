@@ -9,6 +9,11 @@ const config: Config = {
         canvas: '#0d0e10',
         surface: '#16181c',
         raised: '#202329',
+        // A fourth rung on the plate ladder, one step above `raised`, reserved
+        // for *selection* — a state that must not read as a hovered `raised`
+        // plate and must not spend signal (DESIGN.md §5 "Chips", stepper
+        // carve-out). Not a general-purpose surface.
+        selected: '#2a2e36',
         line: {
           DEFAULT: '#30343d',
           strong: '#343a44',

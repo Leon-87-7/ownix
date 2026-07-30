@@ -5,6 +5,7 @@ colors:
   canvas: '#0d0e10'
   surface: '#16181c'
   surface-raised: '#202329'
+  surface-selected: '#2a2e36' # selection plate — see §5 Chips, stepper carve-out
   hairline: '#30343d'
   hairline-strong: '#343a44'
   ink: '#f4f1eb'
@@ -269,6 +270,7 @@ content type.
 - **Canvas** (`#0d0e10`): The page floor — near-black with a restrained premium cast.
 - **Surface** (`#16181c`): The working layer — cards, rows, sidebars, panels, and tiles.
 - **Surface Raised** (`#202329`): Hover plates, active nav plates, and one-step-raised surfaces.
+- **Surface Selected** (`#2a2e36`): One rung above raised, reserved for a *selected* control that must not spend amber — see the stepper carve-out under §5 Chips. It exists so selection never reads as a hovered raised plate. Not a general-purpose surface.
 - **Hairline** (`#30343d`): Default 1px border on plates and inputs.
 - **Hairline Strong** (`#343a44`): Emphasized borders such as input hover and table header rules.
 - **Ink** (`#f4f1eb`): Headings and primary content text.
@@ -386,6 +388,7 @@ float. Overlays do.
 
 - **Style:** 28px tall, 6px radius, surface fill with body text at rest.
 - **State:** Active chip flips to Index Amber fill + near-black text. Selection is an action, so it earns amber. Hover on inactive chips raises the plate.
+- **Stepper carve-out.** The rule above holds because a filter chip's selection **is** the action — there is no second control. In a stepper there is: selection and advance are two separate controls on the same screen, so an amber chip would spend signal on _you are here_ while `Next` is the thing to press, leaving neither able to claim it. A step chip therefore takes **Surface Selected** (`#2a2e36`) + an ink underline, its progress rail takes `ink/60`, and amber stays on the advance button and the focus ring. Applies wherever selection marks position rather than performing the action.
 
 ### Badges
 

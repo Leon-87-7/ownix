@@ -222,6 +222,40 @@
   }
 }
 
+/* Mobile onboarding stepper (components/landing/mobile-onboarding-stepper.tsx).
+   The section holds the viewport while the visitor taps through the three steps,
+   then releases — the same read as the desktop ScrollTrigger pin, built from
+   `position: sticky` inside a taller runway. Sticky costs no JS and never takes
+   the scroll away from the finger: a visitor who doesn't want to tap keeps
+   scrolling and the section lets go.
+
+   Two guards, both load-bearing, which is why this is CSS and not six stacked
+   Tailwind variants:
+
+   - `min-height: 640px` — the stuck child is at least one viewport tall, and a
+     sticky element TALLER than the viewport parks its own bottom permanently
+     off-screen, which would put the invite link out of reach. Below this height
+     (landscape phones) the stepper stays in normal document flow.
+   - `prefers-reduced-motion: no-preference` — mirrors the desktop timeline's own
+     matchMedia query, so both breakpoints fall back to plain flow together.
+
+   Runway is 100svh (the stuck child) + one ~26svh beat per step. Recompute if
+   STEPS grows past three. */
+@media (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  .stepper-runway {
+    height: 180svh;
+  }
+
+  .stepper-stick {
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100svh;
+  }
+}
+
 @keyframes auth-card-enter {
   from {
     opacity: 0;
