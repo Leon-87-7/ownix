@@ -239,27 +239,36 @@
    bottom (the marquee) may take a touch more scroll to reach while still
    pinned, which is the honest alternative to reserving blank space that isn't
    there. The hold itself is `.onboarding-runway`'s `padding-bottom` — extra
-   scroll distance before the block releases.
+   scroll distance before the block releases. `top: 24px`, not `0`, so the
+   stuck content keeps a hairline of breathing room off the literal edge of
+   the screen instead of jamming flush against it.
 
    Three guards, all load-bearing:
 
    - `max-width: 639.98px` — the complement of Tailwind's `sm` breakpoint.
      Desktop already pins the whole section via its own GSAP ScrollTrigger
      (onboarding-stepper.tsx); this rule must never double up with that.
-   - `min-height: 640px` — below this (a landscape phone) skip sticky
-     altogether. Four stacked elements taller than a short viewport would
-     otherwise pin themselves off the bottom edge.
+   - `orientation: portrait` — skip sticky on a landscape phone, where four
+     stacked elements taller than a short viewport would otherwise pin
+     themselves off the bottom edge. Deliberately NOT `min-height: 640px`
+     (an earlier version of this guard): mobile browsers report viewport
+     height against the visual state of their own address-bar/toolbar chrome,
+     which fluctuates as it collapses on scroll — a fixed pixel threshold can
+     read as "too short" on a real portrait phone depending on that chrome's
+     state at evaluation time, silently disabling the whole feature.
+     Orientation doesn't have that problem.
    - `prefers-reduced-motion: no-preference` — mirrors the desktop timeline's
      own matchMedia query, so both breakpoints fall back to plain flow
      together. */
-@media (max-width: 639.98px) and (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+@media (max-width: 639.98px) and (orientation: portrait) and (prefers-reduced-motion: no-preference) {
   .onboarding-runway {
+    padding-bottom: 24vh; /* fallback for browsers without svh support */
     padding-bottom: 24svh;
   }
 
   .onboarding-stick {
     position: sticky;
-    top: 0;
+    top: 24px;
   }
 }
 
