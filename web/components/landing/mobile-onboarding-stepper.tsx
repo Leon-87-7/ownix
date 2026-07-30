@@ -13,15 +13,18 @@ import { STEPS } from './onboarding-stepper';
  *
  * Sticking, without ScrollTrigger. The section holds the viewport while the
  * visitor taps through, then releases — the same read as the desktop pin, but
- * built from `position: sticky` inside a taller runway rather than a second
- * ScrollTrigger (`.stepper-runway` / `.stepper-stick` in globals.css, which
- * also carry the viewport-height guard). Sticky costs no JS, can't desync from
- * the desktop timeline, and — unlike a pin with `scrub` — never takes the
- * scroll away from the finger: a visitor who doesn't want to tap just keeps
- * scrolling and the section lets go. That directness is what makes this safe to
- * do on a phone at all, and it supersedes the desktop-only note in
- * `onboarding-stepper.tsx` (which reasoned about *scroll-jacking* pins
- * specifically, ADR-0038).
+ * built from `position: sticky` rather than a second ScrollTrigger
+ * (`.stepper-runway` / `.stepper-stick` in globals.css, which also carry the
+ * viewport-height guard). The card sizes itself to its own content; the hold
+ * duration is `.stepper-runway`'s `padding-bottom`, not a forced height on the
+ * card — a card forced taller than its content and centered inside that space
+ * shows as dead space above and below it, at rest, not just mid-scroll. Sticky
+ * costs no JS, can't desync from the desktop timeline, and — unlike a pin with
+ * `scrub` — never takes the scroll away from the finger: a visitor who doesn't
+ * want to tap just keeps scrolling and the section lets go. That directness is
+ * what makes this safe to do on a phone at all, and it supersedes the
+ * desktop-only note in `onboarding-stepper.tsx` (which reasoned about
+ * *scroll-jacking* pins specifically, ADR-0038).
  *
  * Selection is `bg-selected`, not `bg-signal`. DESIGN.md rations signal to mean
  * *act here*; on this breakpoint the action is `Next`, so an amber chip would
