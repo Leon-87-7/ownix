@@ -222,53 +222,37 @@
   }
 }
 
-/* Mobile onboarding intro (app/page.tsx, onboarding <section>). The heading,
-   its paragraph, the tappable stepper, and the wordmark marquee hold together
-   in one viewport while the visitor scrolls through them, then release — the
-   same read as the desktop ScrollTrigger pin on `<OnboardingStepper>`, built
-   from `position: sticky` instead of a second ScrollTrigger. Sticky costs no
-   JS and never takes the scroll away from the finger: a visitor who doesn't
-   want to engage just keeps scrolling and the section lets go.
+/* Mobile onboarding stepper (components/landing/mobile-onboarding-stepper.tsx).
+   The section holds the viewport while the visitor taps through the three steps,
+   then releases — the same read as the desktop ScrollTrigger pin, built from
+   `position: sticky` inside a taller runway. Sticky costs no JS and never takes
+   the scroll away from the finger: a visitor who doesn't want to tap keeps
+   scrolling and the section lets go.
 
-   The stuck block sizes itself to its own content — no forced min-height.
-   Forcing one earlier (to guarantee "a full viewport") centered a much
-   shorter child inside it, which showed as dead space above the content
-   before scroll reached the section, and again below it before release. The
-   four elements together already run close to a viewport's height on most
-   phones, so they read as "one screen" naturally; on the shortest phones the
-   bottom (the marquee) may take a touch more scroll to reach while still
-   pinned, which is the honest alternative to reserving blank space that isn't
-   there. The hold itself is `.onboarding-runway`'s `padding-bottom` — extra
-   scroll distance before the block releases. `top: 24px`, not `0`, so the
-   stuck content keeps a hairline of breathing room off the literal edge of
-   the screen instead of jamming flush against it.
+   Two guards, both load-bearing, which is why this is CSS and not six stacked
+   Tailwind variants:
 
-   Three guards, all load-bearing:
+   - `min-height: 640px` — the stuck child is at least one viewport tall, and a
+     sticky element TALLER than the viewport parks its own bottom permanently
+     off-screen, which would put the invite link out of reach. Below this height
+     (landscape phones) the stepper stays in normal document flow.
+   - `prefers-reduced-motion: no-preference` — mirrors the desktop timeline's own
+     matchMedia query, so both breakpoints fall back to plain flow together.
 
-   - `max-width: 639.98px` — the complement of Tailwind's `sm` breakpoint.
-     Desktop already pins the whole section via its own GSAP ScrollTrigger
-     (onboarding-stepper.tsx); this rule must never double up with that.
-   - `orientation: portrait` — skip sticky on a landscape phone, where four
-     stacked elements taller than a short viewport would otherwise pin
-     themselves off the bottom edge. Deliberately NOT `min-height: 640px`
-     (an earlier version of this guard): mobile browsers report viewport
-     height against the visual state of their own address-bar/toolbar chrome,
-     which fluctuates as it collapses on scroll — a fixed pixel threshold can
-     read as "too short" on a real portrait phone depending on that chrome's
-     state at evaluation time, silently disabling the whole feature.
-     Orientation doesn't have that problem.
-   - `prefers-reduced-motion: no-preference` — mirrors the desktop timeline's
-     own matchMedia query, so both breakpoints fall back to plain flow
-     together. */
-@media (max-width: 639.98px) and (orientation: portrait) and (prefers-reduced-motion: no-preference) {
-  .onboarding-runway {
-    padding-bottom: 24vh; /* fallback for browsers without svh support */
-    padding-bottom: 24svh;
+   Runway is 100svh (the stuck child) + one ~26svh beat per step. Recompute if
+   STEPS grows past three. */
+@media (min-height: 640px) and (prefers-reduced-motion: no-preference) {
+  .stepper-runway {
+    height: 180svh;
   }
 
-  .onboarding-stick {
+  .stepper-stick {
     position: sticky;
-    top: 24px;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100svh;
   }
 }
 

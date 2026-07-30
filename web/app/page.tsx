@@ -163,36 +163,24 @@ export default function LandingPage() {
           className="border-t border-line py-6"
         >
           <div className="mx-auto max-w-[960px] px-6">
-            {/* Mobile-only hold: heading, paragraph, stepper, and marquee stay
-                on screen together while the visitor scrolls through them, then
-                release — mirrors the desktop pin below, which holds the same
-                four beats via its own GSAP ScrollTrigger instead. Rules live in
-                globals.css (`.onboarding-runway` / `.onboarding-stick`), scoped
-                to mobile widths only so the two never overlap. Badges are
-                deliberately outside this wrapper — they belong to the page
-                that continues after the intro releases, not the intro itself. */}
-            <div className="onboarding-runway">
-              <div className="onboarding-stick">
-                <h2
-                  id="onboarding"
-                  className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
-                >
-                  Three taps. Nothing new to learn.
-                </h2>
-                <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
-                  It&apos;s the share sheet you already use - aimed at
-                  Ownix instead of a friend. Mid-doomscroll, mid-commute,
-                  mid-anything.
-                </p>
+            <h2
+              id="onboarding"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              Three taps. Nothing new to learn.
+            </h2>
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
+              It&apos;s the share sheet you already use - aimed at
+              Ownix instead of a friend. Mid-doomscroll, mid-commute,
+              mid-anything.
+            </p>
 
-                <MobileOnboardingStepper />
-                <div className="hidden sm:block">
-                  <OnboardingStepper />
-                </div>
-                <div className="mt-6 min-w-0 flex-1">
-                  <WordmarkMarquee />
-                </div>
-              </div>
+            <MobileOnboardingStepper />
+            <div className="hidden sm:block">
+              <OnboardingStepper />
+            </div>
+            <div className="mt-6 min-w-0 flex-1">
+              <WordmarkMarquee />
             </div>
 
             <div
