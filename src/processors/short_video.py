@@ -4,6 +4,8 @@ import base64
 import json
 import re
 import time
+
+import httpx
 from datetime import datetime, timezone
 
 from src import database
@@ -24,26 +26,45 @@ log = get_logger(__name__)
 
 
 def _code_block(code: str, lang: str) -> str:
-    """Fenced block. Backticks in the code would break out of the fence, so widen
-    the fence past the longest run inside instead of mangling the code."""
+    """CommonMark fence, for the Drive .md and the plain-text Telegram fallback.
+    Backticks in the code would close the fence early, so widen the fence past the
+    longest run inside rather than touching the code — the snippet stays verbatim."""
     longest = max((len(m) for m in re.findall(r"`+", code)), default=0)
     fence = "`" * max(3, longest + 1)
-    return f"{fence}{lang}\n{code.rstrip()}\n{fence}"
+    newline = "" if code.endswith("\n") else "\n"
+    return f"{fence}{lang}\n{code}{newline}{fence}"
+
+
+def _telegram_code_block(code: str, lang: str) -> str:
+    """Telegram MarkdownV2 is a different contract from CommonMark: it has no
+    fence-widening, and inside a `pre` entity a backtick or backslash must be
+    backslash-escaped or the entity breaks. Escaping is safe here precisely
+    because Telegram strips it back out when rendering."""
+    escaped = code.replace("\\", "\\\\").replace("`", "\\`")
+    newline = "" if escaped.endswith("\n") else "\n"
+    return f"```{lang}\n{escaped}{newline}```"
 
 
 async def _deliver_code(chat_id: int, tag: str, job_id: str, code: str, lang: str) -> None:
     """Send extracted code as a rendered Markdown fence, or as a .md file when it
     exceeds Telegram's 4096-char message cap."""
-    block = _code_block(code, lang)
-    if len(block) + len(tag) + 2 > 4000:
-        await send_document(chat_id, f"# Code\n\n{block}\n".encode("utf-8"), f"{job_id}_code.md")
+    # Length-check the escaped payload that actually goes over the wire — escaping
+    # can push a block that fit as raw text past the cap.
+    message = f"{tag}\n{_telegram_code_block(code, lang)}"
+    if len(message) > 4000:
+        await send_document(
+            chat_id, f"# Code\n\n{_code_block(code, lang)}\n".encode("utf-8"), f"{job_id}_code.md"
+        )
         return
     try:
-        await send_message(chat_id, f"{tag}\n{block}", parse_mode="MarkdownV2")
-    except Exception as exc:
-        # MarkdownV2 is picky; a rejected parse must not cost the user the code.
+        await send_message(chat_id, message, parse_mode="MarkdownV2")
+    except httpx.HTTPStatusError as exc:
+        # Only a parse rejection (400) is worth retrying unformatted; a timeout or
+        # auth failure would fail again, and swallowing it would hide a real outage.
+        if exc.response.status_code != 400:
+            raise
         log.warning("short_code_markdown_failed", job_id=job_id, error=str(exc)[:120])
-        await send_message(chat_id, f"{tag}\n{block}")
+        await send_message(chat_id, f"{tag}\n{_code_block(code, lang)}")
 
 
 def _build_analysis_markdown(
@@ -235,7 +256,10 @@ async def run(job: dict) -> None:
     await _persist_best_frame_thumbnail(job_id, platform, raw_frames, main_idx)
     title = vision.get("title") or frame_resp.get("title", "")
     summary = vision.get("summary", "")
-    code = (vision.get("code") or "").strip()
+    # Keep the snippet byte-for-byte — .strip() would eat the leading indentation
+    # of code captured from inside a block. Only the emptiness test is stripped.
+    raw_code = vision.get("code") or ""
+    code = raw_code if raw_code.strip() else ""
     code_lang = (vision.get("code_lang") or "").strip()
     ignored = await database.get_ignored_domains(chat_id)
     links: list[dict] = filter_vision_links(vision.get("links", []), extra_ignored=ignored)

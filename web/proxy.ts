@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/logout", "/privacy", "/terms", "/restricted", "/opengraph-image", "/offline"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Mock/demo mode: no real auth backend, so skip the session gate. Guarded to
