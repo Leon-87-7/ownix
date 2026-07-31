@@ -117,8 +117,8 @@ _FEATURES: list[tuple[str, str]] = [
 ]
 
 _STATUS_LINE = (
-    "You're on the list. We'll email you the moment your access is live — "
-    "that message has your Feed link."
+    "I'll approve your account shortly — you'll get a follow-up email with "
+    "your Feed link the moment it's live."
 )
 
 _NOTE_PARAGRAPHS: list[str] = [
@@ -136,10 +136,9 @@ def _build_welcome_text(name: str) -> str:
     lines: list[str] = [
         f"Hi {name},",
         "",
-        "Thanks for requesting access to Ownix — you're on the list. Ownix is "
-        "one place to save the links, videos, and docs you care about, and "
-        "actually find them again. Here's what you'll reach for every day once "
-        "you're in:",
+        "Welcome to Ownix! It's one place to save the links, videos, and docs "
+        "you care about, and actually find them again. Here's what you'll reach "
+        "for every day:",
         "",
     ]
     for i, (title, body) in enumerate(_FEATURES, start=1):
@@ -184,7 +183,7 @@ def _note_paragraphs_html() -> str:
 
 def _build_welcome_html(name: str) -> str:
     safe_name = html.escape(name)
-    preheader = "Thanks for joining the list — here's what you'll be doing in Ownix, day to day."
+    preheader = "Welcome to Ownix — I'll approve your account shortly. A quick tour while you wait."
     font = (
         "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,"
         "Arial,sans-serif"
@@ -214,9 +213,8 @@ Your internet. Own it.</div>
 border-right:1px solid {_LINE};">
               <p style="margin:0 0 12px 0;font-size:16px;color:{_INK};">Hi {safe_name},</p>
               <p style="margin:0 0 20px 0;font-size:15px;color:{_BODY};line-height:1.6;">
-                Thanks for requesting access to Ownix — you're on the list. Ownix is one place to
-                save the links, videos, and docs you care about, and actually find them again.
-                Here's what you'll reach for every day once you're in:
+                Welcome to Ownix! It's one place to save the links, videos, and docs you care
+                about, and actually find them again. Here's what you'll reach for every day:
               </p>
 
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">

@@ -65,10 +65,11 @@ async def test_welcome_email_onboards_pending_user(monkeypatch: pytest.MonkeyPat
         assert feature_title in html
     assert "OwnixAdd" in text and "OwnixAdd" in html
 
-    # Pre-approval framing: sets expectation, promises no Feed access yet.
-    assert "on the list" in text.lower()
-    assert "requesting access to Ownix" in text
-    assert "requesting access to Ownix" in html
+    # Pre-approval framing: personal "I'll approve shortly", no Feed access yet.
+    assert "Welcome to Ownix" in text
+    assert "Welcome to Ownix" in html
+    assert "approve your account shortly" in text
+    assert "approve your account shortly" in html
     # No "your Feed is live" claim and no Feed button in the onboarding email.
     assert "Feed is live" not in text
     assert "Open your Feed" not in html
