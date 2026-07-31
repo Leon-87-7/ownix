@@ -6,7 +6,7 @@
 ## Required context — read these first, in this order
 
 1. `docs/plans/2026-07-13-next14-to-16-migration.md` — the authoritative
-   migration plan, **re-verified against `main` on 2026-07-28**. Its step
+   migration plan, **re-verified against `main` on 2026-07-31**. Its step
    order, the Turbopack SVGR rule, the sync-`cookies()` fix in
    `app/page.tsx`, and the "verify-only / don't pre-fix" list are binding
    where they differ from the issue bodies (the issues predate the
@@ -22,21 +22,26 @@
    acceptance criteria; treat those as the per-slice definition of done. #366
    also has an AI-triage comment restating that the **Next.js ESLint plugin
    rules must stay active** in the new config (do not just delete linting).
+   All four are still **OPEN** as of 2026-07-31 — nothing here has landed yet.
 
-## Already-verified state (re-checked against `main`, 2026-07-28)
+## Already-verified state (re-checked against `main`, 2026-07-31)
 
 - `web/next.config.js:15-28` — the `webpack()` SVGR block is present exactly as
   the plan describes. Replace it (do not keep both — a webpack config present
   fails `next build` under Turbopack in 16).
-- `web/package.json:9` — `"lint": "next lint"`; `"test:run": "vitest run"`.
-  No ESLint config file exists in `web/`. (Open PR #401 configures ESLint on
-  Next 14 — see the plan's Step 4 note; don't produce a competing config.)
+- `web/package.json` — line 9 `"lint": "next lint"`; line 11
+  `"test:run": "vitest run"`; deps still `next@^14.2.29`, `react@^18`,
+  `react-dom@^18`. **No ESLint config file exists in `web/`** — PR #401 (the
+  Next-14 ESLint config) was **closed unmerged on 2026-07-22**, so #366 has a
+  clear field: there is no competing config to avoid.
 - `web/middleware.ts` — exports `function middleware(...)` + `const config`
   matcher; `web/middleware.test.ts` exists. Both must be renamed.
-- `web/app/page.tsx:69` — `cookies().get('vig_session')` called
-  **synchronously** in the sync `LandingPage` server component. Next 16
-  removes sync `cookies()`; this must become `async function LandingPage` +
-  `await cookies()` as part of #365.
+- `web/app/page.tsx` — `export default function LandingPage()` at line 66 calls
+  `cookies().get('vig_session')` **synchronously** at line 71. Next 16 removes
+  sync `cookies()`; this must become `async function LandingPage` +
+  `await cookies()` as part of #365. (The landing page has churned since the
+  plan was written — recent onboarding-stepper work — so match on the symbol,
+  not the line number.)
 - The `eslint-disable @next/next/no-img-element` comment lives at
   `web/components/shell/sidebar.tsx:116` and also in
   `web/components/feed/preview-card.tsx`, `web/components/feed/links-table.tsx`,
@@ -58,11 +63,12 @@
   transitional shims.
 - **Turbopack replaces the webpack block outright.** The documented rule is
   `turbopack.rules['*.svg'] = { loaders: ['@svgr/webpack'], as: '*.js' }` (the
-  `as: '*.js'` is required). A blanket `*.svg` rule is safe — every SVGR
-  consumer is a TSX import (`@/app/ownix-logo.svg` in `app/page.tsx`,
+  `as: '*.js'` is required). A blanket `*.svg` rule is safe — all seven SVGR
+  consumers are TSX imports of `@/app/ownix-logo.svg` (`app/page.tsx`,
   `components/shell/sidebar.tsx`, `components/shell/public-shell.tsx`,
-  `components/ui/public-header.tsx`, `components/ui/footer.tsx`); there are no
-  CSS `url()` consumers. Keep `svgr.d.ts` as-is; tests mock svg in
+  `components/ui/public-header.tsx`, `components/ui/footer.tsx`,
+  `components/ui/preview-motif.tsx`, `components/ui/no-preview-ring.tsx`);
+  there are no CSS `url()` consumers. Keep `svgr.d.ts` as-is; tests mock svg in
   `test/setup.ts`.
   - **Only** if SVGR misbehaves under Turbopack: fall back to keeping the
     webpack block and setting `"build": "next build --webpack"`. Try Turbopack
@@ -94,7 +100,7 @@ verification gate. Each slice must leave the app building and green
   `turbopack.rules['*.svg']` rule above. Keep `output: "standalone"` and the
   `rewrites()` block untouched.
 - Resolve peer-dep fallout on the watchlist packages at install time.
-- Fix the sync-`cookies()` holdout: `app/page.tsx:64-69` — make `LandingPage`
+- Fix the sync-`cookies()` holdout: `app/page.tsx` (`LandingPage`) — make it
   an `async function` and `await cookies()`. Keep the session-aware CTA
   behavior (signed-in vs "Look inside") identical.
 - `app/opengraph-image.tsx:7` sets `export const runtime = 'edge'`
@@ -110,8 +116,11 @@ Regression bar: every SVGR import must still render as a React component;
 
 - Run `npx @next/codemod@canary next-lint-to-eslint-cli .` to generate a
   flat-config ESLint setup and rewrite the `lint` script off `next lint`.
+  Nothing to reconcile with — `web/` has no ESLint config today (PR #401
+  closed unmerged).
 - Confirm the generated config keeps the **`@next/next` plugin rules active**
-  (see STALE #1 — five files rely on `no-img-element` disables), and that
+  (five files rely on `no-img-element` disables — see Already-verified state),
+  and that
   `npm run lint` runs the ESLint CLI directly and passes clean on current
   `web/` source.
 

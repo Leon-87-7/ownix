@@ -180,6 +180,97 @@ table`, there is no separate `dispatch.py`/`callbacks.py`).
 > expanded this task into **per-tenant Brain + an opt-in Community Brain tab**.
 > Consider splitting the Community Brain into its own task before issuing.
 
+> **Grilled 2026-07-31 (session 2) — per-tenant half CLOSED, split done.**
+> This task now covers **only** the per-tenant Brain; Community Brain + Sharer
+> window are deferred to their own task (opens preserved at the bottom).
+> Every session-1 decision was independently re-derived and confirmed. Written
+> up as **ADR-0043**; `CONTEXT.md`'s [[Second Brain]] entry updated. Five things
+> session 1 did not have:
+>
+> 1. **137 orphan links** (`source_job` → no `jobs` row) — the session-1 backfill
+>    rule `source_job → jobs.chat_id` yields `NULL` for them. Fixed with
+>    `COALESCE(..., <operator chat_id>)`; they are demonstrably the Operator's
+>    own May-2026 content from deleted jobs.
+> 2. **A second tenant already owns a link** (`6388384480` /
+>    `github.com/openai/openai-cookbook`). A literal "backfill everything to me"
+>    would have silently absorbed it — the exact leak this task removes.
+> 3. **Live Drive leak.** `brain.py` calls `upload_file()` with no `chat_id`;
+>    `drive.py:72` documents "System calls (no chat_id) pass", and
+>    `config.py:157` `export_blocked(None)` returns `False`. So every tenant's
+>    Brain `.md` lands in the Operator's Drive folder today. `brain.py` is
+>    ADR-0030's last uncovered caller. Session 1 never mentioned Drive.
+> 4. **`get_link_preview` IDOR** — `src/api/brain.py:57` takes no viewer, so any
+>    tenant can read any link by id.
+> 5. **`idx_links_url_unique` already exists** (migration v31). The soft dedup
+>    was hardened on the *wrong* key; migration must DROP it, not merely add one.
+>
+> Also: the scoping note at `src/api/brain.py:5-8` ("intentionally... the single
+> shared Second Brain... see PRD §5") is **stale and wrong** — it contradicts
+> this task's session-1 resolution, and PRD §5 is *Deployment & Operations*. The
+> Brain spec is §13, which assumes a single user rather than deciding anything.
+> ARCHITECTURE D7 ("single-user portfolio tool — harden when: tool goes
+> multi-user") and D8 ("switch when per-user partitioning is needed") both point
+> the same way. Delete the note during implementation.
+>
+> **Resolved this session:**
+>
+> - ~~One canonical row + membership table, or a row per owner?~~ → **Row per
+>   owner.** `UNIQUE(chat_id, url)`, duplicate rows accepted. A shared canonical
+>   row leaves `title`/`description` mutable by whichever tenant re-scrapes last,
+>   which is the same leak one level down; it also forces `link_tags.link_id` to
+>   re-point off `links.id`, contradicting session 1's join-key decision.
+> - ~~Cost of duplicate rows?~~ → **Duplicate the row, never the work.** Before
+>   fetching or embedding, `SELECT title, description, og_image_url, embedding
+>   FROM links WHERE url = ? AND embedding IS NOT NULL LIMIT 1` and reuse it. No
+>   refetch, no second Gemini call. Residual cost is ~3 KB of blob per duplicate
+>   row; revisit at ~100k rows (`ponytail:` the ceiling in code).
+> - ~~First scrape vs re-scrape on a second tenant's ingest?~~ → **First scrape
+>   wins.** Re-scraping would mutate content another tenant already sees. Repo
+>   `stars`/`pushed_at` refresh (ADR-0027) stays, being objective facts.
+> - ~~How does `ingest_links` learn `chat_id`?~~ → **Derives it** from
+>   `source_job_id` (`SELECT chat_id FROM jobs WHERE id = ?`). Signature and all
+>   7 callers unchanged; a caller cannot pass a mismatched owner. Job missing →
+>   skip the ingest, which also guards against creating new orphans.
+> - ~~FK on `source_job`?~~ → **No.** Enforcing it would fail the migration on
+>   the 137 orphans. `chat_id` carries ownership now; `source_job` degrades to
+>   the Obsidian backlink it always really was.
+> - ~~Drive vault after scoping?~~ → **Operator-only, via the gate that already
+>   exists.** Pass `chat_id=` at the four `brain.py` upload sites. Non-Operator
+>   tenants get the DB Brain (Links table, graph, `/find`) and `drive_file_id`
+>   stays `NULL`, so `_touch_existing_link`'s rewrite branch no-ops. Free bonus:
+>   `export_blocked` already exempts token-holders and `drive.py:78` routes them
+>   to `user_folder_id(chat_id)`, so a tenant who has connected Google gets their
+>   own folder with no extra work. Also removes the `{slug}.md` collision.
+>   Aggregates (`rebuild_graph`, `refresh_stale_links`) now pass each row's own
+>   `chat_id`, so they stop relying on the None-passes branch.
+> - ~~Restricted mode Brain (ADR-0035 "remains as-is")?~~ → **Operator's graph,
+>   read-only** — `preview.py:124` already uses `OPERATOR_CHAT_ID` for the Feed
+>   corpus, so Brain becomes consistent with Feed rather than special-cased.
+>
+> **Implementation order** (one migration, `PRAGMA user_version` bump):
+>
+> 1. `ALTER TABLE links ADD COLUMN chat_id INTEGER` → backfill
+>    `COALESCE((SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+>    <operator>)` → `DROP INDEX idx_links_url_unique` →
+>    `CREATE UNIQUE INDEX idx_links_chat_url ON links(chat_id, url)`.
+>    (`chat_id NOT NULL` needs a table rebuild in SQLite — acceptable at 449 rows;
+>    decide rebuild-vs-leave-nullable at implementation time.)
+> 2. `ingest_links` derives `chat_id`; add the reuse `SELECT`; scope
+>    `_ingest_one_link`'s existence check and `_compute_related` to the owner.
+> 3. Add `WHERE l.chat_id = ?` to `list_links`, `search_links`, `get_graph`,
+>    `rebuild_graph`, `get_link_preview`; thread the viewer through
+>    `src/api/brain.py` (404, not 403, on another tenant's link — don't leak
+>    existence) and through `/find` + `/rebuild-graph` in the Telegram webhook.
+> 4. Pass `chat_id=` at the four `brain.py` Drive sites; delete the stale
+>    scoping note at `src/api/brain.py:5-8`.
+> 5. Restricted mode: Brain reads `OPERATOR_CHAT_ID`.
+>
+> **Verification:** seed two chat_ids with an overlapping URL and assert — each
+> sees exactly its own rows in `list_links`/`search`/`graph`; the second ingest
+> makes zero Gemini and zero HTTP calls; deleting tenant A's job leaves tenant
+> B's row intact (today it does not — `database.py:2253` deletes by `source_job`);
+> a non-Operator ingest writes no Drive file.
+
 > **Grill together with task 30.** Task 11 owns the data model (URL ↔ tag
 > join); task 30 owns the Links-table surface + the mobile color-badge
 > redesign that renders it. Same feature, two layers — decide the
@@ -231,19 +322,32 @@ tags(id) ON DELETE CASCADE, PRIMARY KEY(link_id, tag_id))` — mirrors
 - Confirm: tags never appear in the Community tab (private-only), correct?
 - Where does the opt-in/sharer toggle live in the UI (Brain page header,
   Community tab itself, controls page)?
-- Migration mechanics: schema version bump for `links.chat_id` + backfill +
-  `link_tags` + UNIQUE index decision on `(chat_id, url)` (harden the soft
-  dedup while migrating?).
-- Do `search_links`, `get_graph`, and `/api/brain/*` endpoints all gain viewer
-  scoping in this task, or does the Community tab ship read-only from the
-  shared pool first?
+- ~~Migration mechanics~~ → **closed 2026-07-31**, see the session-2 note above
+  (drop `idx_links_url_unique`, create `(chat_id, url)`, `COALESCE` backfill).
+- ~~Do `search_links`, `get_graph`, and `/api/brain/*` gain viewer scoping in
+  this task?~~ → **Yes, all of them, in this task.** The Community tab is split
+  out and no longer gates the scoping work.
 - Surface/edit URL tags where: the Brain Links table (task 30), the controls
   page, or both?
 - Migration: do existing `job_tags` rows get projected onto their URLs, or do
   URL tags start empty?
-- **ADR candidate** once the opens close: per-tenant Brain + forward-only
-  community sharing is hard to reverse, surprising without context, and a real
-  trade-off — write it up when the next session finishes.
+- ~~**ADR candidate**~~ → **ADR-0043** written 2026-07-31 for the per-tenant
+  half. Forward-only community sharing still needs its own ADR when that task
+  is grilled.
+
+**Deferred to a separate task — Community Brain + Sharer window.** Both concepts
+stay defined in `CONTEXT.md`; nothing about them is being built here. Their opens:
+
+- **Timer semantics:** fixed window with silent expiry (recommended — one
+  `sharer_until` timestamp, checked at ingest, no background jobs), fixed window
+  + Telegram expiry notice (needs a scheduled check), or activity-extended
+  sliding TTL? Is 8–12h fixed or user-chosen?
+- Confirm: tags never appear in the Community tab (private-only), correct?
+- Where does the opt-in/sharer toggle live in the UI (Brain page header,
+  Community tab itself, controls page)?
+- With `(chat_id, url)` rows, the Community tab must merge N owner-rows per URL
+  at read time — decide whether `shared_at` lives on the link row (per owner) or
+  in a separate table.
 
 ## 12. Repalette: new signal orange + dark plate tokens
 

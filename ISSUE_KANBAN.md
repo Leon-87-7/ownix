@@ -119,6 +119,11 @@
 | [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth | — |
 | [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval | Jobs / Ops | #449 |
 | [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved | Telegram / Copy | #449 |
+| [#457](https://github.com/Leon-87-7/ownix/issues/457) | refactor(brain): links.chat_id + backfill + owner-scoped ingest (per-tenant Second Brain) | Brain / Schema | — |
+| [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | #457 |
+| [#459](https://github.com/Leon-87-7/ownix/issues/459) | feat(telegram): scope /find and /rebuild-graph to the sender's own Brain | Telegram / Brain | #457 |
+| [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | #457 |
+| [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | #458 |
 
 ---
 
@@ -567,6 +572,15 @@ Streamline new-user signup — pending is a preview, not a wall (docs/TASK.md ta
 #450 pending sessions get the preview dashboard + queue banner (independent — reuses the ADR-0035 restricted plane)
 Critical path: #449 → {#451, #452}; #450 parallel
 Note: web-side submission for pending users and the INVITE_AUTO_APPROVE flag are deliberately out of scope; #352 (auto-approve) is the related open idea.
+
+Per-tenant Second Brain (docs/TASK.md task 11 session 2 — grill-with-docs 2026-07-31; ADR-0043; CONTEXT.md `Second Brain`)
+#457 links.chat_id + backfill + owner-scoped ingest (root, unblocked — owns the migration, the COALESCE backfill, and the ingest reuse SELECT) [HITL]
+├── #458 viewer-scoped Brain reads on the dashboard (list/search/graph/preview + the get_link_preview IDOR)
+│   └── #461 restricted-mode Brain reads the Operator graph (needs scoped reads to exist before it can name an owner; supersedes ADR-0035 line 81)
+├── #459 scope /find and /rebuild-graph to the sender (Telegram half of #458, ships independently)
+└── #460 Brain Drive writes obey the ADR-0030 export gate (needs per-row chat_id so aggregates stop relying on export_blocked(None))
+Critical path: #457 → #458 → #461; {#459, #460} parallel off #457
+Note: #457 is HITL — the backfill runs against live data and aborts if OPERATOR_CHAT_ID is unset while the 137 orphan rows exist. Community Brain + Sharer window are deliberately split out of task 11 and not yet broken into issues.
 ```
 
 ---
