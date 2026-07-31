@@ -32,9 +32,12 @@ import shutil
 from PIL import Image
 import io
 
+# Relative to this file — an absolute default silently stops resolving the moment
+# the checkout moves or gets renamed, and yt-dlp then fails on Instagram with an
+# unrelated-looking "empty media response".
 INSTAGRAM_COOKIES = os.environ.get(
     "INSTAGRAM_COOKIES",
-    r"C:\\Users\\leone\\Desktop\\codeKitchen\\vig\\credentials\\instagram_cookies.txt",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials", "instagram_cookies.txt"),
 )
 INSTAGRAM_MAX_SLIDES = 10
 
@@ -419,8 +422,10 @@ def get_short_frames():
         except Exception as e:
             return jsonify({"error": {"type": "download_failed", "message": str(e)}})
 
-        # Find the downloaded file
-        candidates = os.listdir(tmp_video_dir)
+        # Find the downloaded file. Filter by the outtmpl prefix — _with_cookies
+        # drops cookies.txt in this same dir, and it sorts ahead of video.mp4, so
+        # a bare listdir()[0] hands ffmpeg the cookie file (matches _download_audio_b64).
+        candidates = [f for f in os.listdir(tmp_video_dir) if f.startswith("video.")]
         if not candidates:
             return jsonify(
                 {
@@ -455,7 +460,8 @@ def get_short_frames():
             "-i",
             tmp_video,
             "-vf",
-            f"fps=1/{interval},scale={max_width}:-1",
+            # -2 rounds height to an even number; mjpeg/yuvj420p rejects odd dimensions.
+            f"fps=1/{interval},scale={max_width}:-2",
             "-vframes",
             str(max_frames),
             frame_pattern,
@@ -466,7 +472,9 @@ def get_short_frames():
                 {
                     "error": {
                         "type": "frame_extraction_failed",
-                        "message": result.stderr.decode(errors="replace")[:500],
+                        # Tail, not head: ffmpeg prints ~500 chars of build banner
+                        # first, so [:500] hides the actual failure every time.
+                        "message": result.stderr.decode(errors="replace")[-500:],
                     }
                 }
             )
