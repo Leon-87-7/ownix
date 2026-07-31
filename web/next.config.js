@@ -10,21 +10,13 @@ const nextConfig = {
       },
     ];
   },
-  // SVGR under webpack (only used with `next --webpack`): reroute Next's
-  // default file loader off .svg, then process SVGs as React components.
-  webpack(config) {
-    const fileLoaderRule = config.module.rules.find(
-      (rule) => rule.test?.test?.(".svg"),
-    );
-    if (fileLoaderRule) {
-      fileLoaderRule.exclude = /\.svg$/i;
-      config.module.rules.push({
-        test: /\.svg$/i,
-        issuer: fileLoaderRule.issuer,
-        use: ["@svgr/webpack"],
-      });
-    }
-    return config;
+  turbopack: {
+    rules: {
+      "*.svg": {
+        loaders: ["@svgr/webpack"],
+        as: "*.js",
+      },
+    },
   },
 };
 

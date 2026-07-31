@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from src import database, queue
+from src import database
 from src.api.deps import get_owned_job
 from src.services import drive, job_recovery
 from src.services.jobs import create_and_enqueue_job

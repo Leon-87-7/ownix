@@ -10,16 +10,23 @@ const { graphMethods, latestGraphPropsRef } = vi.hoisted(() => ({
     zoomToFit: vi.fn(),
     centerAt: vi.fn(),
   },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   latestGraphPropsRef: { current: {} as Record<string, any> },
 }));
 
 vi.mock('next/dynamic', () => ({
-  default: () =>
-    React.forwardRef((props: Record<string, any>, ref) => {
-      latestGraphPropsRef.current = props;
-      if (ref && typeof ref === 'object') ref.current = graphMethods;
-      return <div data-testid="force-graph" />;
-    }),
+  default: () => {
+    const MockForceGraph = React.forwardRef(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (props: Record<string, any>, ref) => {
+        latestGraphPropsRef.current = props;
+        if (ref && typeof ref === 'object') ref.current = graphMethods;
+        return <div data-testid="force-graph" />;
+      },
+    );
+    MockForceGraph.displayName = 'MockForceGraph';
+    return MockForceGraph;
+  },
 }));
 
 const payload = {
