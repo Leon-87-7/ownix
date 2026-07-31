@@ -975,6 +975,63 @@ async def test_link_tags_attach_detach_round_trip(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_delete_link_cascades_tags(temp_db):
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com', ?, 't', 't', 't')""",
+            (job,),
+        )
+        await conn.commit()
+
+    tag = await db.create_tag(chat_id=1, name="svg", meaning="", color="#f87171")
+    await db.attach_link_tag("l1", tag["id"])
+
+    assert await db.delete_link("l1", chat_id=1) is True
+    assert await db.delete_link("l1", chat_id=1) is False  # already gone
+    assert await db.list_link_tags("l1") == []
+
+
+@pytest.mark.asyncio
+async def test_delete_link_refuses_another_tenants_link(temp_db):
+    """ADR-0043: a tenant must not be able to delete a link they don't own."""
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com', ?, 't', 't', 't')""",
+            (job,),
+        )
+        await conn.commit()
+
+    assert await db.delete_link("l1", chat_id=2) is False  # not theirs — untouched
+    assert await db.delete_link("l1", chat_id=1) is True  # owner still can
+
+
+@pytest.mark.asyncio
+async def test_delete_link_orphan_falls_back_to_operator(temp_db, monkeypatch):
+    """A dangling source_job resolves to the Operator, per ADR-0043's backfill."""
+    from src import database as db
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "OPERATOR_CHAT_ID", 99)
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('orphan', 'https://example.com/o', 'gone', 't', 't', 't')"""
+        )
+        await conn.commit()
+
+    assert await db.delete_link("orphan", chat_id=1) is False
+    assert await db.delete_link("orphan", chat_id=99) is True
+
+
+@pytest.mark.asyncio
 async def test_update_tag_preserves_and_clears_icon(temp_db):
     from src import database as db
 

@@ -269,6 +269,19 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
     setPage(Math.min(Math.max(requested, 1), pageCount) - 1);
   };
 
+  // Drops the row locally instead of refetching the page — one less round trip,
+  // and the next natural reload reconciles the offset.
+  const removeLink = async (id: string) => {
+    const res = await fetch(`/api/brain/links/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    setData((prev) => ({
+      ...prev,
+      items: prev.items.filter((item) => item.id !== id),
+      total: Math.max(0, prev.total - 1),
+    }));
+    setSelectedLinkId(null);
+  };
+
   // Moves the preview selection to the previous/next visible row (↑/↓).
   const selectAdjacent = (direction: 1 | -1) => {
     if (data.items.length === 0) return;
@@ -306,6 +319,7 @@ export function useLinksTable({ enabled }: { enabled: boolean }) {
     hoverLink,
     cancelHover,
     selectAdjacent,
+    removeLink,
     preview: selectedLinkId ? (previewCache[selectedLinkId] ?? null) : null,
     previewState,
   };

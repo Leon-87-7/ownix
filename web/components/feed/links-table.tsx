@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { PlatformGlyph } from '@/components/ui/platform-icon';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TagMark, TagMenu } from '@/components/ui/tag-picker';
 import PreviewMotif from '@/components/ui/preview-motif';
 import { useLinkTags } from '@/lib/hooks/useLinkTags';
@@ -426,9 +427,12 @@ function LinkPreviewPanel({
 }: {
   linksData: UseLinksTableResult;
 }) {
-  const { data, selectedLinkId, preview, previewState } = linksData;
+  const { data, selectedLinkId, preview, previewState, removeLink } =
+    linksData;
   const link =
     data.items.find((item) => item.id === selectedLinkId) ?? null;
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
 
   if (!link) {
     return <LinkPreviewEmptyState />;
@@ -507,6 +511,35 @@ function LinkPreviewPanel({
           ))}
         </div>
       )}
+      <div className="space-y-2 border-t border-line pt-4">
+        <ConfirmDialog
+          title="Permanently delete this link?"
+          description="This removes the link from your Brain, along with its tags. This can't be undone."
+          confirmLabel="Delete permanently"
+          pending={deleting}
+          onConfirm={async () => {
+            setDeleting(true);
+            setDeleteFailed(false);
+            try {
+              await removeLink(link.id);
+            } catch {
+              setDeleteFailed(true);
+            } finally {
+              setDeleting(false);
+            }
+          }}
+          trigger={
+            <button className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised">
+              Delete link
+            </button>
+          }
+        />
+        {deleteFailed && (
+          <p className="text-xs text-status-error">
+            Couldn&apos;t delete — try again.
+          </p>
+        )}
+      </div>
     </aside>
   );
 }

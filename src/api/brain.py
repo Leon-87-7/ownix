@@ -87,6 +87,18 @@ async def get_link_preview_image(link_id: str) -> Response:
     )
 
 
+@brain_router.delete("/links/{link_id}", status_code=204)
+async def delete_link(link_id: str, request: Request) -> Response:
+    # Deletion is scoped to the owning tenant even though reads above are not:
+    # ADR-0043 §Context names "one tenant's delete removes another's link" as a
+    # bug to close, and a destructive endpoint on an enumerable ID is a worse
+    # failure than a shared read. 404 (not 403) so a miss can't confirm the row.
+    chat_id: int = request.state.user["id"]
+    if not await database.delete_link(link_id, chat_id):
+        raise HTTPException(status_code=404, detail="Link not found")
+    return Response(status_code=204)
+
+
 # ---------------------------------------------------------------------------
 # Link-tag links
 # ---------------------------------------------------------------------------
