@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import time
 from datetime import datetime, timezone
 
@@ -22,8 +23,32 @@ from src.utils.validators import filter_vision_links
 log = get_logger(__name__)
 
 
+def _code_block(code: str, lang: str) -> str:
+    """Fenced block. Backticks in the code would break out of the fence, so widen
+    the fence past the longest run inside instead of mangling the code."""
+    longest = max((len(m) for m in re.findall(r"`+", code)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{lang}\n{code.rstrip()}\n{fence}"
+
+
+async def _deliver_code(chat_id: int, tag: str, job_id: str, code: str, lang: str) -> None:
+    """Send extracted code as a rendered Markdown fence, or as a .md file when it
+    exceeds Telegram's 4096-char message cap."""
+    block = _code_block(code, lang)
+    if len(block) + len(tag) + 2 > 4000:
+        await send_document(chat_id, f"# Code\n\n{block}\n".encode("utf-8"), f"{job_id}_code.md")
+        return
+    try:
+        await send_message(chat_id, f"{tag}\n{block}", parse_mode="MarkdownV2")
+    except Exception as exc:
+        # MarkdownV2 is picky; a rejected parse must not cost the user the code.
+        log.warning("short_code_markdown_failed", job_id=job_id, error=str(exc)[:120])
+        await send_message(chat_id, f"{tag}\n{block}")
+
+
 def _build_analysis_markdown(
-    job: dict, platform: str, video_id: str, summary: str, links: list[dict]
+    job: dict, platform: str, video_id: str, summary: str, links: list[dict],
+    code: str = "", code_lang: str = "",
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
     parts = [
@@ -41,6 +66,8 @@ def _build_analysis_markdown(
         summary,
         "",
     ]
+    if code:
+        parts += ["## Code", "", _code_block(code, code_lang), ""]
     if links:
         parts.append("## Extracted Links\n")
         for lnk in links:
@@ -208,6 +235,8 @@ async def run(job: dict) -> None:
     await _persist_best_frame_thumbnail(job_id, platform, raw_frames, main_idx)
     title = vision.get("title") or frame_resp.get("title", "")
     summary = vision.get("summary", "")
+    code = (vision.get("code") or "").strip()
+    code_lang = (vision.get("code_lang") or "").strip()
     ignored = await database.get_ignored_domains(chat_id)
     links: list[dict] = filter_vision_links(vision.get("links", []), extra_ignored=ignored)
 
@@ -221,7 +250,7 @@ async def run(job: dict) -> None:
         await send_message(chat_id, f"{tag}\n🍪 Analysis done, uploading to Drive...")
 
     # 4. Upload analysis markdown to Drive
-    md_content = _build_analysis_markdown(job, platform, video_id, summary, links)
+    md_content = _build_analysis_markdown(job, platform, video_id, summary, links, code, code_lang)
     file_id, drive_url = await upload_file(
         md_content, f"{job_id}_short.md", settings.GOOGLE_DRIVE_FOLDER_SHORT, chat_id=chat_id
     )
@@ -242,6 +271,9 @@ async def run(job: dict) -> None:
 
     # 6+7. Send best frame photo, then links message (its message_id wins as anchor)
     bot_message_id, links = await _deliver_media(chat_id, tag, raw_frames, main_idx, summary, links)
+
+    if code:
+        await _deliver_code(chat_id, tag, job_id, code, code_lang)
 
     media_fields: dict[str, object] = {}
     if links:

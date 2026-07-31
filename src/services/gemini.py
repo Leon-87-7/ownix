@@ -36,6 +36,8 @@ Return ONLY a valid JSON object — no markdown fences, no commentary:
   "title": "<specific title, <=8 words, names visible tools/topic, never a creator handle>",
   "main_frame_index": <integer: index of the most informative/representative frame>,
   "summary": "<2-3 sentence description — mention specific tools, products, or concepts shown>",
+  "code": "<code visible on screen, transcribed verbatim and stitched across frames; empty string if none>",
+  "code_lang": "<language hint for the fence: js, ts, css, python, bash, ... ; empty string if none>",
   "links": [
     {
       "url": "<exact or inferred full URL>",
@@ -51,6 +53,7 @@ Rules:
 - summary: specific — name the tools, products, and concepts explicitly
 - links: extract any URLs, website names, app names, social handles visible in any frame; infer full URL from domain/brand
 - If no links found: return "links": []
+- code: only if real source code is rendered on screen (editor, terminal, slide). Transcribe it exactly — preserve indentation and line breaks, do NOT explain, reformat, complete, or fix it. If the same file scrolls across frames, stitch the parts in order and de-duplicate overlapping lines. Not code (UI chrome, prose, file trees, prices): return "".
 """
 
 _PHOTO_PROMPT = """You are an OCR-grounded link extractor. Read the image(s) and return only URLs or domains that are LITERALLY visible as text. Do NOT invent or infer a URL from a brand name, product name, app icon, or logo.
