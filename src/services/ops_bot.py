@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from src import database, queue
 from src.config import settings
-from src.services.email import send_welcome_email
+from src.services.email import send_feed_ready_email
 from src.services.jobs import flush_held_jobs
 from src.telegram import sender
 from src.utils.logger import get_logger
@@ -285,9 +285,9 @@ async def _approve_pending_ids(target_ids: list[int]) -> int:
         except Exception:
             log.exception("ops_batch_approval_notification_failed", tg_id=row.get("tg_id"))
         try:
-            await send_welcome_email(row)
+            await send_feed_ready_email(row)
         except Exception:
-            log.exception("ops_batch_approval_welcome_email_failed", tg_id=row.get("tg_id"))
+            log.exception("ops_batch_approval_feed_ready_email_failed", tg_id=row.get("tg_id"))
     return len(approved_rows)
 
 

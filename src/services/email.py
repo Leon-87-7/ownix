@@ -1,4 +1,14 @@
-"""Best-effort transactional email helpers."""
+"""Best-effort transactional email helpers.
+
+Two emails bracket the invite lifecycle:
+
+- ``send_welcome_email`` — an onboarding tour, sent the moment a user's email
+  lands in the DB (they've requested access but aren't approved yet). It
+  introduces the day-to-day features and carries a personal note; it makes no
+  promise of Feed access, since that comes later.
+- ``send_feed_ready_email`` — the original bare "your Feed is live" notice,
+  sent on approval. Unchanged from its pre-onboarding-email behavior.
+"""
 
 from __future__ import annotations
 
@@ -49,11 +59,11 @@ def _first_name(user: dict) -> str:
     return (user.get("first_name") or "").strip()
 
 
-def _subject(user: dict) -> str:
+def _welcome_subject(user: dict) -> str:
     first = _first_name(user)
     if first:
-        return f"Welcome to Ownix, {first} — here's how to get started"
-    return "Welcome to Ownix — here's how to get started"
+        return f"Welcome to Ownix, {first} — here's the quick tour"
+    return "Welcome to Ownix — here's the quick tour"
 
 
 def _smtp_configured() -> bool:
@@ -69,7 +79,7 @@ def _send_email_sync(message: EmailMessage) -> None:
         smtp.send_message(message)
 
 
-# --- Body builders --------------------------------------------------------
+# --- Welcome email body builders ------------------------------------------
 #
 # The four day-to-day features a new user meets first (kept in sync between the
 # HTML and plain-text bodies): in-app ingest (desktop keys + mobile OwnixAdd),
@@ -106,6 +116,11 @@ _FEATURES: list[tuple[str, str]] = [
     ),
 ]
 
+_STATUS_LINE = (
+    "You're on the list. We'll email you the moment your access is live — "
+    "that message has your Feed link."
+)
+
 _NOTE_PARAGRAPHS: list[str] = [
     "A quick hello — I'm Leon, the developer behind Ownix. I built it "
     "because I was tired of losing good links, videos, and docs across a dozen "
@@ -117,17 +132,14 @@ _NOTE_PARAGRAPHS: list[str] = [
 ]
 
 
-def _build_text(name: str, feed_url: str) -> str:
+def _build_welcome_text(name: str) -> str:
     lines: list[str] = [
         f"Hi {name},",
         "",
-        "You're in — welcome to Ownix. Ownix is one place to save the "
-        "links, videos, and docs you care about and actually find them again.",
-        "",
-        "Open your Feed:",
-        feed_url,
-        "",
-        "A few things you'll use every day:",
+        "Thanks for requesting access to Ownix — you're on the list. Ownix is "
+        "one place to save the links, videos, and docs you care about, and "
+        "actually find them again. Here's what you'll reach for every day once "
+        "you're in:",
         "",
     ]
     for i, (title, body) in enumerate(_FEATURES, start=1):
@@ -135,6 +147,8 @@ def _build_text(name: str, feed_url: str) -> str:
         lines.append(f"   {body}")
         lines.append("")
 
+    lines.append(_STATUS_LINE)
+    lines.append("")
     lines.append("— A note from the developer —")
     lines.append("")
     lines.extend(_NOTE_PARAGRAPHS)
@@ -168,10 +182,9 @@ def _note_paragraphs_html() -> str:
     )
 
 
-def _build_html(name: str, feed_url: str) -> str:
+def _build_welcome_html(name: str) -> str:
     safe_name = html.escape(name)
-    safe_feed = html.escape(feed_url, quote=True)
-    preheader = "You're in. Here's how to get the most out of Ownix, day to day."
+    preheader = "Thanks for joining the list — here's what you'll be doing in Ownix, day to day."
     font = (
         "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,"
         "Arial,sans-serif"
@@ -201,23 +214,23 @@ Your internet. Own it.</div>
 border-right:1px solid {_LINE};">
               <p style="margin:0 0 12px 0;font-size:16px;color:{_INK};">Hi {safe_name},</p>
               <p style="margin:0 0 20px 0;font-size:15px;color:{_BODY};line-height:1.6;">
-                You're in — welcome to Ownix. It's one place to save the links, videos, and
-                docs you care about, and actually find them again. Here's what you'll reach for
-                every day:
+                Thanks for requesting access to Ownix — you're on the list. Ownix is one place to
+                save the links, videos, and docs you care about, and actually find them again.
+                Here's what you'll reach for every day once you're in:
               </p>
 
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 {_feature_rows_html()}
               </table>
 
-              <!-- CTA -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" \
-style="margin:8px 0 4px 0;">
+              <!-- status callout (no action yet — access is still pending) -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" \
+style="margin:6px 0 4px 0;">
                 <tr>
-                  <td align="center" bgcolor="{_SIGNAL}" style="border-radius:6px;">
-                    <a href="{safe_feed}" target="_blank" \
-style="display:inline-block;padding:13px 30px;font-family:{font};font-size:15px;\
-font-weight:700;color:{_PLATE};text-decoration:none;border-radius:6px;">Open your Feed →</a>
+                  <td style="background-color:{_CANVAS};border:1px solid {_LINE};\
+border-left:3px solid {_SIGNAL};border-radius:6px;padding:14px 16px;font-size:14px;\
+color:{_BODY};line-height:1.55;">
+                    {html.escape(_STATUS_LINE)}
                   </td>
                 </tr>
               </table>
@@ -245,7 +258,7 @@ style="color:{_SIGNAL};text-decoration:none;">LinkedIn</a>
             <td style="background-color:{_SURFACE};border-radius:0 0 10px 10px;\
 border:1px solid {_LINE};border-top:none;padding:20px 32px;">
               <p style="margin:0;font-size:12px;color:{_MUTED};line-height:1.5;">
-                You're receiving this because your Ownix access was just approved.
+                You're receiving this because you requested access to Ownix.
                 <br>Reply to this email if you need anything — it reaches a real person.
               </p>
             </td>
@@ -258,22 +271,18 @@ border:1px solid {_LINE};border-top:none;padding:20px 32px;">
 
 
 async def send_welcome_email(user: dict) -> bool:
-    """Send an approval welcome email that onboards the user to Ownix.
+    """Send the onboarding tour when a user's email first lands in the DB.
 
     Introduces the four day-to-day features (in-app ingest, the Link Table,
     tagging, and Settings) and closes with a personal note from the developer.
-    Delivered as multipart HTML + plain-text; best-effort and a no-op when the
-    user has no email, the dashboard URL is unset, or SMTP is unconfigured.
+    The user is still pending approval here, so the email promises no Feed
+    access — the approval email does that. Delivered as multipart HTML +
+    plain-text; best-effort and a no-op when the user has no email or SMTP is
+    unconfigured.
     """
     email = (user.get("email") or "").strip()
-    feed_url = _feed_url()
-    if not email or not feed_url:
-        log.info(
-            "welcome_email_skipped",
-            tg_id=user.get("tg_id"),
-            has_email=bool(email),
-            has_dashboard_url=bool(feed_url),
-        )
+    if not email:
+        log.info("welcome_email_skipped", tg_id=user.get("tg_id"), has_email=False)
         return False
     if not _smtp_configured():
         log.info("welcome_email_smtp_unconfigured", tg_id=user.get("tg_id"))
@@ -281,11 +290,61 @@ async def send_welcome_email(user: dict) -> bool:
 
     name = _display_name(user)
     message = EmailMessage()
-    message["Subject"] = _subject(user)
+    message["Subject"] = _welcome_subject(user)
     message["From"] = formataddr((settings.SMTP_FROM_NAME, settings.SMTP_FROM_EMAIL))
     message["To"] = email
-    message.set_content(_build_text(name, feed_url))
-    message.add_alternative(_build_html(name, feed_url), subtype="html")
+    message.set_content(_build_welcome_text(name))
+    message.add_alternative(_build_welcome_html(name), subtype="html")
     await asyncio.to_thread(_send_email_sync, message)
     log.info("welcome_email_sent", tg_id=user.get("tg_id"), email=email)
+    return True
+
+
+async def send_feed_ready_email(user: dict) -> bool:
+    """Send the "your Feed is live" approval notice with the user's Feed URL.
+
+    Fired on approval; the original bare notice, unchanged from before the
+    onboarding email existed. Best-effort and a no-op when the user has no
+    email, the dashboard URL is unset, or SMTP is unconfigured.
+    """
+    email = (user.get("email") or "").strip()
+    feed_url = _feed_url()
+    if not email or not feed_url:
+        log.info(
+            "feed_ready_email_skipped",
+            tg_id=user.get("tg_id"),
+            has_email=bool(email),
+            has_dashboard_url=bool(feed_url),
+        )
+        return False
+    if not _smtp_configured():
+        log.info("feed_ready_email_smtp_unconfigured", tg_id=user.get("tg_id"))
+        return False
+
+    name = _display_name(user)
+    message = EmailMessage()
+    message["Subject"] = "You're in - your Ownix Feed is live"
+    message["From"] = formataddr((settings.SMTP_FROM_NAME, settings.SMTP_FROM_EMAIL))
+    message["To"] = email
+    message.set_content(
+        "\n".join(
+            [
+                f"Hi {name},",
+                "",
+                "You're in - welcome to Ownix.",
+                "",
+                "Your Feed is live here:",
+                feed_url,
+                "",
+                (
+                    "Send the Ownix Telegram bot any link you want to save. "
+                    "We'll process it and add it to your Feed."
+                ),
+                "",
+                "Leon",
+            ]
+        )
+    )
+    await asyncio.to_thread(_send_email_sync, message)
+    log.info("feed_ready_email_sent", tg_id=user.get("tg_id"), email=email)
     return True

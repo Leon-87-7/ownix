@@ -17,6 +17,7 @@ from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
+from src.services.email import send_welcome_email
 from src.services.invite_notifications import notify_operator_invite
 from src.utils.logger import get_logger
 from src.utils.validators import normalize_email
@@ -276,4 +277,9 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
                 else "invite.operator_notification_failed",
                 tg_id=tg_id,
             )
+        try:
+            db_user = await database.get_user(tg_id)
+            await send_welcome_email(db_user or {"tg_id": tg_id, "email": email})
+        except Exception:
+            log.exception("invite.welcome_email_failed", tg_id=tg_id)
     return {"email": email, "status": status}

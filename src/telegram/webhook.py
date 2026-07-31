@@ -25,7 +25,7 @@ from src.config import settings
 from src.services import storage
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
-from src.services.email import send_welcome_email
+from src.services.email import send_feed_ready_email, send_welcome_email
 from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_content_type
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
@@ -1388,6 +1388,17 @@ async def _invite_gate_allows(
             await send_message(chat_id, "Please send a valid email address.")
             return False
         await database.set_user_email(chat_id, email)
+        try:
+            await send_welcome_email(
+                {
+                    "tg_id": chat_id,
+                    "email": email,
+                    "first_name": (user or {}).get("first_name"),
+                    "last_name": (user or {}).get("last_name"),
+                }
+            )
+        except Exception:
+            log.exception("invite.welcome_email_failed", chat_id=chat_id)
         await _notify_operator_invite(chat_id, email)
         await database.clear_chat_state(chat_id)
         await send_message(chat_id, _INVITE_WAITING_MESSAGE_TEMPLATE.format(admin=_admin_label()))
@@ -1760,9 +1771,9 @@ async def _ops_cb_invite_decision(
         try:
             approved_user = await database.get_user(target_chat_id)
             if approved_user is not None:
-                await send_welcome_email(approved_user)
+                await send_feed_ready_email(approved_user)
         except Exception:
-            log.exception("ops_invite.welcome_email_failed", target_chat_id=target_chat_id)
+            log.exception("ops_invite.feed_ready_email_failed", target_chat_id=target_chat_id)
     if prefix.startswith("ops_dev_invite_"):
         log.info(
             "ops_invite.dev_user_outcome_notification_skipped",

@@ -2194,8 +2194,8 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
     monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
     monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
-    welcome_email = AsyncMock()
-    monkeypatch.setattr("src.telegram.webhook.send_welcome_email", welcome_email)
+    feed_ready_email = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_feed_ready_email", feed_ready_email)
     await database.set_user_email(778, "approved@example.com")
     held_id = await database.create_job(
         chat_id=778,
@@ -2214,8 +2214,8 @@ async def test_ops_authorized_invite_callback_mutates_and_uses_ownix_user_messag
 
     assert response.status_code == 200
     assert await database.get_user_status(778) == "approved"
-    welcome_email.assert_awaited_once()
-    assert welcome_email.await_args.args[0]["email"] == "approved@example.com"
+    feed_ready_email.assert_awaited_once()
+    assert feed_ready_email.await_args.args[0]["email"] == "approved@example.com"
     assert (await database.get_job(held_id))["status"] == "pending"
     enqueue.assert_awaited_once_with({"task": "video", "job_id": held_id})
     user_messages = [c for c in fake_http.calls if c["json"].get("chat_id") == 778]
@@ -2238,8 +2238,8 @@ async def test_ops_invite_callback_answer_failure_does_not_abort_approval(
         "src.services.ops_bot.sender.answer_callback_query",
         AsyncMock(side_effect=RuntimeError("callback expired")),
     )
-    welcome_email = AsyncMock()
-    monkeypatch.setattr("src.telegram.webhook.send_welcome_email", welcome_email)
+    feed_ready_email = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_feed_ready_email", feed_ready_email)
     await database.set_user_email(782, "approved-late@example.com")
 
     response = c.post(
@@ -2250,8 +2250,8 @@ async def test_ops_invite_callback_answer_failure_does_not_abort_approval(
 
     assert response.status_code == 200
     assert await database.get_user_status(782) == "approved"
-    welcome_email.assert_awaited_once()
-    assert welcome_email.await_args.args[0]["email"] == "approved-late@example.com"
+    feed_ready_email.assert_awaited_once()
+    assert feed_ready_email.await_args.args[0]["email"] == "approved-late@example.com"
     assert any(
         "botops-token/editMessageReplyMarkup" in call["url"]
         and call["json"]["reply_markup"]["inline_keyboard"][0][0]["text"] == "✅ Approved"
