@@ -2119,6 +2119,33 @@ async def detach_link_tag(link_id: str, tag_id: str) -> bool:
     )
 
 
+async def delete_link(link_id: str, chat_id: int) -> bool:
+    """Delete a Brain link owned by *chat_id*; its link_tags cascade.
+
+    Ownership is derived through ``source_job`` because ``links`` still has no
+    ``chat_id`` of its own (ADR-0043 is accepted but unimplemented). Rows whose
+    ``source_job`` dangles fall back to the Operator — the same ``COALESCE`` the
+    ADR's backfill uses — so the Operator's pre-purge orphans stay deletable
+    while nobody else can reach them. An unset ``OPERATOR_CHAT_ID`` yields NULL,
+    which matches no viewer, so the fallback fails closed.
+
+    # ponytail: leaves the Drive .md node orphaned, same as job deletion
+    # (delete_job's "DELETE FROM links WHERE source_job = ?"). Wire up Drive
+    # cleanup here if orphaned nodes ever show up in /find.
+    """
+    return (
+        await _execute_rowcount(
+            """DELETE FROM links
+               WHERE id = ?
+                 AND COALESCE(
+                     (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?
+                 ) = ?""",
+            (link_id, settings.OPERATOR_CHAT_ID, chat_id),
+        )
+        > 0
+    )
+
+
 async def list_job_tags(job_id: str) -> list[dict]:
     """Return tags attached to *job_id* ordered by name."""
     return await _fetch_dicts(

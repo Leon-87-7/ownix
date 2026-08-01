@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 
 from src.brain import (
     EMBEDDING_DIM,
@@ -867,3 +868,55 @@ async def test_refresh_repairs_missing_description_and_reembeds():
         )
     finally:
         os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/brain/links/{link_id} — HTTP layer
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def brain_client() -> TestClient:
+    from fastapi import FastAPI, Request
+
+    from src.api.brain import brain_router
+
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def _inject_user(request: Request, call_next):
+        request.state.user = {"id": 555}
+        return await call_next(request)
+
+    app.include_router(brain_router)
+    return TestClient(app)
+
+
+def test_delete_link_returns_204_when_deleted(brain_client, monkeypatch) -> None:
+    import src.database as database_module
+
+    calls: list[tuple[str, int]] = []
+
+    async def fake_delete_link(link_id: str, chat_id: int) -> bool:
+        calls.append((link_id, chat_id))
+        return True
+
+    monkeypatch.setattr(database_module, "delete_link", fake_delete_link)
+
+    resp = brain_client.delete("/api/brain/links/link-1")
+
+    assert resp.status_code == 204
+    assert calls == [("link-1", 555)]
+
+
+def test_delete_link_returns_404_when_missing(brain_client, monkeypatch) -> None:
+    import src.database as database_module
+
+    async def fake_delete_link(link_id: str, chat_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(database_module, "delete_link", fake_delete_link)
+
+    resp = brain_client.delete("/api/brain/links/missing")
+
+    assert resp.status_code == 404
