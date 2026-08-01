@@ -24,7 +24,9 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 
-
+- Browser extension / share-target for one-click capture (see task 34 for the sibling idea from the same Youwee comparison)
+- Vimeo support needs an authenticated session — deferred out of task 34 after exhaustive probing (2026-08-01). Every anonymous route is closed: default `macos` client 401s because Vimeo revoked the app credential yt-dlp impersonates (`{"developer_message": "The request includes an unauthorized client.", "error_code": 8001}`), `player.vimeo.com` embed URLs hit the same 401, `client=android`/`client=ios` are cache-only ("unable to fetch new OAuth tokens"), and `client=web` reports "only works when logged-in". Doing it means: own a Vimeo account, add its cookies to the sidecar credential checkout (the Instagram mechanism at `transcript_server.py:124` already exists), **and extend `_with_cookies` to `/metadata`** — today it only wraps `_download_audio_b64` (`:192`), so the unsized resolver runs cookie-less. That last part is the reusable half: any future auth-gated host needs it too.
+- Pin `yt-dlp` in `Dockerfile.transcript:7` (currently unpinned `pip install yt-dlp`) and give it a deliberate upgrade cadence — the deployed version is frozen at image-build time, so extractor support for every video host silently rots between rebuilds. Surfaced by task 34's host probe. — Youwee's biggest UX win over raw yt-dlp is "right-click → send to app" instead of copy-pasting URLs. Ownix's ingestion is currently Telegram-only; a tiny extension (or even a bookmarklet hitting `POST /api/jobs`) that fires the existing `create_and_enqueue_job()` would remove real friction and fits the "drive the pipeline from the web" direction already in PRODUCT.md.
 
 ---
 
@@ -1105,3 +1107,281 @@ tier) and leaves the page.
 - Post-delete: `router.back()`, guarded — `if (window.history.length > 1)
   router.back(); else router.push('/feed')`, so a deep link, bookmark or hard
   refresh doesn't strand the user on a dead page or bounce them out of the app.
+
+## 34. Widen video source coverage — an `unsized` content_type resolved by duration ✅ ISSUED TO GITHUB #466 #467 #468 #469
+
+> **Grill:** `/grill-with-search-docs` — in progress 2026-08-01. Origin: a
+> competitor comparison against **Youwee** (`vanloctech/youwee`), a Tauri
+> desktop GUI wrapping yt-dlp/FFmpeg that advertises 1800+ supported sites.
+> Sibling idea from the same comparison (browser extension / share-target for
+> one-click capture) sits in the Inbox.
+
+> **Grounded:** 2026-08-01
+
+> **Grilled 2026-08-01** — classification shape, the `unsized` content_type, the
+> worker duration resolution and the failure mode are all closed. Written up as
+> **ADR-0045**; `CONTEXT.md` gains an [[Unsized video]] glossary entry, a third
+> worker-dispatch branch in the architecture diagram, and invariant 17 (180s is
+> the single short/long boundary). Remaining opens are the four listed at the
+> bottom — all implementation-adjacent, none blocking.
+
+`detect_pipeline` (`src/utils/validators.py:89`) routes only four video URL
+shapes today: `_match_short` (`validators.py:146`) matches
+`youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@u/video/id`,
+`vt.tiktok.com/*`; `_match_long` (`validators.py:164`) matches
+`youtube.com/watch?v=` and `youtu.be/*`. Everything else is `rejected`.
+
+**The pipelines are already platform-agnostic — only the front door isn't.**
+Verified 2026-08-01:
+
+- `long_video.py` has **zero** YouTube-specific code — it calls
+  `transcript_svc.fetch_transcript(url)` / `fetch_metadata(url)` (`long_video.py:35-38`),
+  the same generic sidecar the short pipeline uses.
+- `transcript_server.py`'s `_generic_transcript` (`:254`) is explicitly written
+  for "Non-YouTube (TikTok, Instagram Reels, …)" — yt-dlp captions, then audio
+  fallback. YouTube is the special case (`_youtube_transcript`, `:231`, prefers
+  `YouTubeTranscriptApi`), not the other way round.
+- Residual platform coupling is cosmetic and lives in two spots:
+  `_should_persist_thumbnail` (`short_video.py:205`, substring-matches
+  `instagram`/`tiktok`) and `_detect_platform` (`transcript_server.py:344`,
+  returns `"unknown"` for anything not Youtube/TikTok/Instagram).
+
+**Resolved 2026-08-01 (grill)**
+
+- ~~Widen the curated regex list, or replace it with a runtime "ask yt-dlp"
+  check?~~ → **Widen the curated list.** `detect_pipeline` stays a pure,
+  offline, synchronous classifier — it is called inside
+  `create_and_enqueue_job` (ADR-0033) before a job row exists, so a network
+  call there would put yt-dlp latency and failure modes on the intake path.
+  More decisive: **yt-dlp cannot answer "is this supported?" reliably.** Its
+  own FAQ (context7 `/yt-dlp/yt-dlp`, 2026-08-01) states detection is only
+  possible by *attempting* extraction, because the **generic extractor**
+  matches almost any URL as a fallback (scraping embedded video / OG tags), and
+  disabling it (`--ies default,-generic`) is discouraged. An offline
+  `InfoExtractor.suitable(url)` scan over `gen_extractor_classes()` does exist
+  and is network-free, but inherits the same generic-extractor false-positive
+  problem — it would classify ordinary article pages with an embedded video as
+  `short`/`long`. This matches the precedent already recorded in CONTEXT.md
+  invariant 10: the article pipeline has an allowlist *because* "is this an
+  article?" is fuzzy across thousands of hosts; the repo pipeline has none
+  because `github.com` has no fuzziness. Video-host detection has the article
+  pipeline's fuzziness, so it gets the article pipeline's answer.
+- ~~Which domains land in batch 1, and does each need a clean short-vs-long path
+  signal?~~ → **No per-platform short/long guessing at all.** The
+  duration check (below) is **folded into batch 1**, which makes the
+  "unambiguous path signal" bar obsolete for new hosts. An earlier draft of this
+  brief proposed Twitch clips + Facebook Reels → `short` and Vimeo → `long` on
+  path shape alone; that was **rejected in-grill as wrong, not merely
+  conservative**. "Vimeo is always long" is a UI fact (Vimeo ships no Shorts
+  product), not a duration fact — Vimeo hosts 20-second clips routinely. Same
+  hole on Twitch: `twitch.tv/<ch>/clip/<slug>` is capped, but
+  `twitch.tv/videos/<id>` VODs run for hours. Guessing from the path would
+  misroute long content into the Vision-frame pipeline.
+- **Batch 1 shape:** `detect_pipeline` gains **one new host set** —
+  `facebook.com` and `x.com`/`twitter.com` (Vimeo and Twitch dropped, see the
+  probe results below) — returning a single
+  length-unknown content_type. `_match_short` / `_match_long`
+  (`validators.py:146,164`) are **not touched**: YouTube's `/shorts/` vs
+  `/watch` stays a hardcoded regex because there the path signal is a genuine
+  product distinction, and those content_types already carry dedup/FSM history.
+  X/Twitter and Facebook Watch — deferred in the earlier draft for lack of a
+  path signal — come back in scope for free, since nothing now depends on one.
+- ~~What is the length-unknown content_type called?~~ → **`unsized`.** Not
+  `"video"`: the queue envelope's *task discriminator* is already `"video"`
+  (`worker.py:210`), so `{"task": "video"}` carrying `content_type="video"`
+  reads as a tautology in logs and in the CONTEXT.md glossary. `unsized` names
+  the actual property (length not yet known) rather than the medium.
+- ~~Is `unsized` persisted, or transient?~~ → **Transient — the worker rewrites
+  the row.** On resolution, `UPDATE jobs SET content_type = 'short'|'long'`
+  before dispatch. Three reasons, all existing behavior rather than
+  speculation: (a) the Feed badge renders raw content_type — `labelFor` in
+  `web/components/ui/platform-icon.tsx:76` falls back to
+  `return contentType || 'Source'`, so a row left at `unsized` shows a card
+  badge literally reading **"unsized"** (`job-card.tsx:43` and the grid card);
+  rewriting means **zero `web/` changes**. (b) `unsized` never becomes a fifth
+  persistent content_type alongside `short`/`long`/`article`/`repo` — the job
+  FSM and glossary stay as they are. (c) Reruns work for free: `/force <url>`
+  resets the row in place and re-enqueues, and an already-rewritten row re-runs
+  as `short`/`long` with no second `/metadata` call. Rejected alternative:
+  keeping `unsized` as an audit trail of "length was unknown at intake" —
+  recoverable from `jobs.url` + the host set anyway, so it buys nothing.
+
+- ~~Do the two cosmetic platform couplings ship in batch 1?~~ → **Yes.** The
+  `unsized` shape made this worse, not better: under the earlier path-regex
+  plan only Twitch/FB Reels would have hit it, but now **any** of the four new
+  hosts can resolve to `short`, so Vimeo and X clips reach `short_video.run`
+  too. That path calls `_persist_best_frame_thumbnail` (`short_video.py:211`),
+  which no-ops unless `_should_persist_thumbnail` (`:205`) sees `instagram` or
+  `tiktok` in the platform string — and that string comes from
+  `_detect_platform` (`transcript_server.py:344`), which returns the constant
+  `"unknown"` for every extractor that is not Youtube/TikTok/Instagram. Left
+  alone, every new host renders a Feed card with **no thumbnail and a badge
+  reading "unknown"** while every existing short has an image — a visible
+  regression against DESIGN.md's Feed, not deferrable polish. Fix, ~4 lines
+  across two files: `_detect_platform` returns `extractor.lower()` for
+  unrecognized extractors (yt-dlp already supplies `extractor_key` —
+  `Twitch`, `Vimeo`, `FacebookReel` — and the code already reads it at
+  `transcript_server.py:451`), and `_should_persist_thumbnail` keeps its
+  **allowlist**, extended from two entries to four — `instagram`, `tiktok`,
+  plus `facebook`, `twitter`/`x`.
+- ~~Allowlist or denylist for `_should_persist_thumbnail`?~~ → **Explicit
+  allowlist.** A denylist ("persist for everything except YouTube") was
+  proposed first, because it means a future host needs no edit here at all.
+  Rejected on the failure asymmetry: thumbnails are not URLs, they are **image
+  bytes written into SQLite** (`job_thumbnails.bytes` is a BLOB,
+  `database.py:101`). An allowlist fails **visibly and cheaply** — a blank
+  card, nothing written. A denylist fails **invisibly and expensively** — every
+  future host silently writes frame bytes into the DB, including hosts whose
+  extracted frame is a black frame, a "video unavailable" placeholder or an
+  age-gate interstitial, and nobody finds out until the table is large. Since
+  hosts are added deliberately anyway (that is the whole point of decision 1 in
+  ADR-0045 — classification is a human decision, not an automatic one), the
+  one-line-per-host cost is already being paid next door in `detect_pipeline`.
+  Keeping both lists explicit also keeps them reviewable side by side.
+
+**Design note — the duration check (folded into batch 1)**
+
+Routing a host whose URL shape does not reveal length needs the video's actual
+duration, which is only knowable after a network call — so it cannot live in
+`detect_pipeline`.
+
+- **The data is already fetched, just discarded.** `GET /metadata`
+  (`transcript_server.py:296`) already runs
+  `yt_dlp.extract_info(url, download=False)` (`:318`) and yt-dlp already
+  populates `duration` in that `info` dict — the endpoint's response
+  (`:322-330`) simply doesn't include it. Exposing it is a one-line change plus
+  the matching key in the error-path schema (`:332-341`) so callers see a
+  consistent shape.
+- **The boundary already exists and is not a new invention.** `/frames`
+  (`transcript_server.py:440-446`) hard-rejects `duration > 180` with
+  `"Video duration {duration}s exceeds 180s limit"`. The short pipeline
+  therefore *already* cannot process anything over 3 minutes — 180s is the
+  system's de facto short/long line, and the resolver must reuse that constant
+  rather than pick a second one.
+- **Where the branch goes:** `_handle_video` (`src/worker.py:79-87`) already
+  branches on `content_type` with an `else` that logs `unknown_content_type` —
+  a third branch slots in there: call `/metadata`, rewrite `content_type` on
+  the 180s boundary, then dispatch to `short_video.run` / `long_video.run`.
+  This keeps intake offline and synchronous and puts the network call where
+  network calls already live.
+- **Cost:** one extra `extract_info` round-trip per unsized job. The short
+  pipeline's `/frames` call re-extracts anyway, so on the short branch this is a
+  duplicate — acceptable (`ponytail:` note the ceiling; cache the `info` dict in
+  Redis keyed by URL for the life of the job if it ever matters).
+- ~~**Failure mode**~~ → **Default to `short`, log loudly.** `/metadata` returns
+  `200` with an `error` key and empty fields rather than a non-2xx
+  (`:331-341`), so a failed lookup yields no number. On a missing/zero
+  `duration`, resolve to `short` and emit an explicit structured log line
+  naming the URL, the host, and the sidecar's `error` string — the log, not the
+  user-facing message, is what identifies the real cause. Rationale: `unsized`
+  hosts are new and low-volume, so a wrong guess is cheap, and `short` is the
+  cheaper pipeline; `/frames` (`transcript_server.py:440`) still bounds the
+  damage by rejecting anything over 180s. Known wart to accept knowingly: when
+  the metadata failure was a cookie-gated or geo-blocked host, the user sees
+  `/frames`' "exceeds 180s limit" message, which points at the wrong cause —
+  the log is the disambiguator. Rejected: failing the job outright (honest
+  message, but a hard failure is a poor first impression on a
+  freshly-supported platform), and defaulting to `long` (runs a full transcript
+  fetch on what may be a 15-second clip).
+
+**Open questions** (continue grill)
+
+- **`/metadata` failure mode** — see the design note above; nothing resolved yet.
+**Probe results — 2026-08-01 (run before shipping, per the gate below)**
+
+Decision: **hosts are gated on a live cookie-less reachability probe; only
+hosts returning a real `duration` ship.** Rationale — `_with_cookies`
+(`transcript_server.py:124`) is applied in exactly one place,
+`_download_audio_b64` (`:192`). It is **not** applied to `/metadata`
+(`:303-317`) or `_fetch_vtt_text` (`:213-222`), so the `unsized` resolver runs
+on the sidecar's one cookie-less path. An auth-gated host therefore fails at
+resolve, falls to default-`short`, and fails again in `/frames` — the user sees
+"exceeds 180s limit" for a URL that was never reachable.
+
+The probe mirrors `/metadata`'s opts exactly, so a PASS means the resolver gets a
+real number in prod. Re-run it whenever a host is added or `yt-dlp` is upgraded:
+
+```python
+import yt_dlp  # no cookies — /metadata doesn't use them
+with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True}) as ydl:
+    info = ydl.extract_info(url, download=False) or {}
+print(info.get("extractor_key"), info.get("duration"))  # duration is a float
+```
+
+To test a host's **auth layer** without a valid URL, pass a deliberately
+nonexistent id (`x.com/i/status/1`): a "does not exist"/"no video found" reply
+proves the request reached the content API, a 401/login-required proves it did
+not.
+
+| Host | Verdict | Detail |
+|---|---|---|
+| YouTube (control) | **PASS** | `extractor=Youtube duration=213s -> long` — confirms network + harness sound |
+| Vimeo | **FAIL (terminal)** | `Failed to fetch macos OAuth token: HTTP Error 401` on **three** different URLs, on both yt-dlp 2026.03.17 and 2026.07.04. Direct query of the token endpoint returns `{"developer_message": "The request includes an unauthorized client.", "error_code": 8001}` — Vimeo rejecting the credentials themselves, not a rate limit/IP/geo block. Fires before any video is looked at, so **no Vimeo URL can work**. |
+| **Facebook** | **PASS** | real URL (`/share/v/1ESoxBa1H2`) → `extractor=Facebook duration=19.201s -> short` |
+| **X / Twitter** | **PASS** | real URL (`x.com/tailwindcss/status/…`) → `extractor=Twitter duration=30.583s -> short` |
+| Twitch | **dropped** | auth layer passed (`Video 1 does not exist`), but deemed not relevant to Ownix's content 2026-08-01 |
+
+Auth-layer screening used deliberately **nonexistent IDs**
+(`twitch.tv/videos/1`, `x.com/i/status/1`, `facebook.com/reel/1`) to test
+reachability without valid URLs: a "does not exist" reply proves the request
+reached the content API, whereas a 401/login-required proves it did not. Both
+survivors were then confirmed end to end with real URLs.
+
+**Final batch 1 host set: `facebook.com` + `x.com`/`twitter.com`.**
+
+Two findings from the real-URL run:
+
+- **The Facebook URL was a `/share/v/<id>` link**, not `/reel/` or `/watch/` — a
+  third FB shape nobody anticipated. It resolved only because matching is on
+  **host**, not path; the rejected Q2 path-regex plan would have rejected this
+  exact URL. Independent confirmation that the host-set decision was correct.
+- **`duration` is a float** (`19.201`, `30.583`), not an int. `duration > 180`
+  is unaffected and `/frames` already compares the same float, but the resolver
+  must not assume `int`.
+
+**This killed the host the grill was most confident about, and spared the two it
+doubted.** The earlier path-regex draft rated Vimeo the safest of the four ("no
+Shorts product, always long") and flagged Facebook/X as the doubtful pair.
+Vimeo is the only one confirmed non-working; X reached the API fine.
+
+**Why Vimeo is structurally different** (from `yt_dlp/extractor/vimeo.py`, read
+2026-08-01 — this is the part a future reader would otherwise re-derive):
+yt-dlp does not scrape Vimeo's site, it **impersonates Vimeo's native apps**.
+`_CLIENT_CONFIGS` (`vimeo.py:58-115`) holds four profiles — `android`, `ios`,
+`macos`, `web` — each carrying a hardcoded `AUTH` (base64
+`client_id:client_secret` lifted from the real app binaries) plus a matching
+fake User-Agent. `android`/`ios` are `CACHE_ONLY: True` (usable only with a
+previously cached token — never true in a fresh container), and `web` is
+`REQUIRES_AUTH: True` (needs a real logged-in Vimeo account). That leaves
+`macos` as the only profile able to mint a token anonymously
+(`_DEFAULT_CLIENT = 'macos'`, `:52`), so every cold extraction POSTs
+`grant_type=client_credentials` to `api.vimeo.com/oauth/authorize/client` with
+those baked-in macOS credentials (`:386-395`) — **which Vimeo has revoked**.
+Consequences: (a) it is not "Vimeo requires login", it is a vendor killing a
+leaked app secret, a cat-and-mouse cycle nobody can schedule; (b) **cookies are
+not the fix** — the cookie path selects the `web` client
+(`_DEFAULT_AUTHED_CLIENT = 'web'`, `:53`), which needs an owned Vimeo account
+kept alive in the sidecar, a much heavier lift than Instagram's; (c) upgrading
+does not help, since 2026.07.04 ships the same revoked secret. By contrast
+Twitch uses a **public** client-id (`twitch.py:58`) with nothing to revoke, and
+X uses an official guest-token path (`twitter.py:104`) rather than impersonation
+— which is exactly why those two passed.
+
+**Related finding — `yt-dlp` is unpinned.** `Dockerfile.transcript:7` runs
+`pip install --no-cache-dir flask waitress youtube-transcript-api yt-dlp Pillow`
+with no version constraint, so the deployed version is frozen at whenever the
+transcript image was last built and site support silently rots between rebuilds.
+"Which hosts work" is a function of a version nobody currently controls or
+observes. Not this task's problem to fix, but it bounds every claim this task
+makes — worth its own Inbox entry.
+
+- Does Facebook (and Twitch/X) need cookies the way Instagram does
+  (`_with_cookies`, `transcript_server.py:124`)? If FB/X needs an authenticated
+  session, those hosts may not be as free as their URL shape suggests — and
+  unlike the old path-regex plan, a cookie-gated host now fails at the
+  `/metadata` resolve step, which is the failure mode above.
+- Help/rejection copy sweep: `webhook.py:1500` advertises the supported list to
+  users and would go stale.
+- Does `GENERIC_ROOTS` (`validators.py:226`) need the new hosts? It filters
+  social links out of YouTube descriptions — `twitch.tv`/`vimeo.com` appearing
+  there is plausible.

@@ -293,6 +293,7 @@
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#456](https://github.com/Leon-87-7/ownix/pull/456) | Tappable mobile onboarding stepper | feat/mobile-onboarding-stepper→main | — | ✅ Merged |
 | [#260](https://github.com/Leon-87-7/vig/pull/260) | Resolve council review findings on Brain graph | codex-252→main | — | ✅ Merged |
 | [#258](https://github.com/Leon-87-7/vig/pull/258) | docs(access): ADR-0031 invite-only gate + onboarding (epic #253) | docs/invite-gate-adr→main | — | ✅ Merged |
 | [#257](https://github.com/Leon-87-7/vig/pull/257) | feat(web): Brain links sortable columns + persisted per-tenant view (#251) | codex-251→main | — | ✅ Merged |

@@ -59,6 +59,10 @@ Ordered by unblocked-first, then dependency chain.
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------------ | ------------------------ | ---------------- |
 | [#317](https://github.com/Leon-87-7/vig/issues/317) | fix(telegram): .md documents preview as mojibake (â€”) — UTF-8 BOM + strip Gemini em-dashes       | Telegram / Gemini        | —                |
 | [#414](https://github.com/Leon-87-7/ownix/issues/414) | test_sheets_append_short_row fails: export_blocked() not mocked | Tests / Sheets | — |
+| [#466](https://github.com/Leon-87-7/ownix/issues/466) | Sidecar: /metadata exposes duration; _detect_platform reports real extractor keys | Sidecar / Transcript | — |
+| [#467](https://github.com/Leon-87-7/ownix/issues/467) | Route Facebook + X as `unsized`, resolve short/long by duration in the worker | Worker / Validators | #466 |
+| [#468](https://github.com/Leon-87-7/ownix/issues/468) | Feed thumbnails for Facebook and X jobs | Feed / Thumbnails | #466 |
+| [#469](https://github.com/Leon-87-7/ownix/issues/469) | Update bot help copy to advertise Facebook + X support | Telegram / Copy | #467 |
 
 ---
 
@@ -503,6 +507,14 @@ Per-tenant Second Brain (docs/TASK.md task 11 session 2 — grill-with-docs 2026
 └── #460 Brain Drive writes obey the ADR-0030 export gate (needs per-row chat_id so aggregates stop relying on export_blocked(None))
 Critical path: #457 → #458 → #461; {#459, #460} parallel off #457
 Note: #457 is HITL — the backfill runs against live data and aborts if OPERATOR_CHAT_ID is unset while the 137 orphan rows exist. Community Brain + Sharer window are deliberately split out of task 11 and not yet broken into issues.
+
+Unsized video hosts (docs/TASK.md task 34 — grill-with-search-docs 2026-08-01; ADR-0045; CONTEXT.md `Unsized video` + invariant 17)
+#466 Sidecar /metadata exposes duration + _detect_platform returns real extractor keys (root, unblocked)
+├── #467 Route facebook.com + x.com/twitter.com as `unsized`; worker resolves short/long on the 180s boundary
+│   └── #469 Help-copy sweep — advertise the new hosts (must not ship before support exists)
+└── #468 Feed thumbnails for FB/X (allowlist 2→4 entries; needs real platform strings from #466)
+Critical path: #466 → #467 → #469; #468 parallel off #466
+Note: the #466 dependency is on DEPLOYMENT, not merge — transcript_server.py ships in its own image (Dockerfile.transcript) as the transcript-service container. Against a stale sidecar #467 fails silently into the default-to-short path. Vimeo is deliberately excluded (every anonymous yt-dlp route is auth-walled — Vimeo revoked the app credential yt-dlp impersonates, error_code 8001) and Twitch was dropped as not relevant; both live in docs/TASK.md Inbox.
 ```
 
 ---
@@ -517,7 +529,7 @@ Note: #457 is HITL — the backfill runs against live data and aborts if OPERATO
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#465](https://github.com/Leon-87-7/ownix/pull/465) | feat(web): robots.txt, sitemap, JSON-LD schema, noindex login | feat/seo-audit-fixes-robots-sitemap-schema→main | — | ✅ Merged |
 | [#464](https://github.com/Leon-87-7/ownix/pull/464) | feat(brain): tenant-scoped link deletion | feat/brain-links-tenant-scoped-delete→main | — | ✅ Merged |
 | [#463](https://github.com/Leon-87-7/ownix/pull/463) | feat(web): upgrade to Next.js 16, React 19 (#365-368) | feat/next16-upgrade-365-368→main | #365 | ✅ Merged |
 | [#462](https://github.com/Leon-87-7/ownix/pull/462) | Short pipeline: extract on-screen code snippets | short-code-snippets→main | — | ✅ Merged |
-| [#456](https://github.com/Leon-87-7/ownix/pull/456) | Tappable mobile onboarding stepper | feat/mobile-onboarding-stepper→main | — | ✅ Merged |

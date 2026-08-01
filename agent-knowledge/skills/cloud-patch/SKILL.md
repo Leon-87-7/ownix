@@ -1,7 +1,6 @@
 ---
 name: cloud-patch
-disable-model-invocation: true
-description: Draft a Codex Cloud handoff prompt for a batch of GitHub issues and save it to docs/cloud-patch/. Use only when explicitly invoked as /cloud-patch — grounds Codex in the right ADRs/plans/CLAUDE.md, pins line-referenced findings and fix directions per issue, and forces working-tree-only (no commit/push/PR) output for human review.
+description: Draft a Codex Cloud handoff prompt for a batch of GitHub issues and save it to docs/cloud-patch/. Use when explicitly invoked as /cloud-patch, or as the final step of /spec-to-kanban — grounds Codex in the right ADRs/plans/CLAUDE.md, pins line-referenced findings and fix directions per issue, and forces working-tree-only (no commit/push/PR) output for human review.
 ---
 
 # Cloud Patch
