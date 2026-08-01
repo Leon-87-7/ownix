@@ -53,7 +53,7 @@ export default function RootLayout({
         <SwRegister />
         {/* impeccable-live-start */}
         {process.env.NODE_ENV === 'development' && (
-          <script src="http://localhost:8400/live.js"></script>
+          <script src="http://localhost:8400/live.js" async></script>
         )}
         {/* impeccable-live-end */}
       </body>

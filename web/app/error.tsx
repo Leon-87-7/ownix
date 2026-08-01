@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 
 export default function AppError({
   error,
@@ -32,12 +33,12 @@ export default function AppError({
           >
             Try again
           </button>
-          <a
+          <Link
             href="/"
             className="inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             Back to feed
-          </a>
+          </Link>
         </div>
       </section>
     </div>
