@@ -274,6 +274,12 @@ function FieldBody({
     );
   }
   if (render === 'json') return <TemplateAnalysis raw={value} />;
+  if (render === 'code')
+    return (
+      <pre className="overflow-x-auto whitespace-pre rounded-md bg-canvas p-3 font-mono text-xs text-ink">
+        {value}
+      </pre>
+    );
   return (
     <p className="whitespace-pre-wrap break-words text-sm text-ink">
       {value}
@@ -701,7 +707,7 @@ export default function JobDetailPage() {
         {presentFields.map(({ key, label, render }) => (
           <FieldCard
             key={key}
-            label={label}
+            label={key === 'code' && job.code_lang ? `${label} (${job.code_lang})` : label}
             value={String(job[key])}
             render={render}
           />

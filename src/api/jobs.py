@@ -518,6 +518,8 @@ _DETAIL_FIELDS_LONG = (
 _DETAIL_FIELDS_SHORT = (
     "summary",
     "transcript",
+    "code",
+    "code_lang",
     "links",
 )
 

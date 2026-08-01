@@ -271,6 +271,8 @@ describe('buildMarkdown', () => {
     template_analysis: null,
     summary: null,
     transcript: null,
+    code: null,
+    code_lang: null,
     links: null,
   }
 

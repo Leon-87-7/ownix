@@ -25,10 +25,16 @@ import type { JobDetail } from '@/lib/hooks/useJobDetail'
 // ---------------------------------------------------------------------------
 
 describe('SHORT_FIELDS', () => {
-  it('contains summary, transcript, links', () => {
+  it('contains summary, transcript, code, links', () => {
     const keys = SHORT_FIELDS.map((f) => f.key)
-    expect(keys).toEqual(['summary', 'transcript', 'links'])
+    expect(keys).toEqual(['summary', 'transcript', 'code', 'links'])
     expect(keys).not.toContain('key_phrases')
+  })
+
+  it('renders code with the code renderer', () => {
+    const codeField = SHORT_FIELDS.find((f) => f.key === 'code')
+    expect(codeField?.label).toBe('Code')
+    expect(codeField?.render).toBe('code')
   })
 
   it('does NOT contain long-enrichment keys', () => {
@@ -89,6 +95,8 @@ const baseJob: JobDetail = {
   // short fields
   summary: 'A short clip about Python.',
   transcript: 'Hello world this is a transcript.',
+  code: null,
+  code_lang: null,
   links: '[{"url":"https://python.org","label":"Python","description":"Official site"}]',
   // long fields (present in DB but should NOT appear in short markdown)
   ai_topic: 'Some topic',

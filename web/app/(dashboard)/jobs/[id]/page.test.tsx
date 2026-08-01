@@ -71,6 +71,8 @@ const JOB = {
   template_analysis: null,
   summary: null,
   transcript: null,
+  code: null,
+  code_lang: null,
   key_phrases: null,
   links: null,
 };

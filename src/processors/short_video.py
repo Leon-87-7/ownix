@@ -304,6 +304,9 @@ async def run(job: dict) -> None:
         media_fields["links"] = json.dumps(links)
     if bot_message_id:
         media_fields["bot_message_id"] = bot_message_id
+    if code:
+        media_fields["code"] = code
+        media_fields["code_lang"] = code_lang
     await database.update_job_status(job_id, "done", **media_fields)
 
     # 8. Sheets logging (fire-and-forget)

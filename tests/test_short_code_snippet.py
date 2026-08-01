@@ -5,6 +5,7 @@ import pytest
 
 import src.processors.short_video as sv
 from src.processors.short_video import _build_analysis_markdown, _code_block, _telegram_code_block
+from tests.test_short_video import _FRAME_RESP, _PLAIN_JOB, _patch_pipeline
 
 JOB = {"id": "j1", "url": "https://x.test/r/1"}
 
@@ -85,3 +86,17 @@ def test_oversized_code_goes_out_as_document(monkeypatch):
     sent = _run_deliver(monkeypatch, "x = 1\n" * 900)
     assert not sent["messages"]
     assert sent["documents"][0]["filename"] == "j1_code.md"
+
+
+@pytest.mark.asyncio
+async def test_code_is_persisted_for_the_dashboard() -> None:
+    """run() must write code/code_lang to the job row, not just Telegram/Drive."""
+    vision = {**{"main_frame_index": 0, "summary": "s", "links": []}, "code": "a { color: red; }", "code_lang": "css"}
+    with _patch_pipeline({"text": ""}, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["vision"].return_value = vision
+        await short_video.run(_PLAIN_JOB)
+
+    persisted = [c.kwargs for c in mocks["update_job_status"].await_args_list if "code" in c.kwargs]
+    assert persisted, "no update_job_status call persisted the code snippet"
+    assert persisted[0]["code"] == "a { color: red; }"
+    assert persisted[0]["code_lang"] == "css"

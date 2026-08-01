@@ -1195,6 +1195,15 @@ async def _migrate_v34_v35(conn: aiosqlite.Connection) -> None:
 
 _MIGRATIONS.append(_migrate_v34_v35)
 
+# v35 → v36: persist short-pipeline code snippets (#462 follow-up) so the
+# dashboard detail page can show them — previously only sent to Telegram/Drive.
+_MIGRATIONS.append(
+    [
+        "ALTER TABLE jobs ADD COLUMN code TEXT",
+        "ALTER TABLE jobs ADD COLUMN code_lang TEXT",
+    ]
+)
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")

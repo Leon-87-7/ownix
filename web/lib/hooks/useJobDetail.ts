@@ -25,6 +25,8 @@ export interface JobDetail {
   // Short pipeline fields
   summary: string | null;
   transcript: string | null;
+  code: string | null;
+  code_lang: string | null;
   links: string | null;
 }
 

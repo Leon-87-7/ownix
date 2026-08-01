@@ -1,6 +1,6 @@
 import type { JobDetail } from '@/lib/hooks/useJobDetail'
 
-export type RenderType = 'text' | 'list' | 'json' | 'links'
+export type RenderType = 'text' | 'list' | 'json' | 'links' | 'code'
 
 export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
   { key: 'ai_topic', label: 'Topic', render: 'text' },
@@ -16,6 +16,7 @@ export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; ren
 export const SHORT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
   { key: 'summary', label: 'Summary', render: 'text' },
   { key: 'transcript', label: 'Transcript', render: 'text' },
+  { key: 'code', label: 'Code', render: 'code' },
   { key: 'links', label: 'Links Found', render: 'links' },
 ]
 
