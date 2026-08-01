@@ -34,8 +34,6 @@ import { WordmarkMarquee } from './wordmark-marquee';
  */
 export function MobileOnboardingStepper() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const step = STEPS[activeIndex];
-  const Icon = step.icon;
   const isFirst = activeIndex === 0;
   const isLast = activeIndex === STEPS.length - 1;
   const progress = `${((activeIndex + 1) / STEPS.length) * 100}%`;
@@ -101,34 +99,48 @@ export function MobileOnboardingStepper() {
             />
           </div>
 
-          <article
-            key={step.id}
-            className="rounded-lg border border-line bg-surface p-5 motion-safe:animate-slide-up-in"
-          >
-            <div className="mb-3 flex items-center gap-3">
-              <Icon
-                aria-hidden="true"
-                className="h-5 w-5 shrink-0 text-contrasignal"
-              />
-              <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
-                {step.surface}
-              </span>
-            </div>
-            <h3 className="text-balance mb-3 max-w-[24ch] text-[clamp(1.25rem,6vw,1.5rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
-              {step.title}
-            </h3>
-            <p className="text-pretty max-w-[58ch] text-base leading-relaxed tracking-[0.01em] text-body">
-              {step.body.map((line, li) => (
-                <Fragment key={`${step.id}-${li}`}>
-                  {li > 0 && <br />}
-                  {line}
-                </Fragment>
-              ))}
-            </p>
-            <p className="mt-4 font-mono text-xs text-muted">
-              {step.meta}
-            </p>
-          </article>
+          {/* Grid-stack all three cards into one cell so the row auto-sizes to
+              the tallest — 'own' has three body lines against the other two's
+              two, so it's the ruler. No animation on swap: only the active
+              card is visible, the rest sit invisible but still contribute to
+              the shared height. */}
+          <div className="grid">
+            {STEPS.map((item, index) => {
+              const ItemIcon = item.icon;
+              const isActive = index === activeIndex;
+              return (
+                <article
+                  key={item.id}
+                  aria-hidden={!isActive}
+                  className={`col-start-1 row-start-1 rounded-lg border border-line bg-surface p-5 ${isActive ? '' : 'invisible'}`}
+                >
+                  <div className="mb-3 flex items-center gap-3">
+                    <ItemIcon
+                      aria-hidden="true"
+                      className="h-5 w-5 shrink-0 text-contrasignal"
+                    />
+                    <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
+                      {item.surface}
+                    </span>
+                  </div>
+                  <h3 className="text-balance mb-3 max-w-[24ch] text-[clamp(1.25rem,6vw,1.5rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
+                    {item.title}
+                  </h3>
+                  <p className="text-pretty max-w-[58ch] text-base leading-relaxed tracking-[0.01em] text-body">
+                    {item.body.map((line, li) => (
+                      <Fragment key={`${item.id}-${li}`}>
+                        {li > 0 && <br />}
+                        {line}
+                      </Fragment>
+                    ))}
+                  </p>
+                  <p className="mt-4 font-mono text-xs text-muted">
+                    {item.meta}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
