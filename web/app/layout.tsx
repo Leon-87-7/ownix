@@ -63,9 +63,16 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="bg-canvas font-sans text-ink antialiased">
+        {/* SITE_URL is env/deploy-controlled, not user input, but escape
+            </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(softwareAppSchema)
+              .replace(/</g, '\\u003c')
+              .replace(/>/g, '\\u003e')
+              .replace(/&/g, '\\u0026'),
+          }}
         />
         <MockProvider>{children}</MockProvider>
         <SwRegister />
