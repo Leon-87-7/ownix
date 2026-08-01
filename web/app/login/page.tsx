@@ -1,8 +1,16 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { MoveLeft } from 'lucide-react';
 import { AuthShell } from '@/components/shell/auth-shell';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
+
+// Thin auth page — index space is better spent on the landing page.
+// follow: true so link equity still flows through to pages this one links to.
+export const metadata: Metadata = {
+  title: 'Sign in — Ownix',
+  robots: { index: false, follow: true },
+};
 
 export default function LoginPage() {
   return (

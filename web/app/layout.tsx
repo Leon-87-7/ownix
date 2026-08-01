@@ -3,6 +3,20 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
+import { SITE_URL } from '@/lib/site-url';
+
+// Site-wide since it's cheap and every page benefits from rich-result
+// eligibility; the private dashboard is noindexed anyway so this is harmless
+// weight there.
+const softwareAppSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Ownix',
+  url: SITE_URL,
+  description: 'Collect what matters. Own your Index. Shape the Brain.',
+  applicationCategory: 'ProductivityApplication',
+  operatingSystem: 'Web',
+};
 
 // Two voices (DESIGN.md): Inter for human language, JetBrains Mono for machine facts.
 const inter = Inter({
@@ -49,6 +63,17 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body className="bg-canvas font-sans text-ink antialiased">
+        {/* SITE_URL is env/deploy-controlled, not user input, but escape
+            </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(softwareAppSchema)
+              .replace(/</g, '\\u003c')
+              .replace(/>/g, '\\u003e')
+              .replace(/&/g, '\\u0026'),
+          }}
+        />
         <MockProvider>{children}</MockProvider>
         <SwRegister />
         {/* impeccable-live-start */}
