@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 
 from src.brain import (
     EMBEDDING_DIM,
@@ -875,9 +876,8 @@ async def test_refresh_repairs_missing_description_and_reembeds():
 
 
 @pytest.fixture
-def brain_client() -> "TestClient":
+def brain_client() -> TestClient:
     from fastapi import FastAPI, Request
-    from fastapi.testclient import TestClient
 
     from src.api.brain import brain_router
 
