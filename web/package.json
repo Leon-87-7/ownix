@@ -53,5 +53,8 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "overrides": {
+    "sharp": "^0.35.0"
   }
 }
