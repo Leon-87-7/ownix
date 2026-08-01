@@ -213,6 +213,80 @@
 | [#301](https://github.com/Leon-87-7/vig/issues/301) | fix(webhook): skip invite-gate email-parsing branch on callback button presses (via_callback)              | Webhook                  | Merged; PR #304 (council chunk 5); closed on GH                                           |
 | [#302](https://github.com/Leon-87-7/vig/issues/302) | fix(webhook): message-copy hygiene sweep (trailing spaces, _HELP_TEXT backticks, capitalize waiting message) | Webhook                | Merged; PR #304 (council chunk 5); closed on GH                                           |
 
+| [#311](https://github.com/Leon-87-7/vig/issues/311) | feat(github): fetch sub-project READMEs for monorepos into the repo bundle                                 | Repo / GitHub            | Merged; PR #315; closed on GH                                                             |
+| [#312](https://github.com/Leon-87-7/vig/issues/312) | feat(repo): key_components field — what's actually in this repo                                            | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
+| [#313](https://github.com/Leon-87-7/vig/issues/313) | fix(web): job detail renders ai_action_points/ai_tools as raw JSON strings                                 | Web / Jobs               | Merged; PR #315; closed on GH                                                             |
+| [#314](https://github.com/Leon-87-7/vig/issues/314) | feat(repo): tighten prompt field guidance — tagline, tech_stack cap, when_to_use, concepts_taught          | Repo / Gemini            | Merged; PR #315; closed on GH                                                             |
+| [#305](https://github.com/Leon-87-7/vig/issues/305) | Links table — truncate & expand the title · topic description                                              | Web / Brain              | Merged; PR #316; closed on GH                                                              |
+| [#306](https://github.com/Leon-87-7/vig/issues/306) | Links table — mobile TableCard stacked layout                                                               | Web / Brain              | Merged; PR #316; closed on GH                                                              |
+| [#307](https://github.com/Leon-87-7/vig/issues/307) | Sidebar footer — Terms/Privacy links + Sign out icon                                                        | Web / Sidebar            | Merged; PR #316; closed on GH                                                              |
+| [#308](https://github.com/Leon-87-7/vig/issues/308) | Sidebar footer — Google-connect row redesign                                                                | Web / Account            | Merged; PR #316; closed on GH                                                              |
+| [#309](https://github.com/Leon-87-7/vig/issues/309) | Job details — previous/next navigation                                                                      | Web / Jobs               | Merged; PR #316; closed on GH                                                              |
+| [#310](https://github.com/Leon-87-7/vig/issues/310) | Feed — Docs tab linking to Doc Parser                                                                       | Web / Feed               | Merged; PR #316; closed on GH                                                              |
+| [#318](https://github.com/Leon-87-7/vig/issues/318) | Extract shared job-creation core (create_and_enqueue_job)                                                   | Jobs / Core              | Merged; PR #324; closed on GH                                                              |
+| [#319](https://github.com/Leon-87-7/vig/issues/319) | POST /api/jobs — dashboard job-creation endpoint                                                            | API / Jobs               | Merged; PR #324; closed on GH                                                              |
+| [#320](https://github.com/Leon-87-7/vig/issues/320) | Feed page submit control — URL + template picker                                                            | Web / Feed               | Merged; PR #324; closed on GH                                                              |
+| [#321](https://github.com/Leon-87-7/vig/issues/321) | Repo follow-up after short-video enrichment                                                                 | Telegram / Repo          | Merged; PR #324; closed on GH                                                              |
+| [#322](https://github.com/Leon-87-7/vig/issues/322) | Repo follow-up after article enrichment                                                                     | Telegram / Repo          | Merged; PR #324; closed on GH                                                              |
+| [#323](https://github.com/Leon-87-7/vig/issues/323) | Repo follow-up after long-video enrichment                                                                  | Telegram / Repo          | Merged; PR #324; closed on GH                                                              |
+| [#333](https://github.com/Leon-87-7/vig/issues/333) | Feed tabs: rename Feed and move Links into Feed                                                             | Web / Feed               | Merged; PR #337; closed on GH                                                              |
+| [#334](https://github.com/Leon-87-7/vig/issues/334) | Docs ingest modal from Feed actions                                                                        | Web / Feed               | Merged; PR #337; closed on GH                                                              |
+| [#335](https://github.com/Leon-87-7/vig/issues/335) | Desktop Commands launcher for Feed actions                                                                 | Web / Feed               | Merged; PR #337; closed on GH                                                              |
+| [#336](https://github.com/Leon-87-7/vig/issues/336) | Move Links inventory API to Feed namespace last                                                            | API / Feed               | Merged; PR #337; closed on GH                                                              |
+| [#374](https://github.com/Leon-87-7/vig/issues/374) | Ops bot foundation: settings, allowlists, sender, startup webhook registration                              | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#375](https://github.com/Leon-87-7/vig/issues/375) | Invite approvals move to Ops bot with admin-only callbacks                                                  | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#376](https://github.com/Leon-87-7/vig/issues/376) | Ops bot read-only user queue commands                                                                       | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#377](https://github.com/Leon-87-7/vig/issues/377) | Domain-scoped batch approval with confirmation                                                              | Telegram / Ops           | Merged; PR #380; closed on GH                                                              |
+| [#378](https://github.com/Leon-87-7/vig/issues/378) | Dev login stays quiet by default, with explicit Ops bot e2e mode                                            | Auth / Dev               | Merged; PR #380; closed on GH                                                              |
+| [#379](https://github.com/Leon-87-7/vig/issues/379) | Ngrok-assisted local Ops e2e helper                                                                         | DevEx / Ops              | Merged; PR #380; closed on GH                                                              |
+| [#329](https://github.com/Leon-87-7/vig/issues/329) | Routing cutover — Feed moves to /feed, / becomes the public landing route | Web / Routing | Merged; PRs #351/#360; closed on GH |
+| [#330](https://github.com/Leon-87-7/vig/issues/330) | Add Google API Limited Use disclosure to the /privacy page | Web / Privacy | closed on GH |
+| [#331](https://github.com/Leon-87-7/vig/issues/331) | Public landing — BrandBackground extraction + full marketing page + /login back-link | Web / Landing | Merged; PRs #351/#360; closed on GH |
+| [#353](https://github.com/Leon-87-7/vig/issues/353) | Restricted mode — preview data plane: read-only preview endpoints + diversified corpus | API / Preview | Merged; PR #359; closed on GH |
+| [#354](https://github.com/Leon-87-7/vig/issues/354) | Restricted mode — entry: session-aware landing + ownix_preview cookie + read-only Feed | Web / Routing | Merged; PR #359; closed on GH |
+| [#355](https://github.com/Leon-87-7/vig/issues/355) | Restricted mode — chrome: shared state + AppHeader banner + global toast + blocked actions | Web / Restricted | Merged; PR #359; closed on GH |
+| [#356](https://github.com/Leon-87-7/vig/issues/356) | Restricted mode — Feed intro modal (once per browser session) | Web / Restricted | Merged; PR #359; closed on GH |
+| [#357](https://github.com/Leon-87-7/vig/issues/357) | Restricted mode — sidebar persistence + read-only page facades (Docs/Collections/Recipes/Settings) | Web / Restricted | Merged; PR #359; closed on GH |
+| [#358](https://github.com/Leon-87-7/vig/issues/358) | Restricted mode — login access sequence + locked Connect Google | Web / Auth | Merged; PR #359; closed on GH |
+| [#381](https://github.com/Leon-87-7/vig/issues/381) | Standalone link identity — links.description via tiered resolver (GitHub svc → meta parse → Jina) | Brain | Merged; PR #390; closed on GH |
+| [#382](https://github.com/Leon-87-7/vig/issues/382) | link_tags schema + attach/detach API + dot-cluster TagMenu trigger on link rows | Tags | Merged; PR #390; closed on GH |
+| [#383](https://github.com/Leon-87-7/vig/issues/383) | Global tag palette redesign — ~10 OKLCH hues, orange-yellow band excluded, color remap migration | Tags | Merged; PR #390; closed on GH |
+| [#384](https://github.com/Leon-87-7/vig/issues/384) | Search + embedding cutover to url/title/description — topic demoted to provenance | Brain | Merged; PR #390; closed on GH |
+| [#385](https://github.com/Leon-87-7/vig/issues/385) | Backfill standalone link identity via refresh-loop repair (re-resolve + re-embed) | Brain | Merged; PR #390; closed on GH |
+| [#386](https://github.com/Leon-87-7/vig/issues/386) | Optional tag icons — nullable tags.icon + Lucide picker, icon-in-color rendering | Tags | Merged; PR #390; closed on GH |
+| [#387](https://github.com/Leon-87-7/vig/issues/387) | Links search box matches tag names exactly via link_tags join | Tags | Merged; PR #390; closed on GH |
+| [#399](https://github.com/Leon-87-7/ownix/issues/399) | security: GET-based /api/auth/handoff is a login-CSRF primitive (7-day cookie-installing link) | Security / Auth | Already fixed by PR #411 (commit cdb7c63); closed on GH |
+| [#402](https://github.com/Leon-87-7/ownix/issues/402) | fix(validators): require http/https scheme, exact host match, and stricter domain normalization | Security / Validators | closed on GH |
+| [#403](https://github.com/Leon-87-7/ownix/issues/403) | fix(telegram): enforce chat_id ownership check on job callback handlers (IDOR) | Security / Telegram | closed on GH |
+| [#404](https://github.com/Leon-87-7/ownix/issues/404) | fix(transcript-service): add SSRF guards, auth, and parameter bounds | Security / Transcript | closed on GH |
+| [#405](https://github.com/Leon-87-7/ownix/issues/405) | fix(api): add length/size bounds to unbounded user-supplied text fields | API / Validation | closed on GH |
+| [#406](https://github.com/Leon-87-7/ownix/issues/406) | fix(telegram): validate /download_md URL (https, public host, max length) | Security / Telegram | closed on GH |
+| [#407](https://github.com/Leon-87-7/ownix/issues/407) | fix(api): reject whitespace-only names for spaces/tags/contexts | API / Validation | closed on GH |
+| [#408](https://github.com/Leon-87-7/ownix/issues/408) | fix(api): validate sort_order bounds on reorder endpoints | API / Validation | closed on GH |
+| [#409](https://github.com/Leon-87-7/ownix/issues/409) | fix(api): constrain tag icon to the frontend's fixed icon set | API / Tags | closed on GH |
+| [#410](https://github.com/Leon-87-7/ownix/issues/410) | fix(ops-bot): escape SQL LIKE wildcards in /users email <domain> | Security / Ops | closed on GH |
+| [#117](https://github.com/Leon-87-7/ownix/issues/117) | ExportModal: restore PDF fallback when Google Drive is not configured | Web / Export | closed on GH |
+| [#234](https://github.com/Leon-87-7/ownix/issues/234) | Replace raw logout API response with dedicated logout page | Web / Auth | closed on GH |
+| [#255](https://github.com/Leon-87-7/ownix/issues/255) | feat(telegram): first-contact email capture + pending gate + one-tap approve | Telegram / Access | closed on GH |
+| [#256](https://github.com/Leon-87-7/ownix/issues/256) | feat(web): dashboard email modal + /api/* status gate + pending screen | Web / Access | closed on GH |
+| [#259](https://github.com/Leon-87-7/ownix/issues/259) | Security: nodeLabel is an XSS sink in Brain graph (external video titles) | Security / Brain | closed on GH |
+| [#266](https://github.com/Leon-87-7/ownix/issues/266) | chore(ops): deliver Google OAuth credentials to the server .env | Ops | closed on GH |
+| [#267](https://github.com/Leon-87-7/ownix/issues/267) | fix(config): fail fast on empty TELEGRAM_WEBHOOK_SECRET/TELEGRAM_BOT_TOKEN | Config | closed on GH |
+| [#268](https://github.com/Leon-87-7/ownix/issues/268) | chore: delete scripts/backfill_brain.py — crashes on removed GOOGLE_SHEETS_ID_SHORT/LONG | Scripts / Brain | closed on GH |
+| [#269](https://github.com/Leon-87-7/ownix/issues/269) | fix(gemini): bound genai.Client requests to a 90s timeout | Gemini | closed on GH |
+| [#270](https://github.com/Leon-87-7/ownix/issues/270) | fix(web): replace invalid Tailwind class names (WCAG contrast fix + dead classes) | Web / A11y | closed on GH |
+| [#271](https://github.com/Leon-87-7/ownix/issues/271) | fix(web): guard TelegramToggle against overlapping requests and unmount timer leak | Web / Telegram | closed on GH |
+| [#272](https://github.com/Leon-87-7/ownix/issues/272) | fix(web): guard doc-parser detail load() against stale-response races | Web / Doc Parser | closed on GH |
+| [#273](https://github.com/Leon-87-7/ownix/issues/273) | feat(web): add app-level error boundary styled to the design system | Web | closed on GH |
+| [#415](https://github.com/Leon-87-7/ownix/issues/415) | feat(telegram): link pipeline core + /addlink command | Telegram | closed on GH |
+| [#416](https://github.com/Leon-87-7/ownix/issues/416) | feat(web): Add Link modal (U shortcut) | Web | closed on GH |
+| [#417](https://github.com/Leon-87-7/ownix/issues/417) | feat(web): Feed content-type support for link jobs | Web | closed on GH |
+| [#419](https://github.com/Leon-87-7/ownix/issues/419) | feat(web): mobile Feed intake sheet — BadgePlus launcher for the three ingests | Web / Feed | Merged; PR #420; closed on GH |
+| [#421](https://github.com/Leon-87-7/ownix/issues/421) | feat(web): PWA installability — complete the manifest (start_url /feed, id) | Web / PWA | Merged; PR #424; closed on GH |
+| [#422](https://github.com/Leon-87-7/ownix/issues/422) | feat(web): offline fallback — /offline page + hand-rolled sw.js | Web / PWA | Merged; PR #424; closed on GH |
+| [#423](https://github.com/Leon-87-7/ownix/issues/423) | feat(web): share-target intake — manifest share_target prefills the Submit URL dialog | Web / Feed | Merged; PR #424; closed on GH |
+| [#365](https://github.com/Leon-87-7/ownix/issues/365) | Next.js 16 core upgrade: deps + Turbopack SVGR config | Web / Next16 | Merged; PR #463 (#365-368); closed on GH |
+
 ---
 
 ## Closed PRs
@@ -316,3 +390,57 @@
 | [#263](https://github.com/Leon-87-7/vig/pull/263) | Invite gate: council-review fixes (rounds 1-2) + council-review tooling updates | invite-gate-255-256→main | — | ✅ Merged |
 | [#262](https://github.com/Leon-87-7/vig/pull/262) | feat(db): add invite gate user status | feat/invite-gate-db→main | #254 | ✅ Merged |
 | [#261](https://github.com/Leon-87-7/vig/pull/261) | [codex] fix brain graph tooltip escaping | codex/fix-brain-graph-tooltip-xss→main | — | ✅ Merged |
+| [#412](https://github.com/Leon-87-7/ownix/pull/412) | refactor(web): extract shared PreviewMotif component | refactor/shared-preview-motif→main | — | ✅ Merged |
+| [#411](https://github.com/Leon-87-7/ownix/pull/411) | fix(security): input-validation hardening for #399, #402-#410 | security/input-validation-hardening-399-402-410→main | — | ✅ Merged |
+| [#400](https://github.com/Leon-87-7/ownix/pull/400) | feat(links): add hover/arrow-key preview panel with og:image | feat/links-preview-panel→main | — | ✅ Merged |
+| [#397](https://github.com/Leon-87-7/ownix/pull/397) | Fix Links rows: trimmed URL + favicon, buttons stay in place | claude/url-button-layout-fix-flvx57→main | — | ✅ Merged |
+| [#396](https://github.com/Leon-87-7/ownix/pull/396) | fix(dashboard): skip Telegram Login Widget on job dashboard links | fix/dashboard-link-skip-telegram-login→main | — | ✅ Merged |
+| [#390](https://github.com/Leon-87-7/ownix/pull/390) | feat: standalone link identity + link-level tags (#381–#387) | feat/standalone-link-identity-381→main | #381–#387 | ✅ Merged |
+| [#389](https://github.com/Leon-87-7/ownix/pull/389) | test: align backfill limit assertion with bound SQL LIMIT param | fix/backfill-limit-test-params→main | — | ✅ Merged |
+| [#388](https://github.com/Leon-87-7/ownix/pull/388) | feat(telegram): add Open in Dashboard button to job messages | feat/telegram-job-dashboard-button→main | — | ✅ Merged |
+| [#380](https://github.com/Leon-87-7/ownix/pull/380) | feat(telegram): add Ops bot workflow | codex/ops-bot-workflow→main | — | ✅ Merged |
+| [#373](https://github.com/Leon-87-7/ownix/pull/373) | fix(web): favicon, one-click invite widget, header home link, OG logo | feat/landing-invite-widget-and-header-link→main | — | ✅ Merged |
+| [#372](https://github.com/Leon-87-7/ownix/pull/372) | fix(web): correct stale vig branding, clarify dashboard tool copy | copy/legal-and-dashboard-clarity→main | — | ✅ Merged |
+| [#371](https://github.com/Leon-87-7/ownix/pull/371) | refactor(web): organize components into feature folders | refactor/web-components-layout→main | — | ✅ Merged |
+| [#370](https://github.com/Leon-87-7/ownix/pull/370) | fix(web): redirect Google OAuth to feed, rename Drive folder to Ownix | fix/google-redirect-and-web-polish→main | — | ✅ Merged |
+| [#369](https://github.com/Leon-87-7/ownix/pull/369) | chore(codacy): disable markdown analysis, prune tools to repo languages | claude/feed-jobs-not-found-oetr0t→main | — | ✅ Merged |
+| [#364](https://github.com/Leon-87-7/ownix/pull/364) | polish(web): landing funnel copy + floating dev persona switch | feat/ownix-landing-copy→main | — | ✅ Merged |
+| [#363](https://github.com/Leon-87-7/ownix/pull/363) | Fix logout and restore Next 14 | codex/next14-logout-fix→main | — | ✅ Merged |
+| [#362](https://github.com/Leon-87-7/ownix/pull/362) | fix(web): resolve Next 16 async route params breaking job/space detail pages | claude/feed-jobs-not-found-oetr0t→main | — | ✅ Merged |
+| [#361](https://github.com/Leon-87-7/ownix/pull/361) | fix(restricted): approved session outranks stale preview cookie | claude/feed-jobs-not-found-oetr0t→main | — | ✅ Merged |
+| [#360](https://github.com/Leon-87-7/ownix/pull/360) | Codex landing 329 331 | codex-landing-329-331→main | — | ✅ Merged |
+| [#359](https://github.com/Leon-87-7/ownix/pull/359) | Restricted mode preview: preview API, routing, and read-only UI | codex/implement-issues-#353#358-for-restricted-mode→main | #353–#358 | ✅ Merged |
+| [#351](https://github.com/Leon-87-7/ownix/pull/351) | Implement Ownix landing and Feed dashboard flow | codex-landing-329-331→main | — | ✅ Merged |
+| [#350](https://github.com/Leon-87-7/ownix/pull/350) | feat(web): transition dashboard to Ownix design system | codex/ownix-design-system-shell→main | — | ✅ Merged |
+| [#338](https://github.com/Leon-87-7/ownix/pull/338) | fix(doc-parser): shorten source document key | codex/doc-parser-source-chip→main | — | ✅ Merged |
+| [#337](https://github.com/Leon-87-7/ownix/pull/337) | Feed inventory IA: Links and Commands | codex-IA-refactor→main | — | ✅ Merged |
+| [#328](https://github.com/Leon-87-7/ownix/pull/328) | impeccable critiques and dialog placement | ui/submit-url-dialog-desktop→main | — | ✅ Merged |
+| [#327](https://github.com/Leon-87-7/ownix/pull/327) | Revert "feat: refactor components for improved readability and maintainability" | revert-326-ui/submit-url-dialog-desktop→main | — | ❌ Closed |
+| [#326](https://github.com/Leon-87-7/ownix/pull/326) | feat: refactor components for improved readability and maintainability | ui/submit-url-dialog-desktop→main | — | ✅ Merged |
+| [#325](https://github.com/Leon-87-7/ownix/pull/325) | feat(web): collapse dashboard submit form behind a neutral trigger | feat/submit-collapse→main | — | ✅ Merged |
+| [#324](https://github.com/Leon-87-7/ownix/pull/324) | feat: dashboard job submission + shared job service and repo follow-ups | codex/resolve-issues-318-to-323→main | — | ✅ Merged |
+| [#316](https://github.com/Leon-87-7/ownix/pull/316) | feat: job prev/next navigation, links mobile cards, Docs tab, sidebar footer (#305-#310) | codex/resolve-305-310→main | — | ✅ Merged |
+| [#418](https://github.com/Leon-87-7/ownix/pull/418) | feat: link pipeline — direct-add URLs via /addlink and dashboard Add Link | feat/link-pipeline-addlink→main | — | ✅ Merged |
+| [#420](https://github.com/Leon-87-7/ownix/pull/420) | feat(feed): mobile intake sheet — BadgePlus launcher for the three ingests | feat/419-mobile-intake-sheet→main | #419 | ✅ Merged |
+| [#424](https://github.com/Leon-87-7/ownix/pull/424) | feat(web): installable PWA — manifest, offline fallback, share-target intake | feat/installable-pwa-421-423→main | #421, #422, #423 | ✅ Merged |
+| [#425](https://github.com/Leon-87-7/ownix/pull/425) | feat(web): Ownix brand icons + seeded no-preview ring stamp | feat/ownix-brand-icons→main | — | ✅ Merged |
+| [#426](https://github.com/Leon-87-7/ownix/pull/426) | fix(web): keep intake dialogs above the mobile keyboard | claude/mobile-ingest-keyboard-overlap-rj1ojw→main | — | ✅ Merged |
+| [#427](https://github.com/Leon-87-7/ownix/pull/427) | perf(web): stop landing demo video from autoplaying on load | perf/landing-demo-video→main | — | ✅ Merged |
+| [#428](https://github.com/Leon-87-7/ownix/pull/428) | perf(web): only mount the active AppSlot icon before hydration | perf/hero-appslot-lcp→main | — | ✅ Merged |
+| [#429](https://github.com/Leon-87-7/ownix/pull/429) | perf(web): three Lighthouse easy wins on the landing page | perf/easy-wins-avatar-a11y→main | — | ✅ Merged |
+| [#430](https://github.com/Leon-87-7/ownix/pull/430) | refactor: cut cyclomatic complexity on 9 Codacy lizard warnings | refactor/reduce-cyclomatic-complexity→main | — | ✅ Merged |
+| [#431](https://github.com/Leon-87-7/ownix/pull/431) | refactor(web): dedupe over-engineering from ponytail-review sweep | chore/web-dedupe-ponytail-findings→main | — | ✅ Merged |
+| [#432](https://github.com/Leon-87-7/ownix/pull/432) | refactor(web): cut over-engineering found by ponytail-audit sweep | ponytail-audit-web-cleanup→main | — | ✅ Merged |
+| [#433](https://github.com/Leon-87-7/ownix/pull/433) | refactor(src): cut over-engineering found by ponytail-audit sweep | chore/ponytail-audit-src-cleanup→main | — | ✅ Merged |
+| [#434](https://github.com/Leon-87-7/ownix/pull/434) | fix(api): bind POST /api/jobs to create_job, not _create_link_job | fix/post-jobs-route→main | — | ✅ Merged |
+| [#435](https://github.com/Leon-87-7/ownix/pull/435) | docs(skills): seed-index staleness check + repair skills | docs/seed-index-skills→main | — | ✅ Merged |
+| [#437](https://github.com/Leon-87-7/ownix/pull/437) | fix(api): cache job thumbnail responses (ETag + Cache-Control) | fix/436-thumbnail-cache-headers→main | #436 | ✅ Merged |
+| [#438](https://github.com/Leon-87-7/ownix/pull/438) | fix(tags): sync icon set between backend and settings/feed forms | fix/tag-icon-mismatch→main | — | ✅ Merged |
+| [#439](https://github.com/Leon-87-7/ownix/pull/439) | fix(tags): add aria-pressed to IconPicker toggle buttons | fix/tag-picker-aria-pressed→main | — | ✅ Merged |
+| [#440](https://github.com/Leon-87-7/ownix/pull/440) | Refine tag color well | ui/color-well-hue-order→main | — | ✅ Merged |
+| [#447](https://github.com/Leon-87-7/ownix/pull/447) | feat(web): sub-300ms feed thumbnails — SSR preload + eager cards + 30d cache (#441–#443) | feat/feed-thumbnail-preload-441-443→main | #441, #442, #443 | ✅ Merged |
+| [#448](https://github.com/Leon-87-7/ownix/pull/448) | feat: job hard-delete + async cloud purge, feed thumbnail preload | feat/job-delete-purge-feed-preload→main | — | ✅ Merged |
+| [#453](https://github.com/Leon-87-7/ownix/pull/453) | feat(jobs): hold pending users' links and flush them on approval (#449–#452) | feat/held-jobs-pending-preview→main | #449, #450, #451, #452 | ✅ Merged |
+| [#454](https://github.com/Leon-87-7/ownix/pull/454) | Polish invite approval flow | codex/invite-approval-polish→main | — | ✅ Merged |
+| [#455](https://github.com/Leon-87-7/ownix/pull/455) | Invite-approval polish + scroll-driven landing onboarding stepper | codex/invite-approval-polish→main | — | ✅ Merged |
+| [#401](https://github.com/Leon-87-7/ownix/pull/401) | chore(web): configure ESLint | chore/web-eslint-setup→main | — | ❌ Closed |
