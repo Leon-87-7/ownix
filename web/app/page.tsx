@@ -63,12 +63,12 @@ const tiles: [string, number][] = [
   ['Repos collected', 38],
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
   // Session-aware CTA: logged-in visitors see "Open feed", anonymous ones
   // "Look inside". vig_session is httpOnly, so this has to be a server read —
   // which opts the landing page into dynamic rendering. /restricted handles
   // the actual routing (approved -> feed, else -> preview) either way.
-  const signedIn = Boolean(cookies().get('vig_session')?.value);
+  const signedIn = Boolean((await cookies()).get('vig_session')?.value);
   return (
     <>
       <nav
