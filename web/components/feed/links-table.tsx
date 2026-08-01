@@ -535,7 +535,7 @@ function LinkPreviewPanel({
           }
         />
         {deleteFailed && (
-          <p className="text-xs text-status-error">
+          <p className="text-xs text-status-error" role="alert">
             Couldn&apos;t delete — try again.
           </p>
         )}
