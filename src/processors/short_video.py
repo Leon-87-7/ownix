@@ -53,7 +53,7 @@ async def _deliver_code(chat_id: int, tag: str, job_id: str, code: str, lang: st
     message = f"{tag}\n{_telegram_code_block(code, lang)}"
     if len(message) > 4000:
         await send_document(
-            chat_id, f"# Code\n\n{_code_block(code, lang)}\n".encode("utf-8"), f"{job_id}_code.md"
+            chat_id, f"# Code\n\n{_code_block(code, lang)}\n".encode("utf-8-sig"), f"{job_id}_code.md"
         )
         return
     try:
@@ -204,7 +204,12 @@ async def _deliver_media(
 
 def _should_persist_thumbnail(platform: str) -> bool:
     normalized = platform.lower()
-    return "instagram" in normalized or "tiktok" in normalized
+    return (
+        "instagram" in normalized
+        or "tiktok" in normalized
+        or "facebook" in normalized
+        or normalized in {"twitter", "x"}
+    )
 
 
 async def _persist_best_frame_thumbnail(
@@ -381,7 +386,7 @@ async def _deliver_transcript_doc(
     try:
         await send_document(
             chat_id,
-            transcript_md.encode("utf-8"),
+            transcript_md.encode("utf-8-sig"),
             f"{job_id}_transcript.md",
         )
     except Exception as exc:

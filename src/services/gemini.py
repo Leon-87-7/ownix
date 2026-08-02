@@ -203,7 +203,7 @@ async def generate(
         log_ok="gemini.generate_ok",
         log_fail="gemini.generate_key_failed",
     )
-    return response.text or ""
+    return (response.text or "").replace("—", "-")
 
 
 async def call_gemini_vision(frames: list[dict]) -> dict:

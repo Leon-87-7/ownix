@@ -128,7 +128,7 @@ async def run(job: dict) -> None:
     doc_caption = f"{tag}\n📜 Transcript ready"
     if drive_url:
         doc_caption += f'\n📄 <a href="{drive_url}">Open in Drive</a>'
-    doc_result = await send_document(chat_id, md_text.encode(), filename=f"{slug}.md", caption=doc_caption, parse_mode="HTML")
+    doc_result = await send_document(chat_id, md_text.encode("utf-8-sig"), filename=f"{slug}.md", caption=doc_caption, parse_mode="HTML")
     bot_message_id = doc_result.get("message_id")
     if bot_message_id:
         await database.update_job_status(job_id, "transcript_done", bot_message_id=bot_message_id)

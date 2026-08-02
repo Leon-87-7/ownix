@@ -176,3 +176,20 @@ def test_call_sync_sets_explicit_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
     http_options = captured["http_options"]
     assert isinstance(http_options, types.HttpOptions)
     assert http_options.timeout == 90_000
+
+
+# ---------------------------------------------------------------------------
+# Test 9: em-dashes are stripped so downstream .md files never mojibake (#317)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_generate_strips_em_dashes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """generate() replaces em-dashes with hyphens regardless of model prose."""
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    with patch("src.services.gemini._call_sync", return_value=_make_response("path — purpose")):
+        result = await generate("Hello", model="gemini-2.5-flash")
+
+    assert result == "path - purpose"
+    assert "—" not in result

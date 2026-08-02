@@ -316,7 +316,7 @@ async def run_auto_resend(job_id: str) -> None:
         log.exception("prd.auto_resend.drive_failed", job_id=job_id)
         # Fall through — we still have md_content locally, deliver it
     await send_document(
-        chat_id, md_content.encode("utf-8"), filename, caption="📐 Auto-generated PRD"
+        chat_id, md_content.encode("utf-8-sig"), filename, caption="📐 Auto-generated PRD"
     )
     summary_lines = build_summary_lines(prd_data)
     await send_message(chat_id, "\n".join(summary_lines))
@@ -447,7 +447,7 @@ async def _deliver_prd(
         final_msg = "💡 Want to refine? Build a deeper spec:"
 
     from src.telegram.sender import send_document, send_message, send_inline_keyboard
-    await send_document(chat_id, md_content.encode("utf-8"), filename, caption=caption)
+    await send_document(chat_id, md_content.encode("utf-8-sig"), filename, caption=caption)
     summary_lines = build_summary_lines(prd_data)
     await send_message(chat_id, "\n".join(summary_lines))
     await send_inline_keyboard(chat_id, final_msg, buttons=final_buttons)
