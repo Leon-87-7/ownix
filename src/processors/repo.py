@@ -530,7 +530,11 @@ async def run(job: dict) -> None:
     # Document (non-fatal)
     filename = _sanitize_filename(owner, repo, job_id=job_id)
     try:
-        await send_document(chat_id, render_repo_markdown(analysis, bundle).encode("utf-8-sig"), filename)
+        await send_document(
+            chat_id,
+            render_repo_markdown(analysis, bundle).encode("utf-8-sig"),
+            filename,
+        )
     except Exception as exc:
         log.warning("repo_doc_send_failed", job_id=job_id, error=str(exc)[:120])
 

@@ -203,12 +203,14 @@ async def _deliver_media(
 
 
 def _should_persist_thumbnail(platform: str) -> bool:
-    normalized = platform.lower()
+    normalized = platform.strip().lower()
     return (
         "instagram" in normalized
         or "tiktok" in normalized
         or "facebook" in normalized
-        or normalized in {"twitter", "x"}
+        or "twitter" in normalized
+        or normalized == "x"
+        or normalized.startswith("x.")
     )
 
 

@@ -1506,6 +1506,43 @@ async def create_job(
     return job_id
 
 
+async def create_held_job_unless_recent(
+    *,
+    chat_id: int,
+    url: str,
+    content_type: str,
+    message_id: int | None = None,
+) -> dict[str, Any]:
+    """Atomically deduplicate and insert a held pre-approval job."""
+    job_id = generate_id()
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        cur = await conn.execute(
+            "SELECT * FROM jobs "
+            "WHERE chat_id = ? AND url = ? AND status NOT IN ('error', 'cancelled') "
+            "ORDER BY created_at DESC, id DESC LIMIT 1",
+            (chat_id, url),
+        )
+        row = await cur.fetchone()
+        if row:
+            await conn.commit()
+            return {**dict(row), "_deduped": True}
+
+        await conn.execute(
+            """
+            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status)
+            VALUES (?, ?, ?, ?, ?, 'held')
+            """,
+            (job_id, chat_id, message_id, url, content_type),
+        )
+        cur = await conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        created = await cur.fetchone()
+        await conn.commit()
+
+    log.info("held_job_created", job_id=job_id, chat_id=chat_id, content_type=content_type)
+    return {**dict(created), "_deduped": False}  # type: ignore[arg-type]
+
+
 async def reset_job(job_id: str) -> None:
     """Reset a job back to pending, clearing all result fields. Increments attempt."""
     async with connection() as conn:

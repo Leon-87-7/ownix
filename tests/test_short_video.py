@@ -1,4 +1,5 @@
 """Tests for the short-video pipeline (issue #2)."""
+
 from __future__ import annotations
 
 import os
@@ -28,6 +29,27 @@ from src.utils.validators import detect_pipeline
 )
 def test_detect_pipeline_short_urls(url: str) -> None:
     assert detect_pipeline(url) == "short"
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected"),
+    [
+        ("instagram_reels", True),
+        ("tiktok", True),
+        ("facebook", True),
+        ("twitter", True),
+        ("x", True),
+        ("X/Twitter", True),
+        ("Twitter video", True),
+        ("x.com", True),
+        ("youtube_shorts", False),
+        ("example", False),
+    ],
+)
+def test_thumbnail_platform_allowlist(platform: str, expected: bool) -> None:
+    from src.processors.short_video import _should_persist_thumbnail
+
+    assert _should_persist_thumbnail(platform) is expected
 
 
 @pytest.mark.parametrize(

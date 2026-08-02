@@ -1428,10 +1428,13 @@ async def _invite_gate_allows(
         return False
 
     url = normalize_repo_url(text) if pipeline == "repo" else text
-    # Same dedup rule as create_and_enqueue_job (ADR-0033): a waiting user resending
-    # the same link is the expected behavior, and must not queue it twice on approval.
-    if not await database.find_recent_job_by_url(chat_id, url):
-        await database.create_job(chat_id=chat_id, url=url, content_type=pipeline, status="held")
+    # Same dedup rule as create_and_enqueue_job (ADR-0033), but protected by a
+    # single write transaction so concurrent waiting-user resends cannot double-park.
+    await database.create_held_job_unless_recent(
+        chat_id=chat_id,
+        url=url,
+        content_type=pipeline,
+    )
     await send_message(chat_id, "Saved — it processes the moment you're in.")
     return False
 
