@@ -503,7 +503,10 @@ def get_short_frames():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"})
+    # yt-dlp is deliberately unpinned (Dockerfile.transcript): staleness breaks
+    # extractors, so we want the newest. Report it instead — this is the only
+    # way to tell which version is actually deployed.
+    return jsonify({"status": "ok", "yt_dlp": yt_dlp.version.__version__})
 
 
 if __name__ == "__main__":

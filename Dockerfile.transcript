@@ -4,7 +4,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir flask waitress youtube-transcript-api yt-dlp Pillow
+RUN pip install --no-cache-dir flask waitress youtube-transcript-api Pillow
+
+# yt-dlp is deliberately unpinned and installed in its own layer. Pinning it
+# freezes site breakage instead of behaviour — extractors rot as sites change,
+# and yt-dlp ships fixes within days. `--no-cache-dir` is pip's cache, not
+# Docker's, so the layer above would otherwise be reused forever and yt-dlp
+# would never actually update.
+# Bump YTDLP_REFRESH (or pass --build-arg YTDLP_REFRESH=$(date +%s)) to pull the
+# newest yt-dlp without busting the ffmpeg/apt layers. Deployed version is
+# visible at GET /health.
+ARG YTDLP_REFRESH=1
+RUN pip install --no-cache-dir --upgrade yt-dlp
 
 COPY transcript_server.py .
 
