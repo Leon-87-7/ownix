@@ -1097,7 +1097,7 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
     """Routing path when chat_state is armed and not expired."""
     job_id = state["job_id"]
     pipeline = detect_pipeline(text)
-    if pipeline in ("short", "long", "article", "repo"):
+    if pipeline in ("short", "long", "unsized", "article", "repo"):
         await database.clear_chat_state(chat_id)
         log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
         url_to_store = normalize_repo_url(text) if pipeline == "repo" else text

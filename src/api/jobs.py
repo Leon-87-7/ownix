@@ -178,7 +178,7 @@ async def _create_pipeline_job(body: JobCreateRequest, chat_id: int, url: str) -
     pipeline = detect_pipeline(url, frozenset(await database.list_allowed_domains(chat_id)))
     if pipeline == "document":
         raise HTTPException(status_code=422, detail="Document URLs belong in the Doc Parser")
-    if pipeline not in {"short", "long", "article", "repo"}:
+    if pipeline not in {"short", "long", "unsized", "article", "repo"}:
         raise HTTPException(status_code=422, detail="Unsupported URL")
 
     template = body.template.strip() if body.template else None
