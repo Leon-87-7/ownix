@@ -97,12 +97,11 @@ export async function apiPostJsonOrThrow<T>(
   body: unknown,
   options: { fallback: string | ((status: number) => string); headers?: HeadersInit },
 ): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     body: JSON.stringify(body),
   });
   return parseApiJsonOrThrow<T>(res, options.fallback);
