@@ -1,6 +1,6 @@
 /** MV3 service worker: context-menu registration + click handling (issue #478). */
 
-import { buildIntakePayload, sendToOwnix } from './api';
+import { buildIntakePayload, sendToOwnix } from './api.js';
 
 export const MENU_PAGE = 'ownix-send-page';
 export const MENU_LINK = 'ownix-send-link';

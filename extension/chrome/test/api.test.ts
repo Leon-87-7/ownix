@@ -53,6 +53,12 @@ describe('getOwnixHost / setOwnixHost', () => {
     await setOwnixHost('https://custom.example.com/');
     expect(await getOwnixHost()).toBe('https://custom.example.com');
   });
+
+  it('rejects a non-http(s) host instead of storing it', async () => {
+    vi.stubGlobal('chrome', fakeChromeStorage());
+    await expect(setOwnixHost('javascript:alert(1)')).rejects.toThrow(/http\(s\)/i);
+    await expect(setOwnixHost('not a url')).rejects.toThrow(/http\(s\)/i);
+  });
 });
 
 describe('sendToOwnix', () => {

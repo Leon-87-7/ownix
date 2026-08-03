@@ -1,6 +1,6 @@
 /** Toolbar popup: read the active tab, "Send to Ownix" (issue #478). */
 
-import { buildIntakePayload, getOwnixHost, sendToOwnix, type IntakeResponseShape } from './api';
+import { buildIntakePayload, getOwnixHost, sendToOwnix, type IntakeResponseShape } from './api.js';
 
 export interface PopupDeps {
   getActiveTab: () => Promise<{ title?: string; url?: string } | undefined>;

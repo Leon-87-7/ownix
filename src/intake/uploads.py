@@ -52,6 +52,12 @@ async def _handle_pdf(chat_id: int, file: IntakeFile) -> IntakeResponse:
     except HTTPException as exc:
         detail = exc.detail.get("message") if isinstance(exc.detail, dict) else str(exc.detail)
         return responses.rejected(detail or "This PDF could not be accepted.")
+    except Exception:
+        # GCS/storage/hash failures are transient infra errors, not the
+        # client's fault — never let them leak past the IntakeResponse
+        # contract this module's docstring promises.
+        log.exception("intake_pdf_job_failed")
+        return responses.error("Could not process this PDF right now.", retryable=True)
     return IntakeResponse(
         kind="job_created",
         text=f"Received {filename} — job_{result['job_id'][-4:]} (document).",
@@ -63,10 +69,14 @@ async def _handle_image(chat_id: int, file: IntakeFile) -> IntakeResponse:
     from src.services.gemini import call_gemini_photo_links
     from src.services.github import enrich_github_links
 
-    result = await call_gemini_photo_links(
-        [{"bytes": file.data, "mime_type": file.content_type}],
-        caption=None,
-    )
+    try:
+        result = await call_gemini_photo_links(
+            [{"bytes": file.data, "mime_type": file.content_type}],
+            caption=None,
+        )
+    except Exception:
+        log.exception("intake_photo_links_failed")
+        return responses.error("Could not process this image right now.", retryable=True)
     links = result.get("links", [])
     summary = result.get("summary", "")
     if not links:
@@ -75,7 +85,12 @@ async def _handle_image(chat_id: int, file: IntakeFile) -> IntakeResponse:
             text=f"No links found in this image.\n{summary}".strip(),
         )
 
-    links = await enrich_github_links(links)
+    try:
+        links = await enrich_github_links(links)
+    except Exception:
+        # Enrichment is a nice-to-have on top of links already found — don't
+        # fail the whole response over it.
+        log.exception("intake_github_enrich_failed")
     _maybe_ingest_brain(links, summary, chat_id)
     return IntakeResponse(
         kind="action_ack",

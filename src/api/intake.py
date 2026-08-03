@@ -13,6 +13,7 @@ import time
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
 from src.intake import idempotency, mime_sniff, quota, rate_limit, state
@@ -104,12 +105,28 @@ async def post_intake_upload(
         return cached
 
     try:
-        # Starlette's own multipart parser defaults max_part_size to 1 MiB and
-        # raises before this handler's own size check ever runs — any file
-        # over 1 MiB would otherwise 500 instead of hitting the intended 413.
+        # max_part_size only limits non-file form fields (Starlette's
+        # MultiPartParser skips the check for any part with a filename, i.e.
+        # our actual `file` field) — this endpoint's own read-and-compare
+        # below is what actually enforces the size cap on the upload itself.
+        # Passed through anyway so a client that smuggles an extra oversized
+        # text field alongside `file` still gets bounded, not an unbounded
+        # buffer.
         form = await request.form(max_part_size=MAX_UPLOAD_BYTES)
     except MultiPartException as exc:
+        # Defensive: only reachable if Starlette ever stops converting this
+        # to an HTTPException itself (see except clause below).
         raise HTTPException(status_code=413, detail="File must be 20 MB or smaller") from exc
+    except StarletteHTTPException as exc:
+        # Request._get_form catches MultiPartException internally and
+        # re-raises it as a *base* starlette HTTPException(400, ...) whenever
+        # the request has an app scope (always true here) — so the
+        # `except MultiPartException` above never actually fires for that
+        # path. Remap the size-limit case to the 413 this endpoint promises;
+        # let any other 400 (e.g. a malformed boundary) pass through as-is.
+        if exc.status_code == 400 and "exceeded maximum size" in str(exc.detail):
+            raise HTTPException(status_code=413, detail="File must be 20 MB or smaller") from exc
+        raise
     upload = form.get("file")
     if upload is None or not hasattr(upload, "read"):
         raise HTTPException(status_code=422, detail="file is required")

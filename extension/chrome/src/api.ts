@@ -1,6 +1,6 @@
 /** API client for the extension: POST /api/intake/message (issue #478). */
 
-import { getExtensionToken } from './auth';
+import { getExtensionToken } from './auth.js';
 
 export interface IntakeResponseShape {
   schema_version: number;
@@ -28,8 +28,23 @@ export async function getOwnixHost(): Promise<string> {
   return value || DEFAULT_HOST;
 }
 
+/** Reject anything but a well-formed http(s) origin — the saved value is later
+ * passed straight into `fetch()`, so a `javascript:`/`data:`/malformed value
+ * must never reach storage in the first place. */
+export function isValidOwnixHost(host: string): boolean {
+  try {
+    return new URL(host).protocol === 'https:' || new URL(host).protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export async function setOwnixHost(host: string): Promise<void> {
-  await chrome.storage.local.set({ [HOST_STORAGE_KEY]: host.replace(/\/+$/, '') });
+  const trimmed = host.replace(/\/+$/, '');
+  if (!isValidOwnixHost(trimmed)) {
+    throw new Error('Ownix host must be a valid http(s) URL.');
+  }
+  await chrome.storage.local.set({ [HOST_STORAGE_KEY]: trimmed });
 }
 
 /** URL wins over text — a URL capture (page/link) is always what the user meant to send. */

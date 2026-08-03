@@ -68,6 +68,7 @@ export function ExtensionTokensPanel() {
 
   const handleRevoke = async (tokenId: string) => {
     setRevokingId(tokenId);
+    setError(null);
     try {
       await revokeExtensionToken(tokenId);
       setTokens((prev) => prev.filter((t) => t.id !== tokenId));

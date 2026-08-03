@@ -43,7 +43,12 @@ async def _retry_job(chat_id: int, job_id: str | None) -> IntakeResponse:
             job_id=job_id,
         )
     retried = await create_and_enqueue_job(
-        chat_id, job["url"], job["content_type"], skip_cache=True
+        chat_id,
+        job["url"],
+        job["content_type"],
+        template=job.get("template"),
+        freestyle_prompt=job.get("freestyle_prompt"),
+        skip_cache=True,
     )
     return responses.action_ack(
         f"Retrying job_{retried['id'][-4:]}.",

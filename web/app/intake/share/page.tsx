@@ -31,8 +31,10 @@ function IntakeShareRedirect() {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const shareUrl = searchParams.get('url');
-    const shareText = searchParams.get('text');
+    // Param names must match manifest.json's share_target.params mapping
+    // (share_url/share_text), not the raw Web Share Target field names.
+    const shareUrl = searchParams.get('share_url');
+    const shareText = searchParams.get('share_text');
     const extracted = extractSharedUrl(shareUrl, shareText);
     const intakeTarget = extracted ? `/intake?url=${encodeURIComponent(extracted)}` : '/intake';
 

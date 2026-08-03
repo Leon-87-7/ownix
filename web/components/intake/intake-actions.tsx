@@ -19,7 +19,7 @@ export function IntakeActions({
         <button
           key={action.action_id}
           type="button"
-          disabled={pendingActionId === action.action_id}
+          disabled={Boolean(pendingActionId)}
           onClick={() => onAction(action)}
           className="h-8 rounded-md border border-line bg-raised px-3 text-sm font-medium text-ink transition-ui hover:border-signal hover:text-signal disabled:opacity-50"
         >

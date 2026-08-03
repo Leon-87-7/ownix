@@ -36,7 +36,9 @@ export function IntakeUploadDropzone({
         accept="application/pdf,image/*"
         onChange={handleChange}
         disabled={uploading}
-        className="sr-only"
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
         id="intake-upload-input"
       />
       <button

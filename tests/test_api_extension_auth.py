@@ -4,6 +4,7 @@ SessionMiddleware (issue #479)."""
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ CHAT_ID = 5555
 
 
 @pytest.fixture(autouse=True)
-def _memory_backend_reset() -> None:
+def _memory_backend_reset() -> Iterator[None]:
     # session_store._memory is a module-level global (shared with
     # extension_tokens.py's Redis/memory dual backend) — clear it per test so
     # a token minted in one test can't leak into another's chat_id-scoped list.

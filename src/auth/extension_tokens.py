@@ -28,8 +28,9 @@ from src.auth import session as session_store
 _PAIRING_PREFIX = "extension_pairing:"
 PAIRING_TTL_SECONDS = 300
 
-_TOKEN_PREFIX = "extension_token:"
-_TOKEN_INDEX_PREFIX = "extension_tokens_by_chat:"
+_TOKEN_PREFIX = "extension_token:"  # nosec B105 — Redis key prefix, not a credential
+_TOKEN_INDEX_PREFIX = "extension_tokens_by_chat:"  # nosec B105 — Redis key prefix, not a credential
+_TOUCH_THROTTLE_SECONDS = 60
 
 
 def _hash_token(raw_token: str) -> str:
@@ -74,6 +75,22 @@ async def _get_metadata(token_hash: str) -> dict[str, Any] | None:
         return json.loads(raw)
     except json.JSONDecodeError:
         return None
+
+
+async def _touch_metadata(token_hash: str, metadata: dict[str, Any]) -> None:
+    """Write metadata back only if the key still exists.
+
+    Guards against a concurrent revoke resurrecting a just-deleted token: if
+    `revoke_extension_token` runs between `resolve_extension_token`'s read and
+    this write, the key must stay gone rather than being recreated here.
+    """
+    key = f"{_TOKEN_PREFIX}{token_hash}"
+    raw = json.dumps(metadata)
+    if session_store._use_memory():
+        if key in session_store._memory:
+            session_store._memory_set(key, raw)
+    else:
+        await session_store._client().set(key, raw, xx=True)
 
 
 async def _delete_metadata(token_hash: str) -> None:
@@ -145,9 +162,14 @@ async def resolve_extension_token(raw_token: str) -> int | None:
     metadata = await _get_metadata(token_hash)
     if metadata is None:
         return None
-    metadata["last_used_at"] = time.time()
-    await _store_metadata(token_hash, metadata)
-    return int(metadata["chat_id"])
+    chat_id = int(metadata["chat_id"])
+    last_used = metadata.get("last_used_at")
+    # Throttle the write — every authenticated intake request otherwise costs
+    # a store round-trip just to bump a timestamp nobody reads that often.
+    if last_used is None or time.time() - float(last_used) > _TOUCH_THROTTLE_SECONDS:
+        metadata["last_used_at"] = time.time()
+        await _touch_metadata(token_hash, metadata)
+    return chat_id
 
 
 async def list_extension_tokens(chat_id: int) -> list[dict[str, Any]]:

@@ -1,7 +1,7 @@
 /** Options page: choose Ownix host, connection status, pair/disconnect (issues #478/#479). */
 
-import { getOwnixHost, setOwnixHost } from './api';
-import { clearExtensionToken, getExtensionToken, redeemPairingCode } from './auth';
+import { getOwnixHost, setOwnixHost } from './api.js';
+import { clearExtensionToken, getExtensionToken, redeemPairingCode } from './auth.js';
 
 export async function initOptions(doc: Document): Promise<void> {
   const hostInput = doc.getElementById('host') as HTMLInputElement;
@@ -23,8 +23,12 @@ export async function initOptions(doc: Document): Promise<void> {
   await refreshConnectionStatus();
 
   saveBtn.addEventListener('click', async () => {
-    await setOwnixHost(hostInput.value.trim());
-    status.textContent = 'Saved.';
+    try {
+      await setOwnixHost(hostInput.value.trim());
+      status.textContent = 'Saved.';
+    } catch (err) {
+      status.textContent = err instanceof Error ? err.message : 'Failed to save host.';
+    }
   });
 
   pairBtn.addEventListener('click', async () => {

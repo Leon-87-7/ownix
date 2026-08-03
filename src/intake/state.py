@@ -56,7 +56,11 @@ async def set_state(chat_id: int, mode: str, job_id: str, expires_minutes: int =
         raise ValueError(f"Unsupported pending mode: {mode}")
     await database.set_chat_state(chat_id, mode=mode, job_id=job_id, expires_minutes=expires_minutes)
     state = await database.get_chat_state(chat_id)
-    assert state is not None
+    if state is None:
+        # A concurrent clear_state for the same chat_id between the write and
+        # this read-back would otherwise surface as an unhandled
+        # AssertionError (and `assert` vanishes under python -O).
+        raise RuntimeError(f"chat_state row for {chat_id} vanished immediately after being set")
     return state
 
 

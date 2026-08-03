@@ -33,6 +33,8 @@ export function IntakeStateBanner() {
       if (!res.ok) return;
       const data = (await res.json()) as { pending: PendingState | null };
       setPending(data.pending);
+    } catch {
+      // Network drop mid-poll: keep the last known state, next poll retries.
     } finally {
       setLoaded(true);
     }

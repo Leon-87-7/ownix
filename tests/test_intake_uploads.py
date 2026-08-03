@@ -121,6 +121,25 @@ class TestUploadValidation:
         )
         assert resp.status_code == 413
 
+    def test_oversized_extra_field_gets_413_not_starlette_raw_400(
+        self, upload_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # max_part_size only limits non-file parts (Starlette skips the check
+        # for any part with a filename). A client smuggling an extra oversized
+        # text field alongside `file` used to hit Starlette's internal
+        # MultiPartException -> base HTTPException(400) conversion, which
+        # `except MultiPartException` never actually caught.
+        from src.api import intake as intake_module
+
+        monkeypatch.setattr(intake_module, "MAX_UPLOAD_BYTES", 1024)
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            data={"extra_field": "x" * 2048},
+            files={"file": ("paper.pdf", b"%PDF-1.4 some pdf bytes", "application/pdf")},
+        )
+        assert resp.status_code == 413
+
     def test_valid_pdf_just_under_1mib_still_succeeds(self, upload_client: TestClient) -> None:
         under_1mib = b"%PDF-1.4 " + b"a" * (900 * 1024)
         _login(upload_client)

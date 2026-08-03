@@ -26,7 +26,7 @@ afterEach(() => {
 
 describe('IntakeSharePage', () => {
   it('authenticated: redirects straight into /intake with the extracted URL prefilled', async () => {
-    navigationMock.params = new URLSearchParams({ url: 'https://example.com/a' });
+    navigationMock.params = new URLSearchParams({ share_url: 'https://example.com/a' });
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
 
     render(<IntakeSharePage />);
@@ -39,7 +39,7 @@ describe('IntakeSharePage', () => {
   });
 
   it('unauthenticated: stores the shared URL and bounces to /login', async () => {
-    navigationMock.params = new URLSearchParams({ url: 'https://example.com/b' });
+    navigationMock.params = new URLSearchParams({ share_url: 'https://example.com/b' });
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 401 }));
 
     render(<IntakeSharePage />);
@@ -50,7 +50,7 @@ describe('IntakeSharePage', () => {
 
   it('reuses extractSharedUrl to pull a URL out of Android-style share_text', async () => {
     navigationMock.params = new URLSearchParams({
-      text: 'Check this out https://www.instagram.com/reel/abc/ nice',
+      share_text: 'Check this out https://www.instagram.com/reel/abc/ nice',
     });
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
 

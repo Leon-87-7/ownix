@@ -16,22 +16,23 @@ export function IntakeThread({
   onAction?: (action: IntakeActionShape) => void;
   pendingActionId?: string | null;
 }) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted">Nothing submitted yet this session.</p>;
-  }
   return (
     <div
       className="space-y-3"
       aria-live="polite"
     >
-      {items.map((item) => (
-        <IntakeResponseCard
-          key={item.id}
-          response={item.response}
-          onAction={onAction}
-          pendingActionId={pendingActionId}
-        />
-      ))}
+      {items.length === 0 ? (
+        <p className="text-sm text-muted">Nothing submitted yet this session.</p>
+      ) : (
+        items.map((item) => (
+          <IntakeResponseCard
+            key={item.id}
+            response={item.response}
+            onAction={onAction}
+            pendingActionId={pendingActionId}
+          />
+        ))
+      )}
     </div>
   );
 }
