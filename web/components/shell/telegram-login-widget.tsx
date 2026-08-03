@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { consumePostLoginRedirect } from '@/lib/intake-share-redirect';
 
 interface TelegramUser {
   id: number;
@@ -57,7 +58,7 @@ export function TelegramLoginWidget({
         // flag is derived from cookies server-side, and a soft nav can reuse
         // the Router Cache entry seeded by an earlier anonymous/restricted
         // visit to /feed, landing back on the stale pre-login render.
-        window.location.href = '/feed';
+        window.location.href = consumePostLoginRedirect();
         return;
       }
 

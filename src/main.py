@@ -11,7 +11,9 @@ from src import database, queue
 from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router
+from src.api.extension_auth import extension_auth_router
 from src.api.google_oauth import google_oauth_router
+from src.api.intake import intake_router
 from src.api.jobs import jobs_router
 from src.api.parsed import parsed_router
 from src.api.preview import preview_router
@@ -85,6 +87,22 @@ async def _register_ops_webhook() -> None:
     )
 
 
+async def _reap_intake_state() -> None:
+    """Sweep expired `chat_state` rows (issue #474).
+
+    `expires_at` was already checked lazily on read (webhook.py's
+    `_resolve_chat_state`) but nothing ever deleted an expired row — this is
+    that missing reaper, wired the same way `_drain_purge_outbox` is
+    (including swallow-and-log so one bad tick doesn't take the scheduler down).
+    """
+    from src.intake import state as intake_state
+
+    try:
+        await intake_state.reap_expired()
+    except Exception:
+        log.exception("intake_state_reap_failed")
+
+
 async def _drain_purge_outbox() -> None:
     """Drain pending purge tasks from the outbox to Redis.
 
@@ -120,6 +138,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     scheduler = AsyncIOScheduler()
     # Drain purge_tasks outbox to Redis every 30 seconds.
     scheduler.add_job(_drain_purge_outbox, "interval", seconds=30)
+    # Reap expired dashboard/Telegram pending intake state every 60 seconds.
+    scheduler.add_job(_reap_intake_state, "interval", seconds=60)
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         await brain.init_db()
         scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
@@ -144,6 +164,8 @@ app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)
 app.include_router(jobs_router)
+app.include_router(intake_router)
+app.include_router(extension_auth_router)
 app.include_router(google_oauth_router)
 app.include_router(parsed_router)
 app.include_router(spaces_router)

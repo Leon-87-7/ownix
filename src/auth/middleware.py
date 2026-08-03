@@ -7,9 +7,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from src import database
-from src.auth import session as session_store
+from src.auth import extension_tokens, session as session_store
 
 COOKIE_NAME = "vig_session"
+_BEARER_PREFIX = "bearer "
 
 # Paths that bypass the session gate entirely
 _OPEN_PATHS = frozenset(["/webhook", "/webhook/ops", "/health"])
@@ -22,6 +23,9 @@ _OPEN_API_PATHS = frozenset(
         "/api/auth/miniapp/session",
         "/api/auth/handoff",
         "/api/google/callback",
+        # The pairing code itself is the credential here (issue #479) — there
+        # is no session to check yet when the extension redeems it.
+        "/api/extension/token",
     ]
 )
 _OPEN_API_PREFIXES = ("/api/preview/",)
@@ -41,6 +45,12 @@ _PRE_APPROVAL_AUTH_PATHS = frozenset(
 # a query param so this one path can authenticate without the cookie.
 _HANDOFF_TOKEN_PATHS = frozenset(["/api/google/connect"])
 
+# A bearer extension token (issue #479) is scoped to Intake only — it must
+# never carry the same authority as a full dashboard session (account email
+# changes, Google disconnect, job deletes, minting more pairing codes, …).
+# Least-privilege: only these prefixes will even attempt bearer resolution.
+_BEARER_ALLOWED_PREFIXES = ("/api/intake/",)
+
 
 class SessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
@@ -54,6 +64,20 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
         session_id = request.cookies.get(COOKIE_NAME)
         user = await session_store.resolve(session_id) if session_id else None
+
+        # Bearer traffic (Chrome extension, issue #479) is distinct from
+        # session-cookie traffic — checked only when no session cookie
+        # resolved, so a same-site request can't be confused for one. Scoped
+        # to _BEARER_ALLOWED_PREFIXES: a stolen/leaked extension token must
+        # not double as a full-account session on unrelated routes.
+        if user is None and path.startswith(_BEARER_ALLOWED_PREFIXES):
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith(_BEARER_PREFIX):
+                token = auth_header[len(_BEARER_PREFIX) :].strip()
+                chat_id = await extension_tokens.resolve_extension_token(token) if token else None
+                if chat_id is not None:
+                    user = {"id": chat_id, "auth": "extension_token"}
+
         # A stale/expired same-origin cookie must not block the handoff-token
         # fallback — fall back to it whenever cookie resolution didn't yield a user.
         if user is None and path in _HANDOFF_TOKEN_PATHS:

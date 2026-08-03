@@ -21,7 +21,7 @@
   "start_url": "/feed",
   "id": "/feed",
   "share_target": {
-    "action": "/feed",
+    "action": "/intake/share",
     "method": "GET",
     "params": {
       "title": "share_title",

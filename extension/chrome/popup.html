@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ownix</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        width: 260px;
+        padding: 12px;
+        background: #16181c;
+        color: #f4f1eb;
+      }
+      p {
+        font-size: 13px;
+        color: #c6c1b8;
+        word-break: break-word;
+        white-space: pre-line;
+      }
+      button {
+        width: 100%;
+        padding: 8px;
+        background: #d99a45;
+        color: #1b1309;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #status {
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      a {
+        color: #d99a45;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="tab-info">Loading current tab…</p>
+    <button
+      id="send-btn"
+      disabled
+    >
+      Send to Ownix
+    </button>
+    <div id="status"></div>
+    <script
+      type="module"
+      src="src/popup.js"
+    ></script>
+  </body>
+</html>

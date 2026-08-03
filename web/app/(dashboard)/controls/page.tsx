@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PRESET_COLORS, IconPicker } from '@/components/ui/tag-picker';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
+import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 
 const DEFAULT_COLOR = '#8b5cf6';
 
@@ -606,6 +607,9 @@ export default function ControlsPage() {
         <div className="rounded-lg border border-line bg-surface px-4 py-3">
           <RecoveryTab />
         </div>
+        <Section title="Chrome Extension">
+          <ExtensionTokensPanel />
+        </Section>
       </div>
     </PageShell>
   );
