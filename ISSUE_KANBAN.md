@@ -63,6 +63,14 @@ Ordered by unblocked-first, then dependency chain.
 | [#467](https://github.com/Leon-87-7/ownix/issues/467) | Route Facebook + X as `unsized`, resolve short/long by duration in the worker | Worker / Validators | #466 |
 | [#468](https://github.com/Leon-87-7/ownix/issues/468) | Feed thumbnails for Facebook and X jobs | Feed / Thumbnails | #466 |
 | [#469](https://github.com/Leon-87-7/ownix/issues/469) | Update bot help copy to advertise Facebook + X support | Telegram / Copy | #467 |
+| [#472](https://github.com/Leon-87-7/ownix/issues/472) | Dashboard Intake MVP — /intake URL submit through create_and_enqueue_job() | Web / Intake | — |
+| [#473](https://github.com/Leon-87-7/ownix/issues/473) | Shared channel-neutral intake router + versioned contract | Intake / Router | #472 |
+| [#474](https://github.com/Leon-87-7/ownix/issues/474) | Dashboard conversational intake state (intent / freestyle) with expiry sweeper | Intake / State | #473 |
+| [#475](https://github.com/Leon-87-7/ownix/issues/475) | Dashboard intake files + inline actions (upload caps, idempotent actions) | Intake / Uploads | #473 |
+| [#476](https://github.com/Leon-87-7/ownix/issues/476) | Move PWA share target from Feed prefill to /intake/share | Web / PWA | #472 |
+| [#477](https://github.com/Leon-87-7/ownix/issues/477) | Refactor Telegram webhook into an intake-router adapter | Telegram / Intake | #473 |
+| [#478](https://github.com/Leon-87-7/ownix/issues/478) | Chrome extension MVP — capture current tab / context-menu links into Ownix Intake | Extension | #472 |
+| [#479](https://github.com/Leon-87-7/ownix/issues/479) | Production-safe Chrome extension auth via one-time pairing tokens | Extension / Auth | #478 |
 
 ---
 
@@ -515,6 +523,18 @@ Unsized video hosts (docs/TASK.md task 34 — grill-with-search-docs 2026-08-01;
 └── #468 Feed thumbnails for FB/X (allowlist 2→4 entries; needs real platform strings from #466)
 Critical path: #466 → #467 → #469; #468 parallel off #466
 Note: the #466 dependency is on DEPLOYMENT, not merge — transcript_server.py ships in its own image (Dockerfile.transcript) as the transcript-service container. Against a stale sidecar #467 fails silently into the default-to-short path. Vimeo is deliberately excluded (every anonymous yt-dlp route is auth-walled — Vimeo revoked the app credential yt-dlp impersonates, error_code 8001) and Twitch was dropped as not relevant; both live in docs/TASK.md Inbox.
+
+Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-03-ownix-intake-channels-extension-share.md — spec-to-kanban 2026-08-03)
+#472 Dashboard Intake MVP — /intake URL submit (root, unblocked)
+├── #473 Shared intake router + versioned contract ◄── #472
+│   ├── #474 Dashboard conversational state (intent/freestyle) + expiry sweeper
+│   ├── #475 Dashboard files + idempotent actions
+│   └── #477 Telegram webhook → intake-router adapter
+├── #476 PWA share target → /intake/share
+└── #478 Chrome extension MVP (current tab + context menu)
+    └── #479 Extension pairing auth (one-time token, hash-only)
+Critical path: #472 → #473 → {#474, #475, #477}; #476 parallel off #472; #478 → #479 parallel off #472
+Note: Phase 9 user_id identity migration and Phase 10 Discord adapter deferred per the plan's Non-Goals — not yet broken into issues.
 ```
 
 ---
