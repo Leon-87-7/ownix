@@ -207,7 +207,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
     # 3. Send document to Telegram
     filename = _sanitize_title(title, url) + ".md"
     if not skip_document:
-        await send_document(chat_id, content.encode(), filename)
+        await send_document(chat_id, content.encode("utf-8-sig"), filename)
 
     # 4. Build Gemini prompt
     freestyle_prompt = job.get("freestyle_prompt")

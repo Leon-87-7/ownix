@@ -195,7 +195,7 @@ async def test_happy_path_sends_txt_summary_then_buttons(patched):
     # primary artifact: the parsed .txt named after the title
     (chat_id, body, filename), _ = m["send_document"].call_args
     assert filename == "On Widgets.txt"
-    assert body == b"extracted document text"
+    assert body == "extracted document text".encode("utf-8-sig")
     # enrichment summary sent as HTML (status msg + summary = 2 send_message calls)
     assert m["send_message"].await_count == 2
     assert m["send_message"].call_args.kwargs.get("parse_mode") == "HTML"
@@ -261,7 +261,7 @@ async def test_deliver_markdown_parses_md_caches_and_sends(patched):
     # delivered as a .md document
     (_chat, sent_body, filename), _ = m["send_document"].call_args
     assert filename == "On Widgets.md"
-    assert sent_body == b"# Heading\n\nbody"
+    assert sent_body == "# Heading\n\nbody".encode("utf-8-sig")
 
 
 @pytest.mark.asyncio
@@ -276,7 +276,7 @@ async def test_deliver_markdown_uses_cached_md(patched):
     m["parse_pdf"].assert_not_called()
     m["upload"].assert_not_called()
     (_chat, sent_body, filename), _ = m["send_document"].call_args
-    assert sent_body == b"# cached md" and filename == "T.md"
+    assert sent_body == "# cached md".encode("utf-8-sig") and filename == "T.md"
 
 
 @pytest.mark.asyncio

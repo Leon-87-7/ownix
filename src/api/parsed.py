@@ -127,7 +127,7 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
     await storage.upload(key, md.encode("utf-8"), "text/markdown")
     output = await database.add_document_output(job["id"], kind, key, title)
     if job.get("telegram_delivery") == "on":
-        await _try_send_document(job["chat_id"], md.encode("utf-8"), key.rsplit("/", 1)[-1])
+        await _try_send_document(job["chat_id"], md.encode("utf-8-sig"), key.rsplit("/", 1)[-1])
     return {**output, "content": md}
 
 

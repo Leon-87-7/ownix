@@ -586,7 +586,8 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
         await send_message(
             ctx.chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, and allowlisted article domains.",
+            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+            "and allowlisted article domains.",
         )
         return
     if pipeline == "repo":
@@ -709,7 +710,7 @@ async def _cmd_template(ctx: SlashCtx) -> None:
         await send_message(
             ctx.chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, and TikTok videos.",
+            "Instagram Reels, TikTok videos, Facebook videos, and X/Twitter videos.",
         )
         return
     result = await create_and_enqueue_job(
@@ -835,7 +836,8 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         await send_message(
             ctx.chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, and allowlisted article domains.",
+            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+            "and allowlisted article domains.",
         )
         return
     url_to_store = normalize_repo_url(url) if pipeline == "repo" else url
@@ -881,7 +883,7 @@ async def _cmd_download_md(ctx: SlashCtx) -> None:
         # For cache-hit, derive filename the same way.
         first_line = title_body.split("\n", 1)[0].lstrip("# ").strip()
         filename = _sanitize_title(first_line, url) + ".md"
-        await send_document(ctx.chat_id, title_body.encode(), filename)
+        await send_document(ctx.chat_id, title_body.encode("utf-8-sig"), filename)
         log.info("download_md.cache_hit", chat_id=ctx.chat_id, url=url)
         return
 
@@ -900,7 +902,7 @@ async def _cmd_download_md(ctx: SlashCtx) -> None:
 
     # 4. Send as Telegram document
     filename = _sanitize_title(title, url) + ".md"
-    await send_document(ctx.chat_id, content.encode(), filename)
+    await send_document(ctx.chat_id, content.encode("utf-8-sig"), filename)
     log.info("download_md.fetched", chat_id=ctx.chat_id, url=url, filename=filename)
 
 
@@ -1012,6 +1014,7 @@ _START_TEXT = (
     "• YouTube video or Short\n"
     "• Instagram Reel\n"
     "• TikTok video\n"
+    "• Facebook or X/Twitter video\n"
     "• Article URL (use /allowlist to add domains)\n"
     "• GitHub repo URL\n"
     "• PDF file or link\n\n"
@@ -1415,7 +1418,8 @@ async def _invite_gate_allows(
             await send_message(
                 chat_id,
                 "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-                "Instagram Reels, TikTok videos, and allowlisted article domains.",
+                "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+                "and allowlisted article domains.",
             )
         else:
             await send_message(
@@ -1424,12 +1428,13 @@ async def _invite_gate_allows(
         return False
 
     url = normalize_repo_url(text) if pipeline == "repo" else text
-    # Same dedup rule as create_and_enqueue_job (ADR-0033): a waiting user resending
-    # the same link is the expected behavior, and must not queue it twice on approval.
-    if not await database.find_recent_job_by_url(chat_id, url):
-        await database.create_job(
-            chat_id=chat_id, url=url, content_type=pipeline, status="held"
-        )
+    # Same dedup rule as create_and_enqueue_job (ADR-0033), but protected by a
+    # single write transaction so concurrent waiting-user resends cannot double-park.
+    await database.create_held_job_unless_recent(
+        chat_id=chat_id,
+        url=url,
+        content_type=pipeline,
+    )
     await send_message(chat_id, "Saved — it processes the moment you're in.")
     return False
 
@@ -1456,7 +1461,8 @@ async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: in
         await send_message(
             chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, and allowlisted article domains.",
+            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+            "and allowlisted article domains.",
         )
         return True
     # Repo jobs run the standard repo prompt — template inputs are cleared,
@@ -1526,7 +1532,8 @@ async def _reject_url(chat_id: int, text: str) -> None:
     await send_message(
         chat_id,
         "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-        "Instagram Reels (not /p/ carousels), and TikTok videos.\n" + _ARTICLE_HINT + _github_hint,
+        "Instagram Reels (not /p/ carousels), TikTok videos, Facebook videos, "
+        "and X/Twitter videos.\n" + _ARTICLE_HINT + _github_hint,
     )
     log.info("url_rejected", chat_id=chat_id, url=text)
 
@@ -1739,9 +1746,7 @@ async def _ops_cb_invite_decision(
         await conn.commit()
     if cur.rowcount != 1:
         current_user = await database.get_user(target_chat_id)
-        current_status = (
-            str(current_user.get("status")) if current_user is not None else "missing"
-        )
+        current_status = str(current_user.get("status")) if current_user is not None else "missing"
         if current_status in {"approved", "blocked"}:
             await _settle_ops_invite_card(chat_id, message_id, current_status, target_chat_id)
             await ops_bot.answer_ops_callback(cq_id, f"Already {current_status}.")

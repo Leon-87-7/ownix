@@ -137,7 +137,7 @@ async def _deliver(job: dict, text: str, tools: list[dict], references: list[str
     chat_id = job["chat_id"]
     filename = _safe_filename(job.get("title")) + ".txt"
     try:
-        await send_document(chat_id, text.encode("utf-8"), filename)
+        await send_document(chat_id, text.encode("utf-8-sig"), filename)
     except Exception:
         log.exception("document.txt_delivery_failed", job_id=job["id"])
     try:
@@ -167,7 +167,7 @@ async def deliver_markdown(job: dict) -> None:
     sha = _sha_from_key(job["url"])
     md = await _cached_parse(sha, "md", output_format="markdown")
     filename = _safe_filename(job.get("title")) + ".md"
-    await send_document(job["chat_id"], md.encode("utf-8"), filename)
+    await send_document(job["chat_id"], md.encode("utf-8-sig"), filename)
     log.info("document.markdown_delivered", job_id=job["id"], sha=sha)
 
 

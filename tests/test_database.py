@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -166,6 +167,28 @@ async def test_create_job_without_template_defaults_none(temp_db):
     job = await db.get_job(job_id)
     assert job is not None
     assert job["template"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_held_job_unless_recent_deduplicates_concurrent_requests(temp_db):
+    from src import database as db
+
+    url = "https://x.com/user/status/123"
+    first, second = await asyncio.gather(
+        db.create_held_job_unless_recent(chat_id=42, url=url, content_type="short"),
+        db.create_held_job_unless_recent(chat_id=42, url=url, content_type="short"),
+    )
+
+    rows = await db._fetch_dicts(
+        "SELECT id, status, content_type FROM jobs WHERE chat_id = ? AND url = ?",
+        (42, url),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["status"] == "held"
+    assert rows[0]["content_type"] == "short"
+    assert {first["_deduped"], second["_deduped"]} == {False, True}
+    assert first["id"] == second["id"] == rows[0]["id"]
 
 
 @pytest.mark.asyncio
