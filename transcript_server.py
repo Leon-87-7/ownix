@@ -37,9 +37,14 @@ import io
 # unrelated-looking "empty media response".
 INSTAGRAM_COOKIES = os.environ.get(
     "INSTAGRAM_COOKIES",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "credentials", "instagram_cookies.txt"),
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "credentials", "instagram_cookies.txt"
+    ),
 )
 INSTAGRAM_MAX_SLIDES = 10
+# Authoritative short/long boundary.  The worker receives this value from
+# /metadata so the app and independently deployed sidecar cannot drift.
+SHORT_VIDEO_MAX_DURATION = 180
 
 TRANSCRIPT_SERVICE_TOKEN = os.environ.get("TRANSCRIPT_SERVICE_TOKEN", "")
 _INTERNAL_AUTH_HEADER = "X-Ownix-Internal-Token"
@@ -74,7 +79,14 @@ def _validate_public_http_url(url: str):
         return "URL host could not be resolved"
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
             return "URL host resolves to a non-public address"
     return None
 
@@ -200,7 +212,9 @@ def _download_audio_b64(url: str, tmp_dir: str) -> tuple[str, str]:
 
     audio_path = os.path.join(tmp_dir, candidates[0])
     ext = os.path.splitext(candidates[0])[1].lstrip(".")
-    mime_type = {"m4a": "audio/mp4", "webm": "audio/webm", "mp3": "audio/mpeg"}.get(ext, "audio/mp4")
+    mime_type = {"m4a": "audio/mp4", "webm": "audio/webm", "mp3": "audio/mpeg"}.get(
+        ext, "audio/mp4"
+    )
 
     with open(audio_path, "rb") as f:
         audio_b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -248,7 +262,16 @@ def _youtube_transcript(video_id: str, url: str):
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    return jsonify([{"error": {"type": "IpBlocked", "message": "Could not retrieve transcript via YouTubeTranscriptApi or yt-dlp"}}])
+    return jsonify(
+        [
+            {
+                "error": {
+                    "type": "IpBlocked",
+                    "message": "Could not retrieve transcript via YouTubeTranscriptApi or yt-dlp",
+                }
+            }
+        ]
+    )
 
 
 def _generic_transcript(url: str):
@@ -326,6 +349,8 @@ def get_metadata():
                 "views": str(info.get("view_count", "")),
                 "upload_date": info.get("upload_date", ""),
                 "description": info.get("description", ""),  # This is the new line
+                "duration": info.get("duration"),
+                "short_max_duration": SHORT_VIDEO_MAX_DURATION,
             }
         )
     except Exception as e:
@@ -337,6 +362,8 @@ def get_metadata():
                 "views": "",
                 "upload_date": "",
                 "description": "",  # Keep the schema consistent on error
+                "duration": None,
+                "short_max_duration": SHORT_VIDEO_MAX_DURATION,
             }
         ), 200
 
@@ -348,7 +375,7 @@ def _detect_platform(extractor: str, url: str) -> str:
         return "tiktok"
     if extractor == "Instagram":
         return "instagram_reels"
-    return "unknown"
+    return extractor.lower() if extractor else "unknown"
 
 
 def _encode_frames(tmp_frame_dir: str, interval: float) -> list[dict]:
@@ -438,12 +465,14 @@ def get_short_frames():
         tmp_video = os.path.join(tmp_video_dir, candidates[0])
 
         duration = info.get("duration") or 0
-        if duration > 180:
+        if duration > SHORT_VIDEO_MAX_DURATION:
             return jsonify(
                 {
                     "error": {
                         "type": "too_long",
-                        "message": f"Video duration {duration}s exceeds 180s limit",
+                        "message": (
+                            f"Video duration {duration}s exceeds {SHORT_VIDEO_MAX_DURATION}s limit"
+                        ),
                     }
                 }
             )

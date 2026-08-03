@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -13,7 +14,9 @@ from src.api.jobs import is_persistable_short_platform, resolve_thumbnail
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_long_youtube_watch() -> None:
-    assert await resolve_thumbnail({"id": "j1", "url": "https://www.youtube.com/watch?v=abc123", "content_type": "long"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://www.youtube.com/watch?v=abc123", "content_type": "long"}
+    ) == (
         "https://img.youtube.com/vi/abc123/hqdefault.jpg",
         "landscape",
     )
@@ -21,7 +24,9 @@ async def test_resolve_thumbnail_long_youtube_watch() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_long_youtu_be() -> None:
-    assert await resolve_thumbnail({"id": "j1", "url": "https://youtu.be/abc123", "content_type": "long"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://youtu.be/abc123", "content_type": "long"}
+    ) == (
         "https://img.youtube.com/vi/abc123/hqdefault.jpg",
         "landscape",
     )
@@ -29,7 +34,9 @@ async def test_resolve_thumbnail_long_youtu_be() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_repo() -> None:
-    assert await resolve_thumbnail({"id": "j1", "url": "https://github.com/owner/repo/issues/1", "content_type": "repo"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://github.com/owner/repo/issues/1", "content_type": "repo"}
+    ) == (
         "https://opengraph.githubassets.com/0/owner/repo",
         "landscape",
     )
@@ -37,7 +44,9 @@ async def test_resolve_thumbnail_repo() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_youtube_short() -> None:
-    assert await resolve_thumbnail({"id": "j1", "url": "https://youtube.com/shorts/short123", "content_type": "short"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://youtube.com/shorts/short123", "content_type": "short"}
+    ) == (
         "https://img.youtube.com/vi/short123/hqdefault.jpg",
         "portrait",
     )
@@ -49,12 +58,22 @@ async def test_resolve_thumbnail_ig_and_tiktok_short_placeholder(monkeypatch) ->
         return False
 
     monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
-    assert await resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (None, None)
-    assert await resolve_thumbnail({"id": "j2", "url": "https://www.tiktok.com/@user/video/1234567890", "content_type": "short"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}
+    ) == (None, None)
+    assert await resolve_thumbnail(
+        {
+            "id": "j2",
+            "url": "https://www.tiktok.com/@user/video/1234567890",
+            "content_type": "short",
+        }
+    ) == (
         None,
         None,
     )
-    assert await resolve_thumbnail({"id": "j3", "url": "https://vt.tiktok.com/ZS2vJqL2Y/", "content_type": "short"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j3", "url": "https://vt.tiktok.com/ZS2vJqL2Y/", "content_type": "short"}
+    ) == (
         None,
         None,
     )
@@ -64,6 +83,9 @@ def test_is_persistable_short_platform() -> None:
     assert is_persistable_short_platform("https://instagram.com/reel/abc123")
     assert is_persistable_short_platform("https://www.tiktok.com/@user/video/123")
     assert is_persistable_short_platform("https://vt.tiktok.com/ZS2vJqL2Y/")
+    assert is_persistable_short_platform("https://facebook.com/share/v/123")
+    assert is_persistable_short_platform("https://x.com/user/status/123")
+    assert is_persistable_short_platform("https://mobile.twitter.com/user/status/123")
     assert not is_persistable_short_platform("https://youtube.com/shorts/abc123")
 
 
@@ -74,7 +96,24 @@ async def test_resolve_thumbnail_ig_short_uses_persisted_thumbnail(monkeypatch) 
 
     monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
 
-    assert await resolve_thumbnail({"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}) == (
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}
+    ) == (
+        "/api/jobs/j1/thumbnail",
+        "portrait",
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_thumbnail_unsized_short_uses_persisted_thumbnail(monkeypatch) -> None:
+    async def _has_thumbnail(_job_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
+
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://x.com/user/status/123", "content_type": "short"}
+    ) == (
         "/api/jobs/j1/thumbnail",
         "portrait",
     )
@@ -82,17 +121,21 @@ async def test_resolve_thumbnail_ig_short_uses_persisted_thumbnail(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_article_og_image() -> None:
-    assert await resolve_thumbnail({
-        "id": "j1",
-        "url": "https://medium.com/example/post",
-        "content_type": "article",
-        "og_image_url": "https://cdn.example.com/og.jpg",
-    }) == ("https://cdn.example.com/og.jpg", "landscape")
+    assert await resolve_thumbnail(
+        {
+            "id": "j1",
+            "url": "https://medium.com/example/post",
+            "content_type": "article",
+            "og_image_url": "https://cdn.example.com/og.jpg",
+        }
+    ) == ("https://cdn.example.com/og.jpg", "landscape")
 
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_article_placeholder() -> None:
-    assert await resolve_thumbnail({"id": "j1", "url": "https://medium.com/example/post", "content_type": "article"}) == (None, None)
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://medium.com/example/post", "content_type": "article"}
+    ) == (None, None)
 
 
 class _RecordingCursor:
@@ -205,17 +248,19 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
             self.calls += 1
             if self.calls == 1:
                 return FakeCursor((1,))
-            return FakeCursor([
-                {
-                    "id": "j1",
-                    "title": "Example",
-                    "content_type": "long",
-                    "status": "done",
-                    "url": "https://youtube.com/watch?v=abc123",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "og_image_url": None,
-                }
-            ])
+            return FakeCursor(
+                [
+                    {
+                        "id": "j1",
+                        "title": "Example",
+                        "content_type": "long",
+                        "status": "done",
+                        "url": "https://youtube.com/watch?v=abc123",
+                        "created_at": "2026-01-01T00:00:00Z",
+                        "og_image_url": None,
+                    }
+                ]
+            )
 
     class FakeConnection:
         async def __aenter__(self):
@@ -232,7 +277,9 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
         limit=20,
     )
 
-    assert response["items"][0]["thumbnail_url"] == "https://img.youtube.com/vi/abc123/hqdefault.jpg"
+    assert (
+        response["items"][0]["thumbnail_url"] == "https://img.youtube.com/vi/abc123/hqdefault.jpg"
+    )
     assert response["items"][0]["thumbnail_kind"] == "landscape"
 
 
@@ -312,6 +359,7 @@ def test_list_jobs_order_matches_adjacent_tiebreak() -> None:
 # list_jobs limit cap tests (issue #175 — raised from 50 to 1000)
 # ---------------------------------------------------------------------------
 
+
 def _get_limit_query_metadata() -> list:
     """Return the metadata annotations attached to the ``limit`` Query param."""
     sig = inspect.signature(jobs.list_jobs)
@@ -359,6 +407,7 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
             return None
 
     monkeypatch.setattr(jobs.database, "connection", lambda: FakeConnection())
+
     async def _fake_get_thumbnail_job_ids(_ids: list) -> set:
         return set()
 
@@ -381,10 +430,30 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
 def test_post_jobs_routes_to_create_job() -> None:
     # Regression: the decorator once sat on _create_link_job, so POST /api/jobs
     # took chat_id/url as query params and never saw the body or the session.
-    post = next(
-        r for r in jobs.jobs_router.routes if r.path == "/api/jobs" and "POST" in r.methods
-    )
+    post = next(r for r in jobs.jobs_router.routes if r.path == "/api/jobs" and "POST" in r.methods)
     assert post.endpoint is jobs.create_job
+
+
+@pytest.mark.asyncio
+async def test_create_pipeline_job_accepts_unsized_host(monkeypatch) -> None:
+    monkeypatch.setattr(jobs.database, "list_allowed_domains", AsyncMock(return_value=[]))
+    create = AsyncMock(
+        return_value={
+            "id": "job-unsized",
+            "url": "https://facebook.com/share/v/123",
+            "content_type": "unsized",
+            "status": "pending",
+        }
+    )
+    monkeypatch.setattr(jobs, "create_and_enqueue_job", create)
+
+    result = await jobs._create_pipeline_job(
+        jobs.JobCreateRequest(url="https://facebook.com/share/v/123"),
+        1,
+        "https://facebook.com/share/v/123",
+    )
+
+    assert result["content_type"] == "unsized"
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +543,7 @@ def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
 
     async def seed() -> None:
         from src import database
+
         async with database.connection() as conn:
             await conn.execute(
                 "UPDATE jobs SET status='pending', "
@@ -495,17 +565,24 @@ def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
 
     assert response.status_code == 204
     assert asyncio.run(jobs.database.get_job("pending-delete")) is None
-    assert asyncio.run(jobs.database._fetch_one(
-        "SELECT id FROM links WHERE source_job = ?", ("pending-delete",)
-    )) is None
-    assert captured == [{
-        "task": "job_purge",
-        "job_id": "pending-delete",
-        "chat_id": 1,
-        "drive_file_ids": ["drive-1", "drive-2"],
-        "gcs_keys": ["parsed/key.txt"],
-        "url": "https://example.com/job",
-    }]
+    assert (
+        asyncio.run(
+            jobs.database._fetch_one(
+                "SELECT id FROM links WHERE source_job = ?", ("pending-delete",)
+            )
+        )
+        is None
+    )
+    assert captured == [
+        {
+            "task": "job_purge",
+            "job_id": "pending-delete",
+            "chat_id": 1,
+            "drive_file_ids": ["drive-1", "drive-2"],
+            "gcs_keys": ["parsed/key.txt"],
+            "url": "https://example.com/job",
+        }
+    ]
 
 
 def test_delete_job_unknown_and_foreign_leave_rows_intact(
@@ -562,9 +639,7 @@ class TestJobThumbnailCaching:
         _insert_thumbnail_job("s1", chat_id=1)
         jobs_client.cookies.set("vig_session", jobs_client.session_a)
 
-        resp = jobs_client.get(
-            "/api/jobs/s1/thumbnail", headers={"If-None-Match": '"stale"'}
-        )
+        resp = jobs_client.get("/api/jobs/s1/thumbnail", headers={"If-None-Match": '"stale"'})
         assert resp.status_code == 200
         assert resp.content == b"\xff\xd8fakejpeg"
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import time
+from urllib.parse import urlparse
 
 from src import database, queue
 from src.utils import job_tag
@@ -39,6 +40,7 @@ async def _notify_failure(chat_id: int, job_id: str, text: str) -> None:
     """Best-effort failure message — never raises (worker must keep dequeuing)."""
     try:
         from src.telegram.sender import send_message
+
         await send_message(chat_id, f"{job_tag(job_id)}\n{text}")
     except Exception:
         pass
@@ -51,6 +53,7 @@ async def _handle_enrichment(task: dict) -> None:
         return
     try:
         from src.processors import enrichment
+
         await enrichment.run(job_id)
     except Exception:
         log.exception("enrichment_processor_error", job_id=job_id)
@@ -76,15 +79,46 @@ async def _handle_video(task: dict) -> None:
     if not job:
         return
     try:
-        if job["content_type"] == "short":
+        content_type = job["content_type"]
+        if content_type == "unsized":
+            from src.services import transcript as transcript_svc
+
+            metadata = await transcript_svc.fetch_metadata(job["url"])
+            duration = metadata.get("duration")
+            boundary = metadata.get("short_max_duration")
+            if (
+                not isinstance(duration, (int, float))
+                or isinstance(duration, bool)
+                or duration <= 0
+                or not isinstance(boundary, (int, float))
+                or isinstance(boundary, bool)
+                or boundary <= 0
+            ):
+                content_type = "short"
+                log.error(
+                    "unsized_duration_resolution_failed",
+                    url=job["url"],
+                    host=urlparse(job["url"]).hostname or "",
+                    sidecar_error=metadata.get("error", ""),
+                )
+            else:
+                content_type = "short" if duration <= boundary else "long"
+            await database.update_job_status(
+                job_id, job.get("status", "pending"), content_type=content_type
+            )
+            job["content_type"] = content_type
+
+        if content_type == "short":
             from src.processors import short_video
+
             await short_video.run(job)
-        elif job["content_type"] == "long":
+        elif content_type == "long":
             from src.processors import long_video
+
             await long_video.run(job)
             await _maybe_auto_enqueue_enrichment(job, job_id)
         else:
-            log.error("unknown_content_type", job_id=job_id, content_type=job["content_type"])
+            log.error("unknown_content_type", job_id=job_id, content_type=content_type)
     except Exception:
         log.exception("processor_error", job_id=job_id)
         await database.update_job_status(job_id, "error")
@@ -127,15 +161,23 @@ def _make_handler(
 
 
 _handle_article = _make_handler(
-    "article", "article_processor_error", "❌ Article processing failed. Please try again.",
+    "article",
+    "article_processor_error",
+    "❌ Article processing failed. Please try again.",
     pass_skip_document=True,
 )
-_handle_repo = _make_handler("repo", "repo_processor_error", "❌ Repo processing failed. Please try again.")
+_handle_repo = _make_handler(
+    "repo", "repo_processor_error", "❌ Repo processing failed. Please try again."
+)
 _handle_document = _make_handler(
-    "document", "document_processor_error", "❌ Document processing failed. Please try again.",
+    "document",
+    "document_processor_error",
+    "❌ Document processing failed. Please try again.",
     pass_skip_document=True,
 )
-_handle_link = _make_handler("link", "link_processor_error", "❌ Link pipeline failed. Please try again.")
+_handle_link = _make_handler(
+    "link", "link_processor_error", "❌ Link pipeline failed. Please try again."
+)
 
 
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
@@ -153,6 +195,7 @@ async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list
                 await conn.commit()
         if job:
             from src.telegram.sender import send_inline_keyboard
+
             await send_inline_keyboard(
                 job["chat_id"],
                 "⚠️ PRD generation failed unexpectedly.",
@@ -166,11 +209,13 @@ async def _handle_prd_auto(task: dict) -> None:
     job_id = task["job_id"]
     try:
         from src.processors import prd as _prd
+
         await _prd.run_auto(job_id)
     except Exception:
         log.exception("prd_auto_error", job_id=job_id)
         await _reset_prd_slot_and_notify(
-            job_id, "prd_auto_status",
+            job_id,
+            "prd_auto_status",
             [[{"text": "🔄 Retry", "callback_data": f"prd_retry_auto:{job_id}"}]],
         )
 
@@ -179,6 +224,7 @@ async def _handle_prd_auto_resend(task: dict) -> None:
     job_id = task["job_id"]
     try:
         from src.processors import prd as _prd
+
         await _prd.run_auto_resend(job_id)
     except Exception:
         log.exception("prd_auto_resend_error", job_id=job_id)
@@ -188,20 +234,25 @@ async def _handle_prd_intent(task: dict) -> None:
     job_id = task["job_id"]
     try:
         from src.processors import prd as _prd
+
         await _prd.run_intent(job_id)
     except Exception:
         log.exception("prd_intent_error", job_id=job_id)
         await _reset_prd_slot_and_notify(
-            job_id, "prd_intent_status",
-            [[
-                {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
-                {"text": "✍️ New Intent", "callback_data": f"prd_intent_prompt:{job_id}"},
-            ]],
+            job_id,
+            "prd_intent_status",
+            [
+                [
+                    {"text": "🔄 Retry Same Intent", "callback_data": f"prd_retry_intent:{job_id}"},
+                    {"text": "✍️ New Intent", "callback_data": f"prd_intent_prompt:{job_id}"},
+                ]
+            ],
         )
 
 
 async def _handle_job_purge(task: dict) -> None:
     from src.processors import purge
+
     await purge.run(task)
 
 
@@ -276,6 +327,7 @@ async def loop() -> None:
     await database.init_db()  # idempotent — safe if api container ran it first
 
     from src.processors import prd as _prd
+
     await _prd.reaper()
     await _prd.reaper_intent()
     await reap_stale_jobs()

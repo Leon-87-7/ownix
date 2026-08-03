@@ -11,8 +11,8 @@ log = get_logger(__name__)
 
 
 def task_for_content_type(content_type: str | None, *, default: str | None) -> str | None:
-    """Worker task name for a pipeline / content_type. short/long collapse to 'video'."""
-    if content_type in {"short", "long"}:
+    """Worker task name for a pipeline / content_type. short/long/unsized collapse to 'video'."""
+    if content_type in {"short", "long", "unsized"}:
         return "video"
     if content_type in {"article", "repo", "document", "link"}:
         return content_type

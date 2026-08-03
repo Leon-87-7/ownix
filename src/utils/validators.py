@@ -5,7 +5,9 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
-Pipeline = Literal["short", "long", "article", "repo", "document", "rejected"]
+Pipeline = Literal["short", "long", "unsized", "article", "repo", "document", "rejected"]
+
+_UNSIZED_VIDEO_HOSTS = frozenset({"facebook.com", "x.com", "twitter.com"})
 
 _TIKTOK_VIDEO_PATH = re.compile(r"^/@[^/]+/video/\d+", re.IGNORECASE)
 
@@ -42,7 +44,9 @@ _GITHUB_RESERVED_PATHS: frozenset[str] = frozenset(
     }
 )
 
-_REPO_HINT = "If you meant a repository, the URL should look like https://github.com/<owner>/<repo>."
+_REPO_HINT = (
+    "If you meant a repository, the URL should look like https://github.com/<owner>/<repo>."
+)
 
 ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset(
     {
@@ -64,9 +68,7 @@ ARTICLE_DEFAULT_DOMAINS: frozenset[str] = frozenset(
     }
 )
 
-_ARTICLE_HINT = (
-    "If this is an article you'd like to track, try /allowlist <domain> first."
-)
+_ARTICLE_HINT = "If this is an article you'd like to track, try /allowlist <domain> first."
 
 _DNS_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.IGNORECASE)
 
@@ -101,6 +103,9 @@ def detect_pipeline(
     Long pipeline:
         - youtube.com/watch?v={id}
         - youtu.be/{id}
+
+    Unsized video pipeline:
+        - facebook.com, x.com, or twitter.com (including subdomains)
 
     Article pipeline:
         - host in ARTICLE_DEFAULT_DOMAINS (or a subdomain thereof)
@@ -138,6 +143,8 @@ def detect_pipeline(
     # casing at MVP (ADR-0023) — that returns when someone actually sends one.
     if path.lower().endswith(".pdf"):
         return "document"
+    if any(_host_matches(host, video_host) for video_host in _UNSIZED_VIDEO_HOSTS):
+        return "unsized"
     if _match_article(host, extra_domains):
         return "article"
     return "rejected"
@@ -194,9 +201,7 @@ def normalize_repo_url(url: str) -> str:
     """Strip subpaths from a github.com URL, returning canonical https://github.com/{owner}/{repo}."""
     segments = [s for s in urlparse(url.strip()).path.split("/") if s]
     if len(segments) < 2:
-        raise ValueError(
-            f"Not a full owner/repo URL, cannot normalize as a repo URL: {url!r}"
-        )
+        raise ValueError(f"Not a full owner/repo URL, cannot normalize as a repo URL: {url!r}")
     return f"https://github.com/{segments[0]}/{segments[1]}"
 
 
@@ -216,7 +221,7 @@ def is_fetchable_url(url: str) -> bool:
 
 def is_video_url(text: str) -> bool:
     """True if text is a single video or article URL (excludes repo URLs)."""
-    return detect_pipeline(text) in {"short", "long", "article"}
+    return detect_pipeline(text) in {"short", "long", "unsized", "article"}
 
 
 # ---------------------------------------------------------------------------
