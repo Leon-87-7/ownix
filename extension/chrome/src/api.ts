@@ -1,6 +1,13 @@
 /** API client for the extension: POST /api/intake/message (issue #478). */
 
 import { getExtensionToken } from './auth.js';
+import {
+  defaultOwnixHost,
+  fetchIntakeMessage,
+  isAllowedOwnixHost,
+  normalizeAllowedOwnixHost,
+  type AllowedOwnixOrigin,
+} from './hosts.js';
 
 export interface IntakeResponseShape {
   schema_version: number;
@@ -19,32 +26,23 @@ export interface IntakePayload {
   text?: string;
 }
 
-const DEFAULT_HOST = 'https://app.leondev.xyz';
 const HOST_STORAGE_KEY = 'ownixHost';
 
-export async function getOwnixHost(): Promise<string> {
+export async function getOwnixHost(): Promise<AllowedOwnixOrigin> {
   const stored = await chrome.storage.local.get(HOST_STORAGE_KEY);
   const value = stored[HOST_STORAGE_KEY] as string | undefined;
-  return value || DEFAULT_HOST;
+  if (!value) return defaultOwnixHost();
+  return normalizeAllowedOwnixHost(value);
 }
 
-/** Reject anything but a well-formed http(s) origin — the saved value is later
- * passed straight into `fetch()`, so a `javascript:`/`data:`/malformed value
- * must never reach storage in the first place. */
+/** Reject anything outside the fixed Ownix origin allowlist. */
 export function isValidOwnixHost(host: string): boolean {
-  try {
-    return new URL(host).protocol === 'https:' || new URL(host).protocol === 'http:';
-  } catch {
-    return false;
-  }
+  return isAllowedOwnixHost(host);
 }
 
 export async function setOwnixHost(host: string): Promise<void> {
-  const trimmed = host.replace(/\/+$/, '');
-  if (!isValidOwnixHost(trimmed)) {
-    throw new Error('Ownix host must be a valid http(s) URL.');
-  }
-  await chrome.storage.local.set({ [HOST_STORAGE_KEY]: trimmed });
+  const normalized = normalizeAllowedOwnixHost(host);
+  await chrome.storage.local.set({ [HOST_STORAGE_KEY]: normalized });
 }
 
 /** URL wins over text — a URL capture (page/link) is always what the user meant to send. */
@@ -68,13 +66,13 @@ export function buildIntakePayload(input: { url?: string; text?: string }): Inta
  * pairing is required.
  */
 export async function sendToOwnix(payload: IntakePayload, host?: string): Promise<IntakeResponseShape> {
-  const base = host ?? (await getOwnixHost());
+  const base = host ? normalizeAllowedOwnixHost(host) : await getOwnixHost();
   const token = await getExtensionToken();
   if (!token) {
     throw new Error('Not paired — open the extension Options page and connect to Ownix.');
   }
 
-  const res = await fetch(`${base}/api/intake/message`, {
+  const res = await fetchIntakeMessage(base, {
     method: 'POST',
     credentials: 'omit',
     headers: {

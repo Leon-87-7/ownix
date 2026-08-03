@@ -1,3 +1,5 @@
+import { fetchExtensionToken, normalizeAllowedOwnixHost } from './hosts.js';
+
 /**
  * Production-safe extension auth (issue #479): redeem a dashboard-minted
  * pairing code for an opaque bearer token, store only that token locally,
@@ -21,14 +23,8 @@ export async function clearExtensionToken(): Promise<void> {
 
 /** Redeem a one-time pairing code (minted at `/settings/extensions/connect` in the dashboard) for a bearer token. */
 export async function redeemPairingCode(host: string, code: string): Promise<void> {
-  // `host` is the user's own configured Ownix instance (validated at the
-  // point it's saved — see api.ts's setOwnixHost) — re-checked here too so
-  // this fetch's target is never anything but a well-formed http(s) origin.
-  const parsedHost = new URL(host);
-  if (parsedHost.protocol !== 'https:' && parsedHost.protocol !== 'http:') {
-    throw new Error('Ownix host must be a valid http(s) URL.');
-  }
-  const res = await fetch(`${parsedHost.origin}/api/extension/token`, {
+  const origin = normalizeAllowedOwnixHost(host);
+  const res = await fetchExtensionToken(origin, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),

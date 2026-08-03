@@ -3,6 +3,8 @@
  * `IntakeResponse` contract mirrored 1:1 from `src/intake/models.py`.
  */
 
+import { apiPostJsonOrThrow } from '@/lib/fetch-utils';
+
 export interface IntakeActionShape {
   action_id: string;
   kind: string;
@@ -37,21 +39,12 @@ export async function submitIntakeMessage(
   body: { text?: string; url?: string },
   idempotencyKey: string = crypto.randomUUID(),
 ): Promise<IntakeResponseShape> {
-  const res = await fetch('/api/intake/message', {
-    method: 'POST',
+  return apiPostJsonOrThrow<IntakeResponseShape>('/api/intake/message', body, {
     headers: {
-      'Content-Type': 'application/json',
       'Idempotency-Key': idempotencyKey,
     },
-    body: JSON.stringify(body),
+    fallback: (status) => `Intake request failed (${status})`,
   });
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}));
-    throw new Error(
-      (payload as { detail?: string }).detail ?? `Intake request failed (${res.status})`,
-    );
-  }
-  return (await res.json()) as IntakeResponseShape;
 }
 
 export function submitIntakeText(value: string): Promise<IntakeResponseShape> {

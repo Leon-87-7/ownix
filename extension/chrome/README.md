@@ -9,7 +9,7 @@ selected text to Ownix Intake (`POST /api/intake/message`).
 manifest.json     Manifest V3
 popup.html/       Toolbar popup — reads the active tab, "Send to Ownix"
 src/popup.ts
-options.html/     Choose the Ownix host
+options.html/     Choose the Ownix host from the fixed allowlist
 src/options.ts
 src/background.ts Service worker — context menu (page/link/selection)
 src/api.ts        Fetch client for /api/intake/message
@@ -43,8 +43,8 @@ cross-origin `fetch()` from an extension-origin context — only pairing does.)
 3. Open `chrome://extensions`, enable **Developer mode** (top right).
 4. **Load unpacked** → select `extension/chrome/`.
 5. Click the toolbar icon → **Options** (or right-click the extension icon →
-   Options) → set the Ownix host (defaults to `https://app.leondev.xyz`; use
-   `http://localhost:8000` for a local backend).
+   Options) → set the Ownix host (defaults to `https://app.leondev.xyz`; the
+   extension also allows `http://localhost:8000` for a local backend).
 6. In the dashboard, go to **Settings → Chrome Extension** and generate a
    pairing code; paste it into the Options page's **Connect** field. Once
    paired, use the toolbar popup or right-click a page/link/selection.
