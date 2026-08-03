@@ -43,7 +43,11 @@ async def handle(msg: IntakeMessage) -> IntakeResponse:
 
     result = await _route(msg)
 
-    if msg.idempotency_key:
+    # A retryable response (transient upstream failure) must never be cached
+    # under the caller's idempotency key — caching it would make the retry
+    # this response is telling the caller to attempt just replay the same
+    # failure forever instead of actually trying again.
+    if msg.idempotency_key and not result.retryable:
         await idempotency.store(key, msg.idempotency_key, result.model_dump(mode="json"))
     return result
 

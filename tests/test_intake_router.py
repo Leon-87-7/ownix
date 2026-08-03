@@ -147,3 +147,25 @@ class TestIdempotentReplay:
             )
         )
         assert first.job_id != second.job_id
+
+    def test_retryable_response_is_never_cached(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A retryable response is a signal to try again — caching it under the
+        # caller's idempotency key would make every retry replay the same
+        # failure forever instead of actually re-attempting the operation.
+        from src.intake.models import IntakeResponse
+
+        call_count = 0
+
+        async def _fake_route(_msg: IntakeMessage) -> IntakeResponse:
+            nonlocal call_count
+            call_count += 1
+            return IntakeResponse(kind="error", text="boom", retryable=True)
+
+        monkeypatch.setattr(router, "_route", _fake_route)
+
+        asyncio.run(router.handle(_msg(url="https://x", idempotency_key="idem-retry")))
+        asyncio.run(router.handle(_msg(url="https://x", idempotency_key="idem-retry")))
+
+        assert call_count == 2

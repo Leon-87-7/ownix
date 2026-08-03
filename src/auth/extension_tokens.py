@@ -28,8 +28,8 @@ from src.auth import session as session_store
 _PAIRING_PREFIX = "extension_pairing:"
 PAIRING_TTL_SECONDS = 300
 
-_TOKEN_PREFIX = "extension_token:"  # nosec B105 — Redis key prefix, not a credential
-_TOKEN_INDEX_PREFIX = "extension_tokens_by_chat:"  # nosec B105 — Redis key prefix, not a credential
+_TOKEN_PREFIX = "extension_token:"  # noqa: S105 — Redis key prefix, not a credential
+_TOKEN_INDEX_PREFIX = "extension_tokens_by_chat:"  # noqa: S105 — Redis key prefix, not a credential
 _TOUCH_THROTTLE_SECONDS = 60
 
 
