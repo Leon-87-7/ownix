@@ -81,10 +81,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     summary                     TEXT,
     links                       TEXT,
     telegram_delivery           TEXT NOT NULL DEFAULT 'on',
+    code                        TEXT,
+    code_lang                   TEXT,
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
-    CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document', 'link')),
+    CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
     CHECK(prd_intent_status IS NULL OR prd_intent_status IN ('generating','done','error')),
@@ -1203,6 +1205,39 @@ _MIGRATIONS.append(
         "ALTER TABLE jobs ADD COLUMN code_lang TEXT",
     ]
 )
+
+# v36 → v37: transient unsized video rows (#467) before worker duration resolution.
+_V37_CREATE = (
+    _V35_CREATE.replace("jobs_v35", "jobs_v37")
+    .replace(
+        "telegram_delivery           TEXT NOT NULL DEFAULT 'on',\n"
+        "    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,",
+        "telegram_delivery           TEXT NOT NULL DEFAULT 'on',\n"
+        "    code                        TEXT,\n"
+        "    code_lang                   TEXT,\n"
+        "    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,",
+    )
+    .replace(
+        "CHECK(content_type IN ('short', 'long', 'article', 'repo', 'document', 'link')),",
+        "CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),",
+    )
+)
+_V37_COLS = _V35_COLS + ["code", "code_lang"]
+
+
+async def _migrate_v36_v37(conn: aiosqlite.Connection) -> None:
+    """Widen content_type CHECK to include transient unsized rows."""
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        await _rebuild_jobs_table(conn, _V37_CREATE, "jobs_v37", _V37_COLS)
+        await conn.commit()
+    finally:
+        await conn.rollback()
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+
+_MIGRATIONS.append(_migrate_v36_v37)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:

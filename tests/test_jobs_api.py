@@ -83,6 +83,9 @@ def test_is_persistable_short_platform() -> None:
     assert is_persistable_short_platform("https://instagram.com/reel/abc123")
     assert is_persistable_short_platform("https://www.tiktok.com/@user/video/123")
     assert is_persistable_short_platform("https://vt.tiktok.com/ZS2vJqL2Y/")
+    assert is_persistable_short_platform("https://facebook.com/share/v/123")
+    assert is_persistable_short_platform("https://x.com/user/status/123")
+    assert is_persistable_short_platform("https://mobile.twitter.com/user/status/123")
     assert not is_persistable_short_platform("https://youtube.com/shorts/abc123")
 
 
@@ -95,6 +98,21 @@ async def test_resolve_thumbnail_ig_short_uses_persisted_thumbnail(monkeypatch) 
 
     assert await resolve_thumbnail(
         {"id": "j1", "url": "https://instagram.com/reel/abc123", "content_type": "short"}
+    ) == (
+        "/api/jobs/j1/thumbnail",
+        "portrait",
+    )
+
+
+@pytest.mark.asyncio
+async def test_resolve_thumbnail_unsized_short_uses_persisted_thumbnail(monkeypatch) -> None:
+    async def _has_thumbnail(_job_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(jobs.database, "has_thumbnail", _has_thumbnail)
+
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://x.com/user/status/123", "content_type": "short"}
     ) == (
         "/api/jobs/j1/thumbnail",
         "portrait",

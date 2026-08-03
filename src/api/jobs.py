@@ -250,7 +250,10 @@ def _stored_thumbnail_url(job_id: str) -> str:
 def is_persistable_short_platform(url: str) -> bool:
     host = (urlparse(url.strip()).hostname or "").lower().removeprefix("www.")
     # host.endswith("tiktok.com") already matches vt.tiktok.com as a suffix.
-    return host.endswith("instagram.com") or host.endswith("tiktok.com")
+    return any(
+        host == target or host.endswith("." + target)
+        for target in ("instagram.com", "tiktok.com", "facebook.com", "x.com", "twitter.com")
+    )
 
 
 async def resolve_thumbnail(
@@ -273,7 +276,7 @@ async def resolve_thumbnail(
         if repo_path:
             return f"https://opengraph.githubassets.com/0/{repo_path}", "landscape"
 
-    if content_type == "short" and detect_pipeline(url) == "short":
+    if content_type == "short" and detect_pipeline(url) in {"short", "unsized"}:
         video_id = _youtube_video_id(url)
         if video_id:
             return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "portrait"
