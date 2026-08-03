@@ -166,25 +166,43 @@ class IntakeActor:
     legacy_chat_id: int | None = None
 
 class IntakeMessage:
+    schema_version: int = 1          # bump on any breaking contract change
+    idempotency_key: str | None = None  # caller-supplied dedup key for safe retries
     actor: IntakeActor
     text: str | None = None
     url: str | None = None
     files: list[IntakeFile] = []
     action: IntakeAction | None = None
     source_message_id: str | int | None = None
+    received_at: float | None = None  # server ingest timestamp for latency/ordering
     metadata: dict = {}
 
 class IntakeResponse:
+    schema_version: int = 1
     kind: str
     text: str
     job_id: str | None = None
     actions: list[IntakeAction] = []
     state: dict | None = None
     artifacts: list[dict] = []
+    retryable: bool = False          # signal transient failures to channel adapters
 ```
 
 The router should not know whether the caller is Telegram, dashboard, extension,
 or Discord. It should receive `IntakeMessage` and return `IntakeResponse`.
+
+Contract stability rules (these keep the fan-out of channels from fossilizing an
+accidental v1):
+
+- Every `IntakeMessage` / `IntakeResponse` carries `schema_version`. Adapters
+  reject a version they cannot parse instead of silently mis-reading fields.
+- Fields are added, never repurposed. A removed field is tombstoned, not reused.
+- `idempotency_key` is the retry contract: the same key from the same actor must
+  yield the same job, never a duplicate. Channels that can double-deliver
+  (extension network retries, PWA share re-fires, Telegram webhook redelivery)
+  MUST populate it.
+- `metadata` is channel-private scratch space; the router must never branch on
+  its contents to make core decisions.
 
 ## Dashboard Intake Page
 
@@ -384,13 +402,33 @@ GET  /api/intake/history
 Endpoint responsibilities:
 
 - authenticate user
-- resolve or create channel
+- enforce per-user rate limits and payload/upload size caps before doing work
+- resolve or create channel (idempotently — see channel-resolution race below)
+- honor `Idempotency-Key` header / `idempotency_key` field for safe retries
 - normalize payload into `IntakeMessage`
 - call shared intake router
 - return structured `IntakeResponse`
 
 `/api/jobs` should remain the low-level job API. `/api/intake/*` is the product
 interaction API.
+
+Endpoint hardening requirements:
+
+- `POST /api/intake/message` and `/api/intake/action` are mutating and MUST
+  accept an `Idempotency-Key` header. A repeat within the dedup window returns
+  the original `IntakeResponse` (HTTP 200) rather than creating a second job.
+- `POST /api/intake/upload` enforces a max file size, an allowed-MIME allowlist
+  with content sniffing (do not trust the client `Content-Type`), and a
+  per-user daily upload/byte quota. Reject early with 413/415/429, before the
+  bytes hit the pipeline.
+- `GET /api/intake/history` is cursor-paginated (opaque cursor + `limit`), never
+  an unbounded scan. Cap `limit` server-side.
+- All `/api/intake/*` responses set explicit cache headers (`no-store` for
+  mutating and state reads) and a consistent error envelope so extension and
+  share clients can branch on `retryable`.
+- CORS is locked to the dashboard origin plus the published extension origin(s);
+  the extension authenticates by token (see Phase 8), not ambient cookies, so
+  these endpoints stay CSRF-safe without relying on same-site cookie behavior.
 
 ## Command Migration
 
@@ -420,6 +458,73 @@ Telegram-only operations should stay in the Telegram adapter:
 
 Shared behavior should move to `src/intake/commands.py` and related modules.
 
+## Scalability And Hardening
+
+These are cross-cutting concerns that every phase inherits. They are not a phase
+of their own — bolting them on last is how an intake surface becomes a DoS
+vector. Treat each as a definition-of-done gate for the phase that first exposes
+the surface.
+
+### Abuse and load control
+
+- Per-user and per-channel rate limits on all `/api/intake/*` mutating
+  endpoints, plus a global ceiling so one account cannot saturate the worker
+  queue. Return 429 with `retryable=true` and a `Retry-After`.
+- Payload caps: max text length, max URL length, max files per message, max
+  bytes per file, max bytes per user per day.
+- Intake is authenticated-only (per Non-Goals: no public unauthenticated
+  intake). Keep that invariant enforced at the router, not just the route, so a
+  future channel adapter cannot accidentally bypass it.
+
+### Idempotency and delivery semantics
+
+- The intake path is at-least-once from every real channel (webhook redelivery,
+  extension retry, share re-fire, Discord gateway resume). Dedup on
+  `idempotency_key` first, then fall back to the existing `create_and_enqueue_job()`
+  content dedup. One logical submit == one job.
+- `POST /api/intake/action` must be idempotent per `(actor, action_id)` so a
+  double-tapped dashboard button or re-delivered callback does not double-apply.
+
+### Datastore concurrency reality
+
+- SQLite WAL is single-writer. The intake fan-out multiplies write pressure
+  (jobs, intake_state, channels, history). Keep intake writes short, batched,
+  and off the request's critical path where possible; do not hold a write
+  transaction across an external call (Gemini, Drive, Telegram send).
+- Channel resolution is a read-then-maybe-insert race under concurrent
+  submits from the same new user. Use an upsert / `INSERT ... ON CONFLICT` keyed
+  on `(user_id, type, external_id)` with a unique index, not select-then-insert.
+- If write contention becomes the ceiling, that is the signal to plan the
+  SQLite→server-DB move — call it out explicitly rather than discovering it in
+  production. This does not change the plan's phases; it changes `src/database.py`
+  underneath them.
+
+### State lifecycle
+
+- `intake_state.expires_at` needs an actual sweeper (scheduled job) that reaps
+  expired rows; an expiry column no one enforces is a slow leak.
+- Pending state is per-channel; reconcile what "one user, two channels, two
+  pending flows" means before Phase 3 ships (last-write-wins vs. per-channel
+  isolation). Document the choice.
+
+### Observability
+
+- Structured logs and metrics tagged with `channel_type`, `user_id`, and a
+  request/correlation id that flows from adapter → router → job. Without it,
+  "which channel is generating load / errors" is unanswerable.
+- Counters for intake volume, dedup hits, rate-limit rejections, upload
+  rejections, and router error kinds, per channel.
+
+### Migration safety (Phase 9)
+
+- Backfill in bounded batches with progress tracking and resumability, never one
+  giant transaction.
+- Dual-write behind a feature flag with a documented rollback: prefer `user_id`
+  on read only after backfill is verified, and keep `chat_id` authoritative
+  until the cutover is signed off.
+- Add a reconciliation check (counts + spot-diff `chat_id` vs `user_id`
+  ownership) before removing any `chat_id` dependency.
+
 ## Implementation Phases
 
 ### Phase 1 - Dashboard Intake MVP
@@ -431,16 +536,21 @@ Tasks:
 - [ ] Add `web/app/(dashboard)/intake/page.tsx`.
 - [ ] Add `web/components/intake/*` composer/thread/action components.
 - [ ] Add `POST /api/intake/message` for text and URL payloads.
+- [ ] Enforce per-user rate limit + text/URL length caps on the endpoint.
+- [ ] Honor `Idempotency-Key` so a double-submit returns one job.
 - [ ] Reuse `create_and_enqueue_job()` for URL intake.
 - [ ] Show created job result inline with link to `/jobs/{id}`.
 - [ ] Add navigation entry to app shell/sidebar.
-- [ ] Add tests for successful URL submit, unsupported URL, and auth errors.
+- [ ] Add tests for successful URL submit, unsupported URL, auth errors,
+      rate-limit rejection, and idempotent re-submit.
 
 Acceptance criteria:
 
 - signed-in approved user can submit a URL from `/intake`
 - created job appears in Feed and in the intake response
 - invalid URLs return a clear response
+- a repeated submit with the same idempotency key returns the original job
+- oversized/abusive input is rejected before any job is created
 - page works without Telegram
 - no database ownership migration required yet
 
@@ -476,6 +586,8 @@ Tasks:
 - [ ] Support `awaiting_freestyle`.
 - [ ] Add `GET /api/intake/state`.
 - [ ] Add `DELETE /api/intake/state`.
+- [ ] Add an `expires_at` and a scheduled sweeper that reaps expired state.
+- [ ] Decide and document per-channel vs. last-write-wins pending semantics.
 - [ ] Render pending state banner in `/intake`.
 - [ ] Add cancel/resume actions.
 
@@ -484,6 +596,7 @@ Acceptance criteria:
 - user can start an intent/freestyle flow in dashboard
 - refresh preserves pending state
 - cancel clears pending state
+- expired state is reaped automatically, not left to accumulate
 - state remains scoped to the signed-in user
 
 ### Phase 4 - Dashboard Files And Actions
@@ -492,10 +605,11 @@ Goal: bring document/photo intake and inline actions into dashboard intake.
 
 Tasks:
 
-- [ ] Add `POST /api/intake/upload`.
+- [ ] Add `POST /api/intake/upload` with size caps, MIME allowlist + content
+      sniffing, and a per-user daily byte/upload quota.
 - [ ] Support PDF upload through existing document pipeline.
 - [ ] Support image upload through photo/OCR pipeline or a new queued path if needed.
-- [ ] Add `POST /api/intake/action`.
+- [ ] Add `POST /api/intake/action`, idempotent per `(actor, action_id)`.
 - [ ] Represent Telegram inline keyboards as generic actions.
 - [ ] Render actions as dashboard buttons.
 
@@ -503,6 +617,8 @@ Acceptance criteria:
 
 - PDF upload creates a document job
 - image upload follows the existing Ownix photo behavior or an explicitly documented replacement path
+- oversized, wrong-type, or over-quota uploads are rejected before the pipeline runs
+- a double-fired action does not double-apply
 - dashboard can perform actions that are no longer Telegram-specific
 
 ### Phase 5 - Telegram Adapter Refactor
@@ -573,16 +689,21 @@ Goal: make extension auth production-safe.
 Tasks:
 
 - [ ] Add extension pairing model to the database.
-- [ ] Add dashboard endpoint to create one-time pairing code.
+- [ ] Add dashboard endpoint to create a one-time, short-TTL pairing code
+      (single-use, rate-limited).
 - [ ] Add extension endpoint to redeem pairing code.
-- [ ] Store hashed extension token server-side.
-- [ ] Add token revocation.
-- [ ] Add extension settings UI.
+- [ ] Store only a hash of the extension token server-side; show the raw token
+      once, at pairing time.
+- [ ] Rate-limit extension-token traffic and record last-used per token.
+- [ ] Add token revocation (and optional expiry/rotation).
+- [ ] Add extension settings UI listing active tokens with revoke.
 
 Acceptance criteria:
 
 - extension does not need to store raw dashboard session cookie
-- user can revoke extension access
+- pairing codes are single-use and expire quickly
+- raw tokens are never stored or logged server-side (hash only)
+- user can revoke extension access and it takes effect immediately
 - API can distinguish dashboard session traffic from extension token traffic
 
 ### Phase 9 - User Identity Migration
@@ -633,10 +754,14 @@ Backend tests:
 
 - intake router unit tests
 - dashboard API endpoint tests
-- state lifecycle tests
-- upload validation tests
+- idempotency tests (repeated submit/action yields one job/effect)
+- rate-limit and payload-cap rejection tests
+- state lifecycle + expiry-sweeper tests
+- upload validation tests (size, MIME sniffing, quota)
+- channel-resolution concurrency/upsert test
+- migration backfill + dual-write reconciliation tests (Phase 9)
 - Telegram adapter regression tests
-- extension token auth tests when pairing exists
+- extension token auth tests when pairing exists (hash-only, revocation, TTL)
 
 Frontend tests:
 
@@ -697,4 +822,7 @@ This plan is complete when:
 - Chrome extension can capture current page and context-menu links
 - intake state works outside Telegram
 - ownership is ready for `user_id` and future Discord identity
+- every exposed intake surface is rate-limited, idempotent, and size-capped
+- intake contract is versioned so channels can evolve independently
+- expired intake state is swept, not leaked
 - tests cover the shared router, dashboard endpoint, share target, and adapter behavior
