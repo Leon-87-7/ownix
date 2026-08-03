@@ -155,12 +155,18 @@ async def test_sheets_append_short_row(monkeypatch) -> None:
     mock_service.spreadsheets.return_value = mock_spreadsheets
 
     with patch("src.services.sheets._build_service", return_value=mock_service):
-        await sheets_svc.append_short_row({
-            "id": "job1", "chat_id": 123, "url": "https://youtube.com/shorts/x",
-            "title": "Test", "platform": "youtube_shorts",
-            "drive_url": "https://drive.google.com/x",
-            "processing_time_ms": 1000, "created_at": "2026-01-01T00:00:00",
-        })
+        await sheets_svc.append_short_row(
+            {
+                "id": "job1",
+                "chat_id": 123,
+                "url": "https://youtube.com/shorts/x",
+                "title": "Test",
+                "platform": "youtube_shorts",
+                "drive_url": "https://drive.google.com/x",
+                "processing_time_ms": 1000,
+                "created_at": "2026-01-01T00:00:00",
+            }
+        )
 
     mock_values.append.assert_called_once()
     call_kwargs = mock_values.append.call_args.kwargs
@@ -172,17 +178,24 @@ async def test_sheets_append_short_row(monkeypatch) -> None:
 # Processor: too_long error surfaces to user
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_too_long_error_surfaces(monkeypatch) -> None:
     """Frame service returning too_long sends the correct message and raises."""
     from src.processors import short_video
 
-    too_long_response = {"error": {"type": "too_long", "message": "Video duration 200s exceeds 180s limit"}}
+    too_long_response = {
+        "error": {"type": "too_long", "message": "Video duration 200s exceeds 180s limit"}
+    }
 
     with (
         patch("src.processors.short_video.database.update_job_status", new_callable=AsyncMock),
         patch("src.processors.short_video.send_message", new_callable=AsyncMock) as mock_send,
-        patch("src.processors.short_video.frames.fetch_frames", new_callable=AsyncMock, return_value=too_long_response),
+        patch(
+            "src.processors.short_video.frames.fetch_frames",
+            new_callable=AsyncMock,
+            return_value=too_long_response,
+        ),
     ):
         job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/shorts/x"}
         with pytest.raises(RuntimeError):
@@ -209,8 +222,19 @@ _FRAME_RESP = {
 _VISION = {"main_frame_index": 0, "summary": "a short clip", "links": []}
 
 
-_TEMPLATE_JOB = {"id": "job1", "chat_id": 42, "url": "u", "template": "method", "title": "Test Reel"}
-_PLAIN_JOB = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "title": "Test Reel"}
+_TEMPLATE_JOB = {
+    "id": "job1",
+    "chat_id": 42,
+    "url": "u",
+    "template": "method",
+    "title": "Test Reel",
+}
+_PLAIN_JOB = {
+    "id": "job1",
+    "chat_id": 42,
+    "url": "https://instagram.com/reel/x",
+    "title": "Test Reel",
+}
 
 
 @contextlib.contextmanager
@@ -222,25 +246,63 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
     with contextlib.ExitStack() as stack:
         p = lambda target, **kw: stack.enter_context(patch(target, **kw))  # noqa: E731
         mocks = {
-            "update_job_status": p("src.processors.short_video.database.update_job_status", new_callable=AsyncMock),
+            "update_job_status": p(
+                "src.processors.short_video.database.update_job_status", new_callable=AsyncMock
+            ),
             "get_job": p("src.processors.short_video.database.get_job", new_callable=AsyncMock),
-            "save_thumbnail": p("src.processors.short_video.database.save_thumbnail", new_callable=AsyncMock),
-            "send_message": p("src.processors.short_video.send_message", new_callable=AsyncMock,
-                              return_value={"message_id": 1}),
-            "send_photo": p("src.processors.short_video.send_photo", new_callable=AsyncMock,
-                            return_value={"message_id": 2}),
+            "save_thumbnail": p(
+                "src.processors.short_video.database.save_thumbnail", new_callable=AsyncMock
+            ),
+            "send_message": p(
+                "src.processors.short_video.send_message",
+                new_callable=AsyncMock,
+                return_value={"message_id": 1},
+            ),
+            "send_photo": p(
+                "src.processors.short_video.send_photo",
+                new_callable=AsyncMock,
+                return_value={"message_id": 2},
+            ),
             "send_document": p("src.processors.short_video.send_document", new_callable=AsyncMock),
-            "edit_message_text": p("src.processors.short_video.edit_message_text", new_callable=AsyncMock),
-            "send_inline_keyboard": p("src.processors.short_video.send_inline_keyboard", new_callable=AsyncMock),
-            "fetch_frames": p("src.processors.short_video.frames.fetch_frames", new_callable=AsyncMock, return_value=_FRAME_RESP),
-            "vision": p("src.processors.short_video.gemini.call_gemini_vision", new_callable=AsyncMock, return_value=_VISION),
-            "upload_file": p("src.processors.short_video.upload_file", new_callable=AsyncMock, return_value=("fid", "https://drive/x")),
-            "append_short_row": p("src.processors.short_video.sheets.append_short_row", new_callable=AsyncMock),
-            "fetch_transcript": p("src.processors.short_video.transcript_svc.fetch_transcript", new_callable=AsyncMock, return_value=transcript_resp),
+            "edit_message_text": p(
+                "src.processors.short_video.edit_message_text", new_callable=AsyncMock
+            ),
+            "send_inline_keyboard": p(
+                "src.processors.short_video.send_inline_keyboard", new_callable=AsyncMock
+            ),
+            "fetch_frames": p(
+                "src.processors.short_video.frames.fetch_frames",
+                new_callable=AsyncMock,
+                return_value=_FRAME_RESP,
+            ),
+            "vision": p(
+                "src.processors.short_video.gemini.call_gemini_vision",
+                new_callable=AsyncMock,
+                return_value=_VISION,
+            ),
+            "upload_file": p(
+                "src.processors.short_video.upload_file",
+                new_callable=AsyncMock,
+                return_value=("fid", "https://drive/x"),
+            ),
+            "append_short_row": p(
+                "src.processors.short_video.sheets.append_short_row", new_callable=AsyncMock
+            ),
+            "fetch_transcript": p(
+                "src.processors.short_video.transcript_svc.fetch_transcript",
+                new_callable=AsyncMock,
+                return_value=transcript_resp,
+            ),
             "enrich_audio": p("src.processors.enrichment.enrich_audio", new_callable=AsyncMock),
-            "transcribe_audio": p("src.processors.enrichment.transcribe_audio", new_callable=AsyncMock),
+            "transcribe_audio": p(
+                "src.processors.enrichment.transcribe_audio", new_callable=AsyncMock
+            ),
             "enrich": p("src.processors.enrichment.enrich", new_callable=AsyncMock),
-            "get_ignored_domains": p("src.processors.short_video.database.get_ignored_domains", new_callable=AsyncMock, return_value=set()),
+            "get_ignored_domains": p(
+                "src.processors.short_video.database.get_ignored_domains",
+                new_callable=AsyncMock,
+                return_value=set(),
+            ),
         }
         resolved_job = job if job is not None else _TEMPLATE_JOB
         mocks["get_job"].return_value = resolved_job
@@ -316,7 +378,12 @@ async def test_template_audio_fallback_routes_to_enrich_audio() -> None:
 
     with _patch_pipeline(transcript_resp) as (short_video, mocks):
         mocks["enrich_audio"].return_value = (template_analysis, "spoken words here")
-        job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
+        job = {
+            "id": "job1",
+            "chat_id": 42,
+            "url": "https://instagram.com/reel/x",
+            "template": "method",
+        }
         await short_video.run(job)
 
     mocks["enrich_audio"].assert_awaited_once()
@@ -338,10 +405,19 @@ async def test_template_caption_path_unchanged() -> None:
     with _patch_pipeline(transcript_resp) as (short_video, mocks):
         mocks["enrich"].return_value = (
             Enrichment("Tech", "fastapi", "obj", "ap", "ts", [], ""),
-            {"steps": [{"action": "a", "details": "d", "result": "r"}], "common_mistakes": "", "pro_tips": ""},
+            {
+                "steps": [{"action": "a", "details": "d", "result": "r"}],
+                "common_mistakes": "",
+                "pro_tips": "",
+            },
             None,
         )
-        job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
+        job = {
+            "id": "job1",
+            "chat_id": 42,
+            "url": "https://instagram.com/reel/x",
+            "template": "method",
+        }
         await short_video.run(job)
 
     mocks["enrich"].assert_awaited_once()
@@ -357,7 +433,12 @@ async def test_template_audio_gemini_unavailable_surfaces_message() -> None:
 
     with _patch_pipeline(transcript_resp) as (short_video, mocks):
         mocks["enrich_audio"].side_effect = EnrichmentUnavailableError("both keys failed")
-        job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
+        job = {
+            "id": "job1",
+            "chat_id": 42,
+            "url": "https://instagram.com/reel/x",
+            "template": "method",
+        }
         await short_video.run(job)
 
     sent = " ".join(str(c) for c in mocks["send_message"].call_args_list)
@@ -367,6 +448,7 @@ async def test_template_audio_gemini_unavailable_surfaces_message() -> None:
 # ---------------------------------------------------------------------------
 # ADR-0020 issue #102: guaranteed transcript acquisition on all short jobs
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_plain_url_job_always_fetches_transcript() -> None:
@@ -427,16 +509,14 @@ async def test_transcript_persisted_on_all_short_jobs() -> None:
         await short_video.run(_PLAIN_JOB)
 
     update_calls = mocks["update_job_status"].call_args_list
-    persisted = any(
-        "transcript" in str(c) and "python fastapi" in str(c)
-        for c in update_calls
-    )
+    persisted = any("transcript" in str(c) and "python fastapi" in str(c) for c in update_calls)
     assert persisted, "jobs.transcript was never persisted"
 
 
 # ---------------------------------------------------------------------------
 # ADR-0020 issue #103: Drive upload + Telegram document delivery tail
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_plain_job_with_transcript_uploads_transcript_to_drive() -> None:
@@ -479,6 +559,7 @@ async def test_no_transcript_skips_document_delivery() -> None:
 # Issue #97: caption-based skeleton — no-template path end-to-end coverage
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_caption_based_no_template_gemini_budget_is_one_call() -> None:
     """Caption-based plain job: only Vision is called (captions = free, no Gemini audio)."""
@@ -495,6 +576,7 @@ async def test_caption_based_no_template_gemini_budget_is_one_call() -> None:
 # ---------------------------------------------------------------------------
 # Issue #98: caption-less plain job — transcribe_audio path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_plain_caption_less_transcript_tail_runs() -> None:
@@ -545,6 +627,7 @@ async def test_plain_caption_less_empty_audio_transcript_is_wordless() -> None:
 # Issue #99: caption-less template path — enrich_audio tail
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
     """caption-less + template: enrich_audio transcript is persisted, Drive-uploaded, and doc-sent."""
@@ -557,11 +640,18 @@ async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
 
     with _patch_pipeline(transcript_resp) as (short_video, mocks):
         mocks["enrich_audio"].return_value = (template_analysis, "verbatim spoken content")
-        job = {"id": "job1", "chat_id": 42, "url": "https://instagram.com/reel/x", "template": "method"}
+        job = {
+            "id": "job1",
+            "chat_id": 42,
+            "url": "https://instagram.com/reel/x",
+            "template": "method",
+        }
         await short_video.run(job)
 
     update_calls = mocks["update_job_status"].call_args_list
-    assert any("verbatim spoken content" in str(c) for c in update_calls), "transcript not persisted"
+    assert any("verbatim spoken content" in str(c) for c in update_calls), (
+        "transcript not persisted"
+    )
     upload_calls = [str(c) for c in mocks["upload_file"].call_args_list]
     assert any("_transcript.md" in f for f in upload_calls), "transcript.md not uploaded to Drive"
     mocks["send_document"].assert_awaited_once()
@@ -570,6 +660,7 @@ async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
 # ---------------------------------------------------------------------------
 # Issue #100: explicit failure taxonomy
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_sidecar_error_dict_surfaces_message_text() -> None:

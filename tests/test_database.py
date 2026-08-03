@@ -170,6 +170,21 @@ async def test_create_job_without_template_defaults_none(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_create_job_accepts_unsized_content_type(temp_db):
+    from src import database as db
+
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://x.com/user/status/123",
+        content_type="unsized",
+    )
+
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["content_type"] == "unsized"
+
+
+@pytest.mark.asyncio
 async def test_create_held_job_unless_recent_deduplicates_concurrent_requests(temp_db):
     from src import database as db
 
@@ -312,6 +327,56 @@ async def test_v35_migration_preserves_jobs_and_children_and_accepts_held(
     async with db.connection() as conn:
         child = await (
             await conn.execute("SELECT bytes FROM job_thumbnails WHERE job_id = ?", (pending_id,))
+        ).fetchone()
+    assert child is not None and child[0] == b"image"
+
+
+@pytest.mark.asyncio
+async def test_v37_migration_preserves_jobs_children_code_and_accepts_unsized(
+    tmp_path, monkeypatch
+) -> None:
+    from src import database as db
+
+    db_file = str(tmp_path / "v36.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await db.init_db()
+    job_id = await db.create_job(chat_id=1, url="https://youtu.be/abc", content_type="long")
+    await db.update_job_status(job_id, "done", code="print('hi')", code_lang="python")
+    async with db.connection() as conn:
+        await conn.execute(
+            "INSERT INTO job_thumbnails (job_id, bytes, mime) VALUES (?, ?, ?)",
+            (job_id, b"image", "image/jpeg"),
+        )
+        await conn.commit()
+        await conn.execute("PRAGMA foreign_keys=OFF")
+        await db._rebuild_jobs_table(conn, db._V35_CREATE, "jobs_v35", db._V35_COLS)
+        await conn.execute("ALTER TABLE jobs ADD COLUMN code TEXT")
+        await conn.execute("ALTER TABLE jobs ADD COLUMN code_lang TEXT")
+        await conn.execute(
+            "UPDATE jobs SET code = ?, code_lang = ? WHERE id = ?",
+            ("print('hi')", "python", job_id),
+        )
+        await conn.execute(f"PRAGMA user_version = {len(db._MIGRATIONS) - 1}")
+        await conn.commit()
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    await db.init_db()
+
+    job = await db.get_job(job_id)
+    assert job is not None
+    assert job["content_type"] == "long"
+    assert job["code"] == "print('hi')"
+    assert job["code_lang"] == "python"
+    unsized_id = await db.create_job(
+        chat_id=1,
+        url="https://x.com/user/status/123",
+        content_type="unsized",
+    )
+    assert (await db.get_job(unsized_id))["content_type"] == "unsized"
+    async with db.connection() as conn:
+        child = await (
+            await conn.execute("SELECT bytes FROM job_thumbnails WHERE job_id = ?", (job_id,))
         ).fetchone()
     assert child is not None and child[0] == b"image"
 

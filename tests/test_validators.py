@@ -62,6 +62,19 @@ def test_long_pipeline(url: str) -> None:
 @pytest.mark.parametrize(
     "url",
     [
+        "https://facebook.com/share/v/123456789",
+        "https://www.facebook.com/watch/123456789",
+        "https://x.com/user/status/123456789",
+        "https://mobile.twitter.com/user/status/123456789",
+    ],
+)
+def test_unsized_video_pipeline_matches_curated_hosts(url: str) -> None:
+    assert detect_pipeline(url) == "unsized"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
         # Instagram non-reel paths
         "https://instagram.com/p/DV12345/",
         "https://www.instagram.com/p/abc/?igsh=xyz",
@@ -79,8 +92,7 @@ def test_long_pipeline(url: str) -> None:
         # vt.tiktok.com short-link redirect requires a code, same as youtu.be
         "https://vt.tiktok.com/",
         "https://vt.tiktok.com",
-        # Other platforms
-        "https://twitter.com/x/status/123",
+        # Other platforms — vimeo stays rejected, it is auth-walled (ADR-0045)
         "https://example.com/video",
         "https://vimeo.com/123",
         # Non-URLs and malformed
@@ -228,8 +240,7 @@ def test_article_default_domains_contains_named_platforms() -> None:
 
 def test_article_hint_verbatim_in_module() -> None:
     assert (
-        "If this is an article you'd like to track, try /allowlist <domain> first."
-        in _ARTICLE_HINT
+        "If this is an article you'd like to track, try /allowlist <domain> first." in _ARTICLE_HINT
     )
 
 
@@ -288,18 +299,13 @@ def test_repo_reserved_paths_case_insensitive() -> None:
 
 def test_normalize_repo_url_strips_subpath() -> None:
     assert (
-        normalize_repo_url(
-            "https://github.com/anthropics/claude-code/blob/main/README.md"
-        )
+        normalize_repo_url("https://github.com/anthropics/claude-code/blob/main/README.md")
         == "https://github.com/anthropics/claude-code"
     )
 
 
 def test_normalize_repo_url_bare() -> None:
-    assert (
-        normalize_repo_url("https://github.com/owner/repo")
-        == "https://github.com/owner/repo"
-    )
+    assert normalize_repo_url("https://github.com/owner/repo") == "https://github.com/owner/repo"
 
 
 def test_normalize_repo_url_raises_on_missing_segments() -> None:
@@ -325,7 +331,10 @@ def test_detect_pipeline_rejects_bad_scheme_and_lookalike_hosts() -> None:
     assert detect_pipeline("ftp://youtube.com/watch?v=abc") == "rejected"
     assert detect_pipeline("https://evilyoutube.com/watch?v=abc") == "rejected"
     assert detect_pipeline("https://youtube.com.evil.test/watch?v=abc") == "rejected"
-    assert detect_pipeline("https://news.ycombinator.com/item?id=1", frozenset({"ycombinator.com"})) == "article"
+    assert (
+        detect_pipeline("https://news.ycombinator.com/item?id=1", frozenset({"ycombinator.com"}))
+        == "article"
+    )
 
 
 def test_normalize_email_rejects_oversized_input() -> None:

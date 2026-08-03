@@ -178,7 +178,7 @@ async def _create_pipeline_job(body: JobCreateRequest, chat_id: int, url: str) -
     pipeline = detect_pipeline(url, frozenset(await database.list_allowed_domains(chat_id)))
     if pipeline == "document":
         raise HTTPException(status_code=422, detail="Document URLs belong in the Doc Parser")
-    if pipeline not in {"short", "long", "article", "repo"}:
+    if pipeline not in {"short", "long", "unsized", "article", "repo"}:
         raise HTTPException(status_code=422, detail="Unsupported URL")
 
     template = body.template.strip() if body.template else None
@@ -250,7 +250,10 @@ def _stored_thumbnail_url(job_id: str) -> str:
 def is_persistable_short_platform(url: str) -> bool:
     host = (urlparse(url.strip()).hostname or "").lower().removeprefix("www.")
     # host.endswith("tiktok.com") already matches vt.tiktok.com as a suffix.
-    return host.endswith("instagram.com") or host.endswith("tiktok.com")
+    return any(
+        host == target or host.endswith("." + target)
+        for target in ("instagram.com", "tiktok.com", "facebook.com", "x.com", "twitter.com")
+    )
 
 
 async def resolve_thumbnail(
@@ -273,7 +276,7 @@ async def resolve_thumbnail(
         if repo_path:
             return f"https://opengraph.githubassets.com/0/{repo_path}", "landscape"
 
-    if content_type == "short" and detect_pipeline(url) == "short":
+    if content_type == "short" and detect_pipeline(url) in {"short", "unsized"}:
         video_id = _youtube_video_id(url)
         if video_id:
             return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg", "portrait"
