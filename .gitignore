@@ -27,6 +27,7 @@ docker-compose.override.yml
 # Worktrees
 .worktrees/
 */worktrees/
+.headroom_wrap_marker.json
 
 # TypeScript
 *.tsbuildinfo
