@@ -49,6 +49,17 @@ describe('proxy routing cutover', () => {
     const response = proxy(requestFor('/opengraph-image'));
     expect(response.status).toBe(200);
   });
+
+  it('lets logged-out visitors reach the share-target landing route (issue #476)', () => {
+    const response = proxy(requestFor('/intake/share?url=https://example.com'));
+    expect(response.status).toBe(200);
+  });
+
+  it('keeps the real /intake surface behind the session gate', () => {
+    const response = proxy(requestFor('/intake'));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://ownix.test/login');
+  });
 });
 
 describe('proxy restricted mode (ADR-0035)', () => {

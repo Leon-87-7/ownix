@@ -10,6 +10,7 @@ import OwnixLogo from '@/app/ownix-logo.svg';
 import { GitHubIcon } from '@/components/svg/github-icon';
 import {
   Rss,
+  Inbox,
   Brain,
   LayoutGrid,
   MessageSquareText,
@@ -38,6 +39,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { href: '/intake', label: 'Intake', icon: Inbox },
   { href: '/feed', label: 'Feed', icon: Rss },
   { href: '/doc-parser', label: 'Docs', icon: FileCode2 },
   { href: '/brain', label: 'Brain', icon: Brain },

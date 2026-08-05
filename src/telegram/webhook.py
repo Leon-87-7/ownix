@@ -613,12 +613,17 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
 
 
 async def _cmd_cancel(ctx: SlashCtx) -> None:
-    state = await database.get_chat_state(ctx.chat_id)
-    await database.clear_chat_state(ctx.chat_id)
+    # Shared with the dashboard's /api/intake/action "cancel_pending" (issue
+    # #477/#475, src/intake/commands.py) — Telegram keeps its own emoji
+    # formatting here; only the get/clear-pending-state decision is shared.
+    from src.intake import state as intake_state
+
+    pending = await intake_state.get_state(ctx.chat_id)
+    await intake_state.clear_state(ctx.chat_id)
     await queue._client().delete(f"pending_template:{ctx.chat_id}")
-    if state and state.get("mode") == "awaiting_intent":
+    if pending and pending.get("mode") == "awaiting_intent":
         await send_message(ctx.chat_id, "✍️ Intent canceled.")
-    elif state and state.get("mode") == "awaiting_freestyle":
+    elif pending and pending.get("mode") == "awaiting_freestyle":
         await send_message(ctx.chat_id, "✍️ Freestyle prompt abandoned.")
     else:
         await send_message(ctx.chat_id, "Nothing to cancel.")

@@ -80,6 +80,33 @@ export async function apiPost<T>(
   return { ok: true, data: (await res.json()) as T };
 }
 
+export async function parseApiJsonOrThrow<T>(
+  res: Response,
+  fallback: string | ((status: number) => string),
+): Promise<T> {
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    const fallbackMessage = typeof fallback === 'function' ? fallback(res.status) : fallback;
+    throw new Error((payload as { detail?: string }).detail ?? fallbackMessage);
+  }
+  return (await res.json()) as T;
+}
+
+export async function apiPostJsonOrThrow<T>(
+  url: string,
+  body: unknown,
+  options: { fallback: string | ((status: number) => string); headers?: HeadersInit },
+): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  return parseApiJsonOrThrow<T>(res, options.fallback);
+}
+
 export async function swapSortOrder(
   urlA: string, newOrderA: number,
   urlB: string, newOrderB: number,
