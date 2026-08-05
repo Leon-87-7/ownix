@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import ControlsPage from './page';
 
@@ -115,6 +115,102 @@ describe('ControlsPage', () => {
     setupTagsMock({ tags: [] });
     render(<ControlsPage />);
     expect(section('Tags').getByText(/no tags yet/i)).toBeTruthy();
+  });
+
+  it('opens the edit panel pre-filled when a tag pill is clicked', () => {
+    render(<ControlsPage />);
+    const pill = section('Tags').getByRole('button', { name: 'Edit Alpha' });
+    fireEvent.click(pill);
+    expect(pill).toHaveAttribute('aria-pressed', 'true');
+    const nameInputs = section('Tags').getAllByPlaceholderText(
+      'Tag name',
+    ) as HTMLInputElement[];
+    expect(nameInputs[1].value).toBe('Alpha');
+    expect(
+      section('Tags').getByRole('button', { name: 'Save' }),
+    ).toBeTruthy();
+  });
+
+  it('toggles the edit panel closed when the same pill is clicked again', () => {
+    render(<ControlsPage />);
+    const pill = section('Tags').getByRole('button', { name: 'Edit Alpha' });
+    fireEvent.click(pill);
+    fireEvent.click(pill);
+    expect(pill).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      section('Tags').queryByRole('button', { name: 'Save' }),
+    ).toBeNull();
+  });
+
+  it('switches the edit panel to another tag when a different pill is clicked', () => {
+    render(<ControlsPage />);
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Beta' }));
+    const nameInputs = section('Tags').getAllByPlaceholderText(
+      'Tag name',
+    ) as HTMLInputElement[];
+    expect(nameInputs[1].value).toBe('Beta');
+  });
+
+  it('saves edits via updateTag and closes the panel', async () => {
+    const updateTag = vi.fn().mockResolvedValue(undefined);
+    setupTagsMock({ updateTag });
+    render(<ControlsPage />);
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
+    const nameInputs = section('Tags').getAllByPlaceholderText(
+      'Tag name',
+    ) as HTMLInputElement[];
+    fireEvent.change(nameInputs[1], { target: { value: 'Alpha2' } });
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(updateTag).toHaveBeenCalledWith(
+        't1',
+        expect.objectContaining({ name: 'Alpha2' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        section('Tags').queryByRole('button', { name: 'Save' }),
+      ).toBeNull(),
+    );
+  });
+
+  it('closes the edit panel on Cancel', () => {
+    render(<ControlsPage />);
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Cancel' }));
+    expect(
+      section('Tags').queryByRole('button', { name: 'Save' }),
+    ).toBeNull();
+  });
+
+  it('deletes the tag from the edit panel after confirmation', async () => {
+    const deleteTag = vi.fn().mockResolvedValue(undefined);
+    setupTagsMock({ deleteTag });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ControlsPage />);
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
+    fireEvent.click(
+      section('Tags').getByRole('button', { name: 'Delete Alpha' }),
+    );
+    await waitFor(() => expect(deleteTag).toHaveBeenCalledWith('t1'));
+    await waitFor(() =>
+      expect(
+        section('Tags').queryByRole('button', { name: 'Save' }),
+      ).toBeNull(),
+    );
+  });
+
+  it('does not delete when the confirmation dialog is declined', () => {
+    const deleteTag = vi.fn();
+    setupTagsMock({ deleteTag });
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<ControlsPage />);
+    fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
+    fireEvent.click(
+      section('Tags').getByRole('button', { name: 'Delete Alpha' }),
+    );
+    expect(deleteTag).not.toHaveBeenCalled();
   });
 
   it('shows Allowed Domains content', () => {

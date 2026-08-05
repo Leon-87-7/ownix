@@ -3,7 +3,7 @@
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { RestrictedFacade } from '@/components/shell/restricted-facade';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
 import { apiPut } from '@/lib/fetch-utils';
@@ -12,34 +12,27 @@ import {
   SlidersHorizontal,
   ChevronDown,
   TagPlus,
-  PenLine,
   TagX,
 } from 'lucide-react';
-import { PRESET_COLORS, IconPicker } from '@/components/ui/tag-picker';
+import { PRESET_COLORS, IconPicker, TagMark } from '@/components/ui/tag-picker';
+import { Tooltip } from '@/components/ui/tooltip';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 
 const DEFAULT_COLOR = '#8b5cf6';
-
-function ColorSwatch({ color }: { color: string }) {
-  return (
-    <span
-      className="inline-block h-4 w-4 flex-shrink-0 rounded"
-      style={{ backgroundColor: color }}
-    />
-  );
-}
 
 function TagForm({
   initial,
   onSubmit,
   onCancel,
   submitLabel,
+  onDelete,
 }: {
   initial: TagFormState;
   onSubmit: (values: TagFormState) => Promise<void>;
   onCancel?: () => void;
   submitLabel: string;
+  onDelete?: () => void;
 }) {
   const [values, setValues] = useState<TagFormState>(initial);
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +73,7 @@ function TagForm({
             <input
               type="text"
               required
+              autoFocus={Boolean(onCancel)}
               maxLength={80}
               value={values.name}
               onChange={(e) =>
@@ -139,7 +133,14 @@ function TagForm({
           onSelect={(icon) => setValues((v) => ({ ...v, icon }))}
         />
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+        >
+          {submitting ? 'Saving…' : submitLabel}
+        </button>
         {onCancel && (
           <button
             type="button"
@@ -149,106 +150,50 @@ function TagForm({
             Cancel
           </button>
         )}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
-        >
-          {submitting ? 'Saving…' : submitLabel}
-        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete ${values.name}`}
+            className="rounded p-1.5 text-status-error transition-ui hover:bg-raised"
+          >
+            <TagX
+              className="h-4 w-4"
+              aria-hidden="true"
+            />
+          </button>
+        )}
       </div>
     </form>
   );
 }
 
-function TagRow({
+function TagPill({
   tag,
-  onDelete,
-  onUpdate,
+  editing,
+  onClick,
 }: {
   tag: Tag;
-  onDelete: (id: string) => Promise<void>;
-  onUpdate: (id: string, values: TagFormState) => Promise<void>;
+  editing: boolean;
+  onClick: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [deleteError, setDeleteError] = useState<
-    string | undefined
-  >();
-
-  const handleDelete = async () => {
-    if (!confirm(`Delete tag "${tag.name}"?`)) return;
-    setDeleteError(undefined);
-    try {
-      await onDelete(tag.id);
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Delete failed',
-      );
-    }
-  };
-
-  const handleUpdate = async (values: TagFormState) => {
-    await onUpdate(tag.id, values);
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <li className="rounded-lg border border-line bg-surface px-4 py-3">
-        <TagForm
-          initial={{
-            name: tag.name,
-            meaning: tag.meaning,
-            color: tag.color,
-            // Carried through the form untouched so saving an edit doesn't NULL it.
-            icon: tag.icon,
-          }}
-          onSubmit={handleUpdate}
-          onCancel={() => setEditing(false)}
-          submitLabel="Save"
-        />
-      </li>
-    );
-  }
-
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-      <ColorSwatch color={tag.color} />
-      <span className="min-w-0 flex-1">
-        <span className="font-medium text-ink">{tag.name}</span>
-        {tag.meaning && (
-          <span className="ml-2 truncate text-sm text-body">
-            {tag.meaning}
-          </span>
-        )}
-      </span>
-      <div className="flex shrink-0 items-center gap-2">
+    <li>
+      <Tooltip content={tag.meaning || undefined}>
         <button
-          onClick={() => setEditing(true)}
+          type="button"
+          onClick={onClick}
+          aria-pressed={editing}
           aria-label={`Edit ${tag.name}`}
-          className="rounded p-1.5 text-muted transition-ui hover:bg-raised hover:text-ink"
+          className={`inline-flex items-center gap-1.5 rounded-full border bg-raised px-2.5 py-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
         >
-          <PenLine
-            className="h-4 w-4"
-            aria-hidden="true"
+          <TagMark
+            tag={tag}
+            className="h-3 w-3"
           />
+          {tag.name}
         </button>
-        <button
-          onClick={handleDelete}
-          aria-label={`Delete ${tag.name}`}
-          className="rounded p-1.5 text-status-error transition-ui hover:bg-raised"
-        >
-          <TagX
-            className="h-4 w-4"
-            aria-hidden="true"
-          />
-        </button>
-      </div>
-      {deleteError && (
-        <p className="w-full text-xs text-status-error">
-          {deleteError}
-        </p>
-      )}
+      </Tooltip>
     </li>
   );
 }
@@ -262,6 +207,49 @@ function TagsTab() {
     deleteTag,
     updateTag,
   } = useTagList();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<
+    string | undefined
+  >();
+  const editingTag = tags.find((t) => t.id === editingId) ?? null;
+  const editPanelRef = useRef<HTMLDivElement>(null);
+
+  // Detached edit panel can render off-screen (fixed slot, not inline at the
+  // clicked pill), so pull it into view whenever the edit target changes.
+  useEffect(() => {
+    if (editingTag) {
+      // jsdom doesn't implement scrollIntoView (undefined in tests).
+      editPanelRef.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [editingTag]);
+
+  const selectForEdit = (tagId: string) => {
+    setDeleteError(undefined);
+    setEditingId((current) => (current === tagId ? null : tagId));
+  };
+
+  const handleSave = async (values: TagFormState) => {
+    if (!editingTag) return;
+    await updateTag(editingTag.id, values);
+    setEditingId(null);
+  };
+
+  const handleDelete = async () => {
+    if (!editingTag) return;
+    if (!confirm(`Delete tag "${editingTag.name}"?`)) return;
+    setDeleteError(undefined);
+    try {
+      await deleteTag(editingTag.id);
+      setEditingId(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : 'Delete failed',
+      );
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -286,6 +274,32 @@ function TagsTab() {
           />
         </div>
       </details>
+      {editingTag && (
+        <div
+          ref={editPanelRef}
+          className="rounded-lg border border-line bg-surface px-4 py-3"
+        >
+          <TagForm
+            key={editingTag.id}
+            initial={{
+              name: editingTag.name,
+              meaning: editingTag.meaning,
+              color: editingTag.color,
+              // Carried through the form untouched so saving an edit doesn't NULL it.
+              icon: editingTag.icon,
+            }}
+            onSubmit={handleSave}
+            onCancel={() => setEditingId(null)}
+            submitLabel="Save"
+            onDelete={handleDelete}
+          />
+          {deleteError && (
+            <p className="mt-2 text-xs text-status-error">
+              {deleteError}
+            </p>
+          )}
+        </div>
+      )}
       <div className="space-y-2">
         {loading && (
           <p className="text-sm text-body">Loading tags…</p>
@@ -298,14 +312,16 @@ function TagsTab() {
             No tags yet. Create one above.
           </p>
         )}
-        {tags.map((tag) => (
-          <TagRow
-            key={tag.id}
-            tag={tag}
-            onDelete={deleteTag}
-            onUpdate={updateTag}
-          />
-        ))}
+        <ul className="flex flex-wrap justify-center gap-2">
+          {tags.map((tag) => (
+            <TagPill
+              key={tag.id}
+              tag={tag}
+              editing={tag.id === editingId}
+              onClick={() => selectForEdit(tag.id)}
+            />
+          ))}
+        </ul>
       </div>
     </div>
   );
