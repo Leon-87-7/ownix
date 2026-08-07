@@ -21,6 +21,24 @@ describe('ConfirmDialog', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
   });
 
+  it('renders optional children between description and actions', async () => {
+    render(
+      <ConfirmDialog
+        trigger={<button>Delete job</button>}
+        title="Delete?"
+        description="Cannot be undone"
+        confirmLabel="Delete"
+        onConfirm={vi.fn()}
+      >
+        <label>
+          <input type="checkbox" /> Also remove the 3 links
+        </label>
+      </ConfirmDialog>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    await waitFor(() => expect(screen.getByText('Also remove the 3 links')).toBeTruthy());
+  });
+
   it('closes on Escape', async () => {
     render(
       <ConfirmDialog trigger={<button>Open</button>} title="Delete?" description="No undo" confirmLabel="Delete" onConfirm={vi.fn()} />,

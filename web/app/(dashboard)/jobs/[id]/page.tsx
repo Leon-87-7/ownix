@@ -585,6 +585,7 @@ export default function JobDetailPage() {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
+  const [withLinks, setWithLinks] = useState(false);
   const { job, fetchState } = useJobDetail(id, restricted);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     id,
@@ -660,7 +661,10 @@ export default function JobDetailPage() {
     setDeleting(true);
     setDeleteFailed(false);
     try {
-      const response = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+      const response = await fetch(
+        `/api/jobs/${id}${withLinks ? '?with_links=1' : ''}`,
+        { method: 'DELETE' },
+      );
       if (!response.ok) throw new Error('Job delete failed');
       if (window.history.length > 1) router.back();
       else router.push('/feed');
@@ -736,7 +740,7 @@ export default function JobDetailPage() {
             <div className="flex-shrink-0 space-y-2">
               <ConfirmDialog
                 title="Permanently delete this job?"
-                description="This removes the job, its notes, tags and Brain link, and schedules its cloud files for deletion. This can't be undone."
+                description="This removes the job and schedules its cloud files for deletion. This can't be undone."
                 confirmLabel="Delete permanently"
                 pending={deleting}
                 onConfirm={handleDelete}
@@ -745,7 +749,25 @@ export default function JobDetailPage() {
                     Delete job
                   </button>
                 }
-              />
+              >
+                {/* ADR-0046: links outlive the job by default — this is the
+                    opt-in back into the old cascade. */}
+                {typeof job.link_count === 'number' && job.link_count > 0 && (
+                  <label className="flex items-start gap-2 text-xs text-body">
+                    <input
+                      type="checkbox"
+                      checked={withLinks}
+                      onChange={(event) => setWithLinks(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Also remove the {job.link_count}{' '}
+                      {job.link_count === 1 ? 'link' : 'links'} this job added
+                      to your Brain
+                    </span>
+                  </label>
+                )}
+              </ConfirmDialog>
               {deleteFailed && (
                 <p className="text-xs text-status-error">
                   Couldn&apos;t delete — try again.

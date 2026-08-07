@@ -175,6 +175,27 @@ describe('JobDetailPage', () => {
     });
   });
 
+  it('has no with-links checkbox when the job added no links', () => {
+    setupMocks({ job: { ...JOB, link_count: 0 } });
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('deletes with ?with_links=1 only when the checkbox is checked (ADR-0046)', async () => {
+    setupMocks({ job: { ...JOB, link_count: 3 } });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    expect(screen.getByText(/also remove the 3 links/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/jobs/j1?with_links=1', { method: 'DELETE' }),
+    );
+  });
+
   it('shows the inline failure and closes the dialog', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
     render(<JobDetailPage />);

@@ -597,16 +597,23 @@ async def get_job(job_id: str, request: Request) -> dict:
     job = await get_owned_job(job_id, request)
 
     fields = detail_fields_for(job.get("content_type", ""))
-    return {k: job.get(k) for k in fields}
+    detail = {k: job.get(k) for k in fields}
+    # Not a job column — one COUNT query, only consumed by the delete-confirm
+    # checkbox (ADR-0046), so it rides outside the content-type field filter.
+    detail["link_count"] = await database.count_job_links(job_id)
+    return detail
 
 
 @jobs_router.delete("/{job_id}", status_code=204)
-async def delete_job(job_id: str, request: Request) -> Response:
+async def delete_job(job_id: str, request: Request, with_links: bool = False) -> Response:
     """Job delete: remove owned database state and durably record its Job purge.
 
     The purge task is written to a transactional outbox in the same transaction as the
     delete, ensuring it cannot be lost even if Redis is unavailable. A background drainer
     moves tasks from the outbox to Redis.
+
+    The job's Brain links are left standing (ADR-0046) unless `?with_links=1` is
+    passed — a bookmark import card owns hundreds of them, and there is no undo.
     """
     job = await get_owned_job(job_id, request)
     outputs = await database.list_document_outputs(job_id)
@@ -627,5 +634,5 @@ async def delete_job(job_id: str, request: Request) -> Response:
         "url": job.get("url"),
     }
     # Atomically delete the job and record the purge task in the outbox.
-    await database.delete_job(job_id, purge_payload=purge_task)
+    await database.delete_job(job_id, purge_payload=purge_task, with_links=with_links)
     return Response(status_code=204)

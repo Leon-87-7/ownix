@@ -530,9 +530,13 @@ def _insert_thumbnail_job(job_id: str, chat_id: int) -> None:
     asyncio.run(run())
 
 
-def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
+def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
     jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """ADR-0046: a job is a work record, its links are knowledge that outlives it.
+
+    Deleting the job leaves `source_job` dangling as pure provenance.
+    """
     captured: list[dict] = []
 
     async def fake_enqueue(task: dict) -> None:
@@ -565,14 +569,10 @@ def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
 
     assert response.status_code == 204
     assert asyncio.run(jobs.database.get_job("pending-delete")) is None
-    assert (
-        asyncio.run(
-            jobs.database._fetch_one(
-                "SELECT id FROM links WHERE source_job = ?", ("pending-delete",)
-            )
-        )
-        is None
+    surviving = asyncio.run(
+        jobs.database._fetch_one("SELECT id FROM links WHERE source_job = ?", ("pending-delete",))
     )
+    assert surviving is not None and surviving["id"] == "link-1"
     assert captured == [
         {
             "task": "job_purge",
@@ -583,6 +583,39 @@ def test_delete_job_hard_deletes_brain_links_and_enqueues_refs(
             "url": "https://example.com/job",
         }
     ]
+
+
+def test_delete_job_with_links_flag_removes_them(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The old cascade survives as an opt-in — same SQL, opposite default."""
+    monkeypatch.setattr(jobs.queue, "enqueue", lambda _task: None)
+    _insert_thumbnail_job("delete-with-links", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                "INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at) "
+                "VALUES (?, ?, ?, '2026-01-01', '2026-01-01', '2026-01-01')",
+                ("link-2", "https://example.com/link-2", "delete-with-links"),
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    response = jobs_client.delete("/api/jobs/delete-with-links?with_links=1")
+
+    assert response.status_code == 204
+    assert (
+        asyncio.run(
+            jobs.database._fetch_one(
+                "SELECT id FROM links WHERE source_job = ?", ("delete-with-links",)
+            )
+        )
+        is None
+    )
 
 
 def test_delete_job_unknown_and_foreign_leave_rows_intact(

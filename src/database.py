@@ -2350,15 +2350,32 @@ async def delete_space(*, chat_id: int, space_id: str) -> bool:
     )
 
 
-async def delete_job(job_id: str, purge_payload: dict[str, Any] | None = None) -> bool:
-    """Hard-delete a job and manually de-index its Brain links atomically.
+async def count_job_links(job_id: str) -> int:
+    """Links a job would take with it under `delete_job(with_links=True)` — the
+    count the delete-confirm checkbox names."""
+    row = await _fetch_one("SELECT COUNT(*) AS n FROM links WHERE source_job = ?", (job_id,))
+    return row["n"] if row else 0
+
+
+async def delete_job(
+    job_id: str, purge_payload: dict[str, Any] | None = None, *, with_links: bool = False
+) -> bool:
+    """Hard-delete a job. Its Brain links survive unless *with_links* is set.
+
+    A job is a work record; the links it produced are knowledge that outlives it
+    (ADR-0046). `source_job` is left dangling as pure provenance — `chat_id`
+    carries ownership (ADR-0043), and `list_links` LEFT JOINs `jobs`, so a
+    dangling reference never hides a link. Removing links is a separate,
+    explicit act: `DELETE /api/brain/links/{id}`, or this flag for all of a
+    job's at once.
 
     If purge_payload is provided, it is written to the purge_tasks outbox in the same
     transaction, ensuring durable purge acceptance before the delete commits.
     """
     async with connection() as conn:
         cursor = await conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
-        await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
+        if with_links:
+            await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
         if purge_payload:
             await conn.execute(
                 "INSERT INTO purge_tasks (job_id, chat_id, task_payload) VALUES (?, ?, ?)",

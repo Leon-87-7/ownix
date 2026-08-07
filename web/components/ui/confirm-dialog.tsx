@@ -17,6 +17,9 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   pending?: boolean;
   onConfirm: () => void | Promise<void>;
+  /** Extra interactive content (e.g. an opt-in checkbox) between the
+   * description and the action buttons. */
+  children?: ReactNode;
 };
 
 export function ConfirmDialog({
@@ -26,6 +29,7 @@ export function ConfirmDialog({
   confirmLabel,
   pending = false,
   onConfirm,
+  children,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -42,6 +46,7 @@ export function ConfirmDialog({
       >
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
+        {children && <div className="mt-3">{children}</div>}
         <div className="mt-5 flex justify-end gap-2">
           <RadixDialog.Close asChild>
             <button

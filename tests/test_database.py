@@ -1120,6 +1120,51 @@ async def test_delete_link_orphan_falls_back_to_operator(temp_db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_leaves_links_standing_by_default(temp_db):
+    """ADR-0046: a job is a work record; its links outlive it unless with_links=True."""
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com/1', ?, 't', 't', 't'),
+                      ('l2', 'https://example.com/2', ?, 't', 't', 't')""",
+            (job, job),
+        )
+        await conn.commit()
+
+    assert await db.count_job_links(job) == 2
+    assert await db.delete_job(job) is True
+    assert await db.get_job(job) is None
+    assert await db.count_job_links(job) == 2  # dangling source_job, links intact
+
+
+@pytest.mark.asyncio
+async def test_delete_job_with_links_true_removes_them(temp_db):
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com/1', ?, 't', 't', 't')""",
+            (job,),
+        )
+        await conn.commit()
+
+    assert await db.delete_job(job, with_links=True) is True
+    assert await db.count_job_links(job) == 0
+
+
+@pytest.mark.asyncio
+async def test_count_job_links_zero_for_unknown_job(temp_db):
+    from src import database as db
+
+    assert await db.count_job_links("no-such-job") == 0
+
+
+@pytest.mark.asyncio
 async def test_update_tag_preserves_and_clears_icon(temp_db):
     from src import database as db
 

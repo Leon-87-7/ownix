@@ -13,6 +13,9 @@ export interface JobDetail {
   completed_at: string | null;
   error_msg: string | null;
   drive_url: string | null;
+  // Not a jobs column — a live COUNT of this job's Brain links, only used by
+  // the delete-confirm checkbox (ADR-0046).
+  link_count: number;
   // Long/article/repo enrichment fields
   ai_topic: string | null;
   ai_objective: string | null;
