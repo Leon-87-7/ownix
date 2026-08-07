@@ -48,6 +48,14 @@
 | [#459](https://github.com/Leon-87-7/ownix/issues/459) | feat(telegram): scope /find and /rebuild-graph to the sender's own Brain | Telegram / Brain | #457 |
 | [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | #457 |
 | [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | #458 |
+| [#490](https://github.com/Leon-87-7/ownix/issues/490) | Tighten is_fetchable_url and add coerce_url | Links / Validators | — |
+| [#491](https://github.com/Leon-87-7/ownix/issues/491) | Links outlive jobs — drop delete cascade, add ?with_links=1 | Links / Delete | — |
+| [#492](https://github.com/Leon-87-7/ownix/issues/492) | Accept Netscape bookmark HTML end-to-end (empty import) | Bookmarks / Intake | — |
+| [#493](https://github.com/Leon-87-7/ownix/issues/493) | _rewrite_existing_md must update_file, not upload_file | Brain / Drive | — |
+| [#494](https://github.com/Leon-87-7/ownix/issues/494) | Batch link paste — textarea, client loop, progress | Links / Console | #490 |
+| [#495](https://github.com/Leon-87-7/ownix/issues/495) | Parse and insert links, skip existing (snapshot ingest) | Bookmarks / Parser | #490, #492 |
+| [#496](https://github.com/Leon-87-7/ownix/issues/496) | Deferred import-scoped enrichment pass | Bookmarks / Brain | #495 |
+| [#497](https://github.com/Leon-87-7/ownix/issues/497) | Folder-to-tag opt-in form | Bookmarks / Tags | #495 |
 
 ---
 
@@ -535,6 +543,18 @@ Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-
     └── #479 Extension pairing auth (one-time token, hash-only)
 Critical path: #472 → #473 → {#474, #475, #477}; #476 parallel off #472; #478 → #479 parallel off #472
 Note: Phase 9 user_id identity migration and Phase 10 Discord adapter deferred per the plan's Non-Goals — not yet broken into issues.
+
+Batch link intake — paste a list, import a bookmark file (grill-with-docs 2026-08-06/07; ADR-0046, ADR-0048; CONTEXT.md `Batch link paste` / `Paste parsing` / `URL coercion` / `Bookmark import` / `Snapshot ingest` / `Deferred link enrichment` / `Job card` / `Job delete`)
+#490 Tighten is_fetchable_url + add coerce_url (root, unblocked — the whitespace-blob bug; one validator for every intake surface)
+├── #494 Batch link paste — textarea, client loop, progress (zero backend diff; loops the endpoint #490 fixed)
+└── #495 Parse and insert links, skip existing ◄── also #492 (needs both the validator and the accepted upload)
+    ├── #496 Deferred import-scoped enrichment pass (embeds once, after descriptions land)
+    └── #497 Folder-to-tag opt-in form (HITL-ish UI; reuses PRESET_COLORS / TAG_ICONS / IconPicker)
+#492 Accept Netscape bookmark HTML end-to-end (root, unblocked — deliberately hollow: card in, zero links)
+#491 Links outlive jobs — drop delete cascade, add ?with_links=1 (root, unblocked — ADR-0046, all seven pipelines)
+#493 _rewrite_existing_md must update_file, not upload_file (root, unblocked — pre-existing Drive-duplication bug)
+Critical path: #490 → #495 → {#496, #497}; #492 joins #495; #491 and #493 fully parallel
+Note: #492 is split from #495 on purpose — it proves the sniff → router → worker → job-card path with an empty payload, so parser surprises land in isolation. #491 and #493 are prerequisites for *safety* rather than *function*: without #491 one misclick on the import card destroys all 318 links, and without #493 every re-import duplicates its Drive .md files. Deliberately excluded: fixing the global refresh cron (Drive-gated, 449 descriptions unresolved since May 2026) — ADR-0048 decoupled bookmark import from it; needs its own diagnosis issue.
 ```
 
 ---
