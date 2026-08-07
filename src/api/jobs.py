@@ -15,7 +15,7 @@ from src.services import drive, job_recovery
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
 from src.templates import PROMPT_TEMPLATES
-from src.utils.validators import detect_pipeline, is_fetchable_url, normalize_repo_url
+from src.utils.validators import coerce_url, detect_pipeline, normalize_repo_url
 
 log = get_logger(__name__)
 
@@ -138,8 +138,13 @@ class JobCreateRequest(BaseModel):
 
 
 async def _create_link_job(chat_id: int, url: str) -> dict:
-    if not is_fetchable_url(url):
+    # coerce_url, not is_fetchable_url: a bare domain gains https:// so
+    # "land-book.com" works, while a whitespace-joined URL blob is rejected
+    # instead of being stored as one job (#490, CONTEXT.md "URL coercion").
+    coerced = coerce_url(url)
+    if coerced is None:
         raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
+    url = coerced
     warning = "Add Link saves the link as-is; it does not process it through the pipeline-detection flow."
     # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any
     # content_type returns the existing job instead of creating one, so a
