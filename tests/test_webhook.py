@@ -1581,6 +1581,51 @@ async def test_cmd_find_no_query_sends_usage(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_cmd_find_no_results_keeps_the_rebuild_graph_hint(monkeypatch):
+    """The shared migration (#485) must not drop Telegram's own copy/formatting."""
+    from src.telegram.webhook import SlashCtx, _cmd_find
+
+    async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        return []
+
+    monkeypatch.setattr("src.brain.search_links", _fake_search)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    ctx = SlashCtx(chat_id=42, parts=["/find", "svg"], message_id=None)
+    await _cmd_find(ctx)
+
+    sent.assert_awaited_once()
+    args, kwargs = sent.await_args
+    assert "rebuild-graph" in args[1]
+    assert kwargs.get("parse_mode") == "HTML"
+
+
+@pytest.mark.asyncio
+async def test_cmd_find_renders_results_via_the_shared_search(monkeypatch):
+    from src.telegram.webhook import SlashCtx, _cmd_find
+
+    async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        return [{"url": "https://example.com/a", "title": "Result A", "topic": "", "score": 0.9}]
+
+    async def _fake_enrich(links: list[dict]) -> list[dict]:
+        return links
+
+    monkeypatch.setattr("src.brain.search_links", _fake_search)
+    monkeypatch.setattr("src.services.github.enrich_github_links", _fake_enrich)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    ctx = SlashCtx(chat_id=42, parts=["/find", "svg"], message_id=None)
+    await _cmd_find(ctx)
+
+    sent.assert_awaited_once()
+    args, _ = sent.await_args
+    assert "Result A" in args[1]
+    assert "1 result" in args[1]
+
+
+@pytest.mark.asyncio
 async def test_cmd_cancel_awaiting_intent_sends_intent_canceled(temp_db, monkeypatch):
     """/cancel when state.mode == 'awaiting_intent' sends the Intent-canceled message."""
     from src.telegram.webhook import SlashCtx, _cmd_cancel

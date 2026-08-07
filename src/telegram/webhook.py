@@ -634,53 +634,58 @@ async def _cmd_spec(ctx: SlashCtx) -> None:
 
 
 async def _cmd_find(ctx: SlashCtx) -> None:
+    # Search, score-filter (0.58) and GitHub enrichment are shared with the
+    # dashboard's /find (issue #485, src/intake/commands.py:find_command) —
+    # usage/empty-result copy stays here, richer and HTML-formatted, rather
+    # than being driven off the shared response's plain `text` (which the
+    # dashboard renders as-is and has no reason to match Telegram's wording).
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /find <query>")
         return
-    query = " ".join(ctx.parts[1:]).strip()
-    from src import brain
-    from src.services.github import enrich_github_links
+
+    from src.intake import commands as intake_commands
     from src.utils.markdown import _humanize_age
 
-    candidates = await brain.search_links(query, top_k=10)
-    results = [r for r in candidates if r["score"] >= 0.58][:5]
-    if not results:
+    resp = await intake_commands.find_command(ctx.chat_id, ctx.parts)
+    query = " ".join(ctx.parts[1:]).strip()
+
+    if not resp.artifacts:
         await send_message(
             ctx.chat_id,
             f'🔍 Nothing found for "<i>{html.escape(query)}</i>".\nTry a broader term or /rebuild-graph if you\'ve added links recently.',
             parse_mode="HTML",
         )
-    else:
-        await enrich_github_links(results)  # mutates in place; no-ops non-GitHub URLs
-        header = f'🔍 <b>{len(results)} result{"s" if len(results) != 1 else ""}</b> for "<i>{html.escape(query)}</i>"\n\n'
-        lines = []
-        for r in results:
-            parsed = urlparse(r["url"])
-            short_url = (parsed.netloc + parsed.path).rstrip("/")
-            short_url = short_url.removeprefix("www.")
-            entry = (
-                f"🔗 <b>{html.escape(r['title'])}</b>\n"
-                f'   <a href="{html.escape(r["url"], quote=True)}">{html.escape(short_url)}</a>'
-            )
-            if r.get("_enriched"):
-                desc = (r.get("_gh_description") or "").strip()
-                language = r.get("_language") or "N/A"
-                meta = f"⭐ {r['_stars']} | 🔀 {r['_forks']} | 💻 {language} | 📅 {_humanize_age(r['_days_ago'])}"
-                if desc:
-                    entry += f"\n   {html.escape(desc)}"
-                entry += f"\n   {meta}"
+        return
+
+    header = f'🔍 <b>{len(resp.artifacts)} result{"s" if len(resp.artifacts) != 1 else ""}</b> for "<i>{html.escape(query)}</i>"\n\n'
+    lines = []
+    for r in resp.artifacts:
+        parsed = urlparse(r["url"])
+        short_url = (parsed.netloc + parsed.path).rstrip("/")
+        short_url = short_url.removeprefix("www.")
+        entry = (
+            f"🔗 <b>{html.escape(r['title'])}</b>\n"
+            f'   <a href="{html.escape(r["url"], quote=True)}">{html.escape(short_url)}</a>'
+        )
+        if r.get("_enriched"):
+            desc = (r.get("_gh_description") or "").strip()
+            language = r.get("_language") or "N/A"
+            meta = f"⭐ {r['_stars']} | 🔀 {r['_forks']} | 💻 {language} | 📅 {_humanize_age(r['_days_ago'])}"
+            if desc:
+                entry += f"\n   {html.escape(desc)}"
+            entry += f"\n   {meta}"
+        else:
+            topic = (r.get("topic") or "").strip()
+            if topic.lower().startswith(("the image", "the screenshot", "the photo")):
+                topic_line = "📷 from a photo"
+            elif topic:
+                topic_line = topic[:70].rstrip() + ("…" if len(topic) > 70 else "")
             else:
-                topic = (r.get("topic") or "").strip()
-                if topic.lower().startswith(("the image", "the screenshot", "the photo")):
-                    topic_line = "📷 from a photo"
-                elif topic:
-                    topic_line = topic[:70].rstrip() + ("…" if len(topic) > 70 else "")
-                else:
-                    topic_line = ""
-                if topic_line:
-                    entry += f"\n   {html.escape(topic_line)}"
-            lines.append(entry)
-        await send_message(ctx.chat_id, header + "\n\n".join(lines), parse_mode="HTML")
+                topic_line = ""
+            if topic_line:
+                entry += f"\n   {html.escape(topic_line)}"
+        lines.append(entry)
+    await send_message(ctx.chat_id, header + "\n\n".join(lines), parse_mode="HTML")
 
 
 async def _cmd_rebuild_graph(ctx: SlashCtx) -> None:

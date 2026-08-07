@@ -76,9 +76,48 @@ async def cancel_command(chat_id: int, parts: list[str]) -> IntakeResponse:
     return await cancel_pending(chat_id)
 
 
+#: Mirrors the thresholds `_cmd_find` used before the migration — score filter
+#: from `settings.BRAIN_MIN_SCORE` isn't tight enough for a results list (it's
+#: tuned for "related" suggestions elsewhere in Brain), so `/find` has always
+#: applied its own, higher bar on top.
+_FIND_MIN_SCORE = 0.58
+_FIND_MAX_RESULTS = 5
+
+
+async def find_command(chat_id: int, parts: list[str]) -> IntakeResponse:
+    """Second Brain search (issue #485). Channel-agnostic half of `/find`.
+
+    Message formatting (HTML, emoji, Drive links) stays in
+    `src/telegram/webhook.py:_cmd_find` — this returns `artifacts`, not
+    preformatted text, so each channel renders its own presentation.
+
+    Not tenant-scoped: neither was the Telegram command it replaces
+    (`src/brain.py:search_links` takes no `chat_id`). See issue #459.
+    """
+    del chat_id
+    if len(parts) < 2:
+        return responses.command_result("Usage: /find <query>")
+
+    query = " ".join(parts[1:]).strip()
+
+    from src import brain
+    from src.services.github import enrich_github_links
+
+    candidates = await brain.search_links(query, top_k=10)
+    results = [r for r in candidates if r["score"] >= _FIND_MIN_SCORE][:_FIND_MAX_RESULTS]
+    if not results:
+        return responses.command_result(f'Nothing found for "{query}".', actions=[])
+
+    await enrich_github_links(results)  # mutates in place; no-ops non-GitHub URLs
+    plural = "s" if len(results) != 1 else ""
+    text = f'{len(results)} result{plural} for "{query}".'
+    return IntakeResponse(kind="command_result", text=text, artifacts=results)
+
+
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
+    "/find": Command("/find", "<query>", find_command),
 }
 
 
