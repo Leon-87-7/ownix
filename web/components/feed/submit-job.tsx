@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
 import { useRestrictedMode } from '@/lib/restricted/context';
+import { parseBatchLinkInput } from '@/lib/parse-batch-links';
 
 /** The job the API accepted, timestamped so consumers can react to repeats. */
 export interface AcceptedJob {
@@ -73,6 +74,13 @@ interface SubmitJobContextValue {
 const SubmitJobContext = createContext<SubmitJobContextValue | null>(
   null,
 );
+
+/** One row of live batch-paste progress (CONTEXT.md "Batch link paste"). */
+interface BatchLinkResult {
+  token: string;
+  status: 'pending' | 'success' | 'error';
+  message?: string;
+}
 
 function hasActiveDialog() {
   return Array.from(
@@ -251,6 +259,9 @@ export function SubmitJobProvider({
   const [open, setOpenRaw] = useState(false);
   const [docsOpenRaw, setDocsOpenRaw] = useState(false);
   const [addLinkOpenRaw, setAddLinkOpenRaw] = useState(false);
+  const [batchResults, setBatchResults] = useState<BatchLinkResult[]>(
+    [],
+  );
   const [intakeOpen, setIntakeOpen] = useState(false);
   const setOpen = useCallback(
     (next: boolean) => {
@@ -284,6 +295,7 @@ export function SubmitJobProvider({
         );
         return;
       }
+      if (next) setBatchResults([]);
       setAddLinkOpenRaw(next);
     },
     [restricted, showRestrictedToast],
@@ -433,45 +445,95 @@ export function SubmitJobProvider({
     [freestylePrompt, submitting, template, url],
   );
 
-  const submitAddLink = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const trimmed = addLinkUrl.trim();
-      if (!trimmed || addLinkSubmitting) return;
-      setAddLinkError(null);
-      setAddLinkSubmitting(true);
+  /** Submits one already-parsed token, updating its row in batchResults.
+   * Returns true on success — plain return value, not React state, so the
+   * caller can tally the batch outcome without racing setState's batching. */
+  const submitOneLink = useCallback(
+    async (token: string, index: number): Promise<boolean> => {
       try {
         const res = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url: trimmed,
-            content_type: 'link',
-          }),
+          body: JSON.stringify({ url: token, content_type: 'link' }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok)
-          throw new Error(data.detail || 'Could not add link');
+        if (!res.ok) {
+          const message =
+            typeof data.detail === 'string'
+              ? data.detail
+              : 'Could not add link';
+          setBatchResults((current) =>
+            current.map((row, i) =>
+              i === index ? { ...row, status: 'error', message } : row,
+            ),
+          );
+          return false;
+        }
         setLastAccepted({
           id: typeof data.id === 'string' && data.id ? data.id : null,
-          url: trimmed,
+          url: token,
           title: typeof data.title === 'string' ? data.title : null,
           content_type: 'link',
           status:
             typeof data.status === 'string' ? data.status : 'pending',
           at: Date.now(),
         });
-        setAddLinkUrl('');
-        setAddLinkOpen(false);
-      } catch (e) {
-        setAddLinkError(
-          e instanceof Error ? e.message : 'Could not add link',
+        setBatchResults((current) =>
+          current.map((row, i) =>
+            i === index ? { ...row, status: 'success' } : row,
+          ),
         );
-      } finally {
-        setAddLinkSubmitting(false);
+        return true;
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : 'Could not add link';
+        setBatchResults((current) =>
+          current.map((row, i) =>
+            i === index ? { ...row, status: 'error', message } : row,
+          ),
+        );
+        return false;
       }
     },
-    [addLinkSubmitting, addLinkUrl, setAddLinkOpen],
+    [setBatchResults, setLastAccepted],
+  );
+
+  const submitAddLink = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const tokens = parseBatchLinkInput(addLinkUrl);
+      if (tokens.length === 0 || addLinkSubmitting) return;
+      setAddLinkError(null);
+      setAddLinkSubmitting(true);
+      setBatchResults(
+        tokens.map((token) => ({ token, status: 'pending' as const })),
+      );
+
+      // ponytail: no hand-rolled concurrency cap — the browser already
+      // limits concurrent connections per origin (~6), so Promise.all over
+      // every token throttles itself for free at the paste sizes in scope.
+      const results = await Promise.all(
+        tokens.map((token, index) => submitOneLink(token, index)),
+      );
+      const failures = results.filter((ok) => !ok).length;
+
+      setAddLinkSubmitting(false);
+      if (failures === 0) {
+        setAddLinkUrl('');
+        setAddLinkOpen(false);
+        setBatchResults([]);
+      }
+    },
+    [
+      addLinkSubmitting,
+      addLinkUrl,
+      setAddLinkOpen,
+      submitOneLink,
+      setAddLinkError,
+      setAddLinkSubmitting,
+      setBatchResults,
+      setAddLinkUrl,
+    ],
   );
 
   const openSubmitWith = useCallback(
@@ -515,6 +577,16 @@ export function SubmitJobProvider({
     },
     [setAddLinkOpen, setDocsOpen, setOpen],
   );
+
+  const addLinkTokenCount = useMemo(
+    () => parseBatchLinkInput(addLinkUrl).length,
+    [addLinkUrl],
+  );
+  const addLinkButtonLabel = addLinkSubmitting
+    ? `Ingesting ${batchResults.filter((r) => r.status !== 'pending').length}/${batchResults.length}…`
+    : addLinkTokenCount > 1
+      ? `Ingest ${addLinkTokenCount} Links`
+      : 'Ingest Link';
 
   const value = useMemo(
     () => ({
@@ -580,21 +652,25 @@ export function SubmitJobProvider({
           >
             <label className="block text-sm font-medium text-ink">
               URL
-              <input
+              <textarea
                 value={addLinkUrl}
                 onChange={(event) =>
                   setAddLinkUrl(event.target.value)
                 }
-                placeholder="https://example.com"
+                rows={4}
+                placeholder={
+                  'https://example.com\nhttps://example.com/two\n…one per line, or paste a whole list'
+                }
                 aria-describedby={
                   addLinkError ? 'add-link-error' : undefined
                 }
-                className="mt-2 w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal focus:ring-1 focus:ring-signal"
+                className="mt-2 w-full resize-y rounded-md border border-line bg-canvas px-3 py-2 font-mono text-sm text-ink outline-none transition-ui placeholder:font-sans placeholder:text-muted focus:border-signal focus:ring-1 focus:ring-signal"
               />
             </label>
             <p className="text-xs text-muted">
-              Ingest Link saves the link as-is; it does not process it
-              through the pipeline-detection flow.
+              Ingest Link saves each link as-is; it does not process
+              them through the pipeline-detection flow. Paste as many
+              as you like — one job per link.
             </p>
             {addLinkError && (
               <p
@@ -605,12 +681,47 @@ export function SubmitJobProvider({
                 {addLinkError}
               </p>
             )}
+            {batchResults.length > 0 && (
+              <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-line bg-canvas p-2 font-mono text-xs">
+                {batchResults.map((row, i) => (
+                  <li
+                    key={`${row.token}-${i}`}
+                    className="flex items-start gap-2"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={
+                        row.status === 'success'
+                          ? 'text-status-done'
+                          : row.status === 'error'
+                            ? 'text-status-error'
+                            : 'text-muted'
+                      }
+                    >
+                      {row.status === 'success'
+                        ? '✓'
+                        : row.status === 'error'
+                          ? '✕'
+                          : '…'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-body">
+                      {row.token}
+                      {row.message && (
+                        <span className="ml-2 text-status-error">
+                          {row.message}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               type="submit"
-              disabled={addLinkSubmitting || !addLinkUrl.trim()}
+              disabled={addLinkSubmitting || addLinkTokenCount === 0}
               className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {addLinkSubmitting ? 'Ingesting…' : 'Ingest Link'}
+              {addLinkButtonLabel}
             </button>
           </form>
         </DialogContent>

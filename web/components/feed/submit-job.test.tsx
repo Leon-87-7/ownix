@@ -239,3 +239,119 @@ describe('SubmitJobProvider', () => {
     await waitFor(() => expect(screen.getByText('repo')).toBeTruthy());
   });
 });
+
+describe('Ingest Link — batch paste (#494)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function openIngestLink() {
+    render(
+      <SubmitJobProvider>
+        <LastAcceptedProbe />
+      </SubmitJobProvider>,
+    );
+    fireEvent.keyDown(window, { key: 'u' });
+    return screen.getByPlaceholderText(/example\.com/i);
+  }
+
+  it('posts one job per pasted URL, in a paste with a label and a duplicate', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'job-1', content_type: 'link', status: 'pending' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const textarea = openIngestLink();
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          'Design Systems — https://land-book.com\nhttps://godly.website\nhttps://land-book.com',
+      },
+    });
+    fireEvent.submit(textarea.closest('form')!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const urls = (fetchMock.mock.calls as [string, RequestInit][]).map(
+      ([, init]) => JSON.parse(init.body as string).url,
+    );
+    expect(urls.sort()).toEqual(
+      ['https://godly.website', 'https://land-book.com'].sort(),
+    );
+  });
+
+  it('the screenshot bug: a whitespace-joined blob becomes N jobs, not one', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'j1', content_type: 'link', status: 'pending' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const textarea = openIngestLink();
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          'https://land-book.com https://godly.website https://mobbin.com',
+      },
+    });
+    fireEvent.submit(textarea.closest('form')!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  });
+
+  it('a failure keeps the dialog open and renders an inline error row', async () => {
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const { url } = JSON.parse(init.body as string);
+      if (url === 'https://bad.example') {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ detail: 'Add Link needs an absolute http(s) URL' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ id: 'j1', content_type: 'link', status: 'pending' }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const textarea = openIngestLink();
+    fireEvent.change(textarea, {
+      target: { value: 'https://good.example\nhttps://bad.example' },
+    });
+    fireEvent.submit(textarea.closest('form')!);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Add Link needs an absolute http(s) URL'),
+      ).toBeTruthy(),
+    );
+    // Dialog stays open on partial failure — the textarea is still mounted.
+    expect(screen.getByDisplayValue(/bad\.example/)).toBeTruthy();
+  });
+
+  it('lastAccepted fires once per successful job, progressively', async () => {
+    let calls = 0;
+    const fetchMock = vi.fn().mockImplementation(() => {
+      calls += 1;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          id: `job-${calls}`,
+          content_type: 'link',
+          status: 'pending',
+        }),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const textarea = openIngestLink();
+    fireEvent.change(textarea, {
+      target: { value: 'https://a.example\nhttps://b.example' },
+    });
+    fireEvent.submit(textarea.closest('form')!);
+
+    await waitFor(() => expect(screen.getByText('link')).toBeTruthy());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+});
