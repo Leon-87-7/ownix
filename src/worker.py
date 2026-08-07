@@ -7,6 +7,7 @@ Task discriminators handled by _dispatch:
     - 'repo'            → processors.repo.run
     - 'document'        → processors.document.run
     - 'link'            → processors.link.run
+    - 'bookmarks'       → processors.bookmarks.run (content_type stays 'link' — #492, ADR-0048)
     - 'prd_auto'        → processors.prd.run_auto
     - 'prd_auto_resend' → processors.prd.run_auto_resend
     - 'prd_intent'      → processors.prd.run_intent
@@ -180,6 +181,24 @@ _handle_link = _make_handler(
 )
 
 
+async def _handle_bookmarks(task: dict) -> None:
+    """The HTML is not persisted (ADR-0048), so the raw bytes travel in the
+    task envelope itself rather than through a job column — same pattern as
+    prd_intent's intent_text."""
+    job_id = task["job_id"]
+    job = await _load_job_or_log(job_id)
+    if not job:
+        return
+    try:
+        from src.processors import bookmarks
+
+        await bookmarks.run(job, html_b64=task.get("html_b64", ""))
+    except Exception:
+        log.exception("bookmarks_processor_error", job_id=job_id)
+        await database.update_job_status(job_id, "error")
+        await _notify_failure(job["chat_id"], job_id, "❌ Bookmark import failed. Please try again.")
+
+
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
     """Roll a crashed PRD slot back to 'error' and offer retry buttons. Never raises."""
     # status_col is interpolated into SQL — keep it pinned to known columns.
@@ -263,6 +282,7 @@ _TASK_HANDLERS = {
     "repo": _handle_repo,
     "document": _handle_document,
     "link": _handle_link,
+    "bookmarks": _handle_bookmarks,
     "prd_auto": _handle_prd_auto,
     "prd_auto_resend": _handle_prd_auto_resend,
     "prd_intent": _handle_prd_intent,

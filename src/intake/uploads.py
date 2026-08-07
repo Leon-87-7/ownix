@@ -34,6 +34,8 @@ async def handle_files(msg: IntakeMessage) -> IntakeResponse:
         return await _handle_pdf(chat_id, file)
     if file.content_type.startswith("image/"):
         return await _handle_image(chat_id, file)
+    if file.content_type == "text/x-bookmarks":
+        return await _handle_bookmarks(chat_id, file)
     return responses.rejected(f"Unsupported file type: {file.content_type}")
 
 
@@ -96,6 +98,40 @@ async def _handle_image(chat_id: int, file: IntakeFile) -> IntakeResponse:
         kind="action_ack",
         text=f"Found {len(links)} link(s) in this image.",
         artifacts=[{"links": links}],
+    )
+
+
+async def _handle_bookmarks(chat_id: int, file: IntakeFile) -> IntakeResponse:
+    """Create the import's job card and queue the parse (#492, ADR-0048).
+
+    The HTML is not persisted (no GCS/Drive object) — it travels in the queue
+    task envelope as base64 and is discarded once the worker dequeues it.
+    `jobs.url` gets a content-hash placeholder, never a navigable link.
+    """
+    import base64
+    import hashlib
+    from datetime import datetime, timezone
+
+    from src import database, queue
+
+    digest = hashlib.sha256(file.data).hexdigest()[:16]
+    url = f"bookmarks:{digest}"
+    now = datetime.now(timezone.utc)
+    title = f"Bookmarks {now.month}/{now.day}/{now.strftime('%y')}"
+
+    job_id = await database.create_job(chat_id=chat_id, url=url, content_type="link")
+    await database.update_job_status(job_id, "pending", title=title)
+    await queue.enqueue(
+        {
+            "task": "bookmarks",
+            "job_id": job_id,
+            "html_b64": base64.b64encode(file.data).decode("ascii"),
+        }
+    )
+    return IntakeResponse(
+        kind="job_created",
+        text=f"Received {file.filename} — job_{job_id[-4:]} ({title}).",
+        job_id=job_id,
     )
 
 
