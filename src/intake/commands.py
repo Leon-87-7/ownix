@@ -190,11 +190,69 @@ async def force_command(
     return responses.job_created({"id": job_id, "content_type": pipeline})
 
 
+async def freestyle_command(
+    chat_id: int, parts: list[str], *, message_id: int | None = None
+) -> IntakeResponse:
+    """`/freestyle <url>` — one-shot form only (issue #487).
+
+    Migrated from `_cmd_freestyle` + `_handle_freestyle_url`. Bare `/freestyle`
+    (no URL) arms a Telegram-only Redis continuation (`pending_template`) that
+    the *next plain message* picks up outside command dispatch entirely — not
+    migrated, see the issue's scoping comment.
+
+    Arms `chat_state(mode='awaiting_freestyle')` for every pipeline except
+    `repo` (explicitly excluded, same as the original) and `rejected`. This is
+    the exact state `IntakeStateBanner` already renders — the dashboard could
+    see the flow but never arm it before this.
+    """
+    from src import database, queue
+    from src.utils.validators import detect_pipeline, normalize_repo_url
+
+    if len(parts) < 2:
+        return responses.command_result("Usage: /freestyle <url>")
+    url = parts[1]
+
+    extra_domains = await database.list_allowed_domains(chat_id)
+    pipeline = detect_pipeline(url, frozenset(extra_domains))
+    if pipeline == "rejected":
+        return responses.unsupported(
+            "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
+            "Facebook/X video, allowlisted article domains, and GitHub repos."
+        )
+
+    if pipeline == "repo":
+        # Freestyle doesn't apply to repos — same fallback as the original:
+        # a plain job, no template, no awaiting_freestyle state.
+        repo_url = normalize_repo_url(url)
+        existing = await database.find_recent_job_by_url(chat_id, repo_url)
+        if existing:
+            return responses.job_created(existing, deduped=True)
+        job_id = await database.create_job(
+            chat_id=chat_id, url=repo_url, content_type="repo", message_id=message_id
+        )
+        await queue.enqueue({"task": "repo", "job_id": job_id})
+        return responses.job_created({"id": job_id, "content_type": "repo"})
+
+    job_id = await database.create_job(
+        chat_id=chat_id,
+        url=url,
+        content_type=pipeline,
+        message_id=message_id,
+        template="freestyle",
+    )
+    await database.update_job_status(job_id, "pending", template_detection_method="explicit_command")
+    if pipeline == "long":
+        await queue.enqueue({"task": "video", "job_id": job_id})
+    await state.set_state(chat_id, "awaiting_freestyle", job_id, expires_minutes=10)
+    return responses.job_created({"id": job_id, "content_type": pipeline})
+
+
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
     "/find": Command("/find", "<query>", find_command),
     "/force": Command("/force", "<url>", force_command),
+    "/freestyle": Command("/freestyle", "<url>", freestyle_command),
 }
 
 

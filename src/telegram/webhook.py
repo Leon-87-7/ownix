@@ -576,21 +576,22 @@ async def _handle_freestyle_url(
 
 async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
+        # Bare /freestyle arms a Telegram-only continuation (the next plain
+        # message picks it up outside command dispatch entirely) — not shared,
+        # see issue #487's scoping comment.
         await queue._client().set(f"pending_template:{ctx.chat_id}", "freestyle", ex=120)
         await send_message(ctx.chat_id, "📥 `/freestyle` ready — send the URL now (2 min window).")
         return
+
+    # The one-shot `/freestyle <url>` form is shared with the dashboard
+    # (issue #487, src/intake/commands.py:freestyle_command) — only this
+    # emoji rendering stays Telegram-only.
+    from src.intake import commands as intake_commands
+
     url = ctx.parts[1]
     extra_domains = await database.list_allowed_domains(ctx.chat_id)
-    pipeline = detect_pipeline(url, frozenset(extra_domains))
-    if pipeline == "rejected":
-        await send_message(
-            ctx.chat_id,
-            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
-            "and allowlisted article domains.",
-        )
-        return
-    if pipeline == "repo":
+    pipeline_preview = detect_pipeline(url, frozenset(extra_domains))
+    if pipeline_preview == "repo":
         await send_message(
             ctx.chat_id,
             "ℹ️ `/freestyle` doesn't apply to repo URLs yet\nRuning standard analysis.",
@@ -600,16 +601,39 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
         if cached:
             await _reply_cached_job(ctx.chat_id, cached)
             return
-        job_id = await database.create_job(
-            chat_id=ctx.chat_id,
-            url=repo_url,
-            content_type="repo",
-            message_id=ctx.message_id,
+
+    resp = await intake_commands.freestyle_command(ctx.chat_id, ctx.parts, message_id=ctx.message_id)
+
+    if resp.kind == "unsupported":
+        await send_message(
+            ctx.chat_id,
+            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+            "and allowlisted article domains.",
         )
-        await queue.enqueue({"task": "repo", "job_id": job_id})
-        await send_message(ctx.chat_id, f"📥 Received!\njob_{job_id[-4:]}")
-        return
-    await _handle_freestyle_url(ctx.chat_id, url, pipeline, ctx.message_id)
+    elif pipeline_preview == "repo":
+        await send_message(ctx.chat_id, f"📥 Received!\njob_{resp.job_id[-4:]}")
+    else:
+        # long/article/short/document/unsized — every pipeline that reaches
+        # `freestyle_command`'s state-arming tail gets the same force-reply;
+        # long and article additionally get a head-start message.
+        if pipeline_preview == "long":
+            await send_message(
+                ctx.chat_id,
+                f"📥 Received\n✨ Kicking off Gemini analysis (freestyle)\njob_{resp.job_id[-4:]}",
+            )
+        elif pipeline_preview == "article":
+            await send_message(
+                ctx.chat_id, f"📥 Article received — reply with your prompt\njob_{resp.job_id[-4:]}"
+            )
+        await send_force_reply(
+            ctx.chat_id,
+            "✍️ Reply with your Gemini prompt (reply within 10 min; /cancel to abandon)",
+            input_field_placeholder="Your Gemini prompt...",
+        )
+        log.info(
+            "freestyle.url.received", chat_id=ctx.chat_id, job_id=resp.job_id, pipeline=pipeline_preview
+        )
 
 
 async def _cmd_cancel(ctx: SlashCtx) -> None:
