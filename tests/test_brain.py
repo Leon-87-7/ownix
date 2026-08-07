@@ -254,6 +254,72 @@ async def test_soft_dedup_seen_count():
         # and the per-URL description is persisted.
         assert row["title"] == "Example Tool — Official Site"
         assert row["description"] == GOOD_DESC
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_touch_existing_link_updates_drive_file_in_place():
+    """#493 regression: re-ingesting a known URL must update the existing
+    Drive file, not create a second one that orphans drive_file_id."""
+    import aiosqlite
+    import tempfile
+    import os
+    from src.brain import ingest_links, SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    url TEXT,
+                    drive_url TEXT
+                );
+                INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                """
+            )
+            await conn.commit()
+
+        url = "https://example.com/tool"
+        link = {"url": url, "title": "Example Tool"}
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+             patch("src.brain.update_file", new_callable=AsyncMock) as mock_update, \
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Example Tool — Official Site", GOOD_DESC, True)),
+             ):
+
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_embed.return_value = _rand_vec()
+            mock_upload.return_value = ("file-id-123", "https://drive.google.com/file/x")
+            mock_update.return_value = "https://drive.google.com/file/x"
+
+            await ingest_links([link], topic="tools", source_job_id="job_001")
+            mock_upload.assert_awaited_once()  # first sighting: create the file
+
+            await ingest_links([link], topic="tools", source_job_id="job_001")
+            # Second sighting: update the SAME file, never a second upload.
+            mock_upload.assert_awaited_once()
+            mock_update.assert_awaited_once()
+            assert mock_update.await_args.args[0] == "file-id-123"
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT drive_file_id FROM links WHERE url = ?", (url,)
+            )
+            row = await cursor.fetchone()
+        assert row["drive_file_id"] == "file-id-123"
 
     finally:
         os.unlink(db_path)

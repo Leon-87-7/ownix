@@ -14,7 +14,7 @@ import numpy as np
 
 from src.config import settings
 from src.database import generate_id
-from src.services.drive import upload_file
+from src.services.drive import update_file, upload_file
 from src.utils.logger import get_logger
 from src.utils.og_image import extract_og_image_url
 from src.utils.public_html import fetch_public_html
@@ -393,13 +393,13 @@ async def _rewrite_existing_md(
         last_seen_at=updated_row["last_seen_at"] if updated_row else last_seen,
         related_titles=related_titles,
     )
-    slug = _slugify(existing_title)
+    # The only caller (_touch_existing_link) checks existing["drive_file_id"]
+    # before calling here, so it is always present — update in place rather
+    # than uploading a fresh file every re-sighting (#493). upload_file was
+    # the wrong call: it orphaned a new Drive .md on every existing-link
+    # touch instead of updating the one drive_file_id already points at.
     try:
-        await upload_file(
-            md_text,
-            f"{slug}.md",
-            settings.GOOGLE_DRIVE_FOLDER_BRAIN,
-        )
+        await update_file(existing["drive_file_id"], md_text)
     except Exception as exc:
         log.warning("brain.drive_rewrite_failed", url=url, error=str(exc))
 
