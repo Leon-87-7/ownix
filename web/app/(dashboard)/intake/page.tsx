@@ -84,6 +84,7 @@ function IntakeWorkspace() {
 
   const handleSaveOffer = useCallback(
     async (action: IntakeActionShape) => {
+      setError(null);
       const response = await applyIntakeAction(action);
       setOpenOfferId(null);
       // Retire the offer so a later `y` can't find and resubmit it.
@@ -113,6 +114,7 @@ function IntakeWorkspace() {
 
   const handleAction = useCallback(
     async (action: IntakeActionShape) => {
+      setError(null);
       setPendingActionId(action.action_id);
       try {
         const response = await applyIntakeAction(action);
