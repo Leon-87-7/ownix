@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
-from src.intake import idempotency, mime_sniff, quota, rate_limit, state
+from src.intake import commands, idempotency, mime_sniff, quota, rate_limit, state
 from src.intake.models import IntakeAction, IntakeActor, IntakeFile, IntakeMessage
 from src.intake.router import handle as handle_intake_message
 
@@ -192,6 +192,16 @@ async def post_intake_action(request: Request, body: IntakeActionRequest) -> dic
 
 class IntakeStateResponse(BaseModel):
     pending: dict | None = None
+
+
+@intake_router.get("/commands")
+async def get_intake_commands() -> dict:
+    """Commands this channel actually accepts, for the composer palette (#484).
+
+    Derived from `SHARED_COMMANDS` rather than hardcoded, so a migrated command
+    lights up its own palette entry on landing.
+    """
+    return {"commands": commands.palette()}
 
 
 @intake_router.get("/state")

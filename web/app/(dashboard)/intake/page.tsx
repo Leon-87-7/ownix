@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Inbox } from 'lucide-react';
 
@@ -48,21 +48,32 @@ function IntakeWorkspace() {
   // Declared before the submit handlers so each can hand the card a `retry`
   // that replays its own original input. Upload retries only work in the
   // session that made them — a `File` can't be persisted (issue #483).
+  //
+  // Each closes over its own identity (`sendText` inside `sendText`), which
+  // eslint's react-hooks/immutability rule flags as "accessed before
+  // declared" — a style warning, not a bug: `retry` is a lazily-invoked
+  // closure, so by the time it runs the surrounding `const` is long assigned.
+  // Routed through a stable ref instead of silencing the rule, so a future
+  // `add` change can't leave `retry` pointing at a stale submit function.
+  const sendTextRef = useRef<(value: string) => Promise<void>>(async () => {});
   const sendText = useCallback(
     async (value: string) => {
       const response = await submitIntakeText(value);
-      add({ echo: value, response, retry: () => sendText(value) });
+      add({ echo: value, response, retry: () => sendTextRef.current(value) });
     },
     [add],
   );
+  sendTextRef.current = sendText;
 
+  const sendUploadRef = useRef<(file: File) => Promise<void>>(async () => {});
   const sendUpload = useCallback(
     async (file: File) => {
       const response = await submitIntakeUpload(file);
-      add({ echo: file.name, response, retry: () => sendUpload(file) });
+      add({ echo: file.name, response, retry: () => sendUploadRef.current(file) });
     },
     [add],
   );
+  sendUploadRef.current = sendUpload;
 
   // The newest un-answered create-tag offer, if any. `y` in the composer opens
   // it — presentation over the action envelope, never server-side pending state

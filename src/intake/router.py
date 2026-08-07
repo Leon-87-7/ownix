@@ -159,10 +159,10 @@ async def apply_tag_tokens(
 async def _dispatch_command(chat_id: int, text: str) -> IntakeResponse:
     parts = text.split()
     cmd = parts[0].lower()
-    handler = commands.SHARED_COMMANDS.get(cmd)
-    if handler is None:
+    command = commands.SHARED_COMMANDS.get(cmd)
+    if command is None:
         return responses.unsupported(f"Unknown or not-yet-migrated command: {cmd}")
-    return await handler(chat_id, parts)
+    return await command.handler(chat_id, parts)
 
 
 __all__ = ["handle", "actor_key", "apply_tag_tokens"]

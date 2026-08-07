@@ -1,11 +1,20 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
+
+import {
+  IntakeCommandPalette,
+  commandQuery,
+  matchCommands,
+  useIntakeCommands,
+} from '@/components/intake/intake-command-palette';
 
 /**
  * The one intake input: paste a URL, type a command, or write a note. Fixed
  * height (no autogrow) so repeated submits don't reflow the page around the
  * composer — DESIGN.md's "stable composer height" requirement.
+ *
+ * Typing `/` at the start opens the command palette (issue #484).
  */
 export function IntakeComposer({
   onSubmit,
@@ -20,6 +29,20 @@ export function IntakeComposer({
 }) {
   const [value, setValue] = useState(initialValue);
   const [submitting, setSubmitting] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const commands = useIntakeCommands();
+  const listId = useId();
+  const activeOptionId = useId();
+
+  const query = commandQuery(value);
+  const matches = query === null ? [] : matchCommands(commands, query);
+  const paletteOpen = matches.length > 0;
+
+  const complete = (name: string) => {
+    // Trailing space puts the cursor where the arguments go.
+    setValue(`${name} `);
+    setActiveIndex(0);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,6 +57,24 @@ export function IntakeComposer({
     }
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!paletteOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % matches.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => (i - 1 + matches.length) % matches.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      // Enter completes the command rather than submitting a half-typed one.
+      e.preventDefault();
+      complete(matches[Math.min(activeIndex, matches.length - 1)].name);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setValue('');
+    }
+  };
+
   const busy = disabled || submitting;
 
   return (
@@ -41,13 +82,31 @@ export function IntakeComposer({
       onSubmit={handleSubmit}
       className="flex flex-col gap-3"
     >
+      {paletteOpen && (
+        <IntakeCommandPalette
+          commands={matches}
+          activeIndex={Math.min(activeIndex, matches.length - 1)}
+          onSelect={(c) => complete(c.name)}
+          listId={listId}
+          activeOptionId={activeOptionId}
+        />
+      )}
       <textarea
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setActiveIndex(0);
+        }}
+        onKeyDown={handleKeyDown}
         placeholder="Paste a URL, type a command like /help, or write a note…"
         rows={4}
         disabled={busy}
         aria-label="Intake composer"
+        role="combobox"
+        aria-expanded={paletteOpen}
+        aria-controls={paletteOpen ? listId : undefined}
+        aria-activedescendant={paletteOpen ? activeOptionId : undefined}
+        aria-autocomplete="list"
         className="h-[104px] w-full resize-none rounded-md border border-line bg-surface p-3 font-sans text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-signal disabled:opacity-50"
       />
       <div className="flex items-center justify-end">
