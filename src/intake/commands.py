@@ -27,9 +27,13 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from src.intake import responses, state
 from src.intake.models import IntakeResponse
+from src.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 Handler = Callable[[int, list[str]], Awaitable[IntakeResponse]]
 
@@ -114,10 +118,83 @@ async def find_command(chat_id: int, parts: list[str]) -> IntakeResponse:
     return IntakeResponse(kind="command_result", text=text, artifacts=results)
 
 
+async def force_command(
+    chat_id: int, parts: list[str], *, message_id: int | None = None
+) -> IntakeResponse:
+    """Force-reprocess a URL (issue #486). Migrated from `_cmd_force`.
+
+    Not a pipeline override — there is no such argument. Three states, same as
+    the Telegram original: reset + reprocess if a job already exists (bypassing
+    `create_and_enqueue_job`'s dedup, which is the entire point of the
+    command); clear an orphaned markdown-cache row if only that exists;
+    otherwise detect the pipeline normally and create a job directly.
+
+    `message_id` is Telegram-only metadata (which message to reply to), passed
+    through as plain data rather than widening this into a Telegram-aware
+    function — the dashboard simply omits it.
+    """
+    from src import database, queue
+    from src.services.jobs import task_for_content_type
+    from src.utils.validators import detect_pipeline, normalize_repo_url
+
+    if len(parts) < 2:
+        return responses.command_result("Usage: /force <url>")
+    url = parts[1]
+
+    extra_domains = await database.list_allowed_domains(chat_id)
+    pipeline = detect_pipeline(url, frozenset(extra_domains))
+    lookup_url = normalize_repo_url(url) if pipeline == "repo" else url
+    existing_job = (
+        await database.find_recent_job_by_url(chat_id, lookup_url)
+        if pipeline != "rejected"
+        else None
+    )
+    existing_cache = await database.get_markdown_cache(url)
+
+    if existing_job:
+        if existing_cache:
+            await database.delete_markdown_cache(url)
+        job_id = existing_job["id"]
+        await database.reset_job(job_id)
+        task_type = task_for_content_type(existing_job.get("content_type"), default="video")
+        if pipeline == "repo":
+            try:
+                path_parts = [s for s in urlparse(lookup_url).path.split("/") if s]
+                owner_r, repo_r = path_parts[0], path_parts[1]
+                redis_client = queue._client()
+                await redis_client.delete(
+                    f"github_repo_bundle:{owner_r}/{repo_r}",
+                    f"github_meta:{owner_r}/{repo_r}",
+                )
+            except Exception:
+                log.warning("force.repo_cache_clear_failed", url=lookup_url)
+        await queue.enqueue({"task": task_type, "job_id": job_id})
+        return responses.action_ack(f"Force-reprocessing job_{job_id[-4:]}.", job_id=job_id)
+
+    if existing_cache:
+        await database.delete_markdown_cache(url)
+        return responses.command_result("Markdown cache cleared for that URL.")
+
+    if pipeline == "rejected":
+        return responses.unsupported(
+            "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
+            "Facebook/X video, allowlisted article domains, and GitHub repos."
+        )
+
+    url_to_store = normalize_repo_url(url) if pipeline == "repo" else url
+    job_id = await database.create_job(
+        chat_id=chat_id, url=url_to_store, content_type=pipeline, message_id=message_id
+    )
+    task_type = task_for_content_type(pipeline, default="video")
+    await queue.enqueue({"task": task_type, "job_id": job_id})
+    return responses.job_created({"id": job_id, "content_type": pipeline})
+
+
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
     "/find": Command("/find", "<query>", find_command),
+    "/force": Command("/force", "<url>", force_command),
 }
 
 

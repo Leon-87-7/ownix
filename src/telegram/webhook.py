@@ -794,72 +794,32 @@ async def _cmd_addlink(ctx: SlashCtx) -> None:
 
 
 async def _cmd_force(ctx: SlashCtx) -> None:
+    # All three states (reset+reprocess / clear orphaned cache / create) are
+    # shared with the dashboard's /force (issue #486,
+    # src/intake/commands.py:force_command) — only this emoji rendering, and
+    # attaching ctx.message_id to a freshly created job, stay Telegram-only.
+    from src.intake import commands as intake_commands
+
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /force <url>")
         return
-    url = ctx.parts[1]
 
-    # Check for existing job and/or markdown cache row.
-    extra_domains = await database.list_allowed_domains(ctx.chat_id)
-    pipeline = detect_pipeline(url, frozenset(extra_domains))
-    lookup_url = normalize_repo_url(url) if pipeline == "repo" else url
-    existing_job = (
-        await database.find_recent_job_by_url(ctx.chat_id, lookup_url)
-        if pipeline != "rejected"
-        else None
+    resp = await intake_commands.force_command(
+        ctx.chat_id, ctx.parts, message_id=ctx.message_id
     )
-    existing_cache = await database.get_markdown_cache(url)
 
-    if existing_job:
-        # State 1: job exists (with or without a cache row) — reset + reprocess.
-        if existing_cache:
-            await database.delete_markdown_cache(url)
-        job_id = existing_job["id"]
-        await database.reset_job(job_id)
-        content_type = existing_job.get("content_type")
-        task_type = task_for_content_type(content_type, default="video")
-        if pipeline == "repo":
-            try:
-                parts = [s for s in urlparse(lookup_url).path.split("/") if s]
-                owner_r, repo_r = parts[0], parts[1]
-                redis_client = queue._client()
-                await redis_client.delete(
-                    f"github_repo_bundle:{owner_r}/{repo_r}",
-                    f"github_meta:{owner_r}/{repo_r}",
-                )
-                log.info("force.repo_bundle_cache_cleared", owner=owner_r, repo=repo_r)
-            except Exception:
-                log.warning("force.repo_cache_clear_failed", url=lookup_url)
-        await queue.enqueue({"task": task_type, "job_id": job_id})
-        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
-        return
-
-    if existing_cache:
-        # State 2: cache-only — delete cache and acknowledge.
-        await database.delete_markdown_cache(url)
-        await send_message(ctx.chat_id, "🗑️ Markdown cache cleared for that URL.")
-        log.info("force.cache_only_cleared", chat_id=ctx.chat_id, url=url)
-        return
-
-    # State 3: neither — create and dispatch.
-    if pipeline == "rejected":
+    if resp.kind == "unsupported":
         await send_message(
             ctx.chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
             "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
             "and allowlisted article domains.",
         )
-        return
-    url_to_store = normalize_repo_url(url) if pipeline == "repo" else url
-    job_id = await database.create_job(
-        chat_id=ctx.chat_id,
-        url=url_to_store,
-        content_type=pipeline,
-        message_id=ctx.message_id,
-    )
-    task_type = task_for_content_type(pipeline, default="video")
-    await queue.enqueue({"task": task_type, "job_id": job_id})
-    await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
+    elif resp.kind == "command_result":
+        # Only reachable non-usage case left is "cache cleared".
+        await send_message(ctx.chat_id, f"🗑️ {resp.text}")
+    else:
+        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{resp.job_id[-4:]}")
 
 
 def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
