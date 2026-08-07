@@ -83,9 +83,13 @@ export function useIntakeThread() {
   }, [items, hydrated]);
 
   /**
-   * One request per tick regardless of card count. Intake-created jobs are the
-   * newest rows (`list_jobs` orders `created_at DESC`), so a window sized to the
-   * card count always contains them — no `?ids=` filter needed.
+   * One request per tick regardless of card count. Intake-created jobs are
+   * usually the newest rows (`list_jobs` orders `created_at DESC`), so a
+   * window sized to the card count almost always contains them without a
+   * `?ids=` filter this endpoint doesn't have. An id that falls outside the
+   * window (older jobs pushed out by newer ones elsewhere) keeps its prior
+   * resolved state rather than being assumed deleted — a real deletion is
+   * still caught once the job re-enters the window on a later poll tick.
    */
   const refreshIds = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -99,11 +103,8 @@ export function useIntakeThread() {
     setItems((prev) =>
       prev.map((item) => {
         const jobId = item.response.job_id;
-        if (!jobId) return item;
-        const job = byId.get(jobId);
-        // Absent from the window means the job was deleted — resolve to null so
-        // the card stops claiming to be in flight forever.
-        return { ...item, job: job ?? null };
+        if (!jobId || !byId.has(jobId)) return item;
+        return { ...item, job: byId.get(jobId) ?? null };
       }),
     );
   }, []);
@@ -146,5 +147,23 @@ export function useIntakeThread() {
 
   const clear = useCallback(() => setItems([]), []);
 
-  return { items, hydrated, add, clear, refresh };
+  // Drops a saved offer (e.g. a `create_tag` action) from whichever item
+  // still lists it, so a later `y` doesn't resurface and resubmit it.
+  const removeAction = useCallback((actionId: string) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.response.actions.some((a) => a.action_id === actionId)
+          ? {
+              ...item,
+              response: {
+                ...item.response,
+                actions: item.response.actions.filter((a) => a.action_id !== actionId),
+              },
+            }
+          : item,
+      ),
+    );
+  }, []);
+
+  return { items, hydrated, add, clear, refresh, removeAction };
 }

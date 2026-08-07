@@ -118,6 +118,10 @@ class TestPostIntakeMessage:
 class TestCommandPalette:
     """`GET /api/intake/commands` — the palette's source of truth (issue #484)."""
 
+    def test_auth_required(self, intake_client: TestClient) -> None:
+        resp = intake_client.get("/api/intake/commands")
+        assert resp.status_code == 401
+
     def test_lists_the_shared_commands_with_hints(self, intake_client) -> None:
         _login(intake_client)
         resp = intake_client.get("/api/intake/commands")

@@ -151,8 +151,51 @@ describe('IntakePage', () => {
     render(<IntakePage />);
 
     await waitFor(() => expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument());
+    // "A restored video" only renders via the done-only PreviewCard branch
+    // (compact variant drops the status badge, so there's no literal "done" text).
     await waitFor(() => expect(screen.getByText('A restored video')).toBeInTheDocument());
     expect(screen.queryByText(/processing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/view job/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps a job unresolved rather than reporting it deleted when the /api/jobs window never includes it', async () => {
+    const user = userEvent.setup();
+    const mockFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/api/intake/state')) return jsonResponse({ pending: null });
+      // Newer jobs elsewhere always fill the window — j1 never appears in it.
+      if (url.includes('/api/jobs')) {
+        return jsonResponse({ items: [], total: 0, page: 1, limit: 20 });
+      }
+      if (url.includes('/api/intake/message') && init?.method === 'POST') {
+        return jsonResponse({
+          schema_version: 1,
+          kind: 'job_created',
+          text: 'Received — job_abcd (short).',
+          job_id: 'j1',
+          job_url: '/jobs/j1',
+          actions: [],
+          artifacts: [],
+          retryable: false,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    };
+    vi.spyOn(global, 'fetch').mockImplementation(mockFetch);
+
+    render(<IntakePage />);
+    const composer = await screen.findByLabelText(/intake composer/i);
+    await user.type(composer, 'https://youtube.com/shorts/abc123');
+    await user.click(screen.getByRole('button', { name: /send/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument(),
+    );
+    // Never resolved (not in any window), never confirmed deleted either —
+    // the "View job" link is the unresolved-state affordance, not the
+    // deleted-job message.
+    expect(screen.getByRole('link', { name: /view job/i })).toBeInTheDocument();
+    expect(screen.queryByText(/job no longer exists/i)).not.toBeInTheDocument();
   });
 
   it('starts empty when the browser session had nothing stored', async () => {

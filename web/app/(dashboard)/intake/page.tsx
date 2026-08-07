@@ -40,7 +40,7 @@ export default function IntakePage() {
 function IntakeWorkspace() {
   const searchParams = useSearchParams();
   const prefillUrl = searchParams.get('url') ?? '';
-  const { items, add } = useIntakeThread();
+  const { items, add, removeAction } = useIntakeThread();
   const [error, setError] = useState<string | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [openOfferId, setOpenOfferId] = useState<string | null>(null);
@@ -86,9 +86,11 @@ function IntakeWorkspace() {
     async (action: IntakeActionShape) => {
       const response = await applyIntakeAction(action);
       setOpenOfferId(null);
+      // Retire the offer so a later `y` can't find and resubmit it.
+      removeAction(action.action_id);
       add({ response });
     },
-    [add],
+    [add, removeAction],
   );
 
   const handleSubmit = useCallback(

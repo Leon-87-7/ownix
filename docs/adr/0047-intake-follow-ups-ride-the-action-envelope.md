@@ -53,9 +53,12 @@ pending `chat_state` mode is added for them.**
   with no server-side row.
 - `src/api/intake.py` builds the action message with a deterministic
   `idempotency_key` of `f"action:{action_id}"`, so the router's existing
-  per-`(actor, idempotency_key)` cache already gives "a double-fired action does
-  not double-apply" (documented in `src/intake/actions.py`). Follow-ups inherit
-  that for free.
+  per-`(actor, idempotency_key)` cache suppresses most double-fires for free.
+  The correctness guarantee itself is the handler's own normalized lookup
+  (e.g. `_create_tag`'s tag-name normalization before create, documented in
+  `src/intake/actions.py`) — the cache is duplicate suppression on top, not
+  the thing a follow-up handler may rely on for data safety, since cache
+  entries are not retained indefinitely.
 - New follow-up kinds are one branch each in `actions.apply()`, beside the
   existing `cancel_pending` and `retry_job`.
 - Because `IntakeAction` is the channel-neutral replacement for a Telegram

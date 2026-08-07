@@ -24,7 +24,7 @@ def normalize(name: str) -> str:
     survive — a regex class would blank them and make every non-Latin tag
     collide on the empty string.
     """
-    return "".join(ch for ch in name.lower() if ch.isalnum())
+    return "".join(ch for ch in name.casefold() if ch.isalnum())
 
 
 def extract(text: str) -> tuple[str, list[str]]:

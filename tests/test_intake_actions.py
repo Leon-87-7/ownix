@@ -214,6 +214,32 @@ class TestCreateTagAction:
         attached = asyncio.run(database.list_job_tags("job_tag_3"))
         assert [t["name"] for t in attached] == ["Read Later"]
 
+    def test_concurrent_create_same_name_does_not_raise_or_duplicate(
+        self, action_client: TestClient
+    ) -> None:
+        """Two requests racing on the same exact name both miss the pre-insert
+        lookup; the DB's UNIQUE(chat_id, name) constraint must not surface as
+        an unhandled exception, and only one tag must land."""
+        from src.intake.actions import _create_tag
+        from src.intake.models import IntakeAction
+
+        asyncio.run(_insert_job("job_tag_race"))
+
+        async def _run() -> None:
+            action = IntakeAction(
+                action_id="create-tag-race",
+                kind="create_tag",
+                job_id="job_tag_race",
+                payload={"tag_name": "Racey"},
+            )
+            results = await asyncio.gather(
+                _create_tag(CHAT_ID, action), _create_tag(CHAT_ID, action)
+            )
+            assert all(r.kind == "action_ack" for r in results)
+
+        asyncio.run(_run())
+        assert len([t for t in self._tags() if t["name"] == "Racey"]) == 1
+
     def test_rejects_a_foreign_job(self, action_client: TestClient) -> None:
         asyncio.run(_insert_job("job_tag_foreign", chat_id=OTHER_CHAT_ID))
         _login(action_client)

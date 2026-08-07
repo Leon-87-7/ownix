@@ -106,7 +106,7 @@ export function IntakeResponseCard({
 
         {/* The finished PreviewCard is itself a link to the job, so the text
             link is only needed until then. */}
-        {response.job_id && job?.status !== 'done' && (
+        {response.job_id && job !== null && job?.status !== 'done' && (
           <Link
             href={response.job_url ?? `/jobs/${response.job_id}`}
             className="mt-2 inline-block text-sm font-medium text-signal hover:text-signal-bright"

@@ -165,4 +165,4 @@ async def _dispatch_command(chat_id: int, text: str) -> IntakeResponse:
     return await command.handler(chat_id, parts)
 
 
-__all__ = ["handle", "actor_key", "apply_tag_tokens"]
+__all__ = ["actor_key", "apply_tag_tokens", "handle"]

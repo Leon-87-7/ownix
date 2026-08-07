@@ -79,3 +79,7 @@ class TestNormalize:
 
     def test_matches_existing_tag_name(self) -> None:
         assert tag_tokens.normalize("#readlater".lstrip("#")) == tag_tokens.normalize("Read Later")
+
+    def test_casefold_beyond_ascii_lower(self) -> None:
+        """`str.lower` doesn't case-fold; `Straße`/`STRASSE` must still collide."""
+        assert tag_tokens.normalize("Straße") == tag_tokens.normalize("STRASSE")

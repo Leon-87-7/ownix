@@ -241,18 +241,20 @@ async def freestyle_command(
         template="freestyle",
     )
     await database.update_job_status(job_id, "pending", template_detection_method="explicit_command")
+    await state.set_state(chat_id, "awaiting_freestyle", job_id, expires_minutes=10)
     if pipeline == "long":
         await queue.enqueue({"task": "video", "job_id": job_id})
-    await state.set_state(chat_id, "awaiting_freestyle", job_id, expires_minutes=10)
     return responses.job_created({"id": job_id, "content_type": pipeline})
 
 
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
-    "/find": Command("/find", "<query>", find_command),
-    "/force": Command("/force", "<url>", force_command),
-    "/freestyle": Command("/freestyle", "<url>", freestyle_command),
+    "/find": Command("/find", "search your processed content", find_command, args="<query>"),
+    "/force": Command("/force", "reprocess a URL (skip cache)", force_command, args="<url>"),
+    "/freestyle": Command(
+        "/freestyle", "use a custom Gemini prompt for the next job", freestyle_command, args="<url>"
+    ),
 }
 
 

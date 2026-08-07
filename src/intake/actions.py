@@ -9,6 +9,8 @@ to implement the actual per-`kind` effect, not its own idempotency tracking.
 
 from __future__ import annotations
 
+import aiosqlite
+
 from src import database
 from src.intake import commands, responses, tag_tokens
 from src.intake.models import IntakeAction, IntakeMessage, IntakeResponse
@@ -40,6 +42,14 @@ async def _create_tag(chat_id: int, action: IntakeAction) -> IntakeResponse:
     lookup runs first, so a double-fire — or a tag someone created from the
     Controls page between the offer and the save — reuses the existing row
     instead of colliding with `UNIQUE(chat_id, name)`.
+
+    The lookup-then-insert isn't wrapped in a single transaction, so two
+    concurrent requests for the same exact name can both miss the lookup and
+    race on the DB's UNIQUE(chat_id, name) constraint; the loser re-reads
+    instead of raising.
+    # ponytail: races only close for exact-name collisions, not
+    # differently-cased names sharing a normalized key — that needs a
+    # normalized-name UNIQUE constraint (schema migration) if it matters.
     """
     payload = action.payload or {}
     name = str(payload.get("tag_name") or "").strip()
@@ -56,15 +66,22 @@ async def _create_tag(chat_id: int, action: IntakeAction) -> IntakeResponse:
     tag = existing.get(key)
     created = tag is None
     if tag is None:
-        tag = await database.create_tag(
-            chat_id=chat_id,
-            name=name,
-            meaning=str(payload.get("meaning") or ""),
-            # The form always sends a palette colour; the schema default is only
-            # a backstop for a caller that omits it.
-            color=str(payload.get("color") or "#8b5cf6"),
-            icon=payload.get("icon") or None,
-        )
+        try:
+            tag = await database.create_tag(
+                chat_id=chat_id,
+                name=name,
+                meaning=str(payload.get("meaning") or ""),
+                # The form always sends a palette colour; the schema default is only
+                # a backstop for a caller that omits it.
+                color=str(payload.get("color") or "#8b5cf6"),
+                icon=payload.get("icon") or None,
+            )
+        except aiosqlite.IntegrityError:
+            created = False
+            existing = {t["name"]: t for t in await database.list_tags(chat_id)}
+            tag = existing.get(name)
+            if tag is None:
+                raise
 
     if action.job_id:
         await database.attach_job_tag(action.job_id, tag["id"])

@@ -195,12 +195,14 @@ class IntakeStateResponse(BaseModel):
 
 
 @intake_router.get("/commands")
-async def get_intake_commands() -> dict:
+async def get_intake_commands(request: Request) -> dict:
     """Commands this channel actually accepts, for the composer palette (#484).
 
     Derived from `SHARED_COMMANDS` rather than hardcoded, so a migrated command
     lights up its own palette entry on landing.
     """
+    chat_id: int = request.state.user["id"]
+    rate_limit.enforce(f"state:{chat_id}", max_requests=60)
     return {"commands": commands.palette()}
 
 

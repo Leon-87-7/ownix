@@ -30,13 +30,14 @@ export function IntakeComposer({
   const [value, setValue] = useState(initialValue);
   const [submitting, setSubmitting] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [paletteDismissed, setPaletteDismissed] = useState(false);
   const commands = useIntakeCommands();
   const listId = useId();
   const activeOptionId = useId();
 
   const query = commandQuery(value);
   const matches = query === null ? [] : matchCommands(commands, query);
-  const paletteOpen = matches.length > 0;
+  const paletteOpen = !paletteDismissed && matches.length > 0;
 
   const complete = (name: string) => {
     // Trailing space puts the cursor where the arguments go.
@@ -71,7 +72,7 @@ export function IntakeComposer({
       complete(matches[Math.min(activeIndex, matches.length - 1)].name);
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setValue('');
+      setPaletteDismissed(true);
     }
   };
 
@@ -96,6 +97,7 @@ export function IntakeComposer({
         onChange={(e) => {
           setValue(e.target.value);
           setActiveIndex(0);
+          setPaletteDismissed(false);
         }}
         onKeyDown={handleKeyDown}
         placeholder="Paste a URL, type a command like /help, or write a note…"

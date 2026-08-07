@@ -56,6 +56,12 @@ default points.
 
 This applies to all seven pipelines, not only the high-N ones.
 
+**Implementation status:** this decision is accepted but not yet wired up — `delete_job`
+(`src/database.py:2353-2368`) still unconditionally runs the old
+`DELETE FROM links WHERE source_job = ?` cascade. Flipping the default and adding the
+`with_links=1` opt-in (route, delete-confirm checkbox, link count) is tracked as follow-up
+work, not part of this documentation change.
+
 ## Considered options
 
 - **Keep the cascade, add a confirmation dialog naming the count.** Rejected: it makes the
@@ -88,7 +94,12 @@ This applies to all seven pipelines, not only the high-N ones.
   untouched.
 - **`database.delete_link`'s ownership derivation is unaffected today** but simplifies once
   ADR-0043 lands: its `COALESCE`-through-`source_job` becomes a direct `chat_id = ?`, after
-  which no link operation reads `source_job` at all.
+  which no link operation reads `source_job` at all. Until then, a link whose owning job was
+  deleted (dangling `source_job`, the normal case per this ADR) falls back to the Operator
+  tenant — the original submitter can no longer delete it themselves, only the Operator can.
 - **Pre-existing bug, surfaced not fixed:** neither the old cascade nor `delete_link` removes
   the link's Drive `.md` node, so Brain Drive files orphan on every deletion path
-  (`# ponytail:` comment already at `database.py:2213`).
+  (`# ponytail:` comment already at `database.py:2213`). Neither the API response nor the
+  dashboard delete-confirm UI tells the user this — the retention is real but silent. Wiring a
+  durable Drive purge, or at minimum surfacing the retention in the confirm copy, is the same
+  follow-up work as the `with_links=1` opt-in above.
