@@ -12,9 +12,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   TagPlus,
-  TagX,
 } from 'lucide-react';
-import { PRESET_COLORS, IconPicker, TagMark } from '@/components/ui/tag-picker';
+import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
