@@ -365,6 +365,46 @@
   /* loop back to signal-deep */
 }
 
+@keyframes intake-shimmer {
+  from {
+    background-position: 200% center;
+  }
+
+  to {
+    background-position: -200% center;
+  }
+}
+
+/* Intake console in-flight label (#481). Two channels carry the state: this
+   shimmer says *alive*, the StatusBadge beside it says *where*. Colour stops
+   are ownix-logo-cycle's, so the console's motion reads as the same brand
+   gesture as the wordmark rather than a new visual language.
+
+   Everything lives inside the reduced-motion guard on purpose: the gradient
+   only works via `color: transparent` + background-clip, so leaving it applied
+   without the animation would freeze the label mid-gradient. Reduced motion
+   falls back to whatever solid text colour the element already carries. */
+@media (prefers-reduced-motion: no-preference) {
+  .intake-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      #a57534,
+      #d99a45,
+      #efb566,
+      #c6c1b8,
+      #9ec9ff,
+      #94e6ee,
+      #649ca1,
+      #a57534
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: intake-shimmer 3s linear infinite;
+  }
+}
+
 /* Sidebar brand reveal — fires only when the nav drawer opens (a state change,
    user-triggered, not page load). Base state is fully visible, so the header
    still renders without JS; these play on top when `open` flips true. No forwards

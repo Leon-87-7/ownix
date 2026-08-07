@@ -48,6 +48,15 @@
 | [#459](https://github.com/Leon-87-7/ownix/issues/459) | feat(telegram): scope /find and /rebuild-graph to the sender's own Brain | Telegram / Brain | #457 |
 | [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | #457 |
 | [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | #458 |
+| [#481](https://github.com/Leon-87-7/ownix/issues/481) | Live intake card — poll job state and render it walking the FSM | Intake / Console | — |
+| [#482](https://github.com/Leon-87-7/ownix/issues/482) | Parse #tag tokens in the intake router and attach existing tags | Intake / Router | — |
+| [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | — |
+| [#484](https://github.com/Leon-87-7/ownix/issues/484) | Slash-command palette with argument hints | Intake / Commands | — |
+| [#485](https://github.com/Leon-87-7/ownix/issues/485) | Migrate /find to shared intake commands | Intake / Commands | — |
+| [#486](https://github.com/Leon-87-7/ownix/issues/486) | Migrate /force to shared intake commands | Intake / Commands | — |
+| [#487](https://github.com/Leon-87-7/ownix/issues/487) | Migrate /freestyle to shared intake commands | Intake / Commands | — |
+| [#488](https://github.com/Leon-87-7/ownix/issues/488) | Persist the intake thread in sessionStorage | Intake / Console | #481 |
+| [#489](https://github.com/Leon-87-7/ownix/issues/489) | Offer inline tag creation when a #tag token is unknown | Intake / Tags | #482 |
 
 ---
 
@@ -535,6 +544,19 @@ Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-
     └── #479 Extension pairing auth (one-time token, hash-only)
 Critical path: #472 → #473 → {#474, #475, #477}; #476 parallel off #472; #478 → #479 parallel off #472
 Note: Phase 9 user_id identity migration and Phase 10 Discord adapter deferred per the plan's Non-Goals — not yet broken into issues.
+
+Intake console makeover — conversational + informing (grill 2026-08-06; CONTEXT.md "Intake console" / "Tag token", ADR-0047)
+#481 Live intake card — poll job state, shimmer + status badge, PreviewCard at done (root, unblocked)
+└── #488 Persist the intake thread in sessionStorage (restore path needs #481's polling to resolve real status)
+#482 Parse #tag tokens in the intake router; attach existing tags (root, unblocked)
+└── #489 Offer inline tag creation when a #tag token is unknown (ADR-0047 — action envelope, not chat_state)
+#483 Render the retry action on retryable intake errors (root, unblocked — retry_job already exists in actions.py)
+#484 Slash-command palette with argument hints (root, unblocked — derives its list from SHARED_COMMANDS)
+├── #485 Migrate /find to shared intake commands
+├── #486 Migrate /force to shared intake commands
+└── #487 Migrate /freestyle to shared intake commands
+Critical path: none — four independent roots (#481, #482, #483, #484). #488 off #481; #489 off #482.
+Note: #485/#486/#487 are drawn under #484 as *content*, not as blockers — the palette derives its list from SHARED_COMMANDS, so each migration lights up its own entry on landing and all four can proceed in parallel. Builds on the shipped intake-channels batch (#472–#479). Deliberately excluded: the other eleven Telegram commands, SSE, /undo, per-flow pending state, and ?tag= feed filtering (the last is in docs/TASK.md Inbox — #489's bare-token warning links nowhere until it exists).
 ```
 
 ---

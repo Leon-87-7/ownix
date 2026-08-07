@@ -14,8 +14,8 @@ migration is Phase 9, deferred), so every routing decision below keys off
 from __future__ import annotations
 
 from src import database
-from src.intake import commands, idempotency, responses
-from src.intake.models import SCHEMA_VERSION, IntakeMessage, IntakeResponse
+from src.intake import commands, idempotency, responses, tag_tokens
+from src.intake.models import SCHEMA_VERSION, IntakeAction, IntakeMessage, IntakeResponse
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline, normalize_repo_url
@@ -73,8 +73,18 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
     if not url and text.startswith("/"):
         return await _dispatch_command(chat_id, text)
 
+    # Strip `#tag` tokens before anything else looks at the text — the whole
+    # string used to reach `detect_pipeline`, so trailing tokens made an
+    # otherwise-valid URL unparseable (issue #482).
+    text, tag_names = tag_tokens.extract(text)
+
     candidate = url or text
     if not candidate:
+        if tag_names:
+            return responses.unsupported(
+                f"#{tag_names[0]} on its own has nothing to attach to — "
+                "send it with a URL or a file."
+            )
         return responses.unsupported("Send a URL, a command, or upload a file.")
 
     pipeline = detect_pipeline(candidate, frozenset(await database.list_allowed_domains(chat_id)))
@@ -88,16 +98,71 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
 
     url_for_job = normalize_repo_url(candidate) if pipeline == "repo" else candidate
     job = await create_and_enqueue_job(chat_id, url_for_job, pipeline)
-    return responses.job_created(job, deduped=bool(job.get("_deduped")))
+    result = responses.job_created(job, deduped=bool(job.get("_deduped")))
+    if tag_names:
+        result = await apply_tag_tokens(chat_id, job["id"], tag_names, result)
+    return result
+
+
+async def apply_tag_tokens(
+    chat_id: int,
+    job_id: str,
+    names: list[str],
+    result: IntakeResponse,
+) -> IntakeResponse:
+    """Attach every token that names an existing tag; report the rest.
+
+    Matching is on the normalized key, so `#readlater` finds an existing
+    "Read Later" instead of reading as a new tag (CONTEXT.md "Tag token").
+    An unmatched name never fails the submit — the job is already created.
+    """
+    existing = {tag_tokens.normalize(t["name"]): t for t in await database.list_tags(chat_id)}
+
+    attached: list[str] = []
+    unknown: list[str] = []
+    for name in names:
+        tag = existing.get(tag_tokens.normalize(name))
+        if tag is None:
+            unknown.append(name)
+            continue
+        await database.attach_job_tag(job_id, tag["id"])
+        attached.append(tag["name"])
+
+    notes = []
+    if attached:
+        notes.append("Tagged " + ", ".join(f"#{n}" for n in attached) + ".")
+    if unknown:
+        notes.append("No tag named " + ", ".join(f"#{n}" for n in unknown) + " yet.")
+
+    # One offer per unknown name. The console opens them one at a time, so each
+    # save is its own committed step — cancelling the second never rolls back
+    # the first (issue #489).
+    offers = [
+        IntakeAction(
+            action_id=f"create_tag:{job_id}:{tag_tokens.normalize(name)}",
+            kind="create_tag",
+            label=f"Create #{name}",
+            job_id=job_id,
+            payload={"tag_name": name},
+        )
+        for name in unknown
+    ]
+
+    update: dict = {}
+    if notes:
+        update["text"] = f"{result.text} " + " ".join(notes)
+    if offers:
+        update["actions"] = [*result.actions, *offers]
+    return result.model_copy(update=update) if update else result
 
 
 async def _dispatch_command(chat_id: int, text: str) -> IntakeResponse:
     parts = text.split()
     cmd = parts[0].lower()
-    handler = commands.SHARED_COMMANDS.get(cmd)
-    if handler is None:
+    command = commands.SHARED_COMMANDS.get(cmd)
+    if command is None:
         return responses.unsupported(f"Unknown or not-yet-migrated command: {cmd}")
-    return await handler(chat_id, parts)
+    return await command.handler(chat_id, parts)
 
 
-__all__ = ["handle", "actor_key"]
+__all__ = ["actor_key", "apply_tag_tokens", "handle"]

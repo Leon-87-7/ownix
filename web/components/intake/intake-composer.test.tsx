@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@/test/render';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IntakeComposer } from './intake-composer';
 
 describe('IntakeComposer', () => {
@@ -60,5 +60,85 @@ describe('IntakeComposer', () => {
     await user.click(button);
     expect(button).toBeDisabled();
     resolveSubmit!(true);
+  });
+});
+
+describe('IntakeComposer — command palette (#484)', () => {
+  const commands = [
+    { name: '/help', args: '', summary: 'this message', usage: '/help' },
+    { name: '/cancel', args: '', summary: 'cancel the current pending prompt', usage: '/cancel' },
+  ];
+
+  beforeEach(() => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/api/intake/commands')) {
+        return new Response(JSON.stringify({ commands }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+  });
+
+  it('opens on a leading slash and filters as you type', async () => {
+    const user = userEvent.setup();
+    render(<IntakeComposer onSubmit={vi.fn().mockResolvedValue(true)} />);
+
+    const composer = screen.getByLabelText(/intake composer/i);
+    await user.type(composer, '/');
+    await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+
+    await user.type(composer, 'ca');
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1));
+    expect(screen.getByRole('option')).toHaveTextContent('/cancel');
+  });
+
+  it('does not open for a slash inside a pasted URL', async () => {
+    const user = userEvent.setup();
+    render(<IntakeComposer onSubmit={vi.fn().mockResolvedValue(true)} />);
+
+    await user.type(screen.getByLabelText(/intake composer/i), 'https://youtube.com/shorts/abc');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('completes with Enter instead of submitting a half-typed command', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(<IntakeComposer onSubmit={onSubmit} />);
+
+    const composer = screen.getByLabelText(/intake composer/i);
+    await user.type(composer, '/ca');
+    await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
+    await user.keyboard('{Enter}');
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(composer).toHaveValue('/cancel ');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('is navigable by arrow keys', async () => {
+    const user = userEvent.setup();
+    render(<IntakeComposer onSubmit={vi.fn().mockResolvedValue(true)} />);
+
+    const composer = screen.getByLabelText(/intake composer/i);
+    await user.type(composer, '/');
+    await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(composer).toHaveValue('/cancel ');
+  });
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup();
+    render(<IntakeComposer onSubmit={vi.fn().mockResolvedValue(true)} />);
+
+    const composer = screen.getByLabelText(/intake composer/i);
+    await user.type(composer, '/');
+    await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 });
