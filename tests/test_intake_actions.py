@@ -215,15 +215,38 @@ class TestCreateTagAction:
         assert [t["name"] for t in attached] == ["Read Later"]
 
     def test_concurrent_create_same_name_does_not_raise_or_duplicate(
-        self, action_client: TestClient
+        self, action_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Two requests racing on the same exact name both miss the pre-insert
         lookup; the DB's UNIQUE(chat_id, name) constraint must not surface as
         an unhandled exception, and only one tag must land."""
+        from src import database
         from src.intake.actions import _create_tag
         from src.intake.models import IntakeAction
 
         asyncio.run(_insert_job("job_tag_race"))
+
+        # Synchronization barrier: ensures both tasks signal entry before either
+        # proceeds to the real insert, making the race deterministic.
+        entered = asyncio.Event()
+        call_count = 0
+        original_create_tag = database.create_tag
+
+        async def _barrier_create_tag(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First caller: wait for the second to also enter.
+                entered.set()
+                await asyncio.sleep(0.05)  # Give second task time to reach this point.
+            else:
+                # Second caller: signal that we're both here, then proceed.
+                await entered.wait()
+            # Both tasks now proceed to the real insert in parallel.
+            return await original_create_tag(**kwargs)
+
+        monkeypatch.setattr("src.database.create_tag", _barrier_create_tag)
+        monkeypatch.setattr("src.intake.actions.database.create_tag", _barrier_create_tag)
 
         async def _run() -> None:
             action = IntakeAction(
