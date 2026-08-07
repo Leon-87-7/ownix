@@ -112,3 +112,90 @@ describe('IntakeResponseCard', () => {
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
   });
 });
+
+describe('IntakeResponseCard — unknown tag offer (#489)', () => {
+  const offer = {
+    action_id: 'create_tag:j1:goto',
+    kind: 'create_tag',
+    label: 'Create #GoTo',
+    job_id: 'j1',
+    payload: { tag_name: 'GoTo' },
+  };
+
+  it('renders a closed offer as a button', () => {
+    render(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer] }) })}
+        onSaveOffer={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /create #goto/i })).toBeInTheDocument();
+  });
+
+  it('expands into the inline tag form when opened', () => {
+    render(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer] }) })}
+        openOfferId={offer.action_id}
+        onSaveOffer={vi.fn()}
+      />,
+    );
+    expect(screen.getByPlaceholderText(/tag name/i)).toHaveValue('GoTo');
+    expect(screen.getByRole('button', { name: /create tag/i })).toBeInTheDocument();
+  });
+
+  it('saves with the edited values and the original job id', async () => {
+    const user = userEvent.setup();
+    const onSaveOffer = vi.fn().mockResolvedValue(undefined);
+    render(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer] }) })}
+        openOfferId={offer.action_id}
+        onSaveOffer={onSaveOffer}
+      />,
+    );
+
+    const meaning = screen.getByPlaceholderText(/what this tag means/i);
+    await user.type(meaning, 'read soon');
+    await user.click(screen.getByRole('button', { name: /create tag/i }));
+
+    expect(onSaveOffer).toHaveBeenCalledTimes(1);
+    const sent = onSaveOffer.mock.calls[0][0];
+    expect(sent.job_id).toBe('j1');
+    expect(sent.payload.tag_name).toBe('GoTo');
+    expect(sent.payload.meaning).toBe('read soon');
+  });
+
+  it('tells you how many offers remain', () => {
+    const second = { ...offer, action_id: 'create_tag:j1:foo', payload: { tag_name: 'Foo' } };
+    render(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer, second] }) })}
+        openOfferId={offer.action_id}
+        onSaveOffer={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/1 more after this/i)).toBeInTheDocument();
+  });
+
+  it('gives each new tag a distinct default colour', () => {
+    const second = { ...offer, action_id: 'create_tag:j1:foo', payload: { tag_name: 'Foo' } };
+    const { rerender } = render(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer, second] }) })}
+        openOfferId={offer.action_id}
+        onSaveOffer={vi.fn()}
+      />,
+    );
+    const first = screen.getByRole('button', { name: /^color/i, pressed: true }).getAttribute('aria-label');
+    rerender(
+      <IntakeResponseCard
+        item={item({ response: response({ actions: [offer, second] }) })}
+        openOfferId={second.action_id}
+        onSaveOffer={vi.fn()}
+      />,
+    );
+    const nextColor = screen.getByRole('button', { name: /^color/i, pressed: true }).getAttribute('aria-label');
+    expect(nextColor).not.toBe(first);
+  });
+});

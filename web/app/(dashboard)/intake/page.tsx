@@ -43,6 +43,7 @@ function IntakeWorkspace() {
   const { items, add } = useIntakeThread();
   const [error, setError] = useState<string | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [openOfferId, setOpenOfferId] = useState<string | null>(null);
 
   // Declared before the submit handlers so each can hand the card a `retry`
   // that replays its own original input. Upload retries only work in the
@@ -63,9 +64,29 @@ function IntakeWorkspace() {
     [add],
   );
 
+  // The newest un-answered create-tag offer, if any. `y` in the composer opens
+  // it — presentation over the action envelope, never server-side pending state
+  // (ADR-0047).
+  const nextOffer = items
+    .flatMap((i) => i.response.actions)
+    .find((a) => a.kind === 'create_tag');
+
+  const handleSaveOffer = useCallback(
+    async (action: IntakeActionShape) => {
+      const response = await applyIntakeAction(action);
+      setOpenOfferId(null);
+      add({ response });
+    },
+    [add],
+  );
+
   const handleSubmit = useCallback(
     async (value: string): Promise<boolean> => {
       setError(null);
+      if (/^y(es)?$/i.test(value.trim()) && nextOffer) {
+        setOpenOfferId(nextOffer.action_id);
+        return true;
+      }
       try {
         await sendText(value);
         return true;
@@ -74,7 +95,7 @@ function IntakeWorkspace() {
         return false;
       }
     },
-    [sendText],
+    [sendText, nextOffer],
   );
 
   const handleAction = useCallback(
@@ -135,6 +156,9 @@ function IntakeWorkspace() {
         items={items}
         onAction={handleAction}
         pendingActionId={pendingActionId}
+        openOfferId={openOfferId}
+        onOpenOffer={setOpenOfferId}
+        onSaveOffer={handleSaveOffer}
       />
     </PageShell>
   );

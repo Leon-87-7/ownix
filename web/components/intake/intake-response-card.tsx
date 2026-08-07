@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { IntakeActions } from '@/components/intake/intake-actions';
 import { IntakeStatusLine } from '@/components/intake/intake-status-line';
+import { IntakeTagOffer } from '@/components/intake/intake-tag-offer';
 import { PreviewCard } from '@/components/feed/preview-card';
 import type { IntakeThreadItem } from '@/lib/hooks/useIntakeThread';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';
@@ -26,14 +27,27 @@ export function IntakeResponseCard({
   item,
   onAction,
   pendingActionId,
+  openOfferId,
+  onOpenOffer,
+  onSaveOffer,
 }: {
   item: IntakeThreadItem;
   onAction?: (action: IntakeActionShape) => void;
   pendingActionId?: string | null;
+  /** The one `create_tag` offer currently expanded — offers open one at a time. */
+  openOfferId?: string | null;
+  onOpenOffer?: (actionId: string | null) => void;
+  onSaveOffer?: (action: IntakeActionShape) => Promise<void>;
 }) {
   const { response, job, echo, retry } = item;
   const negative = NEGATIVE_KINDS.has(response.kind);
   const [retrying, setRetrying] = useState(false);
+
+  // `create_tag` renders as its own inline form, not as a generic action button.
+  const tagOffers = onSaveOffer
+    ? response.actions.filter((a) => a.kind === 'create_tag')
+    : [];
+  const plainActions = response.actions.filter((a) => !tagOffers.includes(a));
 
   const handleRetry = async () => {
     if (!retry || retrying) return;
@@ -101,12 +115,34 @@ export function IntakeResponseCard({
           </Link>
         )}
 
-        {onAction && (
+        {onAction && plainActions.length > 0 && (
           <IntakeActions
-            actions={response.actions}
+            actions={plainActions}
             onAction={onAction}
             pendingActionId={pendingActionId}
           />
+        )}
+
+        {tagOffers.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tagOffers.map((action, i) => (
+              <IntakeTagOffer
+                key={action.action_id}
+                action={action}
+                index={i}
+                total={tagOffers.length}
+                open={openOfferId === action.action_id}
+                onOpen={() => onOpenOffer?.(action.action_id)}
+                onCancel={() => onOpenOffer?.(null)}
+                onSave={(values) =>
+                  onSaveOffer!({
+                    ...action,
+                    payload: { ...action.payload, ...values, tag_name: values.name },
+                  })
+                }
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

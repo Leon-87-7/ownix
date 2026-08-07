@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from src import database
 from src.intake import commands, idempotency, responses, tag_tokens
-from src.intake.models import SCHEMA_VERSION, IntakeMessage, IntakeResponse
+from src.intake.models import SCHEMA_VERSION, IntakeAction, IntakeMessage, IntakeResponse
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
 from src.utils.validators import detect_pipeline, normalize_repo_url
@@ -132,10 +132,28 @@ async def apply_tag_tokens(
     if attached:
         notes.append("Tagged " + ", ".join(f"#{n}" for n in attached) + ".")
     if unknown:
-        notes.append("No tag named " + ", ".join(f"#{n}" for n in unknown) + ".")
+        notes.append("No tag named " + ", ".join(f"#{n}" for n in unknown) + " yet.")
+
+    # One offer per unknown name. The console opens them one at a time, so each
+    # save is its own committed step — cancelling the second never rolls back
+    # the first (issue #489).
+    offers = [
+        IntakeAction(
+            action_id=f"create_tag:{job_id}:{tag_tokens.normalize(name)}",
+            kind="create_tag",
+            label=f"Create #{name}",
+            job_id=job_id,
+            payload={"tag_name": name},
+        )
+        for name in unknown
+    ]
+
+    update: dict = {}
     if notes:
-        result = result.model_copy(update={"text": f"{result.text} " + " ".join(notes)})
-    return result
+        update["text"] = f"{result.text} " + " ".join(notes)
+    if offers:
+        update["actions"] = [*result.actions, *offers]
+    return result.model_copy(update=update) if update else result
 
 
 async def _dispatch_command(chat_id: int, text: str) -> IntakeResponse:

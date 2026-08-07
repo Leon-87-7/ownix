@@ -251,3 +251,30 @@ class TestIdempotentReplay:
         asyncio.run(router.handle(_msg(url="https://x", idempotency_key="idem-retry")))
 
         assert call_count == 2
+
+
+class TestUnknownTagOffer:
+    """An unknown `#tag` returns a create offer, never blocks the job (#489)."""
+
+    def test_unknown_tag_returns_a_create_tag_action(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(text="https://youtube.com/shorts/off1 #GoTo")))
+        assert resp.kind == "job_created"
+        assert [a.kind for a in resp.actions] == ["create_tag"]
+        assert resp.actions[0].payload["tag_name"] == "GoTo"
+        assert resp.actions[0].job_id == resp.job_id
+
+    def test_known_tag_produces_no_offer(self, db, monkeypatch: pytest.MonkeyPatch) -> None:
+        _enqueue_noop(monkeypatch)
+        asyncio.run(db.create_tag(chat_id=CHAT_ID, name="GoTo", meaning="", color="#4ade80"))
+        resp = asyncio.run(router.handle(_msg(text="https://youtube.com/shorts/off2 #GoTo")))
+        assert resp.actions == []
+
+    def test_two_unknown_tags_offer_one_each(self, db, monkeypatch: pytest.MonkeyPatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(text="https://youtube.com/shorts/off3 #GoTo #Foo")))
+        assert [a.payload["tag_name"] for a in resp.actions] == ["GoTo", "Foo"]
+        # Distinct ids, so the console can track which offer is open.
+        assert len({a.action_id for a in resp.actions}) == 2

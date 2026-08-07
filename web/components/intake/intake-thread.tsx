@@ -14,10 +14,16 @@ export function IntakeThread({
   items,
   onAction,
   pendingActionId,
+  openOfferId,
+  onOpenOffer,
+  onSaveOffer,
 }: {
   items: IntakeThreadItem[];
   onAction?: (action: IntakeActionShape) => void;
   pendingActionId?: string | null;
+  openOfferId?: string | null;
+  onOpenOffer?: (actionId: string | null) => void;
+  onSaveOffer?: (action: IntakeActionShape) => Promise<void>;
 }) {
   return (
     <div
@@ -33,6 +39,9 @@ export function IntakeThread({
             item={item}
             onAction={onAction}
             pendingActionId={pendingActionId}
+            openOfferId={openOfferId}
+            onOpenOffer={onOpenOffer}
+            onSaveOffer={onSaveOffer}
           />
         ))
       )}
