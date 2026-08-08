@@ -1158,6 +1158,75 @@ async def _refresh_one_link(
     return repaired_delta, matrix
 
 
+async def refresh_links_for_job(job_id: str) -> int:
+    """Enrich every unenriched link a specific job produced (#496, ADR-0048).
+
+    An import-scoped analogue of refresh_stale_links: selects by source_job
+    instead of oldest-first, so a Bookmark import's links get identity +
+    embeddings without waiting behind the global cron's existing backlog
+    (which, measured against the live database, is deep enough that a fresh
+    import would not be reached for weeks). No batch cap — this runs as its
+    own chained task (worker.py's _handle_bookmarks_enrich), decoupled from
+    the import job via the queue rather than run inline, so it does not block
+    that job's completion or the worker's own dequeue loop between awaits.
+
+    Best-effort: a failed or partial pass leaves rows exactly as
+    refresh_stale_links already expects them (description/embedding/
+    drive_file_id NULL), so the global sweep is still a correct, if slow,
+    fallback. Returns the count of rows touched.
+    """
+    import aiosqlite
+
+    if _rebuild_lock.locked():
+        log.info("brain.job_refresh_skipped", reason="rebuild_in_progress", job_id=job_id)
+        return 0
+
+    t0 = time.monotonic()
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+
+        cursor = await conn.execute(
+            """
+            SELECT * FROM links
+            WHERE source_job = ?
+              AND (embedding IS NULL OR drive_file_id IS NULL OR description IS NULL)
+            ORDER BY created_at ASC
+            """,
+            (job_id,),
+        )
+        batch_rows = [dict(r) for r in await cursor.fetchall()]
+
+        if not batch_rows:
+            log.info("brain.job_refresh_done", job_id=job_id, batch=0, repaired=0, duration_ms=0)
+            return 0
+
+        repair_ids = {r["id"] for r in batch_rows}
+
+        cursor4 = await conn.execute("SELECT id, embedding FROM links WHERE embedding IS NOT NULL")
+        corpus_rows = [dict(r) for r in await cursor4.fetchall()]
+        ids_list, matrix = _load_embeddings(corpus_rows)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        repaired = 0
+
+        for lnk in batch_rows:
+            delta, matrix = await _refresh_one_link(conn, lnk, repair_ids, ids_list, matrix, now_iso)
+            repaired += delta
+
+        await conn.commit()
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "brain.job_refresh_done",
+        job_id=job_id,
+        batch=len(batch_rows),
+        repaired=repaired,
+        duration_ms=duration_ms,
+    )
+    return repaired
+
+
 async def refresh_stale_links() -> None:
     """APScheduler job — repair NULL embeddings and refresh oldest Drive .md files."""
     import aiosqlite

@@ -7,7 +7,9 @@ Task discriminators handled by _dispatch:
     - 'repo'            → processors.repo.run
     - 'document'        → processors.document.run
     - 'link'            → processors.link.run
-    - 'bookmarks'       → processors.bookmarks.run (content_type stays 'link' — #492, ADR-0048)
+    - 'bookmarks'       → processors.bookmarks.run (content_type stays 'link' — #492, ADR-0048),
+                          which chains 'bookmarks_enrich' on success
+    - 'bookmarks_enrich' → brain.refresh_links_for_job (#496) — rowless (ADR-0046)
     - 'prd_auto'        → processors.prd.run_auto
     - 'prd_auto_resend' → processors.prd.run_auto_resend
     - 'prd_intent'      → processors.prd.run_intent
@@ -197,6 +199,32 @@ async def _handle_bookmarks(task: dict) -> None:
         log.exception("bookmarks_processor_error", job_id=job_id)
         await database.update_job_status(job_id, "error")
         await _notify_failure(job["chat_id"], job_id, "❌ Bookmark import failed. Please try again.")
+        return
+
+    # Chain the deferred enrichment pass (#496) — same "processor finishes,
+    # worker enqueues a follow-up task" shape as _maybe_auto_enqueue_enrichment
+    # above. A separate task, not inline: the import job is already 'done'
+    # and must not wait on hundreds of identity/embed/Drive calls.
+    await queue.enqueue({"task": "bookmarks_enrich", "job_id": job_id})
+
+
+async def _handle_bookmarks_enrich(task: dict) -> None:
+    """Best-effort enrichment for one Bookmark import's links (#496).
+
+    Never touches jobs.status — the import already completed. A failed or
+    partial pass simply leaves rows for the global refresh_stale_links sweep
+    to eventually repair, same as any other unenriched link. Exempted from
+    _dispatch's job-existence check (_ROWLESS_TASKS) because ADR-0046 means
+    the job may be legitimately deleted while its links — and their need for
+    enrichment — live on.
+    """
+    job_id = task["job_id"]
+    try:
+        from src import brain
+
+        await brain.refresh_links_for_job(job_id)
+    except Exception:
+        log.exception("bookmarks_enrich_failed", job_id=job_id)
 
 
 async def _reset_prd_slot_and_notify(job_id: str, status_col: str, buttons: list) -> None:
@@ -283,13 +311,17 @@ _TASK_HANDLERS = {
     "document": _handle_document,
     "link": _handle_link,
     "bookmarks": _handle_bookmarks,
+    "bookmarks_enrich": _handle_bookmarks_enrich,
     "prd_auto": _handle_prd_auto,
     "prd_auto_resend": _handle_prd_auto_resend,
     "prd_intent": _handle_prd_intent,
     "job_purge": _handle_job_purge,
 }
 
-_ROWLESS_TASKS = {"job_purge"}  # operate on a job that is already deleted
+_ROWLESS_TASKS = {
+    "job_purge",  # operates on a job that is already deleted
+    "bookmarks_enrich",  # #496: must still enrich links whose job was deleted (ADR-0046)
+}
 
 
 async def _dispatch(task: dict) -> None:
