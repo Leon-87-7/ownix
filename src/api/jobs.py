@@ -604,6 +604,15 @@ async def get_job(job_id: str, request: Request) -> dict:
     return detail
 
 
+@jobs_router.get("/{job_id}/link-topics")
+async def get_job_link_topics(job_id: str, request: Request) -> list[dict]:
+    """Distinct folders among this job's Brain links (#497 — the
+    folder-to-tag opt-in form). Re-openable any time: topic is persisted at
+    import regardless of whether the form is ever used."""
+    await get_owned_job(job_id, request)
+    return await database.list_job_link_topics(job_id)
+
+
 @jobs_router.delete("/{job_id}", status_code=204)
 async def delete_job(job_id: str, request: Request, with_links: bool = False) -> Response:
     """Job delete: remove owned database state and durably record its Job purge.

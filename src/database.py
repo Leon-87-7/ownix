@@ -2357,6 +2357,24 @@ async def count_job_links(job_id: str) -> int:
     return row["n"] if row else 0
 
 
+async def list_job_link_topics(job_id: str) -> list[dict]:
+    """Distinct folder/topic groups among one job's links (#497 — the
+    folder-to-tag opt-in form). Grouped in Python, not SQL GROUP_CONCAT: the
+    row count per job is small (hundreds at most) and avoids parsing a
+    delimited string back into an id list."""
+    rows = await _fetch_dicts(
+        "SELECT id, topic FROM links WHERE source_job = ? AND topic IS NOT NULL AND topic != ''",
+        (job_id,),
+    )
+    groups: dict[str, list[str]] = {}
+    for row in rows:
+        groups.setdefault(row["topic"], []).append(row["id"])
+    return [
+        {"topic": topic, "link_ids": ids, "count": len(ids)}
+        for topic, ids in sorted(groups.items())
+    ]
+
+
 async def delete_job(
     job_id: str, purge_payload: dict[str, Any] | None = None, *, with_links: bool = False
 ) -> bool:

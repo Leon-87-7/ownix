@@ -630,6 +630,41 @@ def test_delete_job_unknown_and_foreign_leave_rows_intact(
     assert asyncio.run(jobs.database.get_job("owned-by-a")) is not None
 
 
+def test_get_job_link_topics_returns_owned_jobs_folders(
+    jobs_client: TestClient,
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                """INSERT INTO links (id, url, topic, source_job, last_seen_at, created_at, updated_at)
+                   VALUES ('l1', 'https://a.com', 'screeners', 'owner-job', 't', 't', 't')"""
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    resp = jobs_client.get("/api/jobs/owner-job/link-topics")
+
+    assert resp.status_code == 200
+    assert resp.json() == [{"topic": "screeners", "link_ids": ["l1"], "count": 1}]
+
+
+def test_get_job_link_topics_forbidden_for_foreign_job(
+    jobs_client: TestClient,
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_b)
+
+    resp = jobs_client.get("/api/jobs/owner-job/link-topics")
+
+    assert resp.status_code == 403
+
+
 class TestJobThumbnailCaching:
     def test_first_request_sets_cache_control_and_etag(self, jobs_client: TestClient) -> None:
         _insert_thumbnail_job("s1", chat_id=1)
