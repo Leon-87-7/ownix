@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import html
+import hmac
 import random
 import re
 import time
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src import database
 from src.auth import session as session_store
@@ -139,6 +140,11 @@ class EmailPayload(BaseModel):
     email: str
 
 
+class ReviewerLoginPayload(BaseModel):
+    email: str = Field(..., max_length=254)
+    password: str = Field(..., max_length=256)
+
+
 @auth_router.post("/telegram")
 async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
     # Build string-typed dict for HMAC verification (Telegram uses string values)
@@ -149,6 +155,62 @@ async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
         raise HTTPException(status_code=401, detail="Invalid Telegram auth payload")
 
     return await _login_telegram_user(payload, response)
+
+
+@auth_router.post("/reviewer-login")
+async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> dict:
+    """Temporary email+code login for Chrome Web Store review.
+
+    This is not a general auth provider. It exists so external reviewers can
+    exercise the extension pairing flow without a Telegram account.
+    """
+    configured_email = normalize_email(settings.REVIEWER_LOGIN_EMAIL)
+    submitted_email = normalize_email(payload.email)
+    configured_password = settings.REVIEWER_LOGIN_PASSWORD
+    submitted_password = payload.password.strip()
+    if not (settings.REVIEWER_LOGIN_ENABLED and configured_email and configured_password):
+        raise HTTPException(status_code=404, detail="Reviewer login is disabled")
+    if submitted_email != configured_email or not hmac.compare_digest(
+        submitted_password,
+        configured_password,
+    ):
+        raise HTTPException(status_code=401, detail="Invalid reviewer credentials")
+
+    tg_id = settings.REVIEWER_LOGIN_TG_ID
+    await database.upsert_user(
+        tg_id=tg_id,
+        username="chrome_reviewer",
+        first_name="Chrome Reviewer",
+        last_name=None,
+        photo_url=None,
+    )
+    await database.set_user_email(tg_id, configured_email)
+    await database.set_user_status(tg_id, "approved")
+    session_id = await session_store.mint(
+        {
+            "id": tg_id,
+            "first_name": "Chrome Reviewer",
+            "username": "chrome_reviewer",
+            "photo_url": None,
+            "source": "reviewer_login",
+        }
+    )
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=_COOKIE_MAX_AGE,
+        path="/",
+    )
+    response.delete_cookie(
+        "ownix_preview",
+        path="/",
+        secure=settings.SESSION_COOKIE_SECURE,
+    )
+    log.info("auth.reviewer_login", tg_id=tg_id)
+    return {"ok": True}
 
 
 @auth_router.get("/handoff", response_class=HTMLResponse)

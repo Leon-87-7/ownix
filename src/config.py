@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     DASHBOARD_URL: str = ""
     DEV_LOGIN_ENABLED: bool = False
 
+    # Temporary Chrome Web Store review access. Keep disabled except during
+    # external review windows; rotate REVIEWER_LOGIN_PASSWORD every time.
+    REVIEWER_LOGIN_ENABLED: bool = False
+    REVIEWER_LOGIN_EMAIL: str = ""
+    REVIEWER_LOGIN_PASSWORD: str = ""
+    REVIEWER_LOGIN_TG_ID: int = 900_000_001
+
     # Ops bot (ADR-0036) — separate internal Telegram operations surface.
     OPS_BOT_TOKEN: str = ""
     OPS_WEBHOOK_SECRET: str = ""

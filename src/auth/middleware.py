@@ -20,6 +20,7 @@ _OPEN_API_PATHS = frozenset(
     [
         "/api/auth/telegram",
         "/api/auth/dev-login",
+        "/api/auth/reviewer-login",
         "/api/auth/miniapp/session",
         "/api/auth/handoff",
         "/api/google/callback",

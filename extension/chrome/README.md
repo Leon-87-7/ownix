@@ -34,6 +34,25 @@ against the dashboard's `vig_session` cookie; that never actually worked,
 since the cookie is `SameSite=Lax` and Lax cookies aren't sent on a
 cross-origin `fetch()` from an extension-origin context — only pairing does.)
 
+## Chrome Web Store reviewer access
+
+Chrome reviewers need to exercise the dashboard pairing flow before the
+extension is live, but they should not need Telegram. During the review window
+only, enable the temporary reviewer login on the web app/API:
+
+```
+REVIEWER_LOGIN_ENABLED=true
+REVIEWER_LOGIN_EMAIL=<reviewer email shown in Chrome Web Store test instructions>
+REVIEWER_LOGIN_PASSWORD=<single-use review code>
+NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED=1
+```
+
+Give Chrome the email/code in **Test instructions** and tell them to sign in at
+`/login`, then open **Settings → Chrome Extension**, generate a pairing code,
+and paste it into the extension Options page. After the extension is approved
+and live, disable `REVIEWER_LOGIN_ENABLED` and remove
+`NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED` before the next production deploy.
+
 ## Load-unpacked / dev install
 
 1. `cd extension/chrome && npm install`

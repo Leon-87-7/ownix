@@ -59,6 +59,15 @@ describe('LoginPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps reviewer access hidden unless the review flag is enabled', () => {
+    render(<LoginPage />);
+
+    expect(screen.queryByLabelText('Reviewer access')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Sign in for review' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows a fallback when the Telegram widget fails to load', async () => {
     render(<LoginPage />);
 
@@ -150,6 +159,73 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry Telegram sign-in' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows reviewer access when enabled and posts credentials to the reviewer endpoint', async () => {
+    vi.stubEnv('NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED', '1');
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+    });
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText('Reviewer access'), {
+      target: { value: 'reviewer@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Reviewer code'), {
+      target: { value: 'review-code' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in for review' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/reviewer-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'reviewer@example.com',
+        password: 'review-code',
+      }),
+    });
+    await waitFor(() => expect(window.location.href).toBe('/feed'));
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  it('shows reviewer credential errors without redirecting', async () => {
+    vi.stubEnv('NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED', 'true');
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status: 401 })));
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText('Reviewer access'), {
+      target: { value: 'reviewer@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('Reviewer code'), {
+      target: { value: 'bad-code' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in for review' }));
+
+    expect(
+      await screen.findByText('Reviewer sign-in failed. Check the email and code.'),
+    ).toBeInTheDocument();
+    expect(window.location.href).toBe('');
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
   it('shows a localhost dev login fallback that uses the backend dev endpoint', async () => {
