@@ -1,17 +1,11 @@
 import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initOptions } from '../src/options';
 
 function buildDom(): Document {
-  const dom = new JSDOM(`
-    <body>
-      <p id="connection-status"></p>
-      <input id="pairing-code" type="text" />
-      <button id="pair">Connect</button>
-      <button id="disconnect" type="button">Disconnect</button>
-      <p id="pairing-status"></p>
-    </body>
-  `);
+  const html = readFileSync('options.html', 'utf8');
+  const dom = new JSDOM(html);
   return dom.window.document;
 }
 

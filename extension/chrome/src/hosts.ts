@@ -1,7 +1,6 @@
 const DEFAULT_HOST = 'https://app.leondev.xyz';
-const LOCAL_DEV_HOST = 'http://localhost:8000';
 
-const ALLOWED_OWNIX_ORIGINS = [DEFAULT_HOST, LOCAL_DEV_HOST] as const;
+const ALLOWED_OWNIX_ORIGINS = [DEFAULT_HOST] as const;
 
 export type AllowedOwnixOrigin = (typeof ALLOWED_OWNIX_ORIGINS)[number];
 
@@ -41,8 +40,6 @@ export function fetchExtensionToken(origin: AllowedOwnixOrigin, init: RequestIni
   switch (origin) {
     case DEFAULT_HOST:
       return fetch('https://app.leondev.xyz/api/extension/token', init);
-    case LOCAL_DEV_HOST:
-      return fetch('http://localhost:8000/api/extension/token', init);
   }
 }
 
@@ -50,8 +47,6 @@ export function fetchIntakeMessage(origin: AllowedOwnixOrigin, init: RequestInit
   switch (origin) {
     case DEFAULT_HOST:
       return fetch('https://app.leondev.xyz/api/intake/message', init);
-    case LOCAL_DEV_HOST:
-      return fetch('http://localhost:8000/api/intake/message', init);
   }
 }
 

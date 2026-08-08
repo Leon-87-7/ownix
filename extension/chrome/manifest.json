@@ -18,8 +18,7 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://app.leondev.xyz/*",
-    "http://localhost/*"
+    "https://app.leondev.xyz/*"
   ],
   "options_page": "options.html",
   "icons": {
