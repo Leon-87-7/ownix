@@ -118,9 +118,9 @@ async def attach_link_tag(link_id: str, tag_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Tag not found")
     try:
         await database.attach_link_tag(link_id, tag_id)
-    except Exception:
+    except Exception as exc:
         # FK violation — the link row doesn't exist.
-        raise HTTPException(status_code=404, detail="Link not found")
+        raise HTTPException(status_code=404, detail="Link not found") from exc
     return {
         "id": tag["id"],
         "name": tag["name"],

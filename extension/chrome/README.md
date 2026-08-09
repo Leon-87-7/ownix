@@ -40,18 +40,23 @@ Chrome reviewers need to exercise the dashboard pairing flow before the
 extension is live, but they should not need Telegram. During the review window
 only, enable the temporary reviewer login on the web app/API:
 
-```
+```dotenv
 REVIEWER_LOGIN_ENABLED=true
 REVIEWER_LOGIN_EMAIL=<reviewer email shown in Chrome Web Store test instructions>
 REVIEWER_LOGIN_PASSWORD=<single-use review code>
 NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED=1
 ```
 
+Set `NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED` before building the web application,
+then deploy that build so the reviewer form is included in the client bundle.
 Give Chrome the email/code in **Test instructions** and tell them to sign in at
 `/login`, then open **Settings → Chrome Extension**, generate a pairing code,
 and paste it into the extension Options page. After the extension is approved
-and live, disable `REVIEWER_LOGIN_ENABLED` and remove
-`NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED` before the next production deploy.
+and live, disable `REVIEWER_LOGIN_ENABLED`, remove
+`NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED`, and remove or rotate
+`REVIEWER_LOGIN_EMAIL` and `REVIEWER_LOGIN_PASSWORD` before the next production
+deploy. Deploying with reviewer login disabled rejects existing reviewer
+sessions as well as new `/reviewer-login` requests.
 
 ## Load-unpacked / dev install
 

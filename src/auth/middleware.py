@@ -8,6 +8,7 @@ from starlette.responses import JSONResponse
 
 from src import database
 from src.auth import extension_tokens, session as session_store
+from src.config import settings
 
 COOKIE_NAME = "vig_session"
 _BEARER_PREFIX = "bearer "
@@ -88,6 +89,14 @@ class SessionMiddleware(BaseHTTPMiddleware):
                 if handoff_session_id:
                     user = await session_store.resolve(handoff_session_id)
         if user is None:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if (
+            not settings.REVIEWER_LOGIN_ENABLED
+            and (
+                user.get("source") == "reviewer_login"
+                or user.get("username") == "chrome_reviewer"
+            )
+        ):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
         request.state.user = user

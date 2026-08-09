@@ -171,24 +171,24 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
     if not (settings.REVIEWER_LOGIN_ENABLED and configured_email and configured_password):
         raise HTTPException(status_code=404, detail="Reviewer login is disabled")
     if submitted_email != configured_email or not hmac.compare_digest(
-        submitted_password,
-        configured_password,
+        submitted_password.encode("utf-8"),
+        configured_password.encode("utf-8"),
     ):
         raise HTTPException(status_code=401, detail="Invalid reviewer credentials")
 
-    tg_id = settings.REVIEWER_LOGIN_TG_ID
+    reviewer_id = settings.REVIEWER_LOGIN_USER_ID
     await database.upsert_user(
-        tg_id=tg_id,
+        tg_id=reviewer_id,
         username="chrome_reviewer",
         first_name="Chrome Reviewer",
         last_name=None,
         photo_url=None,
     )
-    await database.set_user_email(tg_id, configured_email)
-    await database.set_user_status(tg_id, "approved")
+    await database.set_user_email(reviewer_id, configured_email)
+    await database.set_user_status(reviewer_id, "approved")
     session_id = await session_store.mint(
         {
-            "id": tg_id,
+            "id": reviewer_id,
             "first_name": "Chrome Reviewer",
             "username": "chrome_reviewer",
             "photo_url": None,
@@ -209,7 +209,7 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
         path="/",
         secure=settings.SESSION_COOKIE_SECURE,
     )
-    log.info("auth.reviewer_login", tg_id=tg_id)
+    log.info("auth.reviewer_login", reviewer_id=reviewer_id)
     return {"ok": True}
 
 

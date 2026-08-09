@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     REVIEWER_LOGIN_ENABLED: bool = False
     REVIEWER_LOGIN_EMAIL: str = ""
     REVIEWER_LOGIN_PASSWORD: str = ""
-    REVIEWER_LOGIN_TG_ID: int = 900_000_001
+    REVIEWER_LOGIN_USER_ID: int = -900_000_001
 
     # Ops bot (ADR-0036) — separate internal Telegram operations surface.
     OPS_BOT_TOKEN: str = ""
