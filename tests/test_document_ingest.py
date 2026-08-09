@@ -85,19 +85,15 @@ async def test_office_file_accepted_by_extension(patched):
 )
 async def test_macro_enabled_office_mime_accepted_without_filename(patched, monkeypatch, mime_type):
     webhook, m = patched
-    spawned = []
+    spawn_background = MagicMock(side_effect=lambda coro: coro.close())
 
-    def fake_spawn(coro):
-        spawned.append(coro)
-        coro.close()
-
-    monkeypatch.setattr(webhook, "spawn_background", fake_spawn)
+    monkeypatch.setattr(webhook, "spawn_background", spawn_background)
     doc = {"file_id": "F1", "mime_type": mime_type, "file_size": 100}
 
     await webhook._handle_document_update(chat_id=42, message={"message_id": 1}, document=doc)
 
     m["send_message"].assert_not_called()
-    assert len(spawned) == 1
+    spawn_background.assert_called_once()
 
 
 @pytest.mark.asyncio

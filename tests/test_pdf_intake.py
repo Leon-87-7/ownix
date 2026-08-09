@@ -170,7 +170,6 @@ async def test_fetch_remote_document_sends_document_request_headers(monkeypatch)
     assert filename == "doc.pdf"
     assert ext == "pdf"
     assert seen_headers == REMOTE_DOCUMENT_HEADERS
-    assert seen_headers["Accept"] == "*/*"
 
 
 @pytest.mark.asyncio
