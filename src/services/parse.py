@@ -9,6 +9,7 @@ and docs/plans/anydoc-office-parsing-spike.md.
 from __future__ import annotations
 
 import asyncio
+from urllib.parse import urlsplit
 
 import anydoc
 import liteparse
@@ -54,9 +55,12 @@ def _norm_ext(ext: str) -> str:
 
 def _ext_from_name(name: str | None) -> str:
     """Lowercased extension of a filename/path, or '' when there is none."""
-    if not name or "." not in name:
+    if not name:
         return ""
-    return name.rsplit(".", 1)[-1].lower()
+    leaf = urlsplit(name).path.rsplit("/", 1)[-1]
+    if "." not in leaf:
+        return ""
+    return leaf.rsplit(".", 1)[-1].lower()
 
 
 def detect_format(data: bytes, filename: str | None = None) -> str | None:

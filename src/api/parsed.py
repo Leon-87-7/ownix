@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from src import database, queue
+from src import database
 from src.api.deps import get_owned_job
 from src.intake import mime_sniff
 from src.processors import document as document_processor
@@ -22,6 +22,7 @@ from src.services.pdf_intake import (
     read_capped_body,
     validate_document,
 )
+from src.services.jobs import create_and_enqueue_job
 from src.telegram.sender import send_document
 from src.utils.logger import get_logger
 
@@ -60,13 +61,13 @@ async def _create_document_job(chat_id: int, data: bytes, filename: str) -> dict
     sha = _sha(data)
     key = storage.object_key("documents", sha, ext)
     await storage.upload(key, data, parse.content_type_for(ext))
-    job_id = await database.create_job(chat_id=chat_id, url=key, content_type="document")
+    job = await create_and_enqueue_job(chat_id=chat_id, url=key, content_type="document")
+    job_id = job["id"]
     # Dashboard uploads default to NOT delivering to Telegram (user opts in via
     # the per-job toggle). Bot-submitted jobs keep the DB default ('on') so the
     # existing Telegram flow is unchanged.
     await database.set_job_telegram_delivery(job_id, "off")
-    await queue.enqueue({"task": "document", "job_id": job_id})
-    return {"job_id": job_id, "sha256": sha, "gcs_key": key, "status": "pending"}
+    return {"job_id": job_id, "sha256": sha, "gcs_key": key, "status": job.get("status", "pending")}
 
 
 async def _ocr_image_response(chat_id: int, data: bytes, content_type: str) -> dict:
@@ -98,6 +99,11 @@ async def upload_document(request: Request) -> dict:
     else:
         data = await read_capped_body(request)
         filename = request.headers.get("x-filename", "document")
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail={"field": "file", "message": "File must be 20 MB or smaller"},
+        )
     # Images aren't documents — content-sniff and fork them to photo-OCR.
     sniffed = mime_sniff.sniff(data)
     if sniffed is not None and sniffed.startswith("image/"):
@@ -128,9 +134,10 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
     try:
         text = await document_processor._cached_parse(job["url"], "txt")
     except ParseError as exc:
-        # Scanned/image-only source (or a prior failed parse): surface as a readable
-        # 422 instead of a generic 500.
-        raise HTTPException(status_code=422, detail={"field": "job", "message": "Document text could not be extracted (scanned or image-only file)"}) from exc
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "job", "message": "Document text could not be extracted"},
+        ) from exc
     from src.services.gemini import generate
     if kind == "clean":
         instruction = "Clean this parsed document text into well-formatted Markdown while preserving the same content."

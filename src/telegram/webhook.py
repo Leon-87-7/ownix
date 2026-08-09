@@ -2012,7 +2012,11 @@ _DOC_TOO_LARGE_MSG = (
 )
 
 
-_DOCUMENT_MIMES = frozenset(MIME_BY_EXT.values())
+_DOCUMENT_MIMES = frozenset(MIME_BY_EXT.values()) | {
+    "application/vnd.ms-word.document.macroEnabled.12",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+}
 
 
 async def _handle_document_update(chat_id: int, message: dict, document: dict) -> None:

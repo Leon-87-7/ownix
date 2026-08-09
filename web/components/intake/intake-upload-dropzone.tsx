@@ -6,7 +6,7 @@ import { FileUp } from 'lucide-react';
 /** Document/image upload for `/intake` (issue #475, multi-format per ADR-0023).
  *  The server content-sniffs the bytes — this `accept` is only a picker hint. */
 const ACCEPTED_INTAKE_FILES =
-  '.pdf,.doc,.docx,.docm,.odt,.rtf,.epub,.ppt,.pptx,.pptm,.odp,.xls,.xlsx,.xlsm,.ods,image/*';
+  '.pdf,.doc,.docx,.docm,.odt,.rtf,.epub,.ppt,.pptx,.pptm,.odp,.xls,.xlsx,.xlsm,.ods,.csv,image/*';
 export function IntakeUploadDropzone({
   onUploaded,
   onError,

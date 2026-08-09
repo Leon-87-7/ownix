@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from src.services.pdf_intake import (
     MAX_PDF_BYTES,
-    REMOTE_PDF_HEADERS,
+    REMOTE_DOCUMENT_HEADERS,
     assert_public_host,
     fetch_remote_document,
     read_capped_body,
@@ -137,7 +137,7 @@ async def test_fetch_remote_document_accepts_office_url(monkeypatch, office_samp
 
 
 @pytest.mark.asyncio
-async def test_fetch_remote_document_sends_pdf_request_headers(monkeypatch):
+async def test_fetch_remote_document_sends_document_request_headers(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
     seen_headers = {}
 
@@ -169,7 +169,8 @@ async def test_fetch_remote_document_sends_pdf_request_headers(monkeypatch):
     assert data == b"%PDF-1.4 small"
     assert filename == "doc.pdf"
     assert ext == "pdf"
-    assert seen_headers == REMOTE_PDF_HEADERS
+    assert seen_headers == REMOTE_DOCUMENT_HEADERS
+    assert seen_headers["Accept"] == "*/*"
 
 
 @pytest.mark.asyncio

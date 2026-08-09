@@ -20,3 +20,9 @@ async def test_parse_pdf_raises_catchable_parse_error_on_garbage():
 
     with pytest.raises(ParseError):
         await parse_pdf(b"this is not a pdf at all")
+
+
+def test_detect_format_accepts_csv_url_with_query_string():
+    from src.services.parse import detect_format
+
+    assert detect_format(b"name,value\none,1\n", "https://example.com/data.csv?download=1") == "csv"

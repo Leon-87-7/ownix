@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@/test/render';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import DocParserPage from './page';
 
 class MockEventSource {
@@ -14,18 +16,27 @@ vi.mock('@/components/doc-parser/telegram-toggle', () => ({
   TelegramToggle: () => <button>Telegram</button>,
 }));
 
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.stubGlobal('EventSource', MockEventSource);
 });
 
 afterEach(() => {
+  server.resetHandlers();
   vi.restoreAllMocks();
 });
+afterAll(() => server.close());
+
+function useJobs(items: unknown[]) {
+  server.use(http.get('/api/jobs', () => HttpResponse.json({ items })));
+}
 
 describe('DocParserPage', () => {
   it('shows an empty state when there are no documents', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    useJobs([]);
 
     render(<DocParserPage />);
 
@@ -38,7 +49,7 @@ describe('DocParserPage', () => {
       { id: '2', url: 'documents/bbb.docx', status: 'done', created_at: 'x' },
       { id: '3', url: 'documents/ccc.xlsx', status: 'done', created_at: 'x' },
     ];
-    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items })));
+    useJobs(items);
 
     render(<DocParserPage />);
 
@@ -57,14 +68,17 @@ describe('DocParserPage', () => {
   });
 
   it('shows a loading skeleton before the first response resolves', async () => {
-    let resolveFetch: (v: Response) => void;
-    vi.spyOn(global, 'fetch').mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }) as unknown as Promise<Response>);
+    let resolveJobs: ((v: Response) => void) | undefined;
+    server.use(
+      http.get('/api/jobs', () => new Promise<Response>((resolve) => { resolveJobs = resolve; })),
+    );
 
     const { container } = render(<DocParserPage />);
 
     expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+    await waitFor(() => expect(resolveJobs).toBeTypeOf('function'));
     await act(async () => {
-      resolveFetch!(new Response(JSON.stringify({ items: [] })));
+      resolveJobs?.(HttpResponse.json({ items: [] }));
     });
   });
 });

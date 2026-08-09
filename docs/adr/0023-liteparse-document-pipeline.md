@@ -122,13 +122,18 @@ Drive.
 
 ## Decision
 
-**1. Liteparse runs in its own `vig-document` sidecar container.**
+**1. Liteparse runs in its own `vig-document` sidecar container.** **Superseded
+for current implementation by the 2026-08-09 anydoc update above.** This remains
+historical context for the original Office/image plan.
 This mirrors the `vig-transcript` sidecar (yt-dlp) and the weight-quarantine
 reasoning of [ADR-0017](0017-notebooklm-push-forked-sidecar.md) (Chromium). The
 sidecar owns LibreOffice/ImageMagick/Tesseract; `vig-worker` and `vig-api` stay
 lean. The worker calls it over HTTP.
 
 **2. The sidecar contract is: GCS object reference in, plain text out.**
+**Superseded for current implementation by inline parsing in `vig-worker`.** The
+HTTP contract below describes the deferred sidecar design, not the shipped Office
+path.
 The file is already in GCS at ingestion time, so the worker sends a reference
 (not bytes); the sidecar pulls the bytes itself, runs `liteparse.parse()`, and
 returns the layout-ordered **plain text** (`ParseResult.text`). The sidecar is
@@ -203,7 +208,7 @@ flagged upgrade path.
 
 ## Consequences
 
-- **Pro:** `vig-worker`/`vig-api` images stay lean; the ~1GB native-binary
+- **Superseded historical pro:** `vig-worker`/`vig-api` images stay lean; the ~1GB native-binary
   stack is quarantined in `vig-document`.
 - **Pro:** Storage and cache are one thing — a GCS exists-check replaces a DB
   cache table, and the raw file + parsed Markdown sit together.
@@ -212,7 +217,7 @@ flagged upgrade path.
 - **Pro:** The pipeline slots into existing patterns (`_dispatch`, Sheets tabs,
   Freestyle seam) with one genuinely new module (`storage.py`), which the
   platform-storage migration needs anyway.
-- **Con:** A new always-on sidecar container to operate, monitor, and resource
+- **Superseded historical con:** A new always-on sidecar container to operate, monitor, and resource
   (LibreOffice is memory-hungry on large files).
 - **Con:** GCS is now on the document-ingestion hot path; a GCS outage blocks
   document jobs (other pipelines unaffected).
