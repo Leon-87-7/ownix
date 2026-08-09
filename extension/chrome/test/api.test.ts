@@ -48,22 +48,23 @@ describe('getOwnixHost / setOwnixHost', () => {
     expect(await getOwnixHost()).toBe('https://app.leondev.xyz');
   });
 
-  it('returns a saved allowlisted host, normalized to its origin', async () => {
+  it('returns a saved production host, normalized to its origin', async () => {
     vi.stubGlobal('chrome', fakeChromeStorage());
-    await setOwnixHost('http://localhost:8000/path');
-    expect(await getOwnixHost()).toBe('http://localhost:8000');
+    await setOwnixHost('https://app.leondev.xyz/settings');
+    expect(await getOwnixHost()).toBe('https://app.leondev.xyz');
   });
 
   it('rejects anything outside the Ownix host allowlist instead of storing it', async () => {
     vi.stubGlobal('chrome', fakeChromeStorage());
     await expect(setOwnixHost('javascript:alert(1)')).rejects.toThrow(/must be one of/i);
+    await expect(setOwnixHost('http://localhost:8000')).rejects.toThrow(/must be one of/i);
     await expect(setOwnixHost('https://custom.example.com')).rejects.toThrow(/must be one of/i);
   });
 });
 
 describe('sendToOwnix', () => {
   it('throws when the extension has not been paired yet (no stored token)', async () => {
-    vi.stubGlobal('chrome', fakeChromeStorage({ ownixHost: 'http://localhost:8000' }));
+    vi.stubGlobal('chrome', fakeChromeStorage());
     vi.stubGlobal('fetch', vi.fn());
 
     await expect(sendToOwnix({ url: 'https://example.com/a' })).rejects.toThrow(/not paired/i);
@@ -72,7 +73,7 @@ describe('sendToOwnix', () => {
   it('posts the payload with an Idempotency-Key header and a bearer token, never a cookie', async () => {
     vi.stubGlobal(
       'chrome',
-      fakeChromeStorage({ ownixHost: 'http://localhost:8000', ownixExtensionToken: 'paired-token' }),
+      fakeChromeStorage({ ownixExtensionToken: 'paired-token' }),
     );
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -93,7 +94,7 @@ describe('sendToOwnix', () => {
     const result = await sendToOwnix({ url: 'https://example.com/a' });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/api/intake/message',
+      'https://app.leondev.xyz/api/intake/message',
       expect.objectContaining({
         method: 'POST',
         credentials: 'omit',
@@ -109,7 +110,7 @@ describe('sendToOwnix', () => {
   it('throws the server detail message on a non-2xx response', async () => {
     vi.stubGlobal(
       'chrome',
-      fakeChromeStorage({ ownixHost: 'http://localhost:8000', ownixExtensionToken: 'paired-token' }),
+      fakeChromeStorage({ ownixExtensionToken: 'paired-token' }),
     );
     vi.stubGlobal(
       'fetch',

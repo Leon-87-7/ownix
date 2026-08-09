@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Ownix Capture",
   "version": "0.1.0",
-  "description": "Send the current page, a link, or selected text to Ownix Intake.",
+  "description": "Send selected browser content to Ownix Intake.",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Send to Ownix"
@@ -11,8 +11,15 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "permissions": ["contextMenus", "activeTab", "storage", "notifications"],
-  "host_permissions": ["https://*/*", "http://localhost/*"],
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://app.leondev.xyz/*"
+  ],
   "options_page": "options.html",
   "icons": {
     "16": "icons/icon16.png",

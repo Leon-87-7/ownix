@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en">
+
   <head>
     <meta charset="utf-8" />
-    <title>Ownix Capture — Options</title>
+    <title>Ownix Capture - Options</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -12,11 +13,13 @@
         background: #0d0e10;
         color: #f4f1eb;
       }
+
       label {
         display: block;
         margin-bottom: 12px;
         font-size: 14px;
       }
+
       input {
         width: 100%;
         margin-top: 6px;
@@ -26,6 +29,7 @@
         background: #16181c;
         color: #f4f1eb;
       }
+
       button {
         padding: 8px 16px;
         background: #d99a45;
@@ -35,44 +39,33 @@
         font-weight: 600;
         cursor: pointer;
       }
-      #status {
+
+      p {
         margin-top: 10px;
         font-size: 13px;
         color: #948e84;
       }
     </style>
   </head>
+
   <body>
     <h1>Ownix Capture</h1>
-    <label>
-      Ownix host
-      <input
-        id="host"
-        type="url"
-        placeholder="https://app.leondev.xyz"
-      />
-    </label>
-    <button id="save">Save host</button>
-    <p
-      id="status"
-      role="status"
-      aria-live="polite"
-    ></p>
+    <p>Connect this browser to your Ownix account.</p>
 
-    <h2>Pairing</h2>
     <p
       id="connection-status"
       role="status"
       aria-live="polite"
     >
-      Checking connection…
+      Checking connection...
     </p>
+
     <label>
       Pairing code
       <input
         id="pairing-code"
         type="text"
-        placeholder="Paste the code from Settings → Extensions"
+        placeholder="Paste the code from Ownix settings"
       />
     </label>
     <button id="pair">Connect</button>
@@ -92,4 +85,5 @@
       src="src/options.js"
     ></script>
   </body>
+
 </html>

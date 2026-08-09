@@ -576,21 +576,22 @@ async def _handle_freestyle_url(
 
 async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
+        # Bare /freestyle arms a Telegram-only continuation (the next plain
+        # message picks it up outside command dispatch entirely) — not shared,
+        # see issue #487's scoping comment.
         await queue._client().set(f"pending_template:{ctx.chat_id}", "freestyle", ex=120)
         await send_message(ctx.chat_id, "📥 `/freestyle` ready — send the URL now (2 min window).")
         return
+
+    # The one-shot `/freestyle <url>` form is shared with the dashboard
+    # (issue #487, src/intake/commands.py:freestyle_command) — only this
+    # emoji rendering stays Telegram-only.
+    from src.intake import commands as intake_commands
+
     url = ctx.parts[1]
     extra_domains = await database.list_allowed_domains(ctx.chat_id)
-    pipeline = detect_pipeline(url, frozenset(extra_domains))
-    if pipeline == "rejected":
-        await send_message(
-            ctx.chat_id,
-            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
-            "and allowlisted article domains.",
-        )
-        return
-    if pipeline == "repo":
+    pipeline_preview = detect_pipeline(url, frozenset(extra_domains))
+    if pipeline_preview == "repo":
         await send_message(
             ctx.chat_id,
             "ℹ️ `/freestyle` doesn't apply to repo URLs yet\nRuning standard analysis.",
@@ -600,16 +601,39 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
         if cached:
             await _reply_cached_job(ctx.chat_id, cached)
             return
-        job_id = await database.create_job(
-            chat_id=ctx.chat_id,
-            url=repo_url,
-            content_type="repo",
-            message_id=ctx.message_id,
+
+    resp = await intake_commands.freestyle_command(ctx.chat_id, ctx.parts, message_id=ctx.message_id)
+
+    if resp.kind == "unsupported":
+        await send_message(
+            ctx.chat_id,
+            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
+            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
+            "and allowlisted article domains.",
         )
-        await queue.enqueue({"task": "repo", "job_id": job_id})
-        await send_message(ctx.chat_id, f"📥 Received!\njob_{job_id[-4:]}")
-        return
-    await _handle_freestyle_url(ctx.chat_id, url, pipeline, ctx.message_id)
+    elif pipeline_preview == "repo":
+        await send_message(ctx.chat_id, f"📥 Received!\njob_{resp.job_id[-4:]}")
+    else:
+        # long/article/short/document/unsized — every pipeline that reaches
+        # `freestyle_command`'s state-arming tail gets the same force-reply;
+        # long and article additionally get a head-start message.
+        if pipeline_preview == "long":
+            await send_message(
+                ctx.chat_id,
+                f"📥 Received\n✨ Kicking off Gemini analysis (freestyle)\njob_{resp.job_id[-4:]}",
+            )
+        elif pipeline_preview == "article":
+            await send_message(
+                ctx.chat_id, f"📥 Article received — reply with your prompt\njob_{resp.job_id[-4:]}"
+            )
+        await send_force_reply(
+            ctx.chat_id,
+            "✍️ Reply with your Gemini prompt (reply within 10 min; /cancel to abandon)",
+            input_field_placeholder="Your Gemini prompt...",
+        )
+        log.info(
+            "freestyle.url.received", chat_id=ctx.chat_id, job_id=resp.job_id, pipeline=pipeline_preview
+        )
 
 
 async def _cmd_cancel(ctx: SlashCtx) -> None:
@@ -634,53 +658,58 @@ async def _cmd_spec(ctx: SlashCtx) -> None:
 
 
 async def _cmd_find(ctx: SlashCtx) -> None:
+    # Search, score-filter (0.58) and GitHub enrichment are shared with the
+    # dashboard's /find (issue #485, src/intake/commands.py:find_command) —
+    # usage/empty-result copy stays here, richer and HTML-formatted, rather
+    # than being driven off the shared response's plain `text` (which the
+    # dashboard renders as-is and has no reason to match Telegram's wording).
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /find <query>")
         return
-    query = " ".join(ctx.parts[1:]).strip()
-    from src import brain
-    from src.services.github import enrich_github_links
+
+    from src.intake import commands as intake_commands
     from src.utils.markdown import _humanize_age
 
-    candidates = await brain.search_links(query, top_k=10)
-    results = [r for r in candidates if r["score"] >= 0.58][:5]
-    if not results:
+    resp = await intake_commands.find_command(ctx.chat_id, ctx.parts)
+    query = " ".join(ctx.parts[1:]).strip()
+
+    if not resp.artifacts:
         await send_message(
             ctx.chat_id,
             f'🔍 Nothing found for "<i>{html.escape(query)}</i>".\nTry a broader term or /rebuild-graph if you\'ve added links recently.',
             parse_mode="HTML",
         )
-    else:
-        await enrich_github_links(results)  # mutates in place; no-ops non-GitHub URLs
-        header = f'🔍 <b>{len(results)} result{"s" if len(results) != 1 else ""}</b> for "<i>{html.escape(query)}</i>"\n\n'
-        lines = []
-        for r in results:
-            parsed = urlparse(r["url"])
-            short_url = (parsed.netloc + parsed.path).rstrip("/")
-            short_url = short_url.removeprefix("www.")
-            entry = (
-                f"🔗 <b>{html.escape(r['title'])}</b>\n"
-                f'   <a href="{html.escape(r["url"], quote=True)}">{html.escape(short_url)}</a>'
-            )
-            if r.get("_enriched"):
-                desc = (r.get("_gh_description") or "").strip()
-                language = r.get("_language") or "N/A"
-                meta = f"⭐ {r['_stars']} | 🔀 {r['_forks']} | 💻 {language} | 📅 {_humanize_age(r['_days_ago'])}"
-                if desc:
-                    entry += f"\n   {html.escape(desc)}"
-                entry += f"\n   {meta}"
+        return
+
+    header = f'🔍 <b>{len(resp.artifacts)} result{"s" if len(resp.artifacts) != 1 else ""}</b> for "<i>{html.escape(query)}</i>"\n\n'
+    lines = []
+    for r in resp.artifacts:
+        parsed = urlparse(r["url"])
+        short_url = (parsed.netloc + parsed.path).rstrip("/")
+        short_url = short_url.removeprefix("www.")
+        entry = (
+            f"🔗 <b>{html.escape(r['title'])}</b>\n"
+            f'   <a href="{html.escape(r["url"], quote=True)}">{html.escape(short_url)}</a>'
+        )
+        if r.get("_enriched"):
+            desc = (r.get("_gh_description") or "").strip()
+            language = r.get("_language") or "N/A"
+            meta = f"⭐ {r['_stars']} | 🔀 {r['_forks']} | 💻 {language} | 📅 {_humanize_age(r['_days_ago'])}"
+            if desc:
+                entry += f"\n   {html.escape(desc)}"
+            entry += f"\n   {meta}"
+        else:
+            topic = (r.get("topic") or "").strip()
+            if topic.lower().startswith(("the image", "the screenshot", "the photo")):
+                topic_line = "📷 from a photo"
+            elif topic:
+                topic_line = topic[:70].rstrip() + ("…" if len(topic) > 70 else "")
             else:
-                topic = (r.get("topic") or "").strip()
-                if topic.lower().startswith(("the image", "the screenshot", "the photo")):
-                    topic_line = "📷 from a photo"
-                elif topic:
-                    topic_line = topic[:70].rstrip() + ("…" if len(topic) > 70 else "")
-                else:
-                    topic_line = ""
-                if topic_line:
-                    entry += f"\n   {html.escape(topic_line)}"
-            lines.append(entry)
-        await send_message(ctx.chat_id, header + "\n\n".join(lines), parse_mode="HTML")
+                topic_line = ""
+            if topic_line:
+                entry += f"\n   {html.escape(topic_line)}"
+        lines.append(entry)
+    await send_message(ctx.chat_id, header + "\n\n".join(lines), parse_mode="HTML")
 
 
 async def _cmd_rebuild_graph(ctx: SlashCtx) -> None:
@@ -801,72 +830,32 @@ async def _cmd_addlink(ctx: SlashCtx) -> None:
 
 
 async def _cmd_force(ctx: SlashCtx) -> None:
+    # All three states (reset+reprocess / clear orphaned cache / create) are
+    # shared with the dashboard's /force (issue #486,
+    # src/intake/commands.py:force_command) — only this emoji rendering, and
+    # attaching ctx.message_id to a freshly created job, stay Telegram-only.
+    from src.intake import commands as intake_commands
+
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /force <url>")
         return
-    url = ctx.parts[1]
 
-    # Check for existing job and/or markdown cache row.
-    extra_domains = await database.list_allowed_domains(ctx.chat_id)
-    pipeline = detect_pipeline(url, frozenset(extra_domains))
-    lookup_url = normalize_repo_url(url) if pipeline == "repo" else url
-    existing_job = (
-        await database.find_recent_job_by_url(ctx.chat_id, lookup_url)
-        if pipeline != "rejected"
-        else None
+    resp = await intake_commands.force_command(
+        ctx.chat_id, ctx.parts, message_id=ctx.message_id
     )
-    existing_cache = await database.get_markdown_cache(url)
 
-    if existing_job:
-        # State 1: job exists (with or without a cache row) — reset + reprocess.
-        if existing_cache:
-            await database.delete_markdown_cache(url)
-        job_id = existing_job["id"]
-        await database.reset_job(job_id)
-        content_type = existing_job.get("content_type")
-        task_type = task_for_content_type(content_type, default="video")
-        if pipeline == "repo":
-            try:
-                parts = [s for s in urlparse(lookup_url).path.split("/") if s]
-                owner_r, repo_r = parts[0], parts[1]
-                redis_client = queue._client()
-                await redis_client.delete(
-                    f"github_repo_bundle:{owner_r}/{repo_r}",
-                    f"github_meta:{owner_r}/{repo_r}",
-                )
-                log.info("force.repo_bundle_cache_cleared", owner=owner_r, repo=repo_r)
-            except Exception:
-                log.warning("force.repo_cache_clear_failed", url=lookup_url)
-        await queue.enqueue({"task": task_type, "job_id": job_id})
-        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
-        return
-
-    if existing_cache:
-        # State 2: cache-only — delete cache and acknowledge.
-        await database.delete_markdown_cache(url)
-        await send_message(ctx.chat_id, "🗑️ Markdown cache cleared for that URL.")
-        log.info("force.cache_only_cleared", chat_id=ctx.chat_id, url=url)
-        return
-
-    # State 3: neither — create and dispatch.
-    if pipeline == "rejected":
+    if resp.kind == "unsupported":
         await send_message(
             ctx.chat_id,
             "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
             "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
             "and allowlisted article domains.",
         )
-        return
-    url_to_store = normalize_repo_url(url) if pipeline == "repo" else url
-    job_id = await database.create_job(
-        chat_id=ctx.chat_id,
-        url=url_to_store,
-        content_type=pipeline,
-        message_id=ctx.message_id,
-    )
-    task_type = task_for_content_type(pipeline, default="video")
-    await queue.enqueue({"task": task_type, "job_id": job_id})
-    await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{job_id[-4:]}")
+    elif resp.kind == "command_result":
+        # Only reachable non-usage case left is "cache cleared".
+        await send_message(ctx.chat_id, f"🗑️ {resp.text}")
+    else:
+        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{resp.job_id[-4:]}")
 
 
 def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:

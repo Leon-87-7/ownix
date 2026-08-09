@@ -86,9 +86,9 @@ This applies to all seven pipelines, not only the high-N ones.
   remaining searchable through its links — is now handled by making that removal explicit
   rather than implicit. Its async purge half (Drive docs, GCS objects, Sheets rows) is
   untouched.
-- **`database.delete_link`'s ownership derivation is unaffected today** but simplifies once
-  ADR-0043 lands: its `COALESCE`-through-`source_job` becomes a direct `chat_id = ?`, after
-  which no link operation reads `source_job` at all.
+- **`database.delete_link` derives ownership from `links.chat_id`.** Legacy rows without a
+  stored owner still fall back through `source_job` and then the Operator, but new retained
+  links remain deletable by their original owner after their source job is deleted.
 - **Pre-existing bug, surfaced not fixed:** neither the old cascade nor `delete_link` removes
   the link's Drive `.md` node, so Brain Drive files orphan on every deletion path
   (`# ponytail:` comment already at `database.py:2213`).

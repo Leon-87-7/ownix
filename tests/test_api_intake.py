@@ -113,3 +113,45 @@ class TestPostIntakeMessage:
         resp = intake_client.post("/api/intake/message", json={"text": "/help"})
         assert resp.status_code == 429
         assert "Retry-After" in resp.headers
+
+
+class TestCommandPalette:
+    """`GET /api/intake/commands` — the palette's source of truth (issue #484)."""
+
+    def test_auth_required(self, intake_client: TestClient) -> None:
+        resp = intake_client.get("/api/intake/commands")
+        assert resp.status_code == 401
+
+    def test_lists_the_shared_commands_with_hints(self, intake_client) -> None:
+        _login(intake_client)
+        resp = intake_client.get("/api/intake/commands")
+        assert resp.status_code == 200
+        names = [c["name"] for c in resp.json()["commands"]]
+        assert "/help" in names
+        assert "/cancel" in names
+
+    def test_is_derived_from_the_registry_not_hardcoded(self, intake_client) -> None:
+        """A newly registered command must appear without touching the endpoint."""
+        from src.intake import commands as intake_commands
+
+        async def _noop(chat_id: int, parts: list[str]):
+            from src.intake import responses
+
+            del chat_id, parts
+            return responses.command_result("ok")
+
+        intake_commands.SHARED_COMMANDS["/probe"] = intake_commands.Command(
+            "/probe", "temporary probe", _noop, args="<query>"
+        )
+        try:
+            _login(intake_client)
+            entry = next(
+                c for c in intake_client.get("/api/intake/commands").json()["commands"]
+                if c["name"] == "/probe"
+            )
+            assert entry["args"] == "<query>"
+            assert entry["usage"] == "/probe <query>"
+            # /help renders from the same registry.
+            assert "/probe <query>" in intake_commands.help_text()
+        finally:
+            del intake_commands.SHARED_COMMANDS["/probe"]
