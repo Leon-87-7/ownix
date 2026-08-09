@@ -150,13 +150,14 @@ async def _report_photo_links(
 ) -> None:
     """Send enriched links (and kick off brain ingest) or a no-links notice."""
     from src.services.github import enrich_github_links
-    from src.utils.markdown import build_enriched_links_message
+    from src.utils.markdown import build_enriched_links_message, build_plain_links_message
 
     links = result.get("links", [])
     summary = result.get("summary", "")
     if links:
         links = await enrich_github_links(links)
         await send_message(chat_id, build_enriched_links_message(links))
+        await send_message(chat_id, build_plain_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
 

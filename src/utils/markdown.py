@@ -114,3 +114,16 @@ def build_enriched_links_message(links: list[dict]) -> str:
 
     labeled = "\n".join(labeled_parts)
     return f"🔗 Links Found:\n{labeled}"
+
+
+def build_plain_links_message(links: list[dict]) -> str:
+    """Format links as a plain-text list — one bare URL per line, nothing else.
+
+    Preserves the same ordering as :func:`build_enriched_links_message`
+    (enriched GitHub repos first by stars+forks, then the rest) so the two
+    messages line up.  Returns the empty string when there are no links.
+    """
+    enriched = [lnk for lnk in links if lnk.get("_enriched")]
+    others = [lnk for lnk in links if not lnk.get("_enriched")]
+    enriched.sort(key=lambda lnk: lnk.get("_stars", 0) + lnk.get("_forks", 0), reverse=True)
+    return "\n".join(lnk["url"] for lnk in enriched + others)
