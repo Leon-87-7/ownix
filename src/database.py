@@ -302,6 +302,23 @@ CREATE TABLE IF NOT EXISTS purge_tasks (
     enqueued_at     TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_purge_tasks_enqueued ON purge_tasks(enqueued_at);
+
+-- Append-only audit log of admin / security-relevant actions: who did what, to
+-- which entity, when. INTEGER PK like purge_tasks — rows are inserted, never
+-- updated. chat_id is the acting user (NULL for system-initiated actions);
+-- metadata holds an optional JSON blob of extra context.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id     INTEGER,
+    action      TEXT NOT NULL,
+    target_type TEXT,
+    target_id   TEXT,
+    metadata    TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_chat ON audit_log(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id);
 """
 
 
@@ -1278,6 +1295,24 @@ async def _migrate_v37_v38(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v37_v38)
+
+# v38 → v39: append-only audit log of admin / security-relevant actions.
+_MIGRATIONS.append(
+    [
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id     INTEGER,
+            action      TEXT NOT NULL,
+            target_type TEXT,
+            target_id   TEXT,
+            metadata    TEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_chat ON audit_log(chat_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id)",
+    ]
+)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:

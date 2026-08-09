@@ -357,7 +357,12 @@ async def test_v37_migration_preserves_jobs_children_code_and_accepts_unsized(
             "UPDATE jobs SET code = ?, code_lang = ? WHERE id = ?",
             ("print('hi')", "python", job_id),
         )
-        await conn.execute(f"PRAGMA user_version = {len(db._MIGRATIONS) - 1}")
+        # Pin to the exact step before the unsized-widening migration, not the
+        # fragile len-1: later appended migrations (links #499, audit_log) shift
+        # len and otherwise leave _migrate_v36_v37 skipped.
+        await conn.execute(
+            f"PRAGMA user_version = {db._MIGRATIONS.index(db._migrate_v36_v37)}"
+        )
         await conn.commit()
         await conn.execute("PRAGMA foreign_keys=ON")
 
@@ -1271,3 +1276,75 @@ async def test_banned_palette_colors_remap_on_migration(temp_db):
 
     stored = await db.get_tag(2, "t_old")
     assert stored is not None and stored["color"] == "#f87171"
+
+
+# ---------------------------------------------------------------------------
+# audit_log — append-only admin/security action log (v38→v39)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_audit_log_table_exists_after_init(temp_db) -> None:
+    """audit_log is created with the documented schema on a fresh install."""
+    async with aiosqlite.connect(temp_db) as conn:
+        cur = await conn.execute("PRAGMA table_info(audit_log)")
+        cols = {row[1] for row in await cur.fetchall()}
+    assert {"id", "chat_id", "action", "target_type", "target_id", "metadata", "created_at"} <= cols
+
+
+@pytest.mark.asyncio
+async def test_audit_log_accepts_row_and_null_actor(temp_db) -> None:
+    """A row inserts with only action required; chat_id NULL marks a system action."""
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            "INSERT INTO audit_log (chat_id, action, target_type, target_id, metadata) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (42, "user.approve", "user", "999", '{"reason":"invited"}'),
+        )
+        # System-initiated action: NULL actor, no target.
+        await conn.execute("INSERT INTO audit_log (action) VALUES (?)", ("system.startup",))
+        await conn.commit()
+        cur = await conn.execute(
+            "SELECT chat_id, action, target_id FROM audit_log ORDER BY id"
+        )
+        rows = await cur.fetchall()
+    assert rows[0] == (42, "user.approve", "999")
+    assert rows[1] == (None, "system.startup", None)
+
+
+@pytest.mark.asyncio
+async def test_audit_log_requires_action(temp_db) -> None:
+    """action is NOT NULL — an insert without it must fail."""
+    async with aiosqlite.connect(temp_db) as conn:
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute("INSERT INTO audit_log (chat_id) VALUES (?)", (1,))
+
+
+@pytest.mark.asyncio
+async def test_migration_adds_audit_log_to_existing_db(tmp_path, monkeypatch) -> None:
+    """A DB pinned one version before this migration must gain audit_log."""
+    from src import database
+
+    db_file = str(tmp_path / "pre_audit.db")
+    target_version = len(database._MIGRATIONS) - 1
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
+            "url TEXT NOT NULL, content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(f"PRAGMA user_version = {target_version}")
+        await conn.commit()
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    await database.init_db()
+
+    async with aiosqlite.connect(db_file) as conn:
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"
+        )
+        row = await cur.fetchone()
+        cur2 = await conn.execute("PRAGMA user_version")
+        version = (await cur2.fetchone())[0]
+    assert row is not None, "audit_log must exist after the v38→v39 migration"
+    assert version == len(database._MIGRATIONS)
