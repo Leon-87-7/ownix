@@ -82,6 +82,30 @@ interface BatchLinkResult {
   message?: string;
 }
 
+const BATCH_LINK_CONCURRENCY = 6;
+
+async function runWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(limit, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await worker(items[index], index);
+      }
+    }),
+  );
+
+  return results;
+}
+
 function hasActiveDialog() {
   return Array.from(
     document.querySelectorAll<HTMLElement>('[role="dialog"]'),
@@ -509,11 +533,10 @@ export function SubmitJobProvider({
         tokens.map((token) => ({ token, status: 'pending' as const })),
       );
 
-      // ponytail: no hand-rolled concurrency cap — the browser already
-      // limits concurrent connections per origin (~6), so Promise.all over
-      // every token throttles itself for free at the paste sizes in scope.
-      const results = await Promise.all(
-        tokens.map((token, index) => submitOneLink(token, index)),
+      const results = await runWithConcurrency(
+        tokens,
+        BATCH_LINK_CONCURRENCY,
+        (token, index) => submitOneLink(token, index),
       );
       const failures = results.filter((ok) => !ok).length;
 

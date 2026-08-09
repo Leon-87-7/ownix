@@ -1,36 +1,31 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { FolderTagForm } from './folder-tag-form';
 
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterEach(() => {
+  server.resetHandlers();
+  vi.unstubAllGlobals();
+});
+afterAll(() => server.close());
+
+function useTopics(
+  topics: { topic: string; link_ids: string[]; count: number }[] = [
+    { topic: 'rust', link_ids: ['l1'], count: 1 },
+    { topic: 'screeners', link_ids: ['l2', 'l3'], count: 2 },
+  ],
+) {
+  server.use(http.get('/api/jobs/:jobId/link-topics', () => HttpResponse.json(topics)));
+}
+
 describe('FolderTagForm', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function mockTopics(
-    topics: { topic: string; link_ids: string[]; count: number }[] = [
-      { topic: 'rust', link_ids: ['l1'], count: 1 },
-      { topic: 'screeners', link_ids: ['l2', 'l3'], count: 2 },
-    ],
-  ) {
-    return vi.fn(async (url: string, init?: RequestInit) => {
-      const method = init?.method ?? 'GET';
-      if (typeof url === 'string' && url.endsWith('/link-topics')) {
-        return { ok: true, json: async () => topics } as Response;
-      }
-      if (url === '/api/controls/tags' && method === 'POST') {
-        return { ok: true, json: async () => ({ id: 'tag-1' }) } as Response;
-      }
-      if (url.includes('/tags/tag-1')) {
-        return { ok: true, json: async () => ({}) } as Response;
-      }
-      throw new Error(`unexpected fetch: ${url} ${method}`);
-    });
-  }
-
   it('shows each folder checked by default with its link count', async () => {
-    vi.stubGlobal('fetch', mockTopics());
+    useTopics();
     render(
       <FolderTagForm
         jobId="job1"
@@ -47,7 +42,7 @@ describe('FolderTagForm', () => {
   });
 
   it('expands the color/icon picker when the chip is clicked', async () => {
-    vi.stubGlobal('fetch', mockTopics());
+    useTopics();
     render(
       <FolderTagForm
         jobId="job1"
@@ -66,7 +61,7 @@ describe('FolderTagForm', () => {
   });
 
   it('unchecking a folder disables it from the create count', async () => {
-    vi.stubGlobal('fetch', mockTopics([{ topic: 'rust', link_ids: ['l1'], count: 1 }]));
+    useTopics([{ topic: 'rust', link_ids: ['l1'], count: 1 }]);
     render(
       <FolderTagForm
         jobId="job1"
@@ -80,14 +75,21 @@ describe('FolderTagForm', () => {
     );
     fireEvent.click(screen.getByRole('checkbox'));
 
-    expect(
-      screen.getByRole('button', { name: /Create Tag/ }),
-    ).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: /Create Tag/ })).toHaveProperty(
+      'disabled',
+      true,
+    );
   });
 
   it('Skip closes without issuing any mutation', async () => {
-    const fetchMock = mockTopics();
-    vi.stubGlobal('fetch', fetchMock);
+    const mutations: string[] = [];
+    useTopics();
+    server.use(
+      http.post('/api/controls/tags', ({ request }) => {
+        mutations.push(`${request.method} ${new URL(request.url).pathname}`);
+        return HttpResponse.json({ id: 'tag-1' }, { status: 201 });
+      }),
+    );
     const onOpenChange = vi.fn();
     render(
       <FolderTagForm
@@ -101,14 +103,22 @@ describe('FolderTagForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    // Only the initial GET — no POST calls.
-    expect(fetchMock.mock.calls.every(([, init]) => !init || init.method === undefined)).toBe(
-      true,
-    );
+    expect(mutations).toEqual([]);
   });
 
   it('confirming creates tags, attaches them, and closes the dialog', async () => {
-    vi.stubGlobal('fetch', mockTopics([{ topic: 'rust', link_ids: ['l1', 'l2'], count: 2 }]));
+    const calls: { url: string; body?: unknown }[] = [];
+    useTopics([{ topic: 'rust', link_ids: ['l1', 'l2'], count: 2 }]);
+    server.use(
+      http.post('/api/controls/tags', async ({ request }) => {
+        calls.push({ url: new URL(request.url).pathname, body: await request.json() });
+        return HttpResponse.json({ id: 'tag-1' }, { status: 201 });
+      }),
+      http.post('/api/brain/links/:linkId/tags/:tagId', ({ request }) => {
+        calls.push({ url: new URL(request.url).pathname });
+        return new HttpResponse(null, { status: 201 });
+      }),
+    );
     const onOpenChange = vi.fn();
     render(
       <FolderTagForm
@@ -124,11 +134,21 @@ describe('FolderTagForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create 1 Tag/ }));
 
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(calls.find((call) => call.url === '/api/controls/tags')?.body).toMatchObject({
+      name: 'rust',
+    });
+    expect(calls.filter((call) => call.url.includes('/tags/tag-1')).map((call) => call.url).sort())
+      .toEqual(['/api/brain/links/l1/tags/tag-1', '/api/brain/links/l2/tags/tag-1'].sort());
   });
 
   it('reloads from scratch every time it is opened', async () => {
-    const fetchMock = mockTopics();
-    vi.stubGlobal('fetch', fetchMock);
+    let loads = 0;
+    server.use(
+      http.get('/api/jobs/:jobId/link-topics', () => {
+        loads += 1;
+        return HttpResponse.json([{ topic: 'rust', link_ids: ['l1'], count: 1 }]);
+      }),
+    );
     const { rerender } = render(
       <FolderTagForm
         jobId="job1"
@@ -137,7 +157,7 @@ describe('FolderTagForm', () => {
       />,
     );
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(loads).toBe(0);
 
     rerender(
       <FolderTagForm
@@ -147,6 +167,23 @@ describe('FolderTagForm', () => {
       />,
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(loads).toBe(1));
+
+    rerender(
+      <FolderTagForm
+        jobId="job1"
+        open={false}
+        onOpenChange={() => {}}
+      />,
+    );
+    rerender(
+      <FolderTagForm
+        jobId="job1"
+        open={true}
+        onOpenChange={() => {}}
+      />,
+    );
+
+    await waitFor(() => expect(loads).toBe(2));
   });
 });

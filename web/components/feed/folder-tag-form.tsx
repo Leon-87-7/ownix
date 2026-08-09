@@ -44,13 +44,15 @@ export function FolderTagForm({
       open={open}
       onOpenChange={onOpenChange}
     >
-      <DialogContent className="max-w-lg">
-        <DialogTitle>Create tags from folders</DialogTitle>
-        <p className="mt-1 text-sm text-body">
-          {assignments.length} folder{assignments.length === 1 ? '' : 's'} found
-          in this import. Each becomes a link tag, applied to every link in
-          that folder.
-        </p>
+        <DialogContent className="max-w-lg">
+          <DialogTitle>Create tags from folders</DialogTitle>
+        {!loading && (
+          <p className="mt-1 text-sm text-body">
+            {assignments.length} folder{assignments.length === 1 ? '' : 's'} found
+            in this import. Each becomes a link tag, applied to every link in
+            that folder.
+          </p>
+        )}
 
         {loading && (
           <p className="mt-4 text-sm text-muted">Loading folders…</p>
@@ -133,7 +135,7 @@ export function FolderTagForm({
                                 onClick={() => setColor(a.topic, c)}
                                 aria-label={`Color ${c}`}
                                 aria-pressed={selected}
-                                className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-canvas' : 'hover:scale-110'}`}
+                                className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-canvas' : 'motion-safe:hover:scale-110'}`}
                                 style={{ backgroundColor: c }}
                               />
                             );

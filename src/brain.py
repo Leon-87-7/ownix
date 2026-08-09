@@ -29,6 +29,7 @@ _rebuild_lock = asyncio.Lock()
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
+    chat_id       INTEGER,
     url           TEXT NOT NULL,
     title         TEXT,
     topic         TEXT,
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS links (
     og_image_url  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 
@@ -429,12 +430,24 @@ async def _touch_existing_link(
 async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str, now_iso: str) -> None:
     import aiosqlite
 
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute("SELECT chat_id FROM jobs WHERE id = ?", (source_job_id,))
+        owner = await cursor.fetchone()
+        if owner is None:
+            log.info("brain.ingest_source_job_missing", source_job_id=source_job_id, url=url)
+            return
+        chat_id = owner["chat_id"]
+
     # --- Soft dedup (own short connection) ---
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         cursor = await conn.execute(
-            "SELECT id, seen_count, drive_file_id, title, topic FROM links WHERE url = ? LIMIT 1",
-            (url,),
+            """SELECT id, seen_count, drive_file_id, title, topic
+               FROM links
+               WHERE chat_id = ? AND url = ?
+               LIMIT 1""",
+            (chat_id, url),
         )
         existing = await cursor.fetchone()
         if existing:
@@ -464,16 +477,16 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         link_id = generate_id()
-        # Atomic upsert: a concurrent ingest that inserted this URL while
+        # Atomic upsert: a concurrent ingest that inserted this owner+URL while
         # we were fetching becomes a seen_count bump, never a duplicate
-        # (unique index idx_links_url_unique, migration v31).
+        # (unique index idx_links_chat_url_unique, migration v38).
         insert_cursor = await conn.execute(
             """
             INSERT INTO links
-                (id, url, title, topic, description, source_job, embedding,
+                (id, chat_id, url, title, topic, description, source_job, embedding,
                  drive_file_id, og_image_url, seen_count, last_seen_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
-            ON CONFLICT(url) DO UPDATE SET
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
+            ON CONFLICT(chat_id, url) DO UPDATE SET
                 seen_count = links.seen_count + 1,
                 last_seen_at = excluded.last_seen_at,
                 updated_at = excluded.updated_at,
@@ -482,6 +495,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
             """,
             (
                 link_id,
+                chat_id,
                 url,
                 title_str,
                 topic,
@@ -504,8 +518,8 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
 
         # Compute top-3 related
         cursor5 = await conn.execute(
-            "SELECT id, embedding FROM links WHERE embedding IS NOT NULL AND id != ?",
-            (link_id,),
+            "SELECT id, embedding FROM links WHERE chat_id = ? AND embedding IS NOT NULL AND id != ?",
+            (chat_id, link_id),
         )
         other_rows = [dict(r) for r in await cursor5.fetchall()]
         ids_list, matrix = _load_embeddings(other_rows)

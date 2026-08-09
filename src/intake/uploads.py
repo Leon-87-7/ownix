@@ -112,22 +112,28 @@ async def _handle_bookmarks(chat_id: int, file: IntakeFile) -> IntakeResponse:
     import hashlib
     from datetime import datetime, timezone
 
-    from src import database, queue
+    from src import database
+    from src.services.jobs import create_and_enqueue_job
 
     digest = hashlib.sha256(file.data).hexdigest()[:16]
     url = f"bookmarks:{digest}"
     now = datetime.now(timezone.utc)
     title = f"Bookmarks {now.month}/{now.day}/{now.strftime('%y')}"
 
-    job_id = await database.create_job(chat_id=chat_id, url=url, content_type="link")
-    await database.update_job_status(job_id, "pending", title=title)
-    await queue.enqueue(
-        {
-            "task": "bookmarks",
-            "job_id": job_id,
-            "html_b64": base64.b64encode(file.data).decode("ascii"),
-        }
-    )
+    try:
+        job = await create_and_enqueue_job(
+            chat_id,
+            url,
+            "link",
+            task="bookmarks",
+            task_payload={"html_b64": base64.b64encode(file.data).decode("ascii")},
+        )
+    except Exception:
+        log.exception("intake_bookmarks_job_failed")
+        return responses.error("Could not process this bookmark file right now.", retryable=True)
+    job_id = job["id"]
+    if not job.get("_deduped"):
+        await database.update_job_status(job_id, "pending", title=title)
     return IntakeResponse(
         kind="job_created",
         text=f"Received {file.filename} — job_{job_id[-4:]} ({title}).",

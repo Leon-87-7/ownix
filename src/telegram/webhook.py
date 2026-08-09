@@ -777,7 +777,7 @@ async def _cmd_addlink(ctx: SlashCtx) -> None:
     # dashboard — one implementation of "is this a URL" (#490).
     url = coerce_url(ctx.parts[1])
     if url is None:
-        await send_message(ctx.chat_id, "Usage: /addlink <url> — must be an absolute http(s) URL")
+        await send_message(ctx.chat_id, "Usage: /addlink <url> — use a valid HTTP(S) URL or bare domain")
         return
     warning = "`/addlink` saves the link as-is; it does not process it through the pipeline-detection flow."
     # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any content_type

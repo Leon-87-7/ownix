@@ -143,7 +143,7 @@ async def _create_link_job(chat_id: int, url: str) -> dict:
     # instead of being stored as one job (#490, CONTEXT.md "URL coercion").
     coerced = coerce_url(url)
     if coerced is None:
-        raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
+        raise HTTPException(status_code=422, detail="Add Link needs a valid HTTP(S) URL or bare domain")
     url = coerced
     warning = "Add Link saves the link as-is; it does not process it through the pipeline-detection flow."
     # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any

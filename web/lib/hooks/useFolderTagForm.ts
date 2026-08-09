@@ -87,6 +87,7 @@ export function useFolderTagForm(jobId: string) {
     setSubmitting(true);
     setError(null);
     const skipped: string[] = [];
+    let vocabCache: { id: string; name: string }[] | null = null;
     try {
       for (const a of assignments.filter((row) => row.checked)) {
         let tagId: string | null = null;
@@ -99,11 +100,13 @@ export function useFolderTagForm(jobId: string) {
         if (created.ok) {
           tagId = created.data.id;
         } else if (created.status === 409) {
-          const vocab = await fetch('/api/controls/tags');
-          const tags = vocab.ok
-            ? ((await vocab.json()) as { id: string; name: string }[])
-            : [];
-          tagId = tags.find((t) => t.name === a.topic)?.id ?? null;
+          if (vocabCache === null) {
+            const vocab = await fetch('/api/controls/tags');
+            vocabCache = vocab.ok
+              ? ((await vocab.json()) as { id: string; name: string }[])
+              : [];
+          }
+          tagId = vocabCache.find((t) => t.name === a.topic)?.id ?? null;
           if (!tagId) skipped.push(a.topic);
         } else {
           // e.g. a folder name over the 80-char tag name limit — surfaced,
@@ -111,7 +114,7 @@ export function useFolderTagForm(jobId: string) {
           skipped.push(a.topic);
         }
         if (!tagId) continue;
-        await Promise.all(
+        const attachResults = await Promise.all(
           a.linkIds.map((linkId) =>
             fetch(
               `/api/brain/links/${encodeURIComponent(linkId)}/tags/${encodeURIComponent(tagId!)}`,
@@ -119,6 +122,7 @@ export function useFolderTagForm(jobId: string) {
             ),
           ),
         );
+        if (attachResults.some((res) => !res.ok)) skipped.push(a.topic);
       }
       if (skipped.length > 0) {
         setError(`Could not create ${skipped.length === 1 ? 'tag' : 'tags'} for: ${skipped.join(', ')}`);

@@ -549,7 +549,7 @@ Batch link intake — paste a list, import a bookmark file (grill-with-docs 2026
 ├── #494 Batch link paste — textarea, client loop, progress (zero backend diff; loops the endpoint #490 fixed)
 └── #495 Parse and insert links, skip existing ◄── also #492 (needs both the validator and the accepted upload)
     ├── #496 Deferred import-scoped enrichment pass (embeds once, after descriptions land)
-    └── #497 Folder-to-tag opt-in form (HITL-ish UI; reuses PRESET_COLORS / TAG_ICONS / IconPicker)
+    └── #497 Folder-to-tag opt-in form (HITL-ish UI; reuses the shared OKLCH tag palette / TAG_ICONS / IconPicker)
 #492 Accept Netscape bookmark HTML end-to-end (root, unblocked — deliberately hollow: card in, zero links)
 #491 Links outlive jobs — drop delete cascade, add ?with_links=1 (root, unblocked — ADR-0046, all seven pipelines)
 #493 _rewrite_existing_md must update_file, not upload_file (root, unblocked — pre-existing Drive-duplication bug)

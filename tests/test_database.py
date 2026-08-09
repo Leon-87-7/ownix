@@ -1141,6 +1141,23 @@ async def test_delete_job_leaves_links_standing_by_default(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_retained_link_remains_deletable_by_original_owner(temp_db):
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, chat_id, url, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 1, 'https://example.com/1', ?, 't', 't', 't')""",
+            (job,),
+        )
+        await conn.commit()
+
+    assert await db.delete_job(job) is True
+    assert await db.delete_link("l1", chat_id=1) is True
+
+
+@pytest.mark.asyncio
 async def test_delete_job_with_links_true_removes_them(temp_db):
     from src import database as db
 

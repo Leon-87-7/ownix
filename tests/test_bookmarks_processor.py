@@ -4,6 +4,7 @@ link per URL, skipping URLs that already exist (snapshot ingest, ADR-0048)."""
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 import tempfile
 from unittest.mock import patch
@@ -105,8 +106,8 @@ async def test_run_skips_urls_that_already_exist(temp_db):
     async with database.connection() as conn:
         await conn.execute(
             """INSERT INTO links
-               (id, url, title, source_job, seen_count, last_seen_at, created_at, updated_at)
-               VALUES ('existing', 'https://land-book.com', 'Original title',
+               (id, chat_id, url, title, source_job, seen_count, last_seen_at, created_at, updated_at)
+               VALUES ('existing', 1, 'https://land-book.com', 'Original title',
                        'other-job', 5, 't0', 't0', 't0')"""
         )
         await conn.commit()
@@ -125,6 +126,32 @@ async def test_run_skips_urls_that_already_exist(temp_db):
     # The genuinely new URL still lands.
     finviz = await database._fetch_one("SELECT 1 FROM links WHERE url = 'https://finviz.com'")
     assert finviz is not None
+
+
+@pytest.mark.asyncio
+async def test_run_allows_same_url_for_different_chats(temp_db):
+    from src import database
+    from src.processors import bookmarks
+
+    async with database.connection() as conn:
+        await conn.execute(
+            """INSERT INTO links
+               (id, chat_id, url, title, source_job, seen_count, last_seen_at, created_at, updated_at)
+               VALUES ('existing', 1, 'https://land-book.com', 'Original title',
+                       'other-job', 5, 't0', 't0', 't0')"""
+        )
+        await conn.commit()
+
+    job = await _make_job(chat_id=2)
+    await bookmarks.run(job, html_b64=_b64(_TWO_LINK_HTML))
+
+    rows = await database._fetch_dicts(
+        "SELECT chat_id, url FROM links WHERE url = 'https://land-book.com' ORDER BY chat_id"
+    )
+    assert rows == [
+        {"chat_id": 1, "url": "https://land-book.com"},
+        {"chat_id": 2, "url": "https://land-book.com"},
+    ]
 
 
 @pytest.mark.asyncio
@@ -235,7 +262,7 @@ async def test_run_raises_on_corrupt_envelope(temp_db):
 
     job = await _make_job()
 
-    with pytest.raises(Exception):
+    with pytest.raises(binascii.Error):
         await bookmarks.run(job, html_b64="not valid base64 !!!")
 
     # Left mid-flight, not silently marked done — the worker's error path

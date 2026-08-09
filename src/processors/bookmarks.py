@@ -38,6 +38,7 @@ async def run(job: dict, *, html_b64: str = "") -> None:
     export writes nothing.
     """
     job_id = job["id"]
+    chat_id = job["chat_id"]
     await database.update_job_status(job_id, "processing")
 
     html = base64.b64decode(html_b64).decode("utf-8", errors="replace")
@@ -55,7 +56,9 @@ async def run(job: dict, *, html_b64: str = "") -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
     async with database.connection() as conn:
         for url, entry in deduped.items():
-            cursor = await conn.execute("SELECT 1 FROM links WHERE url = ?", (url,))
+            cursor = await conn.execute(
+                "SELECT 1 FROM links WHERE chat_id = ? AND url = ?", (chat_id, url)
+            )
             if await cursor.fetchone() is not None:
                 continue  # Snapshot ingest: already a link, leave it untouched.
 
@@ -66,11 +69,11 @@ async def run(job: dict, *, html_b64: str = "") -> None:
             await conn.execute(
                 """
                 INSERT INTO links
-                    (id, url, title, topic, source_job, seen_count,
+                    (id, chat_id, url, title, topic, source_job, seen_count,
                      last_seen_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 """,
-                (generate_id(), url, title, topic, job_id, now_iso, created_at, now_iso),
+                (generate_id(), chat_id, url, title, topic, job_id, now_iso, created_at, now_iso),
             )
         await conn.commit()
 

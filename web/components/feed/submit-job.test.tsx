@@ -299,13 +299,51 @@ describe('Ingest Link — batch paste (#494)', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
   });
 
+  it('bounds concurrent link submissions while preserving the full batch', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const release: Array<() => void> = [];
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          release.push(() => {
+            active -= 1;
+            resolve(
+              new Response(
+                JSON.stringify({ id: 'j1', content_type: 'link', status: 'pending' }),
+              ),
+            );
+          });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const textarea = openIngestLink();
+    fireEvent.change(textarea, {
+      target: {
+        value: Array.from({ length: 8 }, (_, i) => `https://site-${i}.example`).join('\n'),
+      },
+    });
+    fireEvent.submit(textarea.closest('form')!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+    expect(maxActive).toBe(6);
+
+    release.splice(0).forEach((done) => done());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(8));
+    release.splice(0).forEach((done) => done());
+    await waitFor(() => expect(maxActive).toBe(6));
+  });
+
   it('a failure keeps the dialog open and renders an inline error row', async () => {
     const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
       const { url } = JSON.parse(init.body as string);
       if (url === 'https://bad.example') {
         return Promise.resolve({
           ok: false,
-          json: async () => ({ detail: 'Add Link needs an absolute http(s) URL' }),
+          json: async () => ({ detail: 'Add Link needs a valid HTTP(S) URL or bare domain' }),
         });
       }
       return Promise.resolve({
@@ -323,7 +361,7 @@ describe('Ingest Link — batch paste (#494)', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Add Link needs an absolute http(s) URL'),
+        screen.getByText('Add Link needs a valid HTTP(S) URL or bare domain'),
       ).toBeTruthy(),
     );
     // Dialog stays open on partial failure — the textarea is still mounted.

@@ -2676,4 +2676,4 @@ async def test_cmd_addlink_rejects_non_url(monkeypatch):
 
     created.assert_not_awaited()
     args, _ = sent.await_args
-    assert "absolute http(s) URL" in args[1]
+    assert "valid HTTP(S) URL or bare domain" in args[1]

@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS google_oauth_states (
 -- Second Brain semantic link graph (src/brain.py data-access layer).
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
+    chat_id       INTEGER,
     url           TEXT NOT NULL,
     title         TEXT,
     topic         TEXT,
@@ -191,7 +192,7 @@ CREATE TABLE IF NOT EXISTS links (
     og_image_url  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 
 -- Tag vocabulary for job tagging (issue #87 / S4).
@@ -1240,6 +1241,40 @@ async def _migrate_v36_v37(conn: aiosqlite.Connection) -> None:
 _MIGRATIONS.append(_migrate_v36_v37)
 
 
+async def _table_columns(conn: aiosqlite.Connection, table: str) -> set[str]:
+    cur = await conn.execute(f"PRAGMA table_info({table})")
+    return {row[1] for row in await cur.fetchall()}
+
+
+# v37 → v38: persist link ownership on links and dedupe per tenant (#499).
+async def _migrate_v37_v38(conn: aiosqlite.Connection) -> None:
+    cols = await _table_columns(conn, "links")
+    if "chat_id" not in cols:
+        await conn.execute("ALTER TABLE links ADD COLUMN chat_id INTEGER")
+    await conn.execute(
+        """
+        UPDATE links
+           SET chat_id = COALESCE(
+               (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+               ?
+           )
+         WHERE chat_id IS NULL
+        """,
+        (settings.OPERATOR_CHAT_ID,),
+    )
+    await conn.execute("DROP INDEX IF EXISTS idx_links_url_unique")
+    await conn.execute(
+        "DELETE FROM links WHERE rowid NOT IN "
+        "(SELECT MIN(rowid) FROM links GROUP BY chat_id, url)"
+    )
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url)"
+    )
+
+
+_MIGRATIONS.append(_migrate_v37_v38)
+
+
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
     row = await cur.fetchone()
@@ -1311,11 +1346,22 @@ async def init_db() -> None:
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='links'"
             )
             if await links_cur.fetchone() is not None:
-                # SCHEMA_SQL below unconditionally creates a UNIQUE index on links.url;
-                # dedup first so it doesn't crash on rows left over from before that
-                # constraint existed (the migration's own dedup step runs too late).
+                # SCHEMA_SQL creates a per-owner UNIQUE index on links(chat_id, url);
+                # dedup first so old duplicate rows don't crash DDL before the
+                # ownership migration gets a chance to run.
+                link_cols = await _table_columns(conn, "links")
+                if "chat_id" not in link_cols:
+                    await conn.execute("ALTER TABLE links ADD COLUMN chat_id INTEGER")
+                    link_cols.add("chat_id")
+                owner_expr = (
+                    "COALESCE(chat_id, (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?)"
+                    if "chat_id" in link_cols
+                    else "COALESCE((SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?)"
+                )
                 await conn.execute(
-                    "DELETE FROM links WHERE rowid NOT IN (SELECT MIN(rowid) FROM links GROUP BY url)"
+                    "DELETE FROM links WHERE rowid NOT IN "
+                    f"(SELECT MIN(rowid) FROM links GROUP BY {owner_expr}, url)",
+                    (settings.OPERATOR_CHAT_ID,),
                 )
         await conn.executescript(SCHEMA_SQL)
         if is_fresh:
@@ -2203,12 +2249,9 @@ async def detach_link_tag(link_id: str, tag_id: str) -> bool:
 async def delete_link(link_id: str, chat_id: int) -> bool:
     """Delete a Brain link owned by *chat_id*; its link_tags cascade.
 
-    Ownership is derived through ``source_job`` because ``links`` still has no
-    ``chat_id`` of its own (ADR-0043 is accepted but unimplemented). Rows whose
-    ``source_job`` dangles fall back to the Operator — the same ``COALESCE`` the
-    ADR's backfill uses — so the Operator's pre-purge orphans stay deletable
-    while nobody else can reach them. An unset ``OPERATOR_CHAT_ID`` yields NULL,
-    which matches no viewer, so the fallback fails closed.
+    Ownership is persisted on ``links.chat_id`` so retained links stay deletable
+    after their source job is removed. Legacy rows without a stored owner fall
+    back through ``source_job`` and then the Operator.
 
     # ponytail: leaves the Drive .md node orphaned, same as job deletion
     # (delete_job's "DELETE FROM links WHERE source_job = ?"). Wire up Drive
@@ -2219,7 +2262,9 @@ async def delete_link(link_id: str, chat_id: int) -> bool:
             """DELETE FROM links
                WHERE id = ?
                  AND COALESCE(
-                     (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?
+                     links.chat_id,
+                     (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+                     ?
                  ) = ?""",
             (link_id, settings.OPERATOR_CHAT_ID, chat_id),
         )
