@@ -10,6 +10,7 @@ from src.utils.public_html import fetch_public_html
 async def run(job: dict) -> None:
     """Fetch the page, collect Essential OG collection, and ingest one Brain link."""
     job_id = job["id"]
+    chat_id = job["chat_id"]
     url = job["url"]
     await database.update_job_status(job_id, "processing")
 
@@ -41,7 +42,9 @@ async def run(job: dict) -> None:
     )
     normalized = brain.normalize_url(url)
     async with database.connection() as conn:
-        cur = await conn.execute("SELECT 1 FROM links WHERE url = ?", (normalized,))
+        cur = await conn.execute(
+            "SELECT 1 FROM links WHERE chat_id = ? AND url = ?", (chat_id, normalized)
+        )
         if await cur.fetchone() is None:
             raise RuntimeError(f"brain ingest did not persist link for {url}")
     await database.update_job_status(job_id, "done")

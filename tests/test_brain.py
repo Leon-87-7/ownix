@@ -20,6 +20,7 @@ from src.brain import (
     ingest_links,
     list_links,
     normalize_url,
+    refresh_links_for_job,
     refresh_stale_links,
     search_links,
 )
@@ -254,6 +255,72 @@ async def test_soft_dedup_seen_count():
         # and the per-URL description is persisted.
         assert row["title"] == "Example Tool — Official Site"
         assert row["description"] == GOOD_DESC
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_touch_existing_link_updates_drive_file_in_place():
+    """#493 regression: re-ingesting a known URL must update the existing
+    Drive file, not create a second one that orphans drive_file_id."""
+    import aiosqlite
+    import tempfile
+    import os
+    from src.brain import ingest_links, SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    url TEXT,
+                    drive_url TEXT
+                );
+                INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                """
+            )
+            await conn.commit()
+
+        url = "https://example.com/tool"
+        link = {"url": url, "title": "Example Tool"}
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+             patch("src.brain.update_file", new_callable=AsyncMock) as mock_update, \
+             patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Example Tool — Official Site", GOOD_DESC, True)),
+             ):
+
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_embed.return_value = _rand_vec()
+            mock_upload.return_value = ("file-id-123", "https://drive.google.com/file/x")
+            mock_update.return_value = "https://drive.google.com/file/x"
+
+            await ingest_links([link], topic="tools", source_job_id="job_001")
+            mock_upload.assert_awaited_once()  # first sighting: create the file
+
+            await ingest_links([link], topic="tools", source_job_id="job_001")
+            # Second sighting: update the SAME file, never a second upload.
+            mock_upload.assert_awaited_once()
+            mock_update.assert_awaited_once()
+            assert mock_update.await_args.args[0] == "file-id-123"
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cursor = await conn.execute(
+                "SELECT drive_file_id FROM links WHERE url = ?", (url,)
+            )
+            row = await cursor.fetchone()
+        assert row["drive_file_id"] == "file-id-123"
 
     finally:
         os.unlink(db_path)
@@ -866,6 +933,141 @@ async def test_refresh_repairs_missing_description_and_reembeds():
         np.testing.assert_allclose(
             np.frombuffer(row["embedding"], dtype=np.float32), new_vec, rtol=1e-5
         )
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# refresh_links_for_job (#496) — import-scoped enrichment
+# ---------------------------------------------------------------------------
+
+
+async def _make_scoped_refresh_db():
+    """Two links needing repair, owned by different jobs — proves scoping."""
+    import aiosqlite
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.executescript(SCHEMA_SQL)
+        await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT)")
+        await conn.execute(
+            """INSERT INTO links
+               (id, url, title, topic, description, source_job, embedding, drive_file_id,
+                seen_count, last_seen_at, created_at, updated_at)
+               VALUES
+               ('bm1', 'https://example.com/a', 'A', 'topic-a', NULL, 'bookmark-job',
+                NULL, NULL, 1, 't', '2020-01-01T00:00:00+00:00', 't'),
+               ('other1', 'https://example.com/b', 'B', 'topic-b', NULL, 'other-job',
+                NULL, NULL, 1, 't', '2020-01-01T00:00:00+00:00', 't')"""
+        )
+        await conn.commit()
+    return db_path
+
+
+@pytest.mark.asyncio
+async def test_refresh_links_for_job_only_touches_that_jobs_links():
+    import os
+
+    db_path = await _make_scoped_refresh_db()
+    try:
+        with patch("src.brain.settings") as mock_settings, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Resolved", GOOD_DESC, True)),
+             ), \
+             patch("src.brain._embed", new=AsyncMock(return_value=_rand_vec())), \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload:
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "folder"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_settings.GITHUB_TOKEN = ""
+            mock_upload.return_value = ("file-id", "drive-url")
+
+            repaired = await refresh_links_for_job("bookmark-job")
+
+        assert repaired >= 1
+
+        import aiosqlite
+
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            bm1 = await (await conn.execute(
+                "SELECT description, embedding FROM links WHERE id = 'bm1'"
+            )).fetchone()
+            other1 = await (await conn.execute(
+                "SELECT description, embedding FROM links WHERE id = 'other1'"
+            )).fetchone()
+
+        assert bm1["description"] == GOOD_DESC
+        assert bm1["embedding"] is not None
+        # A different job's link is untouched, even though it also needs repair.
+        assert other1["description"] is None
+        assert other1["embedding"] is None
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_refresh_links_for_job_no_rows_is_a_noop():
+    import os
+
+    db_path = await _make_scoped_refresh_db()
+    try:
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            repaired = await refresh_links_for_job("no-such-job")
+        assert repaired == 0
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_refresh_links_for_job_enriches_links_of_a_deleted_job():
+    """ADR-0046: a job may be deleted while its links live on — enrichment
+    must not depend on the job row still existing."""
+    import os
+    import aiosqlite
+
+    db_path = await _make_scoped_refresh_db()
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.execute("DELETE FROM jobs WHERE id = 'bookmark-job'")
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings, \
+             patch(
+                 "src.brain._resolve_identity",
+                 new=AsyncMock(return_value=("Resolved", GOOD_DESC, True)),
+             ), \
+             patch("src.brain._embed", new=AsyncMock(return_value=_rand_vec())), \
+             patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload:
+            mock_settings.DB_PATH = db_path
+            mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "folder"
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            mock_settings.GITHUB_TOKEN = ""
+            mock_upload.return_value = ("file-id", "drive-url")
+
+            repaired = await refresh_links_for_job("bookmark-job")
+
+        assert repaired >= 1
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_refresh_links_for_job_skipped_while_rebuild_locked():
+    import os
+
+    db_path = await _make_scoped_refresh_db()
+    try:
+        async with _rebuild_lock:
+            with patch("src.brain.settings") as mock_settings:
+                mock_settings.DB_PATH = db_path
+                repaired = await refresh_links_for_job("bookmark-job")
+        assert repaired == 0
     finally:
         os.unlink(db_path)
 

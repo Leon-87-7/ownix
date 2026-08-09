@@ -205,18 +205,48 @@ def normalize_repo_url(url: str) -> str:
     return f"https://github.com/{segments[0]}/{segments[1]}"
 
 
+# A registrable TLD is alphabetic and at least two characters. Kills `e.g` and
+# `v1.2.3` without a registry list.
+_TLD_RE = re.compile(r"^[a-z]{2,}$", re.IGNORECASE)
+
+
 def is_fetchable_url(url: str) -> bool:
-    """True when *url* is an absolute http(s) URL with a hostname.
+    """True when *url* is an absolute http(s) URL with a real hostname.
 
     The minimum bar for direct-add link jobs (/addlink), which bypass
     detect_pipeline — keeps javascript:/data:/garbage strings out of the
     jobs table and the dashboard's <a href>.
+
+    Internal whitespace is rejected outright: urlparse reads a hostname off the
+    first token of "https://a.com https://b.com" and shoves the rest into
+    ``path``, so a whitespace-joined blob of URLs used to pass as one URL.
     """
+    stripped = url.strip()
+    if not stripped or any(c.isspace() for c in stripped):
+        return False
     try:
-        parsed = urlparse(url.strip())
+        parsed = urlparse(stripped)
     except ValueError:
         return False
-    return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+    # .scheme is already lowercased by urlparse, so HTTPS:// is fine here.
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = parsed.hostname or ""
+    # ponytail: 2+ alphabetic TLD, no registry list — `file.txt` and `Node.js`
+    # still coerce to URLs. Swap in a real TLD set only if junk rows show up.
+    return is_valid_domain_name(host) and bool(_TLD_RE.fullmatch(host.rstrip(".").split(".")[-1]))
+
+
+def coerce_url(token: str) -> str | None:
+    """A pasted token → an absolute http(s) URL, or None if it isn't one.
+
+    The single implementation of "is this a URL" behind every intake surface —
+    the Ingest Link box, batch link paste and Telegram /addlink — so a bare
+    domain works everywhere or nowhere. See CONTEXT.md "URL coercion".
+    """
+    token = token.strip()
+    candidate = token if token.lower().startswith(("http://", "https://")) else f"https://{token}"
+    return candidate if is_fetchable_url(candidate) else None
 
 
 def is_video_url(text: str) -> bool:

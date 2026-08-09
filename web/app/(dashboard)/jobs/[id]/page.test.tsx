@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import JobDetailPage from './page';
 
 const routerBack = vi.fn();
 const routerPush = vi.fn();
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterAll(() => server.close());
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'j1' }),
@@ -106,6 +112,7 @@ function setupMocks(
 }
 
 beforeEach(() => {
+  server.resetHandlers();
   setupMocks();
   mockUseRestrictedMode.mockReturnValue({ restricted: false, showRestrictedToast: vi.fn() });
   routerBack.mockReset();
@@ -162,21 +169,52 @@ describe('JobDetailPage', () => {
   });
 
   it('deletes after confirmation and navigates back', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+    let deletedPath = '';
+    server.use(
+      http.delete('/api/jobs/:jobId', ({ request }) => {
+        deletedPath = new URL(request.url).pathname;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
     window.history.pushState({}, '', '/feed');
     window.history.pushState({}, '', '/jobs/j1');
     render(<JobDetailPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/jobs/j1', { method: 'DELETE' });
+      expect(deletedPath).toBe('/api/jobs/j1');
       expect(routerBack).toHaveBeenCalledOnce();
     });
   });
 
+  it('has no with-links checkbox when the job added no links', () => {
+    setupMocks({ job: { ...JOB, link_count: 0 } });
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('deletes with ?with_links=1 only when the checkbox is checked (ADR-0046)', async () => {
+    setupMocks({ job: { ...JOB, link_count: 3 } });
+    let deletedSearch = '';
+    server.use(
+      http.delete('/api/jobs/:jobId', ({ request }) => {
+        deletedSearch = new URL(request.url).search;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    expect(screen.getByText(/also remove the 3 links/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() => expect(deletedSearch).toBe('?with_links=1'));
+  });
+
   it('shows the inline failure and closes the dialog', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    server.use(
+      http.delete('/api/jobs/:jobId', () => new HttpResponse(null, { status: 500 })),
+    );
     render(<JobDetailPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
     fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));

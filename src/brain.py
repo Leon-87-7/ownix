@@ -14,7 +14,7 @@ import numpy as np
 
 from src.config import settings
 from src.database import generate_id
-from src.services.drive import upload_file
+from src.services.drive import update_file, upload_file
 from src.utils.logger import get_logger
 from src.utils.og_image import extract_og_image_url
 from src.utils.public_html import fetch_public_html
@@ -29,6 +29,7 @@ _rebuild_lock = asyncio.Lock()
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS links (
     id            TEXT PRIMARY KEY,
+    chat_id       INTEGER,
     url           TEXT NOT NULL,
     title         TEXT,
     topic         TEXT,
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS links (
     og_image_url  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_links_url_unique ON links(url);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
 CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 
@@ -393,13 +394,13 @@ async def _rewrite_existing_md(
         last_seen_at=updated_row["last_seen_at"] if updated_row else last_seen,
         related_titles=related_titles,
     )
-    slug = _slugify(existing_title)
+    # The only caller (_touch_existing_link) checks existing["drive_file_id"]
+    # before calling here, so it is always present — update in place rather
+    # than uploading a fresh file every re-sighting (#493). upload_file was
+    # the wrong call: it orphaned a new Drive .md on every existing-link
+    # touch instead of updating the one drive_file_id already points at.
     try:
-        await upload_file(
-            md_text,
-            f"{slug}.md",
-            settings.GOOGLE_DRIVE_FOLDER_BRAIN,
-        )
+        await update_file(existing["drive_file_id"], md_text)
     except Exception as exc:
         log.warning("brain.drive_rewrite_failed", url=url, error=str(exc))
 
@@ -429,12 +430,24 @@ async def _touch_existing_link(
 async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str, now_iso: str) -> None:
     import aiosqlite
 
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        cursor = await conn.execute("SELECT chat_id FROM jobs WHERE id = ?", (source_job_id,))
+        owner = await cursor.fetchone()
+        if owner is None:
+            log.info("brain.ingest_source_job_missing", source_job_id=source_job_id, url=url)
+            return
+        chat_id = owner["chat_id"]
+
     # --- Soft dedup (own short connection) ---
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         cursor = await conn.execute(
-            "SELECT id, seen_count, drive_file_id, title, topic FROM links WHERE url = ? LIMIT 1",
-            (url,),
+            """SELECT id, seen_count, drive_file_id, title, topic
+               FROM links
+               WHERE chat_id = ? AND url = ?
+               LIMIT 1""",
+            (chat_id, url),
         )
         existing = await cursor.fetchone()
         if existing:
@@ -464,16 +477,16 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
     async with aiosqlite.connect(settings.DB_PATH) as conn:
         conn.row_factory = aiosqlite.Row
         link_id = generate_id()
-        # Atomic upsert: a concurrent ingest that inserted this URL while
+        # Atomic upsert: a concurrent ingest that inserted this owner+URL while
         # we were fetching becomes a seen_count bump, never a duplicate
-        # (unique index idx_links_url_unique, migration v31).
+        # (unique index idx_links_chat_url_unique, migration v38).
         insert_cursor = await conn.execute(
             """
             INSERT INTO links
-                (id, url, title, topic, description, source_job, embedding,
+                (id, chat_id, url, title, topic, description, source_job, embedding,
                  drive_file_id, og_image_url, seen_count, last_seen_at, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
-            ON CONFLICT(url) DO UPDATE SET
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)
+            ON CONFLICT(chat_id, url) DO UPDATE SET
                 seen_count = links.seen_count + 1,
                 last_seen_at = excluded.last_seen_at,
                 updated_at = excluded.updated_at,
@@ -482,6 +495,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
             """,
             (
                 link_id,
+                chat_id,
                 url,
                 title_str,
                 topic,
@@ -504,8 +518,8 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
 
         # Compute top-3 related
         cursor5 = await conn.execute(
-            "SELECT id, embedding FROM links WHERE embedding IS NOT NULL AND id != ?",
-            (link_id,),
+            "SELECT id, embedding FROM links WHERE chat_id = ? AND embedding IS NOT NULL AND id != ?",
+            (chat_id, link_id),
         )
         other_rows = [dict(r) for r in await cursor5.fetchall()]
         ids_list, matrix = _load_embeddings(other_rows)
@@ -1156,6 +1170,75 @@ async def _refresh_one_link(
     )
 
     return repaired_delta, matrix
+
+
+async def refresh_links_for_job(job_id: str) -> int:
+    """Enrich every unenriched link a specific job produced (#496, ADR-0048).
+
+    An import-scoped analogue of refresh_stale_links: selects by source_job
+    instead of oldest-first, so a Bookmark import's links get identity +
+    embeddings without waiting behind the global cron's existing backlog
+    (which, measured against the live database, is deep enough that a fresh
+    import would not be reached for weeks). No batch cap — this runs as its
+    own chained task (worker.py's _handle_bookmarks_enrich), decoupled from
+    the import job via the queue rather than run inline, so it does not block
+    that job's completion or the worker's own dequeue loop between awaits.
+
+    Best-effort: a failed or partial pass leaves rows exactly as
+    refresh_stale_links already expects them (description/embedding/
+    drive_file_id NULL), so the global sweep is still a correct, if slow,
+    fallback. Returns the count of rows touched.
+    """
+    import aiosqlite
+
+    if _rebuild_lock.locked():
+        log.info("brain.job_refresh_skipped", reason="rebuild_in_progress", job_id=job_id)
+        return 0
+
+    t0 = time.monotonic()
+
+    async with aiosqlite.connect(settings.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+
+        cursor = await conn.execute(
+            """
+            SELECT * FROM links
+            WHERE source_job = ?
+              AND (embedding IS NULL OR drive_file_id IS NULL OR description IS NULL)
+            ORDER BY created_at ASC
+            """,
+            (job_id,),
+        )
+        batch_rows = [dict(r) for r in await cursor.fetchall()]
+
+        if not batch_rows:
+            log.info("brain.job_refresh_done", job_id=job_id, batch=0, repaired=0, duration_ms=0)
+            return 0
+
+        repair_ids = {r["id"] for r in batch_rows}
+
+        cursor4 = await conn.execute("SELECT id, embedding FROM links WHERE embedding IS NOT NULL")
+        corpus_rows = [dict(r) for r in await cursor4.fetchall()]
+        ids_list, matrix = _load_embeddings(corpus_rows)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        repaired = 0
+
+        for lnk in batch_rows:
+            delta, matrix = await _refresh_one_link(conn, lnk, repair_ids, ids_list, matrix, now_iso)
+            repaired += delta
+
+        await conn.commit()
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "brain.job_refresh_done",
+        job_id=job_id,
+        batch=len(batch_rows),
+        repaired=repaired,
+        duration_ms=duration_ms,
+    )
+    return repaired
 
 
 async def refresh_stale_links() -> None:

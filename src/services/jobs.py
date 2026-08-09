@@ -61,6 +61,8 @@ async def create_and_enqueue_job(
     message_id: int | None = None,
     freestyle_prompt: str | None = None,
     skip_cache: bool = False,
+    task: str | None = None,
+    task_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create and enqueue a job, or return a recent matching job.
 
@@ -93,9 +95,22 @@ async def create_and_enqueue_job(
             "pending",
             template_detection_method="explicit_command",
         )
-    await queue.enqueue(
-        {"task": task_for_content_type(content_type, default=content_type), "job_id": job_id}
-    )
+    envelope: dict[str, Any] = {
+        "task": task or task_for_content_type(content_type, default=content_type),
+        "job_id": job_id,
+    }
+    if task_payload:
+        envelope.update(task_payload)
+    try:
+        await queue.enqueue(envelope)
+    except Exception:
+        await database.update_job_status(
+            job_id,
+            "error",
+            error_msg="Failed to enqueue job",
+        )
+        log.exception("job_enqueue_failed", chat_id=chat_id, job_id=job_id, task=envelope["task"])
+        raise
     created = await database.get_job(job_id)
     if created is None:
         return {

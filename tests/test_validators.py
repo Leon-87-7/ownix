@@ -1,8 +1,10 @@
 import pytest
 
 from src.utils.validators import (
+    coerce_url,
     detect_pipeline,
     extract_description_links,
+    is_fetchable_url,
     is_video_url,
     normalize_email,
     slugify,
@@ -340,3 +342,94 @@ def test_detect_pipeline_rejects_bad_scheme_and_lookalike_hosts() -> None:
 def test_normalize_email_rejects_oversized_input() -> None:
     assert normalize_email("a" * 250 + "@x.co") is None
     assert normalize_email("User@Example.COM") == "user@example.com"
+
+
+# ---------------------------------------------------------------------------
+# URL coercion (#490) — one implementation of "is this a URL", shared by the
+# Ingest Link box, batch link paste and Telegram /addlink.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://land-book.com",
+        "http://land-book.com",
+        "https://example.com:8080/x",
+        "https://user:pw@example.com",
+        "https://mail.google.com/mail/u/0/?tab=rm&ogbl#inbox",
+        "  https://land-book.com  ",
+    ],
+)
+def test_is_fetchable_url_accepts(url: str) -> None:
+    assert is_fetchable_url(url) is True
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # The screenshot bug: urlparse reads netloc 'land-book.com https:' off a
+        # whitespace-joined blob and shoves the rest into path, so the whole
+        # paste became one link job.
+        "https://land-book.com https://godly.website https://mobbin.com",
+        "https://a b.com",
+        "chrome://bookmarks/",
+        "file:///C:/Users/leone/Downloads/x.html",
+        "javascript:(function(){var e=document.getElementsByTagName('*');})()",
+        "ftp://example.com",
+        "land-book.com",  # no scheme — coerce_url's job, not this one
+        "....com",
+        "-.com",
+        "https://e.g",  # 1-char TLD
+        "https://v1.2.3",
+        "",
+        "   ",
+    ],
+)
+def test_is_fetchable_url_rejects(url: str) -> None:
+    assert is_fetchable_url(url) is False
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [
+        ("land-book.com", "https://land-book.com"),
+        ("google.com", "https://google.com"),
+        ("  google.com  ", "https://google.com"),
+        ("www.siteinspire.com", "https://www.siteinspire.com"),
+        ("https://land-book.com", "https://land-book.com"),
+        # startswith must be case-insensitive or a valid URL is rejected
+        ("HTTPS://land-book.com", "HTTPS://land-book.com"),
+    ],
+)
+def test_coerce_url_accepts(token: str, expected: str) -> None:
+    assert coerce_url(token) == expected
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "https://land-book.com https://godly.website https://mobbin.com",
+        "chrome://bookmarks/",
+        "file:///C:/Users/leone/Downloads/x.html",
+        "javascript:(function(){var e=document.getElementsByTagName('*');})()",
+        "ftp://example.com",
+        "e.g",
+        "e.g.",
+        "v1.2.3",
+        "....com",
+        "-.com",
+        "a b.com",
+        "just some prose",
+        "",
+    ],
+)
+def test_coerce_url_rejects(token: str) -> None:
+    assert coerce_url(token) is None
+
+
+@pytest.mark.parametrize("token", ["file.txt", "Node.js"])
+def test_coerce_url_known_false_positives(token: str) -> None:
+    """Documented ceiling, not a bug: separating these from real hosts needs a
+    registry TLD list. ADR/CONTEXT.md "URL coercion" records the trade."""
+    assert coerce_url(token) is not None

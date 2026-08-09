@@ -15,7 +15,7 @@ from src.services import drive, job_recovery
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
 from src.templates import PROMPT_TEMPLATES
-from src.utils.validators import detect_pipeline, is_fetchable_url, normalize_repo_url
+from src.utils.validators import coerce_url, detect_pipeline, normalize_repo_url
 
 log = get_logger(__name__)
 
@@ -138,8 +138,13 @@ class JobCreateRequest(BaseModel):
 
 
 async def _create_link_job(chat_id: int, url: str) -> dict:
-    if not is_fetchable_url(url):
-        raise HTTPException(status_code=422, detail="Add Link needs an absolute http(s) URL")
+    # coerce_url, not is_fetchable_url: a bare domain gains https:// so
+    # "land-book.com" works, while a whitespace-joined URL blob is rejected
+    # instead of being stored as one job (#490, CONTEXT.md "URL coercion").
+    coerced = coerce_url(url)
+    if coerced is None:
+        raise HTTPException(status_code=422, detail="Add Link needs a valid HTTP(S) URL or bare domain")
+    url = coerced
     warning = "Add Link saves the link as-is; it does not process it through the pipeline-detection flow."
     # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any
     # content_type returns the existing job instead of creating one, so a
@@ -592,16 +597,32 @@ async def get_job(job_id: str, request: Request) -> dict:
     job = await get_owned_job(job_id, request)
 
     fields = detail_fields_for(job.get("content_type", ""))
-    return {k: job.get(k) for k in fields}
+    detail = {k: job.get(k) for k in fields}
+    # Not a job column — one COUNT query, only consumed by the delete-confirm
+    # checkbox (ADR-0046), so it rides outside the content-type field filter.
+    detail["link_count"] = await database.count_job_links(job_id)
+    return detail
+
+
+@jobs_router.get("/{job_id}/link-topics")
+async def get_job_link_topics(job_id: str, request: Request) -> list[dict]:
+    """Distinct folders among this job's Brain links (#497 — the
+    folder-to-tag opt-in form). Re-openable any time: topic is persisted at
+    import regardless of whether the form is ever used."""
+    await get_owned_job(job_id, request)
+    return await database.list_job_link_topics(job_id)
 
 
 @jobs_router.delete("/{job_id}", status_code=204)
-async def delete_job(job_id: str, request: Request) -> Response:
+async def delete_job(job_id: str, request: Request, with_links: bool = False) -> Response:
     """Job delete: remove owned database state and durably record its Job purge.
 
     The purge task is written to a transactional outbox in the same transaction as the
     delete, ensuring it cannot be lost even if Redis is unavailable. A background drainer
     moves tasks from the outbox to Redis.
+
+    The job's Brain links are left standing (ADR-0046) unless `?with_links=1` is
+    passed — a bookmark import card owns hundreds of them, and there is no undo.
     """
     job = await get_owned_job(job_id, request)
     outputs = await database.list_document_outputs(job_id)
@@ -622,5 +643,5 @@ async def delete_job(job_id: str, request: Request) -> Response:
         "url": job.get("url"),
     }
     # Atomically delete the job and record the purge task in the outbox.
-    await database.delete_job(job_id, purge_payload=purge_task)
+    await database.delete_job(job_id, purge_payload=purge_task, with_links=with_links)
     return Response(status_code=204)

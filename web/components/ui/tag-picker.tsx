@@ -70,7 +70,7 @@ const TAG_ICONS: Record<string, LucideIcon> = {
   Brush,
   Container,
 };
-const TAG_ICON_NAMES = Object.keys(TAG_ICONS);
+export const TAG_ICON_NAMES = Object.keys(TAG_ICONS);
 
 export function TagMark({
   tag,

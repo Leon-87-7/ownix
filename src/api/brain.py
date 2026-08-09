@@ -139,7 +139,6 @@ async def detach_link_tag(link_id: str, tag_id: str, request: Request):
     deleted = await database.detach_link_tag(link_id, tag_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Tag not attached to this link")
-    from fastapi import Response
     return Response(status_code=204)
 
 

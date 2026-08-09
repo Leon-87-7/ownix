@@ -48,7 +48,7 @@ from src.utils.validators import (
     detect_pipeline,
     normalize_email,
     normalize_repo_url,
-    is_fetchable_url,
+    coerce_url,
     sanitize_filename_chars,
     _ARTICLE_HINT,
     _REPO_HINT,
@@ -792,9 +792,21 @@ async def _cmd_addlink(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
         await send_message(ctx.chat_id, "Usage: /addlink <url>")
         return
-    url = ctx.parts[1]
-    if not is_fetchable_url(url):
-        await send_message(ctx.chat_id, "Usage: /addlink <url> — must be an absolute http(s) URL")
+    if len(ctx.parts) > 2:
+        # ctx.parts is a whitespace split, so every token past the first was
+        # silently dropped before this check. Batch intake is dashboard-only
+        # (CONTEXT.md "Batch link paste").
+        await send_message(
+            ctx.chat_id,
+            "/addlink takes one URL. To add several at once, paste the list into "
+            "Ingest Link on the dashboard.",
+        )
+        return
+    # coerce_url so a bare domain works here exactly as it does on the
+    # dashboard — one implementation of "is this a URL" (#490).
+    url = coerce_url(ctx.parts[1])
+    if url is None:
+        await send_message(ctx.chat_id, "Usage: /addlink <url> — use a valid HTTP(S) URL or bare domain")
         return
     warning = "`/addlink` saves the link as-is; it does not process it through the pipeline-detection flow."
     # create_and_enqueue_job owns dedup (ADR-0033): a cache hit on any content_type

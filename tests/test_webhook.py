@@ -2657,3 +2657,68 @@ def test_callback_rejects_foreign_template_pick_sync(tmp_path, monkeypatch):
         answered.assert_awaited_once()
 
     asyncio.run(run())
+
+
+# ---------------------------------------------------------------------------
+# /addlink URL coercion (#490)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cmd_addlink_coerces_bare_domain(monkeypatch):
+    """A bare domain works on Telegram exactly as it does on the dashboard."""
+    from src.telegram.webhook import SlashCtx, _cmd_addlink
+
+    monkeypatch.setattr("src.telegram.webhook.send_message", AsyncMock())
+    created = AsyncMock(
+        return_value={"id": "20260807_000000_ABCD", "content_type": "link", "status": "pending"}
+    )
+    monkeypatch.setattr("src.telegram.webhook.create_and_enqueue_job", created)
+
+    await _cmd_addlink(SlashCtx(chat_id=42, parts=["/addlink", "land-book.com"], message_id=None))
+
+    created.assert_awaited_once()
+    args, _ = created.await_args
+    assert args[1] == "https://land-book.com"
+
+
+@pytest.mark.asyncio
+async def test_cmd_addlink_rejects_extra_tokens_instead_of_truncating(monkeypatch):
+    """Regression: ctx.parts is a whitespace split, so `/addlink a b c` used to
+    save `a` and drop `b c` with no indication anything was lost."""
+    from src.telegram.webhook import SlashCtx, _cmd_addlink
+
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    created = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.create_and_enqueue_job", created)
+
+    await _cmd_addlink(
+        SlashCtx(
+            chat_id=42,
+            parts=["/addlink", "https://a.com", "https://b.com", "https://c.com"],
+            message_id=None,
+        )
+    )
+
+    created.assert_not_awaited()
+    args, _ = sent.await_args
+    assert "one URL" in args[1]
+
+
+@pytest.mark.asyncio
+async def test_cmd_addlink_rejects_non_url(monkeypatch):
+    from src.telegram.webhook import SlashCtx, _cmd_addlink
+
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    created = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.create_and_enqueue_job", created)
+
+    await _cmd_addlink(
+        SlashCtx(chat_id=42, parts=["/addlink", "chrome://bookmarks/"], message_id=None)
+    )
+
+    created.assert_not_awaited()
+    args, _ = sent.await_args
+    assert "valid HTTP(S) URL or bare domain" in args[1]

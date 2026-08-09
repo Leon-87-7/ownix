@@ -206,3 +206,99 @@ class TestUploadValidation:
             files={"file": ("paper.pdf", b"%PDF-1.4 bytes", "application/pdf")},
         )
         assert resp.status_code == 401
+
+
+# Minimal Netscape bookmark export — enough to sniff as text/x-bookmarks
+# without any real bookmarks (#492 is deliberately hollow: zero links).
+_BOOKMARK_HTML = (
+    b"<!DOCTYPE NETSCAPE-Bookmark-file-1>\r\n"
+    b"<!-- generated -->\r\n"
+    b"<TITLE>Bookmarks</TITLE>\r\n"
+    b"<H1>Bookmarks</H1>\r\n"
+    b"<DL><p>\r\n"
+    b'<DT><A HREF="https://example.com" ADD_DATE="1600000000">Example</A>\r\n'
+    b"</DL><p>\r\n"
+)
+
+
+class TestBookmarkUpload:
+    """#492: accept the upload end-to-end, one job card, zero links. Parsing
+    is #495 — this slice only proves the intake wiring."""
+
+    def test_bookmark_html_creates_a_link_job(self, upload_client: TestClient) -> None:
+        from src import database
+
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("bookmarks.html", _BOOKMARK_HTML, "text/html")},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["kind"] == "job_created"
+        job = asyncio.run(database.get_job(body["job_id"]))
+        assert job is not None
+        assert job["content_type"] == "link"
+        # 'done' only after the worker dequeues the 'bookmarks' task and runs
+        # the processor (see test_bookmarks_processor.py) — queue.enqueue is
+        # mocked here, matching this file's PDF-upload tests, which likewise
+        # never assert past job creation.
+        assert job["status"] == "pending"
+        assert job["title"].startswith("Bookmarks ")
+        # jobs.url is a content-hash placeholder, never the uploaded bytes
+        # and never a navigable link (ADR-0048).
+        assert job["url"].startswith("bookmarks:")
+
+    def test_bookmark_html_creates_zero_links(self, upload_client: TestClient) -> None:
+        from src import database
+
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("bookmarks.html", _BOOKMARK_HTML, "text/html")},
+        )
+        job_id = resp.json()["job_id"]
+        row = asyncio.run(
+            database._fetch_one("SELECT COUNT(*) AS n FROM links WHERE source_job = ?", (job_id,))
+        )
+        assert row["n"] == 0
+
+    def test_wrong_content_type_header_is_ignored_bookmark_sniffed_by_bytes(
+        self, upload_client: TestClient
+    ) -> None:
+        # Same hardening guarantee as the PDF case: the client's declared
+        # Content-Type is never trusted, only the sniffed bytes are.
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("bookmarks.html", _BOOKMARK_HTML, "application/octet-stream")},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["kind"] == "job_created"
+
+    def test_arbitrary_html_is_not_sniffed_as_bookmarks(self, upload_client: TestClient) -> None:
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("page.html", b"<!DOCTYPE html><html></html>", "text/html")},
+        )
+        assert resp.status_code == 415
+
+    def test_idempotent_bookmark_resubmit_returns_same_job(
+        self, upload_client: TestClient
+    ) -> None:
+        _login(upload_client)
+        headers = {"Idempotency-Key": "bookmark-resubmit-1"}
+        first = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("bookmarks.html", _BOOKMARK_HTML, "text/html")},
+            headers=headers,
+        )
+        second = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("bookmarks.html", _BOOKMARK_HTML, "text/html")},
+            headers=headers,
+        )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["job_id"] == second.json()["job_id"]

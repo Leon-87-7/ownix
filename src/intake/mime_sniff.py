@@ -12,6 +12,10 @@ _SIGNATURES: tuple[tuple[bytes, str], ...] = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
     (b"GIF87a", "image/gif"),
     (b"GIF89a", "image/gif"),
+    # Every browser's bookmark export starts with this exact literal DOCTYPE —
+    # no other file emits it, so it doubles as a content signature (#492,
+    # ADR-0048). Arbitrary HTML still sniffs to None -> 415.
+    (b"<!DOCTYPE NETSCAPE-Bookmark-file-1>", "text/x-bookmarks"),
 )
 
 _WEBP_RIFF = b"RIFF"
