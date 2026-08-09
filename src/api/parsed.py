@@ -63,9 +63,12 @@ async def _create_document_job(
     ext: str | None = None,
 ) -> dict:
     ext = ext or validate_document(data, filename)  # canonical source ext, or 400
+    source_ext = parse._ext_from_name(filename)
+    if source_ext not in parse.SUPPORTED_EXTS:
+        source_ext = ext
     sha = _sha(data)
-    key = storage.object_key("documents", sha, ext)
-    await storage.upload(key, data, parse.content_type_for(ext))
+    key = storage.object_key("documents", sha, source_ext)
+    await storage.upload(key, data, parse.content_type_for(source_ext))
     job = await create_and_enqueue_job(chat_id=chat_id, url=key, content_type="document")
     job_id = job["id"]
     # Dashboard uploads default to NOT delivering to Telegram (user opts in via

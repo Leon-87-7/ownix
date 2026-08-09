@@ -185,18 +185,20 @@ shared layer is the derived parse only.
   (arxiv) running before the article-allowlist check.
 - `content_type = "document"`; worker task `{"task": "document"}`;
   `src/processors/document.py`.
-- New services: `src/services/liteparse.py` (sidecar HTTP client, mirrors
-  `transcript.py`) and `src/services/storage.py` (GCS wrapper).
+- **Superseded historical service split:** the original design introduced
+  `src/services/liteparse.py` as a `vig-document` sidecar HTTP client. The
+  shipped Office path now parses inline through `src/services/parse.py` with
+  anydoc in `vig-worker`; `src/services/storage.py` remains the GCS wrapper.
 - Document-specific enrichment schema: `title, author, publisher,
   document_type, summary, key_points, references[], tools[]`. Maps `title→title`,
   `summary→ai_objective`, `key_points→ai_action_points`, `tools→ai_tools`;
   `author`/`publisher`/`document_type`/`references` in `jobs.template_analysis`
   JSON blob ([ADR-0008](0008-template-analysis-json-blob.md)). No `promise_gap`
   (documents don't pitch — same reasoning as repos).
-- Delivery: Telegram-only for MVP (send `.txt`, then the enrichment message,
-  then buttons `[✍️ Freestyle] [📄 Get Markdown]`). Freestyle re-run reuses the
-  `awaiting_freestyle` seam and the cached parse. `📄 Get Markdown` triggers the
-  on-demand Markdown render (cached at `parsed/{sha256}.md`).
+- Delivery: Telegram delivery was the MVP surface. The dashboard now also
+  creates document jobs and exposes clean/freestyle outputs. The original
+  button-only follow-up contract is historical; Freestyle and clean Markdown
+  generation both reuse the cached parse.
 - Drive/Sheets writes are opt-in exports per ADR-0022 (new `Document Analysis`
   tab).
 

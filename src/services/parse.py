@@ -14,9 +14,9 @@ from urllib.parse import urlsplit
 import anydoc
 import liteparse
 
-from src.utils.document_formats import ANYDOC_EXTS, SUPPORTED_DOCUMENT_EXTS
+from src.utils.document_formats import SUPPORTED_DOCUMENT_EXTS
 
-# Canonical formats the anydoc path parses — the anydoc `Format` enum minus PDF.
+# Canonical formats the anydoc path parses - the anydoc `Format` enum minus PDF.
 # Callers (intake validation, the document processor) consult these to route
 # without importing anydoc directly.
 # Extension allowlist for URL/filename routing (detect_pipeline, upload filenames).
@@ -32,13 +32,16 @@ MIME_BY_EXT: dict[str, str] = {
     "pdf": "application/pdf",
     "doc": "application/msword",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "docm": "application/vnd.ms-word.document.macroEnabled.12",
     "odt": "application/vnd.oasis.opendocument.text",
     "rtf": "application/rtf",
     "epub": "application/epub+zip",
     "ppt": "application/vnd.ms-powerpoint",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "pptm": "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
     "odp": "application/vnd.oasis.opendocument.presentation",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
     "ods": "application/vnd.oasis.opendocument.spreadsheet",
     "csv": "text/csv",
 }
@@ -70,7 +73,7 @@ def detect_format(data: bytes, filename: str | None = None) -> str | None:
     correctly — never trust a client Content-Type. CSV alone carries no signature,
     so it is accepted only when the filename names it.
     """
-    fmt = anydoc.format_from_bytes(data)  # 'pdf', 'docx', 'xlsx', … or None
+    fmt = anydoc.format_from_bytes(data)  # 'pdf', 'docx', 'xlsx', ... or None
     if fmt:
         return fmt
     if _ext_from_name(filename) == "csv":

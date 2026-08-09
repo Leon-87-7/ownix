@@ -83,6 +83,31 @@ async def test_create_document_job_stores_office_under_source_ext(monkeypatch, o
 
 
 @pytest.mark.asyncio
+async def test_create_document_job_preserves_macro_enabled_source_ext(monkeypatch, office_samples):
+    from src.api import parsed
+
+    uploaded: dict = {}
+
+    async def fake_upload(key, data, ctype):
+        uploaded["key"] = key
+        uploaded["ctype"] = ctype
+
+    monkeypatch.setattr(parsed.storage, "upload", fake_upload)
+    monkeypatch.setattr(
+        parsed,
+        "create_and_enqueue_job",
+        AsyncMock(return_value={"id": "JOB1", "status": "pending"}),
+    )
+    monkeypatch.setattr(parsed.database, "set_job_telegram_delivery", AsyncMock())
+
+    result = await parsed._create_document_job(7, office_samples["deck.pptx"], "deck.pptm")
+
+    assert uploaded["key"].startswith("documents/") and uploaded["key"].endswith(".pptm")
+    assert "powerpoint.presentation.macroEnabled" in uploaded["ctype"]
+    assert result["gcs_key"].endswith(".pptm")
+
+
+@pytest.mark.asyncio
 async def test_create_document_job_preserves_delivery_on_deduped_job(monkeypatch, office_samples):
     from src.api import parsed
 
