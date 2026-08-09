@@ -15,7 +15,6 @@ from src.services.pdf_intake import (
     fetch_remote_document,
     read_capped_body,
     validate_document,
-    validate_pdf,
 )
 
 
@@ -49,20 +48,6 @@ async def test_assert_public_host_dns_failure_is_400(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await assert_public_host("no-such-host.invalid")
     assert exc.value.status_code == 400
-
-
-def test_validate_pdf_rejects_non_pdf():
-    with pytest.raises(HTTPException):
-        validate_pdf(b"not a pdf", "x.pdf")
-
-
-def test_validate_pdf_rejects_oversize():
-    with pytest.raises(HTTPException):
-        validate_pdf(b"%PDF" + b"0" * MAX_PDF_BYTES, "x.pdf")
-
-
-def test_validate_pdf_accepts_pdf():
-    validate_pdf(b"%PDF-1.4 ...", "doc.pdf")  # no raise
 
 
 def test_validate_document_accepts_pdf_returns_ext():
@@ -266,7 +251,7 @@ async def test_fetch_remote_document_unmapped_status_falls_back_to_502(monkeypat
 @pytest.mark.asyncio
 async def test_read_capped_body_clamps_to_cap():
     # A multi-chunk body over the cap is buffered to exactly MAX_PDF_BYTES+1,
-    # not held whole, so validate_pdf can 400 it without memory blowup.
+    # not held whole, so validate_document can 400 it without memory blowup.
     class FakeRequest:
         async def stream(self):
             for _ in range(3):

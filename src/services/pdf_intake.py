@@ -48,15 +48,6 @@ def validate_document(data: bytes, name: str = "document") -> str:
     return ext
 
 
-def validate_pdf(data: bytes, name: str = "document.pdf") -> None:
-    # Retained for the PDF-only callers/tests that predate multi-format intake.
-    # Field-level 400s for malformed input (wrong type / oversized), per #217.
-    if len(data) > MAX_PDF_BYTES:
-        raise HTTPException(status_code=400, detail={"field": "file", "message": "PDF must be 20 MB or smaller"})
-    if not name.lower().endswith(".pdf") or not data.startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail={"field": "file", "message": "Only PDF files are supported"})
-
-
 async def assert_public_host(host: str | None) -> None:
     # SSRF guard: refuse hosts that resolve to non-public addresses (loopback,
     # private, link-local cloud metadata at 169.254.169.254, etc.).
@@ -85,7 +76,7 @@ async def fetch_remote_document(url: str) -> tuple[bytes, str, str]:
         # follow_redirects=False: a redirect could bounce to an internal host
         # past the assert_public_host check (TOCTOU / redirect-based SSRF).
         # Stream with an early abort so a huge/slow body can't exhaust memory
-        # before validate_pdf runs (httpx has no max-response-size option).
+        # before validate_document runs (httpx has no max-response-size option).
         async with httpx.AsyncClient(
             follow_redirects=False,
             headers=REMOTE_PDF_HEADERS,
@@ -128,9 +119,9 @@ async def fetch_remote_document(url: str) -> tuple[bytes, str, str]:
 
 async def read_capped_body(request: Request) -> bytes:
     # Stream-read a raw body with a cap so a giant body can't exhaust memory
-    # before validate_pdf checks the size. Clamp the boundary-crossing chunk so a
-    # single huge chunk can't buffer past the cap (mirrors the multipart +1 read).
-    limit = MAX_PDF_BYTES + 1
+    # before validate_document checks the size. Clamp the boundary-crossing chunk
+    # so a single huge chunk can't buffer past the cap (mirrors the multipart +1 read).
+    limit = MAX_DOC_BYTES + 1
     chunks: list[bytes] = []
     total = 0
     async for chunk in request.stream():

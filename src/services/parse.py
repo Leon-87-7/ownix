@@ -1,16 +1,10 @@
 """Document text/Markdown extraction, routed by format (#153, ADR-0023).
 
-PDF → **liteparse**: layout-aware reading-order reconstruction (columns, tables,
-reading flow) that plain byte-order extraction loses. Kept as the PDF path.
-
-Everything else (DOCX/PPTX/XLSX, ODF, RTF, EPUB, CSV) → **firecrawl-anydoc**: a
-single self-contained Rust wheel (~3.4 MB manylinux abi3, no Rust toolchain at
-install). This lifts ADR-0023's Office deferral without the ~1 GB
-LibreOffice/ImageMagick/Tesseract stack that first-narrowed the pipeline to PDF.
-
-Both parsers are synchronous and CPU-bound, so parsing runs in asyncio.to_thread.
-Neither does OCR: a scanned / image-only input raises ParseError (callers already
-treat that as "no text could be extracted").
+PDF → liteparse; every other supported format (DOCX/PPTX/XLSX, ODF, RTF, EPUB,
+CSV) → anydoc. Both are synchronous and CPU-bound (run via asyncio.to_thread) and
+neither does OCR — a scanned/image-only input raises ParseError. Why this split
+and why anydoc over the LibreOffice stack: docs/adr/0023-liteparse-document-pipeline.md
+and docs/plans/anydoc-office-parsing-spike.md.
 """
 from __future__ import annotations
 
@@ -129,7 +123,5 @@ async def parse_document(data: bytes, ext: str, *, output_format: str = "text") 
         raise ParseError(f"Unsupported document format: .{ext or '?'}")
     try:
         return await asyncio.to_thread(_parse_anydoc_sync, data, ext)
-    except ParseError:
-        raise
     except Exception as exc:  # anydoc.ConvertError subclasses + OSError
         raise ParseError(str(exc)) from exc

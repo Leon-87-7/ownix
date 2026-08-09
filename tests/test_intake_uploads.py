@@ -207,7 +207,7 @@ class TestUploadValidation:
 
     def test_pdf_bytes_with_no_pdf_extension_still_succeeds(self, upload_client: TestClient) -> None:
         # Content sniffing (not the filename) decides this is a PDF; the
-        # channel-neutral contract must not leak a raw validate_pdf()
+        # channel-neutral contract must not leak a raw validate_document()
         # HTTPException just because the filename lacks a .pdf suffix.
         _login(upload_client)
         resp = upload_client.post(
