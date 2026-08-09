@@ -302,6 +302,36 @@ CREATE TABLE IF NOT EXISTS purge_tasks (
     enqueued_at     TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_purge_tasks_enqueued ON purge_tasks(enqueued_at);
+
+-- Append-only audit log of admin / security-relevant actions: who did what, to
+-- which entity, when. INTEGER PK like purge_tasks — rows are inserted, never
+-- updated. chat_id is the acting user (NULL for system-initiated actions);
+-- metadata holds an optional JSON blob of extra context.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id     INTEGER,
+    action      TEXT NOT NULL,
+    target_type TEXT,
+    target_id   TEXT,
+    metadata    TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_chat ON audit_log(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id);
+
+-- Enforce the append-only contract in the engine, not just by convention: a
+-- written audit row can never be altered or removed.
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+BEFORE UPDATE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END;
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+BEFORE DELETE ON audit_log
+BEGIN
+    SELECT RAISE(ABORT, 'audit_log is append-only');
+END;
 """
 
 
@@ -1278,6 +1308,35 @@ async def _migrate_v37_v38(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v37_v38)
+
+# v38 → v39: append-only audit log of admin / security-relevant actions.
+# Named so tests can locate this step by identity (its index shifts as later
+# migrations are appended). Triggers make the append-only contract enforced.
+_AUDIT_LOG_MIGRATION = [
+    """CREATE TABLE IF NOT EXISTS audit_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id     INTEGER,
+        action      TEXT NOT NULL,
+        target_type TEXT,
+        target_id   TEXT,
+        metadata    TEXT,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_log_chat ON audit_log(chat_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_type, target_id)",
+    """CREATE TRIGGER IF NOT EXISTS audit_log_no_update
+       BEFORE UPDATE ON audit_log
+       BEGIN
+           SELECT RAISE(ABORT, 'audit_log is append-only');
+       END""",
+    """CREATE TRIGGER IF NOT EXISTS audit_log_no_delete
+       BEFORE DELETE ON audit_log
+       BEGIN
+           SELECT RAISE(ABORT, 'audit_log is append-only');
+       END""",
+]
+_MIGRATIONS.append(_AUDIT_LOG_MIGRATION)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
