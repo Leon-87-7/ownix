@@ -20,7 +20,41 @@ describe('extractLinks', () => {
       { other: 1 },
       { links: [{ url: 'http://a.com' }, { label: 'no url' }, null] },
     ] as Array<Record<string, unknown>>);
-    expect(found).toEqual([{ url: 'http://a.com' }]);
+    expect(found).toEqual([{ url: 'http://a.com', label: null, description: null }]);
+  });
+
+  it('rejects unsupported or malformed URLs', () => {
+    const found = extractLinks([
+      {
+        links: [
+          { url: 'https://safe.example/path' },
+          { url: 'javascript:alert(1)' },
+          { url: 'ftp://files.example/item' },
+          { url: '/relative/path' },
+          { url: 'not a url' },
+        ],
+      },
+    ] as Array<Record<string, unknown>>);
+
+    expect(found).toEqual([
+      { url: 'https://safe.example/path', label: null, description: null },
+    ]);
+  });
+
+  it('rejects links with malformed metadata', () => {
+    const found = extractLinks([
+      {
+        links: [
+          { url: 'https://safe.example/a', label: 'Safe', description: null },
+          { url: 'https://safe.example/b', label: 12 },
+          { url: 'https://safe.example/c', description: { text: 'bad' } },
+        ],
+      },
+    ] as Array<Record<string, unknown>>);
+
+    expect(found).toEqual([
+      { url: 'https://safe.example/a', label: 'Safe', description: null },
+    ]);
   });
 
   it('returns an empty list when no artifact carries links', () => {

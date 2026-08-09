@@ -19,8 +19,11 @@ describe('TagChips compact mode', () => {
     const clip = screen.getByText('dev', { selector: 'span.sm\\:hidden' });
     expect(clip).toBeInTheDocument();
 
-    // Full name still present (revealed at sm+) and exposed to assistive tech.
-    expect(screen.getByText('dev-tools', { selector: 'span.hidden' })).toBeInTheDocument();
+    // Full name still present (revealed at sm+), but the sr-only span owns the accessible label.
+    expect(screen.getByText('dev-tools', { selector: 'span.hidden' })).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
     expect(screen.getByText('dev-tools', { selector: 'span.sr-only' })).toBeInTheDocument();
   });
 

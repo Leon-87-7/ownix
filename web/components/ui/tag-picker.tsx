@@ -428,7 +428,9 @@ export function TagChips({
                 >
                   {tag.name.slice(0, 3)}
                 </span>
-                <span className="hidden sm:inline">{tag.name}</span>
+                <span className="hidden sm:inline" aria-hidden="true">
+                  {tag.name}
+                </span>
                 <span className="sr-only">{tag.name}</span>
               </>
             ) : (

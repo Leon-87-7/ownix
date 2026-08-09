@@ -157,11 +157,14 @@ async def _report_photo_links(
     if links:
         links = await enrich_github_links(links)
         await send_message(chat_id, build_enriched_links_message(links))
-        await send_message(chat_id, build_plain_links_message(links))
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             from src import brain
 
             spawn_background(brain.ingest_links(links, topic=summary, source_job_id=source_job_id))
+        try:
+            await send_message(chat_id, build_plain_links_message(links))
+        except Exception:
+            log.exception("photo_links_plain_message_failed", chat_id=chat_id)
     else:
         noun = "these images" if plural else "this image"
         await send_message(

@@ -10,14 +10,39 @@ export interface IntakeLink {
   description?: string | null;
 }
 
+const APPROVED_LINK_PROTOCOLS = new Set(['http:', 'https:']);
+
+function parseIntakeLink(value: unknown): IntakeLink | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const link = value as Record<string, unknown>;
+  const { url, label, description } = link;
+  if (typeof url !== 'string') return null;
+
+  try {
+    const parsed = new URL(url);
+    if (!APPROVED_LINK_PROTOCOLS.has(parsed.protocol)) return null;
+  } catch {
+    return null;
+  }
+
+  if (label !== undefined && label !== null && typeof label !== 'string') return null;
+  if (description !== undefined && description !== null && typeof description !== 'string') {
+    return null;
+  }
+
+  return { url, label: label ?? null, description: description ?? null };
+}
+
 /** Pull the `{ links: [...] }` artifact out of a response's artifact list. */
 export function extractLinks(artifacts: Array<Record<string, unknown>>): IntakeLink[] {
   for (const artifact of artifacts) {
     const links = artifact.links;
     if (Array.isArray(links)) {
-      return links.filter(
-        (l): l is IntakeLink => !!l && typeof (l as IntakeLink).url === 'string',
-      );
+      return links.flatMap((link) => {
+        const parsed = parseIntakeLink(link);
+        return parsed ? [parsed] : [];
+      });
     }
   }
   return [];

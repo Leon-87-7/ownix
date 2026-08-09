@@ -260,6 +260,42 @@ async def _approve_user(chat_id: int, email: str | None = None) -> None:
 
 
 @pytest.mark.asyncio
+async def test_report_photo_links_ingests_when_plain_link_message_fails(monkeypatch):
+    from src.config import settings
+    from src.telegram import webhook
+
+    enriched_links = [{"url": "https://example.com", "label": "Example"}]
+    monkeypatch.setattr(
+        "src.services.github.enrich_github_links",
+        AsyncMock(return_value=enriched_links),
+    )
+    send = AsyncMock(side_effect=[{}, RuntimeError("telegram down")])
+    monkeypatch.setattr("src.telegram.webhook.send_message", send)
+    monkeypatch.setattr(settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "folder")
+    ingest = AsyncMock()
+    monkeypatch.setattr("src.brain.ingest_links", ingest)
+
+    scheduled = []
+
+    def capture_background(coro):
+        scheduled.append(coro)
+        coro.close()
+
+    monkeypatch.setattr("src.telegram.webhook.spawn_background", capture_background)
+
+    await webhook._report_photo_links(
+        42,
+        {"links": [{"url": "https://example.com"}], "summary": "summary"},
+        "photo_42",
+        plural=False,
+    )
+
+    assert send.await_count == 2
+    ingest.assert_called_once_with(enriched_links, topic="summary", source_job_id="photo_42")
+    assert len(scheduled) == 1
+
+
+@pytest.mark.asyncio
 async def test_callback_prd_build_spec_sends_submenu(temp_db, monkeypatch):
     from src.telegram import webhook
 
