@@ -1321,12 +1321,39 @@ async def test_audit_log_requires_action(temp_db) -> None:
 
 
 @pytest.mark.asyncio
-async def test_migration_adds_audit_log_to_existing_db(tmp_path, monkeypatch) -> None:
-    """A DB pinned one version before this migration must gain audit_log."""
+async def test_audit_log_is_append_only(temp_db) -> None:
+    """The BEFORE UPDATE / BEFORE DELETE triggers abort any mutation of a row."""
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute("INSERT INTO audit_log (action) VALUES ('user.approve')")
+        await conn.commit()
+
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute("UPDATE audit_log SET action = 'tampered'")
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute("DELETE FROM audit_log")
+
+        # The original row is untouched by either blocked mutation.
+        cur = await conn.execute("SELECT action FROM audit_log")
+        assert [row[0] for row in await cur.fetchall()] == ["user.approve"]
+
+
+@pytest.mark.asyncio
+async def test_migration_creates_audit_log_and_triggers_directly(tmp_path, monkeypatch) -> None:
+    """The v38→v39 migration itself must create audit_log, its indexes, and triggers.
+
+    Runs ``_run_migrations`` directly rather than ``init_db()`` — the latter
+    executes SCHEMA_SQL first, which would create audit_log before any migration
+    ran and mask a migration that omitted the DDL. The step is located by
+    identity (``_AUDIT_LOG_MIGRATION``), not ``len(_MIGRATIONS)``, so appending
+    later migrations can't retarget this test.
+    """
     from src import database
 
     db_file = str(tmp_path / "pre_audit.db")
-    target_version = len(database._MIGRATIONS) - 1
+    target_version = database._MIGRATIONS.index(database._AUDIT_LOG_MIGRATION)
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+
     async with aiosqlite.connect(db_file) as conn:
         await conn.execute(
             "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
@@ -1336,15 +1363,33 @@ async def test_migration_adds_audit_log_to_existing_db(tmp_path, monkeypatch) ->
         await conn.execute(f"PRAGMA user_version = {target_version}")
         await conn.commit()
 
-    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
-    await database.init_db()
-
-    async with aiosqlite.connect(db_file) as conn:
+        # Precondition: no SCHEMA_SQL was run, so audit_log does not exist yet.
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"
         )
-        row = await cur.fetchone()
-        cur2 = await conn.execute("PRAGMA user_version")
-        version = (await cur2.fetchone())[0]
-    assert row is not None, "audit_log must exist after the v38→v39 migration"
-    assert version == len(database._MIGRATIONS)
+        assert await cur.fetchone() is None
+
+        await database._run_migrations(conn)
+
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"
+        )
+        assert await cur.fetchone() is not None, "the migration must create audit_log"
+
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='audit_log'"
+        )
+        indexes = {row[0] for row in await cur.fetchall()}
+        assert {
+            "idx_audit_log_created",
+            "idx_audit_log_chat",
+            "idx_audit_log_target",
+        } <= indexes
+
+        # The append-only triggers came across with the migration too.
+        await conn.execute("INSERT INTO audit_log (action) VALUES ('x')")
+        with pytest.raises(aiosqlite.IntegrityError):
+            await conn.execute("DELETE FROM audit_log")
+
+        cur = await conn.execute("PRAGMA user_version")
+        assert (await cur.fetchone())[0] == len(database._MIGRATIONS)
