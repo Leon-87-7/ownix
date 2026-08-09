@@ -392,13 +392,20 @@ function CreateTagModal({
   );
 }
 
-/** Attached tags rendered as removable colored chips. */
+/** Attached tags rendered as removable colored chips.
+ *
+ * `compact` (feed cards on phones): keep the icon, but clamp the name to its
+ * first 3 characters on mobile; the full name returns at the `sm` breakpoint.
+ * The meaning tooltip still carries the full name for the truncated case.
+ */
 export function TagChips({
   jobTags,
   onRemove,
+  compact = false,
 }: {
   jobTags: TagSummary[];
   onRemove: (tagId: string) => void;
+  compact?: boolean;
 }) {
   // Bare flex items (no wrapper) so chips align inline with a sibling dropdown.
   return (
@@ -413,7 +420,22 @@ export function TagChips({
               tag={tag}
               className="h-3 w-3"
             />
-            {tag.name}
+            {compact ? (
+              <>
+                <span
+                  className="sm:hidden"
+                  aria-hidden="true"
+                >
+                  {tag.name.slice(0, 3)}
+                </span>
+                <span className="hidden sm:inline" aria-hidden="true">
+                  {tag.name}
+                </span>
+                <span className="sr-only">{tag.name}</span>
+              </>
+            ) : (
+              tag.name
+            )}
             <button
               type="button"
               onClick={() => onRemove(tag.id)}

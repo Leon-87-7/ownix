@@ -150,7 +150,7 @@ async def _report_photo_links(
 ) -> None:
     """Send enriched links (and kick off brain ingest) or a no-links notice."""
     from src.services.github import enrich_github_links
-    from src.utils.markdown import build_enriched_links_message
+    from src.utils.markdown import build_enriched_links_message, build_plain_links_message
 
     links = result.get("links", [])
     summary = result.get("summary", "")
@@ -161,6 +161,10 @@ async def _report_photo_links(
             from src import brain
 
             spawn_background(brain.ingest_links(links, topic=summary, source_job_id=source_job_id))
+        try:
+            await send_message(chat_id, build_plain_links_message(links))
+        except Exception:
+            log.exception("photo_links_plain_message_failed", chat_id=chat_id)
     else:
         noun = "these images" if plural else "this image"
         await send_message(

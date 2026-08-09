@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { IntakeActions } from '@/components/intake/intake-actions';
+import { IntakeLinksList, extractLinks } from '@/components/intake/intake-links-list';
 import { IntakeStatusLine } from '@/components/intake/intake-status-line';
 import { IntakeTagOffer } from '@/components/intake/intake-tag-offer';
 import { PreviewCard } from '@/components/feed/preview-card';
@@ -42,6 +43,7 @@ export function IntakeResponseCard({
   const { response, job, echo, retry } = item;
   const negative = NEGATIVE_KINDS.has(response.kind);
   const [retrying, setRetrying] = useState(false);
+  const links = extractLinks(response.artifacts);
 
   // `create_tag` renders as its own inline form, not as a generic action button.
   const tagOffers = onSaveOffer
@@ -89,6 +91,8 @@ export function IntakeResponseCard({
         </div>
 
         <p className="mt-1 whitespace-pre-wrap text-sm text-body">{response.text}</p>
+
+        {links.length > 0 && <IntakeLinksList links={links} />}
 
         {/* `job === undefined` means not yet resolved; `null` means the row is
             gone (deleted). Only a resolved job drives the live treatment. */}

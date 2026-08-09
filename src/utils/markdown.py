@@ -75,6 +75,13 @@ def _humanize_age(days: int) -> str:
     return f"{years} year{'s' if years != 1 else ''} ago"
 
 
+def _ordered_links(links: list[dict]) -> list[dict]:
+    enriched = [lnk for lnk in links if lnk.get("_enriched")]
+    others = [lnk for lnk in links if not lnk.get("_enriched")]
+    enriched.sort(key=lambda lnk: lnk.get("_stars", 0) + lnk.get("_forks", 0), reverse=True)
+    return enriched + others
+
+
 def build_enriched_links_message(links: list[dict]) -> str:
     """Format a mixed list of links, some with GitHub enrichment data.
 
@@ -89,16 +96,8 @@ def build_enriched_links_message(links: list[dict]) -> str:
     ``_stars`` (int), ``_forks`` (int), ``_language`` (str|None),
     ``_days_ago`` (int), ``_gh_description`` (str|None).
     """
-    enriched = [lnk for lnk in links if lnk.get("_enriched")]
-    others = [lnk for lnk in links if not lnk.get("_enriched")]
-
-    # Sort enriched repos by stars + forks, descending
-    enriched.sort(key=lambda lnk: lnk.get("_stars", 0) + lnk.get("_forks", 0), reverse=True)
-
-    sorted_links = enriched + others
-
     labeled_parts: list[str] = []
-    for lnk in sorted_links:
+    for lnk in _ordered_links(links):
         if lnk.get("_enriched"):
             title = lnk.get("_gh_description") or lnk.get("label") or lnk["url"]
             language = lnk.get("_language") or "N/A"
@@ -114,3 +113,13 @@ def build_enriched_links_message(links: list[dict]) -> str:
 
     labeled = "\n".join(labeled_parts)
     return f"🔗 Links Found:\n{labeled}"
+
+
+def build_plain_links_message(links: list[dict]) -> str:
+    """Format links as a plain-text list — one bare URL per line, nothing else.
+
+    Preserves the same ordering as :func:`build_enriched_links_message`
+    (enriched GitHub repos first by stars+forks, then the rest) so the two
+    messages line up.  Returns the empty string when there are no links.
+    """
+    return "\n".join(lnk["url"] for lnk in _ordered_links(links))

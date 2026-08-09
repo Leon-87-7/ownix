@@ -11,7 +11,9 @@ export function JobCardTags({ jobId, countOnly = false }: { jobId: string; count
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {/* countOnly: signal attached tags via the menu's count badge, no chips. */}
-      {!countOnly && <TagChips jobTags={jobTags} onRemove={(id) => toggleTag(id, true)} />}
+      {!countOnly && (
+        <TagChips jobTags={jobTags} onRemove={(id) => toggleTag(id, true)} compact />
+      )}
       <TagMenu jobTags={jobTags} allTags={allTags} onToggle={toggleTag} onCreate={createTag} />
     </div>
   );
