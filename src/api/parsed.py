@@ -56,8 +56,13 @@ async def get_owned_document_job(job_id: str, request: Request) -> dict:
     return job
 
 
-async def _create_document_job(chat_id: int, data: bytes, filename: str) -> dict:
-    ext = validate_document(data, filename)  # canonical source ext, or 400
+async def _create_document_job(
+    chat_id: int,
+    data: bytes,
+    filename: str,
+    ext: str | None = None,
+) -> dict:
+    ext = ext or validate_document(data, filename)  # canonical source ext, or 400
     sha = _sha(data)
     key = storage.object_key("documents", sha, ext)
     await storage.upload(key, data, parse.content_type_for(ext))
@@ -66,8 +71,14 @@ async def _create_document_job(chat_id: int, data: bytes, filename: str) -> dict
     # Dashboard uploads default to NOT delivering to Telegram (user opts in via
     # the per-job toggle). Bot-submitted jobs keep the DB default ('on') so the
     # existing Telegram flow is unchanged.
-    await database.set_job_telegram_delivery(job_id, "off")
-    return {"job_id": job_id, "sha256": sha, "gcs_key": key, "status": job.get("status", "pending")}
+    if not job.get("_deduped"):
+        await database.set_job_telegram_delivery(job_id, "off")
+    return {
+        "job_id": job_id,
+        "sha256": sha,
+        "gcs_key": key,
+        "status": job.get("status", "pending"),
+    }
 
 
 async def _ocr_image_response(chat_id: int, data: bytes, content_type: str) -> dict:
@@ -117,8 +128,8 @@ class UrlIn(BaseModel):
 
 @parsed_router.post("/url", status_code=201)
 async def upload_url(body: UrlIn, request: Request) -> dict:
-    data, filename, _ext = await fetch_remote_document(body.url)
-    return await _create_document_job(request.state.user["id"], data, filename)
+    data, filename, ext = await fetch_remote_document(body.url)
+    return await _create_document_job(request.state.user["id"], data, filename, ext)
 
 
 class FreestyleIn(BaseModel):

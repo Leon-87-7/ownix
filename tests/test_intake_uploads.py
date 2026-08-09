@@ -22,10 +22,11 @@ def upload_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     monkeypatch.setattr("src.config.settings.SESSION_BACKEND", "memory")
 
     from src import database
-    from src.api import parsed as parsed_module
     from src.api.intake import intake_router
     from src.auth.middleware import SessionMiddleware
     from src.intake import idempotency, quota, rate_limit
+    from src.services import jobs as jobs_module
+    from src.services import storage
 
     asyncio.run(database.init_db())
     asyncio.run(database.set_user_status(CHAT_ID, "approved"))
@@ -33,8 +34,8 @@ def upload_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     quota.reset()
     idempotency._memory.clear()
 
-    monkeypatch.setattr(parsed_module.storage, "upload", AsyncMock())
-    monkeypatch.setattr(parsed_module.queue, "enqueue", AsyncMock())
+    monkeypatch.setattr(storage, "upload", AsyncMock())
+    monkeypatch.setattr(jobs_module.queue, "enqueue", AsyncMock())
 
     test_app = FastAPI()
     test_app.add_middleware(SessionMiddleware)

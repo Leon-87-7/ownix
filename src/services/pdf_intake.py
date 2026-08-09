@@ -21,8 +21,7 @@ from fastapi import HTTPException, Request
 from src.services.parse import SUPPORTED_EXTS, _ext_from_name, detect_format
 from src.utils.ssrf import is_public_ip, resolve_public_host
 
-MAX_PDF_BYTES = 20 * 1024 * 1024
-MAX_DOC_BYTES = MAX_PDF_BYTES  # readable alias now that intake is multi-format
+MAX_DOC_BYTES = 20 * 1024 * 1024
 REMOTE_DOCUMENT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; vig/1.0; +https://github.com/Leon-87-7/vig)",
     "Accept": "*/*",

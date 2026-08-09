@@ -14,17 +14,16 @@ from urllib.parse import urlsplit
 import anydoc
 import liteparse
 
+from src.utils.document_formats import ANYDOC_EXTS, SUPPORTED_DOCUMENT_EXTS
+
 # Canonical formats the anydoc path parses — the anydoc `Format` enum minus PDF.
 # Callers (intake validation, the document processor) consult these to route
 # without importing anydoc directly.
-ANYDOC_EXTS = frozenset(
-    {"doc", "docx", "odt", "rtf", "epub", "ppt", "pptx", "xlsx", "ods", "odp", "csv"}
-)
 # Extension allowlist for URL/filename routing (detect_pipeline, upload filenames).
 # The canonical set plus common OOXML variants that share a ZIP container anydoc
 # detects by content (docm→docx, xlsm→xlsx, pptm→pptx). The authoritative gate is
 # always detect_format() on the actual bytes; this only decides "looks like a doc".
-SUPPORTED_EXTS = frozenset({"pdf"}) | ANYDOC_EXTS | {"docm", "xlsm", "pptm"}
+SUPPORTED_EXTS = SUPPORTED_DOCUMENT_EXTS
 
 # Canonical source extension → storage/HTTP content type. Keyed by what
 # detect_format() returns (always a canonical ext), so every stored source object

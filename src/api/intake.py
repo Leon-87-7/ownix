@@ -22,7 +22,7 @@ from src.intake.router import handle as handle_intake_message
 
 intake_router = APIRouter(prefix="/api/intake", tags=["intake"])
 
-# Mirrors src.services.pdf_intake.MAX_PDF_BYTES — the larger of the two file
+# Mirrors src.services.pdf_intake.MAX_DOC_BYTES — the larger of the two file
 # kinds this endpoint accepts (images are always far smaller in practice).
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 

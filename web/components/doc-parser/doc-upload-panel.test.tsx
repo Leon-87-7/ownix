@@ -32,6 +32,7 @@ describe('DocUploadPanel', () => {
     pickFile(container, new File([new Uint8Array([1, 2, 3])], 'shot.png', { type: 'image/png' }));
 
     await waitFor(() => expect(screen.getByText('https://found.tld/x')).toBeInTheDocument());
+    expect(screen.getByText('Image links')).toBeInTheDocument();
     expect(onUploaded).not.toHaveBeenCalled();
   });
 
@@ -75,6 +76,7 @@ describe('DocUploadPanel', () => {
     expect(input.accept).toContain('.docx');
     expect(input.accept).toContain('.xlsx');
     expect(input.accept).toContain('.pptx');
+    expect(input.accept).not.toContain('.xls,');
     expect(input.accept).toContain('image/*');
   });
 });

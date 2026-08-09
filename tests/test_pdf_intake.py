@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.services.pdf_intake import (
-    MAX_PDF_BYTES,
+    MAX_DOC_BYTES,
     REMOTE_DOCUMENT_HEADERS,
     assert_public_host,
     fetch_remote_document,
@@ -76,7 +76,7 @@ def test_validate_document_rejects_unknown():
 
 def test_validate_document_rejects_oversize():
     with pytest.raises(HTTPException):
-        validate_document(b"%PDF" + b"0" * MAX_PDF_BYTES, "x.pdf")
+        validate_document(b"%PDF" + b"0" * MAX_DOC_BYTES, "x.pdf")
 
 
 @pytest.mark.asyncio
@@ -250,26 +250,26 @@ async def test_fetch_remote_document_unmapped_status_falls_back_to_502(monkeypat
 
 @pytest.mark.asyncio
 async def test_read_capped_body_clamps_to_cap():
-    # A multi-chunk body over the cap is buffered to exactly MAX_PDF_BYTES+1,
+    # A multi-chunk body over the cap is buffered to exactly MAX_DOC_BYTES+1,
     # not held whole, so validate_document can 400 it without memory blowup.
     class FakeRequest:
         async def stream(self):
             for _ in range(3):
-                yield b"x" * (MAX_PDF_BYTES // 2)  # 1.5x the cap across chunks
+                yield b"x" * (MAX_DOC_BYTES // 2)  # 1.5x the cap across chunks
 
     data = await read_capped_body(FakeRequest())
-    assert len(data) == MAX_PDF_BYTES + 1
+    assert len(data) == MAX_DOC_BYTES + 1
 
 
 @pytest.mark.asyncio
 async def test_read_capped_body_clamps_single_huge_chunk():
-    # One chunk larger than the cap must not buffer past MAX_PDF_BYTES+1.
+    # One chunk larger than the cap must not buffer past MAX_DOC_BYTES+1.
     class FakeRequest:
         async def stream(self):
-            yield b"x" * (MAX_PDF_BYTES * 3)
+            yield b"x" * (MAX_DOC_BYTES * 3)
 
     data = await read_capped_body(FakeRequest())
-    assert len(data) == MAX_PDF_BYTES + 1
+    assert len(data) == MAX_DOC_BYTES + 1
 
 
 @pytest.mark.asyncio

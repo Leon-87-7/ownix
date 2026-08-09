@@ -83,6 +83,24 @@ async def test_create_document_job_stores_office_under_source_ext(monkeypatch, o
 
 
 @pytest.mark.asyncio
+async def test_create_document_job_preserves_delivery_on_deduped_job(monkeypatch, office_samples):
+    from src.api import parsed
+
+    monkeypatch.setattr(parsed.storage, "upload", AsyncMock())
+    monkeypatch.setattr(
+        parsed,
+        "create_and_enqueue_job",
+        AsyncMock(return_value={"id": "JOB1", "status": "done", "_deduped": True}),
+    )
+    monkeypatch.setattr(parsed.database, "set_job_telegram_delivery", AsyncMock())
+
+    result = await parsed._create_document_job(7, office_samples["deck.pptx"], "deck.pptx")
+
+    assert result["job_id"] == "JOB1"
+    parsed.database.set_job_telegram_delivery.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_document_job_rejects_unsupported(monkeypatch):
     from src.api import parsed
 

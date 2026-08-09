@@ -5,15 +5,9 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
-Pipeline = Literal["short", "long", "unsized", "article", "repo", "document", "rejected"]
+from src.utils.document_formats import SUPPORTED_DOCUMENT_EXTS
 
-# Document file extensions that route a URL to the document pipeline. Mirrors
-# src.services.parse.SUPPORTED_EXTS (kept local so this stdlib-only util doesn't
-# pull in the parser/anydoc import graph). The authoritative format gate is the
-# content sniff at ingest — this only decides "this link looks like a document".
-_DOCUMENT_EXTS = frozenset(
-    {"pdf", "doc", "docx", "docm", "odt", "rtf", "epub", "ppt", "pptx", "pptm", "odp", "xlsx", "xlsm", "ods", "csv"}
-)
+Pipeline = Literal["short", "long", "unsized", "article", "repo", "document", "rejected"]
 
 _UNSIZED_VIDEO_HOSTS = frozenset({"facebook.com", "x.com", "twitter.com"})
 
@@ -163,7 +157,7 @@ def _document_ext(path: str) -> str:
     """The document extension a URL path ends in (e.g. 'pdf', 'docx'), or ''."""
     tail = path.rsplit("/", 1)[-1].lower()
     ext = tail.rsplit(".", 1)[-1] if "." in tail else ""
-    return ext if ext in _DOCUMENT_EXTS else ""
+    return ext if ext in SUPPORTED_DOCUMENT_EXTS else ""
 
 
 def _match_short(host: str, path: str) -> bool:

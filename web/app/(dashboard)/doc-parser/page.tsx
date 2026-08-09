@@ -47,7 +47,7 @@ const DOC_FORMAT_TABS = [
 const FORMAT_BUCKETS: Record<string, readonly string[]> = {
   pdf: ['pdf'],
   word: ['doc', 'docx', 'docm', 'odt', 'rtf', 'epub'],
-  spreadsheet: ['xls', 'xlsx', 'xlsm', 'ods', 'csv'],
+  spreadsheet: ['xlsx', 'xlsm', 'ods', 'csv'],
   presentation: ['ppt', 'pptx', 'pptm', 'odp'],
 };
 
