@@ -13,13 +13,14 @@ export interface FolderAssignment {
   icon: string;
 }
 
-function shuffled<T>(items: readonly T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
+function seedFrom(value: string): number {
+  return Array.from(value).reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+}
+
+function rotated<T>(items: readonly T[], seed: number): T[] {
+  if (items.length === 0) return [];
+  const offset = seed % items.length;
+  return [...items.slice(offset), ...items.slice(0, offset)];
 }
 
 /** Folder-to-tag opt-in form (#497): fetches the distinct folders a Bookmark
@@ -46,8 +47,9 @@ export function useFolderTagForm(jobId: string) {
         link_ids: string[];
         count: number;
       }[];
-      const colors = shuffled(PRESET_COLORS);
-      const icons = shuffled(TAG_ICON_NAMES);
+      const seed = seedFrom(jobId);
+      const colors = rotated(PRESET_COLORS, seed);
+      const icons = rotated(TAG_ICON_NAMES, seed * 3);
       setAssignments(
         topics.map((t, i) => ({
           topic: t.topic,

@@ -1241,8 +1241,13 @@ async def _migrate_v36_v37(conn: aiosqlite.Connection) -> None:
 _MIGRATIONS.append(_migrate_v36_v37)
 
 
+_TABLE_INFO_SQL = {
+    "links": "PRAGMA table_info(links)",
+}
+
+
 async def _table_columns(conn: aiosqlite.Connection, table: str) -> set[str]:
-    cur = await conn.execute(f"PRAGMA table_info({table})")
+    cur = await conn.execute(_TABLE_INFO_SQL[table])
     return {row[1] for row in await cur.fetchall()}
 
 
@@ -1353,14 +1358,19 @@ async def init_db() -> None:
                 if "chat_id" not in link_cols:
                     await conn.execute("ALTER TABLE links ADD COLUMN chat_id INTEGER")
                     link_cols.add("chat_id")
-                owner_expr = (
-                    "COALESCE(chat_id, (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?)"
-                    if "chat_id" in link_cols
-                    else "COALESCE((SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job), ?)"
-                )
                 await conn.execute(
-                    "DELETE FROM links WHERE rowid NOT IN "
-                    f"(SELECT MIN(rowid) FROM links GROUP BY {owner_expr}, url)",
+                    """
+                    DELETE FROM links
+                     WHERE rowid NOT IN (
+                         SELECT MIN(rowid)
+                           FROM links
+                          GROUP BY COALESCE(
+                              chat_id,
+                              (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+                              ?
+                          ), url
+                     )
+                    """,
                     (settings.OPERATOR_CHAT_ID,),
                 )
         await conn.executescript(SCHEMA_SQL)
