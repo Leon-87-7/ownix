@@ -1,20 +1,42 @@
-"""Inline PDF text extraction via liteparse (#153).
+"""Document text/Markdown extraction, routed by format (#153, ADR-0023).
 
-liteparse is synchronous and CPU-bound, so parsing runs in asyncio.to_thread.
-PDF-only at MVP: no OCR, no sidecar, no native binaries (ADR-0023).
+PDF → **liteparse**: layout-aware reading-order reconstruction (columns, tables,
+reading flow) that plain byte-order extraction loses. Kept as the PDF path.
+
+Everything else (DOCX/PPTX/XLSX, ODF, RTF, EPUB, CSV) → **firecrawl-anydoc**: a
+single self-contained Rust wheel (~3.4 MB manylinux abi3, no Rust toolchain at
+install). This lifts ADR-0023's Office deferral without the ~1 GB
+LibreOffice/ImageMagick/Tesseract stack that first-narrowed the pipeline to PDF.
+
+Both parsers are synchronous and CPU-bound, so parsing runs in asyncio.to_thread.
+Neither does OCR: a scanned / image-only input raises ParseError (callers already
+treat that as "no text could be extracted").
 """
 from __future__ import annotations
 
 import asyncio
 
+import anydoc
 import liteparse
+
+# Extensions the anydoc path owns — every document format the pipeline supports
+# except PDF. Callers (intake validation, the document processor) can consult this
+# to decide routing without importing anydoc directly.
+ANYDOC_EXTS = frozenset(
+    {"doc", "docx", "odt", "rtf", "epub", "ppt", "pptx", "xls", "xlsx", "xlsm", "ods", "odp", "csv"}
+)
+SUPPORTED_EXTS = frozenset({"pdf"}) | ANYDOC_EXTS
 
 
 class ParseError(Exception):
-    """Raised when liteparse cannot extract text from the document."""
+    """Raised when a document cannot be converted to text/Markdown."""
 
 
-def _parse_sync(data: bytes, output_format: str) -> str:
+def _norm_ext(ext: str) -> str:
+    return ext.lower().lstrip(".")
+
+
+def _parse_pdf_sync(data: bytes, output_format: str) -> str:
     result = liteparse.LiteParse(
         ocr_enabled=False, quiet=True, output_format=output_format
     ).parse(data)
@@ -25,10 +47,39 @@ def _parse_sync(data: bytes, output_format: str) -> str:
     return "\n".join(p.text for p in pages if p is not None)
 
 
+def _parse_anydoc_sync(data: bytes, ext: str) -> str:
+    # anydoc always renders GitHub-Flavored Markdown; there is no separate
+    # plaintext renderer, so the "text" and "markdown" output formats collapse to
+    # the same clean Markdown for these formats. Pass the extension-derived format
+    # explicitly so signature-less inputs (CSV) still convert.
+    fmt = anydoc.format_from_extension(ext) or anydoc.format_from_bytes(data)
+    return anydoc.to_markdown_bytes(data, fmt)
+
+
 async def parse_pdf(data: bytes, *, output_format: str = "text") -> str:
     """Extract text from PDF bytes. output_format='markdown' yields Markdown.
     Raises ParseError on any parse failure."""
     try:
-        return await asyncio.to_thread(_parse_sync, data, output_format)
+        return await asyncio.to_thread(_parse_pdf_sync, data, output_format)
     except Exception as exc:  # liteparse.ParseError + any native parse failure
+        raise ParseError(str(exc)) from exc
+
+
+async def parse_document(data: bytes, ext: str, *, output_format: str = "text") -> str:
+    """Convert a document to text/Markdown, routing by extension.
+
+    ext 'pdf' → liteparse (honors output_format); any other supported ext →
+    anydoc (always Markdown). Raises ParseError on unsupported formats or any
+    parse failure (including scanned/OCR-only inputs, which neither parser reads).
+    """
+    ext = _norm_ext(ext)
+    if ext == "pdf":
+        return await parse_pdf(data, output_format=output_format)
+    if ext not in ANYDOC_EXTS:
+        raise ParseError(f"Unsupported document format: .{ext or '?'}")
+    try:
+        return await asyncio.to_thread(_parse_anydoc_sync, data, ext)
+    except ParseError:
+        raise
+    except Exception as exc:  # anydoc.ConvertError subclasses + OSError
         raise ParseError(str(exc)) from exc
