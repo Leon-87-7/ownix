@@ -358,6 +358,16 @@ class TestSessionMiddleware:
         # 422 = FastAPI schema validation (missing fields) — middleware did not block it
         assert resp.status_code == 422
 
+    def test_reviewer_login_endpoint_reachable_without_cookie(
+        self, auth_client: TestClient
+    ) -> None:
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": "reviewer@example.com", "password": "wrong"},
+        )
+
+        assert resp.status_code in {401, 404}
+
     def test_dashboard_handoff_get_only_renders_confirmation(self, auth_client: TestClient) -> None:
         import src.auth.session as session_module
 
@@ -558,6 +568,91 @@ class TestSessionMiddleware:
         assert resp.status_code == 200
         assert resp.json()["email"] == "typed@example.com"
         notify.assert_awaited_once_with(123456791, "typed@example.com", dev=True)
+
+    def test_reviewer_login_is_disabled_by_default(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_ENABLED", False)
+
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": "reviewer@example.com", "password": "review-code"},
+        )
+
+        assert resp.status_code == 404
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_reviewer_login_rejects_invalid_credentials(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_EMAIL", "reviewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_PASSWORD", "review-code")
+
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": "reviewer@example.com", "password": "wrong"},
+        )
+
+        assert resp.status_code == 401
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_reviewer_login_rejects_non_ascii_invalid_password(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_EMAIL", "reviewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_PASSWORD", "review-code")
+
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": "reviewer@example.com", "password": "café"},
+        )
+
+        assert resp.status_code == 401
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_reviewer_login_creates_approved_email_user(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_EMAIL", "Reviewer@Example.COM")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_PASSWORD", "review-code")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_USER_ID", -900123001)
+
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": " reviewer@example.com ", "password": " review-code "},
+        )
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert "vig_session=" in resp.headers["set-cookie"]
+        user = asyncio.run(database.get_user(-900123001))
+        assert user is not None
+        assert user["email"] == "reviewer@example.com"
+        assert user["status"] == "approved"
+
+    def test_disabled_reviewer_login_rejects_existing_reviewer_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.auth.middleware.settings.REVIEWER_LOGIN_ENABLED", False)
+        asyncio.run(database.set_user_status(-900123001, "approved"))
+        user = {
+            "id": -900123001,
+            "username": "chrome_reviewer",
+            "source": "reviewer_login",
+        }
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:reviewer-sid"] = json.dumps(user)
+
+        resp = auth_client.get("/api/jobs", cookies={"vig_session": "reviewer-sid"})
+
+        assert resp.status_code == 401
 
 
 class TestAuthRouter:

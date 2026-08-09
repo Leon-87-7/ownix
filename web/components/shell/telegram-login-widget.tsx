@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { consumePostLoginRedirect } from '@/lib/intake-share-redirect';
 
 interface TelegramUser {
@@ -25,20 +26,29 @@ export function TelegramLoginWidget({
 }: {
   align?: 'center' | 'start';
 }) {
+  const reviewerEmailId = useId();
+  const reviewerPasswordId = useId();
+  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
   const containerRef = useRef<HTMLDivElement>(null);
   const lastAuthUser = useRef<TelegramUser | null>(null);
   const [authState, setAuthState] = useState<AuthState>('idle');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [reviewerEmail, setReviewerEmail] = useState('');
+  const [reviewerPassword, setReviewerPassword] = useState('');
   // 4xx means Telegram/the server rejected this specific sign-in attempt —
   // reposting the same payload would just fail again, so only network
   // failures and 5xx (worth retrying as-is) get a Retry action.
   const [canRetry, setCanRetry] = useState(false);
-  const [widgetState, setWidgetState] =
-    useState<WidgetState>('loading');
+  const [widgetState, setWidgetState] = useState<WidgetState>(() =>
+    botUsername ? 'loading' : 'error',
+  );
   const showDevLogin =
     process.env.NODE_ENV === 'development' &&
     typeof window !== 'undefined' &&
     window.location.hostname === 'localhost';
+  const showReviewerLogin =
+    process.env.NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED === '1' ||
+    process.env.NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED === 'true';
 
   const authenticate = useCallback(async (user: TelegramUser) => {
     lastAuthUser.current = user;
@@ -113,10 +123,41 @@ export function TelegramLoginWidget({
     }
   }
 
+  async function reviewerLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuthState('pending');
+    setAuthError(null);
+    setCanRetry(false);
+
+    try {
+      const res = await fetch('/api/auth/reviewer-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: reviewerEmail,
+          password: reviewerPassword,
+        }),
+      });
+      if (res.ok) {
+        window.location.href = consumePostLoginRedirect();
+        return;
+      }
+      setAuthState('error');
+      setAuthError(
+        res.status === 404
+          ? 'Reviewer access is disabled.'
+          : 'Reviewer sign-in failed. Check the email and code.',
+      );
+    } catch {
+      setAuthState('error');
+      setAuthError(
+        'We could not reach the login service. Check your connection and try again.',
+      );
+    }
+  }
+
   useEffect(() => {
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
     if (!botUsername) {
-      setWidgetState('error');
       return;
     }
 
@@ -154,7 +195,7 @@ export function TelegramLoginWidget({
       container.replaceChildren();
       if (win.onTelegramAuth === handleAuth) delete win.onTelegramAuth;
     };
-  }, [authenticate, process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME]);
+  }, [authenticate, botUsername]);
 
   return (
     <div className="flex w-full flex-col">
@@ -197,6 +238,49 @@ export function TelegramLoginWidget({
           >
             Dev login
           </button>
+        )}
+        {showReviewerLogin && (
+          <form
+            onSubmit={reviewerLogin}
+            className={`mt-2 flex w-full max-w-[280px] flex-col gap-3 ${align === 'start' ? 'items-start' : 'items-stretch'}`}
+          >
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor={reviewerEmailId}
+                className="text-xs font-medium uppercase text-muted"
+              >
+                Reviewer access
+              </label>
+              <input
+                id={reviewerEmailId}
+                type="email"
+                value={reviewerEmail}
+                onChange={(event) => setReviewerEmail(event.target.value)}
+                autoComplete="email"
+                required
+                className="min-h-10 rounded-md border border-line bg-raised px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal focus:ring-2 focus:ring-signal/30"
+                placeholder="email"
+              />
+            </div>
+            <input
+              id={reviewerPasswordId}
+              type="password"
+              value={reviewerPassword}
+              onChange={(event) => setReviewerPassword(event.target.value)}
+              autoComplete="one-time-code"
+              required
+              aria-label="Reviewer code"
+              className="min-h-10 rounded-md border border-line bg-raised px-3 text-sm text-ink outline-none transition-ui placeholder:text-muted focus:border-signal focus:ring-2 focus:ring-signal/30"
+              placeholder="code"
+            />
+            <button
+              type="submit"
+              disabled={authState === 'pending'}
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-signal px-4 text-sm font-medium text-onsignal transition-[background-color,transform] duration-150 ease-out-quart hover:bg-signal-bright disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.96] focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface motion-reduce:transition-none motion-reduce:active:scale-100"
+            >
+              Sign in for review
+            </button>
+          </form>
         )}
       </div>
 
