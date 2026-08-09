@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from '@/test/render';
+import { act, fireEvent, render, screen, waitFor } from '@/test/render';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import DocParserPage from './page';
 
@@ -30,6 +30,30 @@ describe('DocParserPage', () => {
     render(<DocParserPage />);
 
     await waitFor(() => expect(screen.getByText(/no jobs yet/i)).toBeInTheDocument());
+  });
+
+  it('filters the job list by format tab (derived from the source extension)', async () => {
+    const items = [
+      { id: '1', url: 'documents/aaa.pdf', status: 'done', created_at: 'x' },
+      { id: '2', url: 'documents/bbb.docx', status: 'done', created_at: 'x' },
+      { id: '3', url: 'documents/ccc.xlsx', status: 'done', created_at: 'x' },
+    ];
+    vi.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items })));
+
+    render(<DocParserPage />);
+
+    // All three visible under the default "All" tab.
+    await waitFor(() => expect(screen.getByText('documents/bbb.docx')).toBeInTheDocument());
+    expect(screen.getByText('documents/aaa.pdf')).toBeInTheDocument();
+    expect(screen.getByText('documents/ccc.xlsx')).toBeInTheDocument();
+
+    // Clicking "Word" leaves only the .docx job.
+    fireEvent.click(screen.getByRole('button', { name: /word/i }));
+    await waitFor(() =>
+      expect(screen.queryByText('documents/aaa.pdf')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('documents/bbb.docx')).toBeInTheDocument();
+    expect(screen.queryByText('documents/ccc.xlsx')).not.toBeInTheDocument();
   });
 
   it('shows a loading skeleton before the first response resolves', async () => {

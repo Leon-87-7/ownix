@@ -1,9 +1,15 @@
-"""Trust-boundary PDF intake (ADR-0029, extracted from parsed.py per #228).
+"""Trust-boundary document intake (ADR-0029, extracted from parsed.py per #228).
 
-Everything a user-supplied PDF crosses on the way in: magic-byte/size validation,
-the SSRF guard, the capped remote fetch, and the capped raw-body read. Kept in one
-module so the trust-boundary logic is consolidated and directly unit-testable
-(no router, no event-loop hazards). Raises HTTPException so route handlers stay thin.
+Everything a user-supplied document crosses on the way in: content-sniffed format
+validation, the SSRF guard, the capped remote fetch, and the capped raw-body read.
+Kept in one module so the trust-boundary logic is consolidated and directly
+unit-testable (no router, no event-loop hazards). Raises HTTPException so route
+handlers stay thin.
+
+Format support is content-based via `src.services.parse.detect_format` (ADR-0023
+Office support): PDF stays on liteparse, DOCX/PPTX/XLSX/ODF/RTF/EPUB/CSV go through
+anydoc. A client-declared Content-Type or extension is never trusted for a format
+that carries a signature — only CSV (signature-less) falls back to the filename.
 """
 from __future__ import annotations
 
@@ -12,17 +18,38 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import HTTPException, Request
 
+from src.services.parse import SUPPORTED_EXTS, _ext_from_name, detect_format
 from src.utils.ssrf import is_public_ip, resolve_public_host
 
 MAX_PDF_BYTES = 20 * 1024 * 1024
+MAX_DOC_BYTES = MAX_PDF_BYTES  # readable alias now that intake is multi-format
 REMOTE_PDF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; vig/1.0; +https://github.com/Leon-87-7/vig)",
     "Accept": "application/pdf,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+_UNSUPPORTED_FILE_MSG = (
+    "Unsupported file type — upload a PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, or CSV file"
+)
+_UNSUPPORTED_URL_MSG = (
+    "Enter a direct HTTPS document URL (.pdf, .docx, .xlsx, .pptx, .odt, .rtf, .epub, .csv, …)"
+)
+
+
+def validate_document(data: bytes, name: str = "document") -> str:
+    """Validate size + format of an uploaded document. Returns the canonical
+    source extension (e.g. 'pdf', 'docx'). Raises HTTPException(400) otherwise."""
+    if len(data) > MAX_DOC_BYTES:
+        raise HTTPException(status_code=400, detail={"field": "file", "message": "File must be 20 MB or smaller"})
+    ext = detect_format(data, name)
+    if ext is None:
+        raise HTTPException(status_code=400, detail={"field": "file", "message": _UNSUPPORTED_FILE_MSG})
+    return ext
+
 
 def validate_pdf(data: bytes, name: str = "document.pdf") -> None:
+    # Retained for the PDF-only callers/tests that predate multi-format intake.
     # Field-level 400s for malformed input (wrong type / oversized), per #217.
     if len(data) > MAX_PDF_BYTES:
         raise HTTPException(status_code=400, detail={"field": "file", "message": "PDF must be 20 MB or smaller"})
@@ -42,12 +69,17 @@ async def assert_public_host(host: str | None) -> None:
         raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
 
 
-async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:
-    """Validate, SSRF-check, and stream-fetch a remote PDF. Returns (data, filename)."""
+async def fetch_remote_document(url: str) -> tuple[bytes, str, str]:
+    """Validate, SSRF-check, and stream-fetch a remote document.
+
+    Returns (data, filename, canonical_ext). The URL extension only gates *which
+    links look like documents*; the returned ext comes from content sniffing the
+    fetched bytes, so a mislabeled URL still stores under its true format.
+    """
     url = url.strip()
     parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.path.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail={"field": "url", "message": "Enter a direct HTTPS PDF URL"})
+    if parsed.scheme != "https" or _ext_from_name(parsed.path) not in SUPPORTED_EXTS:
+        raise HTTPException(status_code=400, detail={"field": "url", "message": _UNSUPPORTED_URL_MSG})
     await assert_public_host(parsed.hostname)
     try:
         # follow_redirects=False: a redirect could bounce to an internal host
@@ -65,8 +97,8 @@ async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:
                 total = 0
                 async for chunk in resp.aiter_bytes():
                     total += len(chunk)
-                    if total > MAX_PDF_BYTES:
-                        raise HTTPException(status_code=422, detail={"field": "url", "message": "PDF must be 20 MB or smaller"})
+                    if total > MAX_DOC_BYTES:
+                        raise HTTPException(status_code=422, detail={"field": "url", "message": "File must be 20 MB or smaller"})
                     chunks.append(chunk)
                 data = b"".join(chunks)
     except HTTPException:
@@ -78,20 +110,20 @@ async def fetch_remote_pdf(url: str) -> tuple[bytes, str]:
                 status_code=422,
                 detail={
                     "field": "url",
-                    "message": f"PDF URL rejected the download request ({status})",
+                    "message": f"Document URL rejected the download request ({status})",
                 },
             ) from exc
         if status == 404:
             raise HTTPException(
                 status_code=422,
-                detail={"field": "url", "message": "PDF URL was not found (404)"},
+                detail={"field": "url", "message": "Document URL was not found (404)"},
             ) from exc
-        raise HTTPException(status_code=502, detail=f"PDF URL returned HTTP {status}") from exc
+        raise HTTPException(status_code=502, detail=f"Document URL returned HTTP {status}") from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not fetch PDF URL") from exc
-    filename = parsed.path.rsplit("/", 1)[-1] or "document.pdf"
-    validate_pdf(data, filename)  # magic-byte check so the function honors its "Validate" contract
-    return data, filename
+        raise HTTPException(status_code=502, detail="Could not fetch document URL") from exc
+    filename = parsed.path.rsplit("/", 1)[-1] or "document"
+    ext = validate_document(data, filename)  # content sniff so the function honors its "Validate" contract
+    return data, filename, ext
 
 
 async def read_capped_body(request: Request) -> bytes:

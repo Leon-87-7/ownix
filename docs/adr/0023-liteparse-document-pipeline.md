@@ -5,6 +5,40 @@ status: accepted
 date: 2026-06-08
 ---
 
+## Office support via anydoc — no sidecar (2026-08-09 update)
+
+The Office-format deferral below is **lifted**, and **without** the deferred
+`vig-document` sidecar. The sidecar existed only to quarantine liteparse's ~1 GB
+native stack (LibreOffice = the DOCX/PPTX/XLSX path; ImageMagick + Tesseract = the
+image/OCR path). [firecrawl/anydoc](https://github.com/firecrawl/anydoc) parses
+DOCX/PPTX/XLSX, ODF, RTF, EPUB, and CSV in a **single self-contained Rust wheel**
+(`firecrawl-anydoc`, ~3.4 MB manylinux abi3, no LibreOffice, no Rust toolchain at
+install), so those formats now run **inline in `vig-worker`** exactly like PDF.
+Spike + rationale: `docs/plans/anydoc-office-parsing-spike.md`.
+
+What this changes:
+
+- **Routing by format, one seam.** `src/services/parse.py` routes **PDF →
+  liteparse** (kept for its layout-aware reading-order reconstruction) and
+  **everything else → anydoc**. `parse_document(data, ext)` is the single entry
+  point; `detect_format(data, filename)` is the authoritative content-sniff gate
+  (anydoc reads the PDF header / OLE stream names / ZIP package mimetype; CSV,
+  signature-less, is trusted by filename only).
+- **Storage key carries the source format.** Objects are content-addressed as
+  `documents/<sha>.<srcext>` (was hardcoded `.pdf`), so `_cached_parse` re-routes
+  a cache miss to the right parser. Parsed output stays sha-addressed and shared.
+- **All three ingest channels generalized** behind that gate — the Doc Parser
+  dashboard (`/api/parsed/*`), the channel-neutral intake API
+  (`/api/intake/upload` → `mime_sniff` → `uploads`), and the Telegram webhook —
+  plus URL routing (`detect_pipeline`). The 20 MB cap and SSRF guards are
+  unchanged.
+- **Images are still not documents.** anydoc has no OCR (scanned/image-only inputs
+  raise), so images uploaded to the Doc Parser / intake pages **fork to the
+  existing photo-OCR link-extraction pipeline** (ADR-0003) via a new branch rather
+  than creating a document job.
+- **Still unadopted:** the sidecar, and OCR for scanned PDFs/images. Those return
+  only if a format anydoc can't handle earns real demand.
+
 ## MVP scope (2026-06-18 update)
 
 The first shipping slice (issues #150–#155) is **narrowed to PDF-only**, which

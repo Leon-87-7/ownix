@@ -7,6 +7,14 @@ from urllib.parse import parse_qs, urlparse
 
 Pipeline = Literal["short", "long", "unsized", "article", "repo", "document", "rejected"]
 
+# Document file extensions that route a URL to the document pipeline. Mirrors
+# src.services.parse.SUPPORTED_EXTS (kept local so this stdlib-only util doesn't
+# pull in the parser/anydoc import graph). The authoritative format gate is the
+# content sniff at ingest — this only decides "this link looks like a document".
+_DOCUMENT_EXTS = frozenset(
+    {"pdf", "doc", "docx", "docm", "odt", "rtf", "epub", "ppt", "pptx", "pptm", "odp", "xlsx", "xlsm", "ods", "csv"}
+)
+
 _UNSIZED_VIDEO_HOSTS = frozenset({"facebook.com", "x.com", "twitter.com"})
 
 _TIKTOK_VIDEO_PATH = re.compile(r"^/@[^/]+/video/\d+", re.IGNORECASE)
@@ -139,15 +147,23 @@ def detect_pipeline(
     github = _match_github(host, path)
     if github is not None:
         return github
-    # Document pipeline: route by extension only (.pdf). No arxiv host special-
-    # casing at MVP (ADR-0023) — that returns when someone actually sends one.
-    if path.lower().endswith(".pdf"):
+    # Document pipeline: route by file extension (PDF + every anydoc-supported
+    # office/document format, ADR-0023). The fetched bytes are content-sniffed
+    # again at ingest, so the extension only decides "this link looks like a doc".
+    if _document_ext(path):
         return "document"
     if any(_host_matches(host, video_host) for video_host in _UNSIZED_VIDEO_HOSTS):
         return "unsized"
     if _match_article(host, extra_domains):
         return "article"
     return "rejected"
+
+
+def _document_ext(path: str) -> str:
+    """The document extension a URL path ends in (e.g. 'pdf', 'docx'), or ''."""
+    tail = path.rsplit("/", 1)[-1].lower()
+    ext = tail.rsplit(".", 1)[-1] if "." in tail else ""
+    return ext if ext in _DOCUMENT_EXTS else ""
 
 
 def _match_short(host: str, path: str) -> bool:

@@ -61,15 +61,29 @@ fmt = anydoc.format_from_extension(ext)        # 'docx', 'csv', … or None
 - `requirements.txt` — `firecrawl-anydoc==0.1.7`.
 - `tests/test_parse_router.py` — hermetic routing/exception tests (5 passing).
 
-## Follow-up (not in this spike)
+## Follow-up — shipped (2026-08-09)
 
-The parser layer now handles any supported format, but the intake path is still
-PDF-only end-to-end. To actually accept Office uploads:
+The full multi-format rollout is now implemented; any format the Doc Parser and
+intake pages list runs exactly like PDF did.
 
-1. **Intake validation** (`src/services/pdf_intake.py`, `src/intake/uploads.py`,
-   `src/api/parsed.py`) — accept the new extensions/magic bytes, not just `%PDF`.
-2. **Storage keys** (`src/processors/document.py::_sha_from_key`,
-   `documents/<sha>.pdf`) — carry the real source extension so `_cached_parse`
-   can call `parse_document(data, ext)` instead of the hardcoded PDF path.
-3. **ADR-0023 amendment** — record that the Office deferral is lifted via anydoc
-   (no sidecar needed) rather than the deferred LibreOffice sidecar design.
+1. **Format detection + MIME map** — `src/services/parse.py` gained
+   `detect_format(data, filename)` (content-sniff gate), `content_type_for(ext)`,
+   `SUPPORTED_EXTS`/`ANYDOC_EXTS`, alongside the `parse_document` router.
+2. **Intake trust boundary** — `src/services/pdf_intake.py` now exposes
+   `validate_document()` (returns canonical ext) and `fetch_remote_document()`;
+   the SSRF/size guards are unchanged.
+3. **Storage keys carry the source format** —
+   `documents/<sha>.<srcext>`; `src/processors/document.py::_cached_parse` derives
+   the ext from the key and calls `parse_document`.
+4. **All ingest channels** — Doc Parser API (`src/api/parsed.py`, with an
+   image→photo-OCR branch), intake pipeline (`src/intake/mime_sniff.py` +
+   `uploads.py`), Telegram webhook (`src/telegram/webhook.py`), and URL routing
+   (`src/utils/validators.py`).
+5. **Frontend** — doc-parser page format-filter tabs (soon badges removed),
+   `doc-upload-panel` accepts all formats + renders image-OCR links, intake
+   dropzone accepts office formats.
+6. **ADR-0023 amendment** — records the Office deferral lifted via anydoc, no
+   sidecar (see the 2026-08-09 update at the top of ADR-0023).
+
+Images remain a separate concern: anydoc has no OCR, so image uploads fork to the
+existing photo-OCR link-extraction pipeline (ADR-0003) rather than a document job.

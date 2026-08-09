@@ -61,6 +61,23 @@ class TestUploadValidation:
         assert body["kind"] == "job_created"
         assert body["job_id"]
 
+    def test_valid_docx_creates_document_job(self, upload_client: TestClient, office_samples) -> None:
+        # Office formats sniff by content (ZIP package mimetype), route to the
+        # document pipeline, and store under documents/<sha>.docx (ADR-0023).
+        from src import database
+
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("report.docx", office_samples["report.docx"], "application/octet-stream")},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["kind"] == "job_created"
+        job = asyncio.run(database.get_job(body["job_id"]))
+        assert job["content_type"] == "document"
+        assert job["url"].endswith(".docx")
+
     def test_wrong_content_type_header_is_ignored_in_favor_of_sniffing(
         self, upload_client: TestClient
     ) -> None:

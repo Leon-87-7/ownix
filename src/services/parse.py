@@ -19,13 +19,35 @@ import asyncio
 import anydoc
 import liteparse
 
-# Extensions the anydoc path owns — every document format the pipeline supports
-# except PDF. Callers (intake validation, the document processor) can consult this
-# to decide routing without importing anydoc directly.
+# Canonical formats the anydoc path parses — the anydoc `Format` enum minus PDF.
+# Callers (intake validation, the document processor) consult these to route
+# without importing anydoc directly.
 ANYDOC_EXTS = frozenset(
-    {"doc", "docx", "odt", "rtf", "epub", "ppt", "pptx", "xls", "xlsx", "xlsm", "ods", "odp", "csv"}
+    {"doc", "docx", "odt", "rtf", "epub", "ppt", "pptx", "xlsx", "ods", "odp", "csv"}
 )
-SUPPORTED_EXTS = frozenset({"pdf"}) | ANYDOC_EXTS
+# Extension allowlist for URL/filename routing (detect_pipeline, upload filenames).
+# The canonical set plus common OOXML variants that share a ZIP container anydoc
+# detects by content (docm→docx, xlsm→xlsx, pptm→pptx). The authoritative gate is
+# always detect_format() on the actual bytes; this only decides "looks like a doc".
+SUPPORTED_EXTS = frozenset({"pdf"}) | ANYDOC_EXTS | {"docm", "xlsm", "pptm"}
+
+# Canonical source extension → storage/HTTP content type. Keyed by what
+# detect_format() returns (always a canonical ext), so every stored source object
+# gets an honest MIME regardless of the client-declared type.
+MIME_BY_EXT: dict[str, str] = {
+    "pdf": "application/pdf",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "odt": "application/vnd.oasis.opendocument.text",
+    "rtf": "application/rtf",
+    "epub": "application/epub+zip",
+    "ppt": "application/vnd.ms-powerpoint",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "odp": "application/vnd.oasis.opendocument.presentation",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ods": "application/vnd.oasis.opendocument.spreadsheet",
+    "csv": "text/csv",
+}
 
 
 class ParseError(Exception):
@@ -34,6 +56,34 @@ class ParseError(Exception):
 
 def _norm_ext(ext: str) -> str:
     return ext.lower().lstrip(".")
+
+
+def _ext_from_name(name: str | None) -> str:
+    """Lowercased extension of a filename/path, or '' when there is none."""
+    if not name or "." not in name:
+        return ""
+    return name.rsplit(".", 1)[-1].lower()
+
+
+def detect_format(data: bytes, filename: str | None = None) -> str | None:
+    """Canonical source extension for supported document bytes, or None.
+
+    Content-based (anydoc reads the PDF header, RTF open group, OLE stream names,
+    and the ZIP package mimetype), so a mislabeled or renamed file still routes
+    correctly — never trust a client Content-Type. CSV alone carries no signature,
+    so it is accepted only when the filename names it.
+    """
+    fmt = anydoc.format_from_bytes(data)  # 'pdf', 'docx', 'xlsx', … or None
+    if fmt:
+        return fmt
+    if _ext_from_name(filename) == "csv":
+        return "csv"
+    return None
+
+
+def content_type_for(ext: str) -> str:
+    """Storage/HTTP content type for a canonical source extension."""
+    return MIME_BY_EXT.get(_norm_ext(ext), "application/octet-stream")
 
 
 def _parse_pdf_sync(data: bytes, output_format: str) -> str:
@@ -75,7 +125,7 @@ async def parse_document(data: bytes, ext: str, *, output_format: str = "text") 
     ext = _norm_ext(ext)
     if ext == "pdf":
         return await parse_pdf(data, output_format=output_format)
-    if ext not in ANYDOC_EXTS:
+    if ext not in SUPPORTED_EXTS:
         raise ParseError(f"Unsupported document format: .{ext or '?'}")
     try:
         return await asyncio.to_thread(_parse_anydoc_sync, data, ext)

@@ -12,8 +12,9 @@ from src.services.pdf_intake import (
     MAX_PDF_BYTES,
     REMOTE_PDF_HEADERS,
     assert_public_host,
-    fetch_remote_pdf,
+    fetch_remote_document,
     read_capped_body,
+    validate_document,
     validate_pdf,
 )
 
@@ -64,31 +65,94 @@ def test_validate_pdf_accepts_pdf():
     validate_pdf(b"%PDF-1.4 ...", "doc.pdf")  # no raise
 
 
-@pytest.mark.asyncio
-async def test_fetch_remote_pdf_rejects_non_https():
+def test_validate_document_accepts_pdf_returns_ext():
+    assert validate_document(b"%PDF-1.4 ...", "doc.pdf") == "pdf"
+
+
+def test_validate_document_accepts_office_by_content(office_samples):
+    # Content-sniffed, so a mislabeled extension still resolves to the true format.
+    assert validate_document(office_samples["report.docx"], "report.pdf") == "docx"
+    assert validate_document(office_samples["costs.xlsx"], "costs.xlsx") == "xlsx"
+    assert validate_document(office_samples["deck.pptx"], "deck.pptx") == "pptx"
+
+
+def test_validate_document_accepts_csv_by_filename(office_samples):
+    # CSV is signature-less: accepted only when the filename names it.
+    assert validate_document(office_samples["data.csv"], "data.csv") == "csv"
+    with pytest.raises(HTTPException):
+        validate_document(office_samples["data.csv"], "data.bin")
+
+
+def test_validate_document_rejects_unknown():
     with pytest.raises(HTTPException) as exc:
-        await fetch_remote_pdf("http://example.com/doc.pdf")
+        validate_document(b"just some plain text", "notes.txt")
+    assert exc.value.status_code == 400
+
+
+def test_validate_document_rejects_oversize():
+    with pytest.raises(HTTPException):
+        validate_document(b"%PDF" + b"0" * MAX_PDF_BYTES, "x.pdf")
+
+
+@pytest.mark.asyncio
+async def test_fetch_remote_document_rejects_non_https():
+    with pytest.raises(HTTPException) as exc:
+        await fetch_remote_document("http://example.com/doc.pdf")
     assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_fetch_remote_pdf_rejects_non_pdf_path():
+async def test_fetch_remote_document_rejects_unsupported_path():
     with pytest.raises(HTTPException) as exc:
-        await fetch_remote_pdf("https://example.com/notapdf")
+        await fetch_remote_document("https://example.com/notadoc")
     assert exc.value.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_fetch_remote_pdf_blocks_ssrf_before_network(monkeypatch):
+async def test_fetch_remote_document_blocks_ssrf_before_network(monkeypatch):
     # Scheme/path pass; the SSRF guard must reject before any fetch happens.
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("127.0.0.1", 0))])
     with pytest.raises(HTTPException) as exc:
-        await fetch_remote_pdf("https://internal.example/doc.pdf")
+        await fetch_remote_document("https://internal.example/doc.pdf")
     assert exc.value.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_fetch_remote_pdf_sends_pdf_request_headers(monkeypatch):
+async def test_fetch_remote_document_accepts_office_url(monkeypatch, office_samples):
+    # A .docx URL passes the extension gate and returns the content-sniffed ext.
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    docx = office_samples["report.docx"]
+
+    class FakeStreamResponse:
+        def raise_for_status(self):
+            pass
+
+        async def aiter_bytes(self):
+            yield docx
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        @asynccontextmanager
+        async def stream(self, method, url):
+            yield FakeStreamResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    data, filename, ext = await fetch_remote_document("https://example.com/report.docx")
+    assert data == docx
+    assert filename == "report.docx"
+    assert ext == "docx"
+
+
+@pytest.mark.asyncio
+async def test_fetch_remote_document_sends_pdf_request_headers(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
     seen_headers = {}
 
@@ -115,10 +179,11 @@ async def test_fetch_remote_pdf_sends_pdf_request_headers(monkeypatch):
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
 
-    data, filename = await fetch_remote_pdf("https://example.com/doc.pdf")
+    data, filename, ext = await fetch_remote_document("https://example.com/doc.pdf")
 
     assert data == b"%PDF-1.4 small"
     assert filename == "doc.pdf"
+    assert ext == "pdf"
     assert seen_headers == REMOTE_PDF_HEADERS
 
 
@@ -126,12 +191,12 @@ async def test_fetch_remote_pdf_sends_pdf_request_headers(monkeypatch):
 @pytest.mark.parametrize(
     ("upstream_status", "expected_message"),
     [
-        (401, "PDF URL rejected the download request (401)"),
-        (403, "PDF URL rejected the download request (403)"),
-        (404, "PDF URL was not found (404)"),
+        (401, "Document URL rejected the download request (401)"),
+        (403, "Document URL rejected the download request (403)"),
+        (404, "Document URL was not found (404)"),
     ],
 )
-async def test_fetch_remote_pdf_maps_upstream_error_to_url_field(monkeypatch, upstream_status, expected_message):
+async def test_fetch_remote_document_maps_upstream_error_to_url_field(monkeypatch, upstream_status, expected_message):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
 
     class ErrorStreamResponse:
@@ -158,14 +223,14 @@ async def test_fetch_remote_pdf_maps_upstream_error_to_url_field(monkeypatch, up
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
 
     with pytest.raises(HTTPException) as exc:
-        await fetch_remote_pdf("https://example.com/doc.pdf")
+        await fetch_remote_document("https://example.com/doc.pdf")
 
     assert exc.value.status_code == 422
     assert exc.value.detail == {"field": "url", "message": expected_message}
 
 
 @pytest.mark.asyncio
-async def test_fetch_remote_pdf_unmapped_status_falls_back_to_502(monkeypatch):
+async def test_fetch_remote_document_unmapped_status_falls_back_to_502(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
 
     class ErrorStreamResponse:
@@ -192,10 +257,10 @@ async def test_fetch_remote_pdf_unmapped_status_falls_back_to_502(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
 
     with pytest.raises(HTTPException) as exc:
-        await fetch_remote_pdf("https://example.com/doc.pdf")
+        await fetch_remote_document("https://example.com/doc.pdf")
 
     assert exc.value.status_code == 502
-    assert exc.value.detail == "PDF URL returned HTTP 429"
+    assert exc.value.detail == "Document URL returned HTTP 429"
 
 
 @pytest.mark.asyncio

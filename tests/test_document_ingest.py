@@ -48,13 +48,30 @@ async def test_accepted_pdf_uploads_creates_job_enqueues(patched):
 @pytest.mark.asyncio
 async def test_unsupported_type_rejected_no_job(patched):
     webhook, m = patched
-    doc = {"file_id": "F1", "file_name": "notes.docx", "mime_type": "application/vnd.openxml", "file_size": 10}
+    doc = {"file_id": "F1", "file_name": "app.exe", "mime_type": "application/x-msdownload", "file_size": 10}
 
     await webhook._handle_document_update(chat_id=42, message={}, document=doc)
 
     m["send_message"].assert_awaited_once()
-    assert "PDF" in m["send_message"].call_args.args[1]
+    assert "supported" in m["send_message"].call_args.args[1].lower()
     m["create_job"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_office_file_accepted_by_extension(patched):
+    """A .docx (or any supported office format) now passes the metadata pre-filter
+    and is dispatched to background ingest — no synchronous rejection (ADR-0023)."""
+    webhook, m = patched
+    doc = {
+        "file_id": "F1",
+        "file_name": "notes.docx",
+        "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "file_size": 100,
+    }
+
+    await webhook._handle_document_update(chat_id=42, message={"message_id": 1}, document=doc)
+
+    m["send_message"].assert_not_called()  # accepted → background ingest, no sync reject
 
 
 @pytest.mark.asyncio
@@ -146,14 +163,28 @@ async def test_route_document_url_fetches_uploads_enqueues(patched, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_route_document_url_non_pdf_body_rejected(patched, monkeypatch):
+async def test_route_document_url_unsupported_body_rejected(patched, monkeypatch):
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=b"<html>not a pdf</html>")
+    _patch_httpx(monkeypatch, webhook, content=b"<html>not a document</html>")
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/a.pdf", message_id=3)
 
     m["create_job"].assert_not_called()
-    assert "didn't return a pdf" in m["send_message"].call_args.args[1].lower()
+    assert "supported document" in m["send_message"].call_args.args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_route_document_url_office_body_accepted(patched, monkeypatch, office_samples):
+    """A .docx URL whose body sniffs as docx is stored under documents/<sha>.docx."""
+    webhook, m = patched
+    _patch_httpx(monkeypatch, webhook, content=office_samples["report.docx"])
+
+    await webhook._route_document_url(chat_id=9, url="https://x.tld/report.docx", message_id=3)
+
+    (key, data, ctype), _ = m["upload"].call_args
+    assert key.startswith("documents/") and key.endswith(".docx")
+    assert m["create_job"].call_args.kwargs["content_type"] == "document"
+    m["enqueue"].assert_awaited_once_with({"task": "document", "job_id": "20260618_000000_ABCD"})
 
 
 @pytest.mark.asyncio
@@ -181,14 +212,26 @@ async def test_route_document_url_oversized_body_rejected(patched, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ingest_document_non_pdf_rejected(patched):
+async def test_ingest_document_unsupported_rejected(patched):
     webhook, m = patched
     m["download_file"].return_value = b"<html>nope</html>"
 
     await webhook._ingest_document(chat_id=42, document={"file_id": "F1"}, message_id=1)
 
     m["upload"].assert_not_called()
-    assert "valid pdf" in m["send_message"].call_args.args[1].lower()
+    assert "supported document" in m["send_message"].call_args.args[1].lower()
+
+
+@pytest.mark.asyncio
+async def test_ingest_document_office_creates_job(patched, office_samples):
+    webhook, m = patched
+    m["download_file"].return_value = office_samples["costs.xlsx"]
+
+    await webhook._ingest_document(chat_id=42, document={"file_id": "F1", "file_name": "costs.xlsx"}, message_id=1)
+
+    (key, data, ctype), _ = m["upload"].call_args
+    assert key.endswith(".xlsx")
+    m["create_job"].assert_awaited_once()
 
 
 @pytest.mark.asyncio
