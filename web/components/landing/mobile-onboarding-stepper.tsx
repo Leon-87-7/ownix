@@ -149,7 +149,7 @@ export function MobileOnboardingStepper() {
                 setActiveIndex((index) => Math.max(0, index - 1))
               }
               disabled={isFirst}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
             >
               <ArrowLeft
                 aria-hidden="true"
@@ -169,7 +169,7 @@ export function MobileOnboardingStepper() {
                     : Math.min(STEPS.length - 1, index + 1),
                 )
               }
-              className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-signal px-4 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep active:scale-[0.98] motion-reduce:active:scale-100"
+              className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-signal px-4 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep active:scale-[0.96] motion-reduce:active:scale-100"
             >
               {isLast ? 'Review again' : 'Next'}
               <ArrowRight

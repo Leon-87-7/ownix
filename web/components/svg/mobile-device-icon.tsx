@@ -1,0 +1,43 @@
+export function MobileDeviceIcon(
+  props: React.SVGProps<SVGSVGElement>,
+) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 256 256"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <rect
+        width="256"
+        height="256"
+        fill="none"
+      />
+      <rect
+        x="24"
+        y="64"
+        width="208"
+        height="128"
+        rx="16"
+        transform="translate(256) rotate(90)"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="16"
+      />
+      <line
+        x1="96"
+        y1="56"
+        x2="160"
+        y2="56"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="16"
+      />
+    </svg>
+  );
+}

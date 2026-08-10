@@ -14,12 +14,13 @@ import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
+import { ChromeIcon } from '@/components/svg/chrome-icon';
+import { PuzzlePieceIcon } from '@/components/svg/puzzle-piece';
+import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
+import { DesktopIcon } from '@/components/svg/desktop';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
-import {
-  ChevronsRight,
-  MessageSquareQuote,
-  Share,
-} from 'lucide-react';
+
+import { Brain, ChevronsRight, Inbox, Share } from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -68,7 +69,9 @@ export default async function LandingPage() {
   // "Look inside". vig_session is httpOnly, so this has to be a server read —
   // which opts the landing page into dynamic rendering. /restricted handles
   // the actual routing (approved -> feed, else -> preview) either way.
-  const signedIn = Boolean((await cookies()).get('vig_session')?.value);
+  const signedIn = Boolean(
+    (await cookies()).get('vig_session')?.value,
+  );
   return (
     <>
       <nav
@@ -357,28 +360,25 @@ export default async function LandingPage() {
                   entry: transcript, summary, links, agent-ready
                   markdown.
                 </p>
-                <p className="mt-3 font-mono text-mono-label text-muted">
-                  short ◉ long ◉ article ◉ repo
+                <p className="mt-3 mb-6 font-mono text-mono-label text-muted">
+                  short ◉ long ◉ article ◉ repo ◉ docs
                 </p>
-              </div>
 
-              <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
-                <div className="py-4 first:pt-0 md:py-5">
-                  <br />
-                  {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
-                    FEED
-                  </span> */}
+                <div className="border-t border-line pt-4 md:pt-5">
                   <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
                     Your personal search-engine
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
-                    Every item lands in your Feed. Filter by type,
-                    search by title or tag, open anything to grab its
-                    full transcript or copy a segment straight into
-                    your AI.
+                    Every item lands in your Feed and Brain. Filter by
+                    type, search by title or tag, open anything to
+                    grab its full transcript or copy a segment
+                    straight into your AI.
                   </p>
                 </div>
-                <div className="py-4 md:py-5">
+              </div>
+
+              <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
+                <div className="py-4 first:pt-0 md:py-5">
                   {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     DOCS
                   </span> */}
@@ -392,8 +392,27 @@ export default async function LandingPage() {
                     for your AI.
                   </p>
                   <p className="mt-2 font-mono text-mono-label text-muted">
-                    pdf today ◉ word / spreadsheet / presentation /
-                    image - soon
+                    pdf / word / spreadsheet / presentation
+                  </p>
+                </div>
+                <div className="py-4 md:py-5">
+                  <h3 className="mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    Drop a GitHub repo link, skip the clone
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Paste a GitHub URL and Ownix reads the README and
+                    structure, writes a plain-language breakdown, and
+                    files it in your Index next to everything else.
+                  </p>
+                </div>
+                <div className="py-4 md:py-5">
+                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
+                    When search stops being enough
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Collections for when &quot;search later&quot;
+                    stops working. Recipes for when you keep
+                    re-running the same freestyle prompt.
                   </p>
                 </div>
               </div>
@@ -401,11 +420,92 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        <section
+          aria-labelledby="capture"
+          className="border-t border-line py-16"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="capture"
+              className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              One Index, however it gets there.
+            </h2>
+            <p className="text-pretty mb-8 max-w-[58ch] text-prose leading-relaxed">
+              Wherever you spot it - phone, laptop, or a browser tab -
+              there&apos;s a one-tap way in.
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-4">
+                <MobileDeviceIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 -rotate-[35deg] text-line"
+                />
+                <TelegramIcon
+                  aria-hidden="true"
+                  className="relative mb-3 h-6 w-6 text-muted"
+                />
+                <h3 className="relative mb-1 text-title font-semibold leading-snug text-ink">
+                  Share sheet
+                </h3>
+                <p className="relative text-pretty text-copy leading-relaxed text-body">
+                  Hit share, tap Ownix. Same reflex as sending a
+                  friend a reel.
+                </p>
+              </div>
+              <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-4">
+                <DesktopIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 -rotate-[35deg] text-line"
+                />
+                <Inbox
+                  aria-hidden="true"
+                  className="relative mb-3 h-6 w-6 text-muted"
+                />
+                <h3 className="relative mb-1 text-title font-semibold leading-snug text-ink">
+                  Intake
+                </h3>
+                <p className="relative text-pretty text-copy leading-relaxed text-body">
+                  Paste a link, run a command, or drop a file straight
+                  into the dashboard.
+                </p>
+              </div>
+              <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-4">
+                <PuzzlePieceIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 -rotate-[35deg] text-line"
+                />
+                <ChromeIcon
+                  aria-hidden="true"
+                  className="relative mb-3 h-6 w-6 text-muted"
+                />
+                <h3 className="relative flex gap-2 mb-1 text-title font-semibold leading-snug text-ink">
+                  Chrome extension
+                </h3>
+                <p className="relative text-pretty text-copy leading-relaxed text-body">
+                  Right-click any page, link, or selection - send it
+                  without leaving the tab.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <div className="mx-auto flex max-w-[960px] items-center justify-center gap-3 border-t border-line p-6">
-          <MessageSquareQuote className="h-4 w-6 shrink-0" />
-          <p className="text-pretty text-button text-muted leading-normal">
-            A shared Brain is growing quietly underneath all of this -
-            early members shape it.
+          <Brain
+            aria-hidden="true"
+            className="h-6 w-6 shrink-0 text-muted"
+          />
+          <p className="text-pretty text-button leading-normal">
+            <span className="font-medium text-ink">
+              You won&apos;t remember the title. Your Brain will.
+            </span>
+            <br />
+            <span className="text-muted">
+              Every save joins your Brain - searchable by meaning, not
+              just keywords.
+            </span>
           </p>
         </div>
 
