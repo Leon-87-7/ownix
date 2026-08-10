@@ -147,6 +147,7 @@ function DocParserWorkspace() {
         tabValue={format}
         onTabChange={setFormat}
         tabsLabel="Document format"
+        scrollTabsOnMobile
         query={q}
         setQuery={setQ}
         searchPlaceholder="Search documents…"
