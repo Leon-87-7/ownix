@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,7 +26,7 @@ def patched(monkeypatch):
         "exists": AsyncMock(return_value=False),
         "download": AsyncMock(return_value=b"%PDF bytes"),
         "upload": AsyncMock(),
-        "parse_pdf": AsyncMock(return_value="extracted document text"),
+        "parse_document": AsyncMock(return_value="extracted document text"),
         "update_job_status": AsyncMock(),
         "add_document_output": AsyncMock(return_value={}),
         "send_message": AsyncMock(return_value={}),
@@ -43,7 +43,7 @@ def patched(monkeypatch):
     monkeypatch.setattr(document.storage, "exists", mocks["exists"])
     monkeypatch.setattr(document.storage, "download", mocks["download"])
     monkeypatch.setattr(document.storage, "upload", mocks["upload"])
-    monkeypatch.setattr(document, "parse_pdf", mocks["parse_pdf"])
+    monkeypatch.setattr(document, "parse_document", mocks["parse_document"])
     monkeypatch.setattr(document.database, "update_job_status", mocks["update_job_status"])
     monkeypatch.setattr(document.database, "add_document_output", mocks["add_document_output"])
     monkeypatch.setattr(document.database, "get_job", mocks["get_job"])
@@ -72,7 +72,7 @@ async def test_cache_miss_parses_and_uploads(patched):
 
     await document.run(_job())
 
-    m["parse_pdf"].assert_awaited_once()
+    m["parse_document"].assert_awaited_once()
     # parsed text cached to parsed/<sha>.txt (also uploads the structured summary,
     # so match the specific key rather than the last upload call).
     uploads = {c.args[0]: c.args[1] for c in m["upload"].call_args_list}
@@ -108,7 +108,7 @@ async def test_cache_hit_skips_parse(patched):
 
     await document.run(_job())
 
-    m["parse_pdf"].assert_not_called()
+    m["parse_document"].assert_not_called()
     # Parse is skipped on a cache hit, but the structured summary still generates
     # and uploads on every run (ADR-0029 §3). No parsed-text re-upload, though.
     keys = [c.args[0] for c in m["upload"].call_args_list]
@@ -121,7 +121,7 @@ async def test_parse_failure_propagates(patched):
     from src.services.parse import ParseError
     document, m = patched
     m["exists"].return_value = False
-    m["parse_pdf"].side_effect = ParseError("bad pdf")
+    m["parse_document"].side_effect = ParseError("bad pdf")
 
     with pytest.raises(ParseError):
         await document.run(_job())
@@ -146,7 +146,7 @@ async def test_empty_parse_raises_before_cache_upload(patched):
     from src.services.parse import ParseError
     document, m = patched
     m["exists"].return_value = False
-    m["parse_pdf"].return_value = "  \n  "
+    m["parse_document"].return_value = "  \n  "
 
     with pytest.raises(ParseError):
         await document.run(_job())
@@ -248,13 +248,13 @@ async def test_run_passes_freestyle_prompt_to_gemini(patched):
 async def test_deliver_markdown_parses_md_caches_and_sends(patched):
     document, m = patched
     m["exists"].return_value = False  # no cached .md yet → parse fresh
-    m["parse_pdf"].return_value = "# Heading\n\nbody"
+    m["parse_document"].return_value = "# Heading\n\nbody"
 
     await document.deliver_markdown({"id": "JOB1", "chat_id": 7, "title": "On Widgets",
                                      "url": "documents/abc123.pdf"})
 
     # parsed in markdown mode
-    assert m["parse_pdf"].call_args.kwargs.get("output_format") == "markdown"
+    assert m["parse_document"].call_args.kwargs.get("output_format") == "markdown"
     # cached to parsed/<sha>.md
     (md_key, body, _ctype), _ = m["upload"].call_args
     assert md_key == "parsed/abc123.md"
@@ -273,7 +273,7 @@ async def test_deliver_markdown_uses_cached_md(patched):
     await document.deliver_markdown({"id": "JOB1", "chat_id": 7, "title": "T",
                                      "url": "documents/sha9.pdf"})
 
-    m["parse_pdf"].assert_not_called()
+    m["parse_document"].assert_not_called()
     m["upload"].assert_not_called()
     (_chat, sent_body, filename), _ = m["send_document"].call_args
     assert sent_body == "# cached md".encode("utf-8-sig") and filename == "T.md"

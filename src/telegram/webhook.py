@@ -23,6 +23,13 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from src import database, queue
 from src.config import settings
 from src.services import storage
+from src.services.parse import (
+    MIME_BY_EXT,
+    SUPPORTED_EXTS,
+    _ext_from_name,
+    content_type_for,
+    detect_format,
+)
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
 from src.services.email import send_welcome_email
@@ -1666,20 +1673,21 @@ async def _safe_get_pdf(url: str) -> bytes | None:
 
 
 async def _route_document_url(chat_id: int, url: str, message_id: int | None) -> None:
-    """Fetch a .pdf URL, store it content-addressed, and enqueue a document job (#152)."""
+    """Fetch a document URL, store it content-addressed, and enqueue a job (#152)."""
     try:
         data = await _safe_get_pdf(url)
     except Exception:
         data = None
     if data is None:
         log.info("document_url_fetch_failed", chat_id=chat_id, url=url)
-        await send_message(chat_id, "📄 Couldn't download that PDF. Check the link and try again.")
+        await send_message(chat_id, "📄 Couldn't download that file. Check the link and try again.")
         return
-    if not data.startswith(b"%PDF"):
-        await send_message(chat_id, "📄 That link didn't return a PDF.")
-        log.info("document_url_not_pdf", chat_id=chat_id, url=url)
+    ext = detect_format(data, url)
+    if ext is None:
+        await send_message(chat_id, "📄 That link didn't return a supported document.")
+        log.info("document_url_unsupported", chat_id=chat_id, url=url)
         return
-    await _enqueue_document_job(chat_id, data, message_id)
+    await _enqueue_document_job(chat_id, data, ext, message_id)
 
 
 async def _settle_ops_invite_card(
@@ -2004,13 +2012,24 @@ _DOC_TOO_LARGE_MSG = (
 )
 
 
+_DOCUMENT_MIMES = frozenset(MIME_BY_EXT.values()) | {
+    "application/vnd.ms-word.document.macroEnabled.12",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+}
+
+
 async def _handle_document_update(chat_id: int, message: dict, document: dict) -> None:
-    """Validate + ingest a Telegram document upload. PDF-only at MVP (#151)."""
+    """Validate + ingest a Telegram document upload (PDF + office formats, ADR-0023).
+
+    Only file *metadata* is available here (bytes are fetched in _ingest_document),
+    so this is a cheap pre-filter on the declared extension/MIME; the real gate is
+    the content sniff after download."""
     file_name = document.get("file_name") or ""
     mime_type = document.get("mime_type")
-    is_pdf = mime_type == "application/pdf" or file_name.lower().endswith(".pdf")
-    if not is_pdf:
-        await send_message(chat_id, "📄 Only PDF files are supported right now.")
+    looks_supported = _ext_from_name(file_name) in SUPPORTED_EXTS or mime_type in _DOCUMENT_MIMES
+    if not looks_supported:
+        await send_message(chat_id, "📄 Only documents (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, CSV) are supported.")
         log.info("document_rejected_type", chat_id=chat_id, mime=mime_type)
         return
     if (document.get("file_size") or 0) > _MAX_DOC_BYTES:
@@ -2021,11 +2040,11 @@ async def _handle_document_update(chat_id: int, message: dict, document: dict) -
     spawn_background(_ingest_document(chat_id, document, message.get("message_id")))
 
 
-async def _enqueue_document_job(chat_id: int, data: bytes, message_id: int | None) -> None:
-    """Store PDF bytes content-addressed, create + enqueue the job, ack the user."""
+async def _enqueue_document_job(chat_id: int, data: bytes, ext: str, message_id: int | None) -> None:
+    """Store document bytes content-addressed, create + enqueue the job, ack the user."""
     sha = hashlib.sha256(data).hexdigest()
-    key = storage.object_key("documents", sha, "pdf")
-    await storage.upload(key, data, "application/pdf")
+    key = storage.object_key("documents", sha, ext)
+    await storage.upload(key, data, content_type_for(ext))
     job_id = await database.create_job(
         chat_id=chat_id,
         url=key,
@@ -2040,14 +2059,15 @@ async def _ingest_document(chat_id: int, document: dict, message_id: int | None)
     # Runs unawaited via create_task, so swallow nothing silently: catch and tell the user.
     try:
         data = await download_file(document["file_id"])
-        if not data.startswith(b"%PDF"):  # parity with the URL path; skip wasted upload+job
-            await send_message(chat_id, "📄 That file isn't a valid PDF.")
+        ext = detect_format(data, document.get("file_name"))
+        if ext is None:  # parity with the URL path; skip wasted upload+job
+            await send_message(chat_id, "📄 That file isn't a supported document.")
             log.info("document_rejected_magic", chat_id=chat_id)
             return
-        await _enqueue_document_job(chat_id, data, message_id)
+        await _enqueue_document_job(chat_id, data, ext, message_id)
     except Exception:
         log.exception("document_ingest_failed", chat_id=chat_id)
-        await send_message(chat_id, "📄 Couldn't process that PDF. Please try again.")
+        await send_message(chat_id, "📄 Couldn't process that file. Please try again.")
 
 
 async def _handle_photo_update(chat_id: int, message: dict, photo: list) -> None:

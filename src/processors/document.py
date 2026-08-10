@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from src import database
 from src.services import storage
-from src.services.parse import ParseError, parse_pdf
+from src.services.parse import ParseError, parse_document
 from src.telegram.sender import send_document, send_inline_keyboard, send_message
 from src.services.gemini import extract_json
 from src.utils import dashboard_button_row, job_tag
@@ -25,23 +25,33 @@ log = get_logger(__name__)
 
 
 def _sha_from_key(key: str) -> str:
-    """documents/<sha>.pdf → <sha>."""
+    """documents/<sha>.<ext> → <sha>."""
     return key.rsplit("/", 1)[-1].rsplit(".", 1)[0]
 
 
-async def _cached_parse(sha: str, ext: str, *, output_format: str = "text") -> str:
-    """Parsed content for <sha>, served from parsed/<sha>.<ext> or parsed fresh + cached.
+def _ext_from_key(key: str) -> str:
+    """documents/<sha>.<ext> → <ext> (the canonical source format, lowercased)."""
+    return key.rsplit(".", 1)[-1].lower()
 
-    Shared by run() (txt) and deliver_markdown() (md) so the sha→key→
-    exists/download/parse/upload dance lives in one place (#156).
+
+async def _cached_parse(src_key: str, cache_ext: str, *, output_format: str = "text") -> str:
+    """Parsed content for a source object, served from parsed/<sha>.<cache_ext> or
+    parsed fresh + cached.
+
+    src_key is the job's GCS key (documents/<sha>.<srcext>): its sha addresses the
+    shared parse cache and its extension routes the parser (PDF → liteparse, every
+    other format → anydoc). Shared by run() (txt) and deliver_markdown() (md) so
+    the sha→key→exists/download/parse/upload dance lives in one place (#156).
     """
-    parsed_key = storage.object_key("parsed", sha, ext)
+    sha = _sha_from_key(src_key)
+    src_ext = _ext_from_key(src_key)
+    parsed_key = storage.object_key("parsed", sha, cache_ext)
     if await storage.exists(parsed_key):
         return (await storage.download(parsed_key)).decode("utf-8", "replace")
-    pdf_bytes = await storage.download(storage.object_key("documents", sha, "pdf"))
-    content = await parse_pdf(pdf_bytes, output_format=output_format)  # raises ParseError
-    if not content.strip():  # scanned/image-only PDF: don't cache an empty parse
-        raise ParseError("No text could be extracted — this PDF may be scanned or image-only (OCR not supported)")
+    doc_bytes = await storage.download(src_key)
+    content = await parse_document(doc_bytes, src_ext, output_format=output_format)  # raises ParseError
+    if not content.strip():  # scanned/image-only source: don't cache an empty parse
+        raise ParseError("No text could be extracted — this file may be scanned or image-only (OCR not supported)")
     await storage.upload(parsed_key, content.encode("utf-8"), "text/plain")
     return content
 
@@ -165,7 +175,7 @@ async def _deliver(job: dict, text: str, tools: list[dict], references: list[str
 async def deliver_markdown(job: dict) -> None:
     """On-demand: serve parsed/<sha>.md (cached or freshly parsed) as a .md document (#156)."""
     sha = _sha_from_key(job["url"])
-    md = await _cached_parse(sha, "md", output_format="markdown")
+    md = await _cached_parse(job["url"], "md", output_format="markdown")
     filename = _safe_filename(job.get("title")) + ".md"
     await send_document(job["chat_id"], md.encode("utf-8-sig"), filename)
     log.info("document.markdown_delivered", job_id=job["id"], sha=sha)
@@ -187,7 +197,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
 
     # 1. Parse cache: parsed text is shared by sha across tenants.
     sha = _sha_from_key(key)
-    text = await _cached_parse(sha, "txt")  # raises ParseError on empty/failed parse
+    text = await _cached_parse(key, "txt")  # raises ParseError on empty/failed parse
     log.info("document.text_ready", job_id=job_id, sha=sha, chars=len(text))
 
     # 2. Gemini enrichment (raises GeminiUnavailableError on total failure).

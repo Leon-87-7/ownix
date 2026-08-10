@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
+import { IntakeLinksList, type IntakeLink } from '@/components/intake/intake-links-list';
+import { DOCUMENT_UPLOAD_ACCEPT } from '@/lib/document-formats';
 
 // FastAPI puts the reason in `detail` (a string, or {field, message} for our
 // 400/422s). Surface it instead of a generic "failed" so real causes are visible.
@@ -28,18 +30,23 @@ export function DocUploadPanel({
   const [error, setError] = useState('');
   const [compact, setCompact] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [links, setLinks] = useState<IntakeLink[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function uploadFile(file: File) {
     if (busy) return;
     setError('');
+    setLinks(null);
     setBusy(true);
     const fd = new FormData();
     fd.append('file', file);
     try {
       const r = await fetch('/api/parsed/upload', { method: 'POST', body: fd });
       if (!r.ok) { setError(await errorMessage(r, 'Upload failed')); return; }
-      onUploaded((await r.json())?.job_id ?? null);
+      const data = await r.json();
+      // An image forks to photo-OCR and returns extracted links, not a job.
+      if (data?.kind === 'links') { setLinks(data.links ?? []); return; }
+      onUploaded(data?.job_id ?? null);
     } finally {
       setBusy(false);
     }
@@ -48,6 +55,7 @@ export function DocUploadPanel({
     e.preventDefault();
     if (busy) return;
     setError('');
+    setLinks(null);
     setBusy(true);
     try {
       const r = await fetch('/api/parsed/url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
@@ -77,10 +85,26 @@ export function DocUploadPanel({
         className="mt-4 flex min-h-48 w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line-strong bg-canvas text-body transition-ui hover:border-signal hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Upload />
-        <span>Drop a PDF here or click to choose</span>
-        <input ref={fileRef} type="file" accept="application/pdf" hidden onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); }} />
+        <span>Drop a document to create a job, or an image to extract links</span>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={DOCUMENT_UPLOAD_ACCEPT}
+          hidden
+          onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); }}
+        />
       </button>
       {error && <p className="mt-2 text-sm text-status-error">{error}</p>}
+      {links !== null && (
+        links.length > 0
+          ? (
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-medium uppercase text-muted">Image links</p>
+                <IntakeLinksList links={links} />
+              </div>
+            )
+          : <p className="mt-2 text-sm text-muted">No links found in that image.</p>
+      )}
     </Wrapper>
   );
 }

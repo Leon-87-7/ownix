@@ -14,7 +14,6 @@ import {
 import {
   FileCode2,
   Sparkles,
-  CircleQuestionMark,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badges';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
@@ -36,86 +35,28 @@ type Job = {
 };
 
 const DOC_FORMAT_TABS = [
-  { label: 'PDF', value: 'pdf', count: undefined },
-  {
-    label: 'Word',
-    value: 'word',
-    disabled: true,
-    badge: 'soon',
-    dividerBefore: true,
-  },
-  {
-    label: 'Spreadsheet',
-    value: 'spreadsheet',
-    disabled: true,
-    badge: 'soon',
-    dividerBefore: true,
-  },
-  {
-    label: 'Presentation',
-    value: 'presentation',
-    disabled: true,
-    badge: 'soon',
-    dividerBefore: true,
-  },
-  {
-    label: 'Image',
-    value: 'image',
-    disabled: true,
-    badge: 'soon',
-    dividerBefore: true,
-  },
+  { label: 'All', value: '' },
+  { label: 'PDF', value: 'pdf' },
+  { label: 'Word', value: 'word' },
+  { label: 'Spreadsheet', value: 'spreadsheet' },
+  { label: 'Presentation', value: 'presentation' },
 ] as const;
 
-// Full format list (LlamaParse multi-format). All-inline markup so it stays
-// valid nested inside the header <p>; reveals on hover OR keyboard focus.
-function FormatHelp() {
-  return (
-    <span className="group relative inline-flex">
-      <button
-        type="button"
-        aria-label="Show all supported formats"
-        aria-describedby="doc-formats-tip"
-        className="inline-flex h-5 w-5 items-center justify-center rounded text-muted transition-ui hover:text-ink"
-      >
-        <CircleQuestionMark
-          className="h-4 w-4"
-          aria-hidden="true"
-        />
-      </button>
-      <span
-        id="doc-formats-tip"
-        role="tooltip"
-        className="pointer-events-none absolute left-0 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-md border border-line bg-surface p-3 font-sans text-xs leading-relaxed text-body opacity-0 shadow-overlay transition-opacity duration-150 ease-out-quart group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        <span className="block font-medium text-ink">
-          All supported formats
-        </span>
-        <span className="mt-2 grid gap-1.5">
-          {[
-            ['PDF', '.pdf'],
-            ['Word', '.doc .docx .docm .odt .rtf .pages'],
-            ['PowerPoint', '.ppt .pptx .pptm .odp .key'],
-            [
-              'Spreadsheet',
-              '.xls .xlsx .xlsm .ods .csv .tsv .numbers',
-            ],
-            ['Images', '.jpg .jpeg .png .gif .bmp .tiff .webp .svg'],
-          ].map(([label, exts]) => (
-            <span
-              key={label}
-              className="block"
-            >
-              <span className="text-muted">{label}</span>{' '}
-              <span className="font-mono text-label text-body">
-                {exts}
-              </span>
-            </span>
-          ))}
-        </span>
-      </span>
-    </span>
-  );
+// Map a job's stored source extension (documents/<sha>.<ext>) to a format tab.
+// Mirrors the buckets the parser supports (ADR-0023); anything else is 'other'.
+const FORMAT_BUCKETS: Record<string, readonly string[]> = {
+  pdf: ['pdf'],
+  word: ['doc', 'docx', 'docm', 'odt', 'rtf', 'epub'],
+  spreadsheet: ['xlsx', 'xlsm', 'ods', 'csv'],
+  presentation: ['ppt', 'pptx', 'pptm', 'odp'],
+};
+
+function jobFormat(url: string): string {
+  const ext = url.includes('.') ? url.split('.').pop()!.toLowerCase() : '';
+  for (const [bucket, exts] of Object.entries(FORMAT_BUCKETS)) {
+    if (exts.includes(ext)) return bucket;
+  }
+  return 'other';
 }
 
 export default function DocParserPage() {
@@ -127,6 +68,7 @@ export default function DocParserPage() {
 function DocParserWorkspace() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [status, setStatus] = useState('');
+  const [format, setFormat] = useState('');
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -166,18 +108,24 @@ function DocParserWorkspace() {
 
   const filtered = useMemo(
     () =>
-      jobs.filter((j) =>
-        (j.title || j.url).toLowerCase().includes(q.toLowerCase()),
+      jobs.filter(
+        (j) =>
+          (j.title || j.url).toLowerCase().includes(q.toLowerCase()) &&
+          (!format || jobFormat(j.url) === format),
       ),
-    [jobs, q],
+    [jobs, q, format],
   );
-  const formatTabs = useMemo(
-    () =>
-      DOC_FORMAT_TABS.map((t) =>
-        t.value === 'pdf' ? { ...t, count: jobs.length } : t,
-      ),
-    [jobs.length],
-  );
+  const formatTabs = useMemo(() => {
+    const counts = jobs.reduce<Record<string, number>>((acc, j) => {
+      const f = jobFormat(j.url);
+      acc[f] = (acc[f] ?? 0) + 1;
+      return acc;
+    }, {});
+    return DOC_FORMAT_TABS.map((t) => ({
+      ...t,
+      count: t.value === '' ? jobs.length : counts[t.value] ?? 0,
+    }));
+  }, [jobs]);
 
   return (
     <PageShell>
@@ -187,9 +135,8 @@ function DocParserWorkspace() {
         description={
           <>
             Upload PDFs, Microsoft Office formats and Images.
-            <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted">
-              <span>.pdf | .docx | .xlsx | .pptx | .png | …</span>
-              <FormatHelp />
+            <span className="mt-1 block font-mono text-xs text-muted">
+              .pdf | .docx | .xlsx | .pptx | .png | …
             </span>
           </>
         }
@@ -197,8 +144,8 @@ function DocParserWorkspace() {
 
       <FilterBar
         tabs={formatTabs}
-        tabValue="pdf"
-        onTabChange={() => {}}
+        tabValue={format}
+        onTabChange={setFormat}
         tabsLabel="Document format"
         query={q}
         setQuery={setQ}
@@ -223,10 +170,11 @@ function DocParserWorkspace() {
           )}
           {!loading && !loadError && filtered.length === 0 && (
             <EmptyState
-              hasFilters={Boolean(q || status)}
+              hasFilters={Boolean(q || status || format)}
               onClear={() => {
                 setQ('');
                 setStatus('');
+                setFormat('');
               }}
             />
           )}
