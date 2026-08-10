@@ -47,6 +47,12 @@ REVIEWER_LOGIN_PASSWORD=<single-use review code>
 NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED=1
 ```
 
+password gene:
+
+```powershell
+-join ((48..57) + (65..90) + (97..122) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+```
+
 Set `NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED` before building the web application,
 then deploy that build so the reviewer form is included in the client bundle.
 Give Chrome the email/code in **Test instructions** and tell them to sign in at
