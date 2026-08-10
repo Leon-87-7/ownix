@@ -22,10 +22,11 @@ def upload_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     monkeypatch.setattr("src.config.settings.SESSION_BACKEND", "memory")
 
     from src import database
-    from src.api import parsed as parsed_module
     from src.api.intake import intake_router
     from src.auth.middleware import SessionMiddleware
     from src.intake import idempotency, quota, rate_limit
+    from src.services import jobs as jobs_module
+    from src.services import storage
 
     asyncio.run(database.init_db())
     asyncio.run(database.set_user_status(CHAT_ID, "approved"))
@@ -33,8 +34,8 @@ def upload_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     quota.reset()
     idempotency._memory.clear()
 
-    monkeypatch.setattr(parsed_module.storage, "upload", AsyncMock())
-    monkeypatch.setattr(parsed_module.queue, "enqueue", AsyncMock())
+    monkeypatch.setattr(storage, "upload", AsyncMock())
+    monkeypatch.setattr(jobs_module.queue, "enqueue", AsyncMock())
 
     test_app = FastAPI()
     test_app.add_middleware(SessionMiddleware)
@@ -60,6 +61,23 @@ class TestUploadValidation:
         body = resp.json()
         assert body["kind"] == "job_created"
         assert body["job_id"]
+
+    def test_valid_docx_creates_document_job(self, upload_client: TestClient, office_samples) -> None:
+        # Office formats sniff by content (ZIP package mimetype), route to the
+        # document pipeline, and store under documents/<sha>.docx (ADR-0023).
+        from src import database
+
+        _login(upload_client)
+        resp = upload_client.post(
+            "/api/intake/upload",
+            files={"file": ("report.docx", office_samples["report.docx"], "application/octet-stream")},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["kind"] == "job_created"
+        job = asyncio.run(database.get_job(body["job_id"]))
+        assert job["content_type"] == "document"
+        assert job["url"].endswith(".docx")
 
     def test_wrong_content_type_header_is_ignored_in_favor_of_sniffing(
         self, upload_client: TestClient
@@ -190,7 +208,7 @@ class TestUploadValidation:
 
     def test_pdf_bytes_with_no_pdf_extension_still_succeeds(self, upload_client: TestClient) -> None:
         # Content sniffing (not the filename) decides this is a PDF; the
-        # channel-neutral contract must not leak a raw validate_pdf()
+        # channel-neutral contract must not leak a raw validate_document()
         # HTTPException just because the filename lacks a .pdf suffix.
         _login(upload_client)
         resp = upload_client.post(

@@ -5,6 +5,8 @@ import unicodedata
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
+from src.utils.document_formats import SUPPORTED_DOCUMENT_EXTS
+
 Pipeline = Literal["short", "long", "unsized", "article", "repo", "document", "rejected"]
 
 _UNSIZED_VIDEO_HOSTS = frozenset({"facebook.com", "x.com", "twitter.com"})
@@ -139,15 +141,23 @@ def detect_pipeline(
     github = _match_github(host, path)
     if github is not None:
         return github
-    # Document pipeline: route by extension only (.pdf). No arxiv host special-
-    # casing at MVP (ADR-0023) — that returns when someone actually sends one.
-    if path.lower().endswith(".pdf"):
+    # Document pipeline: route by file extension (PDF + every anydoc-supported
+    # office/document format, ADR-0023). The fetched bytes are content-sniffed
+    # again at ingest, so the extension only decides "this link looks like a doc".
+    if _document_ext(path):
         return "document"
     if any(_host_matches(host, video_host) for video_host in _UNSIZED_VIDEO_HOSTS):
         return "unsized"
     if _match_article(host, extra_domains):
         return "article"
     return "rejected"
+
+
+def _document_ext(path: str) -> str:
+    """The document extension a URL path ends in (e.g. 'pdf', 'docx'), or ''."""
+    tail = path.rsplit("/", 1)[-1].lower()
+    ext = tail.rsplit(".", 1)[-1] if "." in tail else ""
+    return ext if ext in SUPPORTED_DOCUMENT_EXTS else ""
 
 
 def _match_short(host: str, path: str) -> bool:

@@ -2,8 +2,10 @@
 
 import { useRef, useState, type ChangeEvent } from 'react';
 import { FileUp } from 'lucide-react';
+import { DOCUMENT_UPLOAD_ACCEPT } from '@/lib/document-formats';
 
-/** PDF/image upload for `/intake` (issue #475). Server sniffs content, not this input's `accept`. */
+/** Document/image upload for `/intake` (issue #475, multi-format per ADR-0023).
+ *  The server content-sniffs the bytes — this `accept` is only a picker hint. */
 export function IntakeUploadDropzone({
   onUploaded,
   onError,
@@ -33,7 +35,7 @@ export function IntakeUploadDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf,image/*"
+        accept={DOCUMENT_UPLOAD_ACCEPT}
         onChange={handleChange}
         disabled={uploading}
         className="hidden"
@@ -51,7 +53,7 @@ export function IntakeUploadDropzone({
           className="h-4 w-4"
           aria-hidden="true"
         />
-        {uploading ? 'Uploading…' : 'Upload PDF or image'}
+        {uploading ? 'Uploading…' : 'Upload document or image'}
       </button>
     </div>
   );

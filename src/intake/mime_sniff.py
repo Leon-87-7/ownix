@@ -29,4 +29,14 @@ def sniff(data: bytes) -> str | None:
             return mime
     if data[:4] == _WEBP_RIFF and data[8:12] == _WEBP_MARKER:
         return "image/webp"
+    # Office / OpenDocument / RTF / EPUB documents — content-detected (ZIP package
+    # mimetype, OLE stream names, RTF open group) via the shared parser detector,
+    # so uploads route to the document pipeline instead of 415'ing (ADR-0023).
+    # CSV is signature-less and stays unrecognized here (the Doc Parser page,
+    # which has the filename, is the CSV entry point).
+    from src.services.parse import content_type_for, detect_format
+
+    ext = detect_format(data)
+    if ext is not None:
+        return content_type_for(ext)
     return None

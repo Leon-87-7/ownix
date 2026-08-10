@@ -5,6 +5,40 @@ status: accepted
 date: 2026-06-08
 ---
 
+## Office support via anydoc — no sidecar (2026-08-09 update)
+
+The Office-format deferral below is **lifted**, and **without** the deferred
+`vig-document` sidecar. The sidecar existed only to quarantine liteparse's ~1 GB
+native stack (LibreOffice = the DOCX/PPTX/XLSX path; ImageMagick + Tesseract = the
+image/OCR path). [firecrawl/anydoc](https://github.com/firecrawl/anydoc) parses
+DOCX/PPTX/XLSX, ODF, RTF, EPUB, and CSV in a **single self-contained Rust wheel**
+(`firecrawl-anydoc`, ~3.4 MB manylinux abi3, no LibreOffice, no Rust toolchain at
+install), so those formats now run **inline in `vig-worker`** exactly like PDF.
+Spike + rationale: `docs/plans/anydoc-office-parsing-spike.md`.
+
+What this changes:
+
+- **Routing by format, one seam.** `src/services/parse.py` routes **PDF →
+  liteparse** (kept for its layout-aware reading-order reconstruction) and
+  **everything else → anydoc**. `parse_document(data, ext)` is the single entry
+  point; `detect_format(data, filename)` is the authoritative content-sniff gate
+  (anydoc reads the PDF header / OLE stream names / ZIP package mimetype; CSV,
+  signature-less, is trusted by filename only).
+- **Storage key carries the source format.** Objects are content-addressed as
+  `documents/<sha>.<srcext>` (was hardcoded `.pdf`), so `_cached_parse` re-routes
+  a cache miss to the right parser. Parsed output stays sha-addressed and shared.
+- **All three ingest channels generalized** behind that gate — the Doc Parser
+  dashboard (`/api/parsed/*`), the channel-neutral intake API
+  (`/api/intake/upload` → `mime_sniff` → `uploads`), and the Telegram webhook —
+  plus URL routing (`detect_pipeline`). The 20 MB cap and SSRF guards are
+  unchanged.
+- **Images are still not documents.** anydoc has no OCR (scanned/image-only inputs
+  raise), so images uploaded to the Doc Parser / intake pages **fork to the
+  existing photo-OCR link-extraction pipeline** (ADR-0003) via a new branch rather
+  than creating a document job.
+- **Still unadopted:** the sidecar, and OCR for scanned PDFs/images. Those return
+  only if a format anydoc can't handle earns real demand.
+
 ## MVP scope (2026-06-18 update)
 
 The first shipping slice (issues #150–#155) is **narrowed to PDF-only**, which
@@ -88,13 +122,18 @@ Drive.
 
 ## Decision
 
-**1. Liteparse runs in its own `vig-document` sidecar container.**
+**1. Liteparse runs in its own `vig-document` sidecar container.** **Superseded
+for current implementation by the 2026-08-09 anydoc update above.** This remains
+historical context for the original Office/image plan.
 This mirrors the `vig-transcript` sidecar (yt-dlp) and the weight-quarantine
 reasoning of [ADR-0017](0017-notebooklm-push-forked-sidecar.md) (Chromium). The
 sidecar owns LibreOffice/ImageMagick/Tesseract; `vig-worker` and `vig-api` stay
 lean. The worker calls it over HTTP.
 
 **2. The sidecar contract is: GCS object reference in, plain text out.**
+**Superseded for current implementation by inline parsing in `vig-worker`.** The
+HTTP contract below describes the deferred sidecar design, not the shipped Office
+path.
 The file is already in GCS at ingestion time, so the worker sends a reference
 (not bytes); the sidecar pulls the bytes itself, runs `liteparse.parse()`, and
 returns the layout-ordered **plain text** (`ParseResult.text`). The sidecar is
@@ -146,18 +185,20 @@ shared layer is the derived parse only.
   (arxiv) running before the article-allowlist check.
 - `content_type = "document"`; worker task `{"task": "document"}`;
   `src/processors/document.py`.
-- New services: `src/services/liteparse.py` (sidecar HTTP client, mirrors
-  `transcript.py`) and `src/services/storage.py` (GCS wrapper).
+- **Superseded historical service split:** the original design introduced
+  `src/services/liteparse.py` as a `vig-document` sidecar HTTP client. The
+  shipped Office path now parses inline through `src/services/parse.py` with
+  anydoc in `vig-worker`; `src/services/storage.py` remains the GCS wrapper.
 - Document-specific enrichment schema: `title, author, publisher,
   document_type, summary, key_points, references[], tools[]`. Maps `title→title`,
   `summary→ai_objective`, `key_points→ai_action_points`, `tools→ai_tools`;
   `author`/`publisher`/`document_type`/`references` in `jobs.template_analysis`
   JSON blob ([ADR-0008](0008-template-analysis-json-blob.md)). No `promise_gap`
   (documents don't pitch — same reasoning as repos).
-- Delivery: Telegram-only for MVP (send `.txt`, then the enrichment message,
-  then buttons `[✍️ Freestyle] [📄 Get Markdown]`). Freestyle re-run reuses the
-  `awaiting_freestyle` seam and the cached parse. `📄 Get Markdown` triggers the
-  on-demand Markdown render (cached at `parsed/{sha256}.md`).
+- Delivery: Telegram delivery was the MVP surface. The dashboard now also
+  creates document jobs and exposes clean/freestyle outputs. The original
+  button-only follow-up contract is historical; Freestyle and clean Markdown
+  generation both reuse the cached parse.
 - Drive/Sheets writes are opt-in exports per ADR-0022 (new `Document Analysis`
   tab).
 
@@ -169,7 +210,7 @@ flagged upgrade path.
 
 ## Consequences
 
-- **Pro:** `vig-worker`/`vig-api` images stay lean; the ~1GB native-binary
+- **Superseded historical pro:** `vig-worker`/`vig-api` images stay lean; the ~1GB native-binary
   stack is quarantined in `vig-document`.
 - **Pro:** Storage and cache are one thing — a GCS exists-check replaces a DB
   cache table, and the raw file + parsed Markdown sit together.
@@ -178,7 +219,7 @@ flagged upgrade path.
 - **Pro:** The pipeline slots into existing patterns (`_dispatch`, Sheets tabs,
   Freestyle seam) with one genuinely new module (`storage.py`), which the
   platform-storage migration needs anyway.
-- **Con:** A new always-on sidecar container to operate, monitor, and resource
+- **Superseded historical con:** A new always-on sidecar container to operate, monitor, and resource
   (LibreOffice is memory-hungry on large files).
 - **Con:** GCS is now on the document-ingestion hot path; a GCS outage blocks
   document jobs (other pipelines unaffected).
