@@ -158,7 +158,7 @@ export function MobileOnboardingStepper() {
               Back
             </button>
             {/* `group` so the press drives the arrow as well as the plate: the
-                button sinks 2% and the arrow travels 4px in the direction it
+                button sinks 4% and the arrow travels 4px in the direction it
                 points. Transform-only, and neutralised under motion-reduce. */}
             <button
               type="button"
