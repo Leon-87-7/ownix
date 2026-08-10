@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { ChevronDown, Upload } from 'lucide-react';
 import { IntakeLinksList, type IntakeLink } from '@/components/intake/intake-links-list';
 import { DOCUMENT_UPLOAD_ACCEPT } from '@/lib/document-formats';
 
@@ -70,11 +70,27 @@ export function DocUploadPanel({
   // flat: no card chrome and no mobile collapse — it lives inside a dialog.
   const Wrapper = flat ? 'div' : 'section';
   return (
-    <Wrapper className={flat ? 'mt-4' : `${compact ? 'max-lg:max-h-12 max-lg:overflow-hidden' : ''} rounded-lg border border-line bg-surface p-4`}>
-      {!flat && <button onClick={() => setCompact(!compact)} className="mb-3 w-full text-left text-sm font-medium text-ink lg:hidden">Upload documents</button>}
+    <Wrapper className={flat ? 'mt-4' : `${compact ? 'max-lg:max-h-16 max-lg:overflow-hidden' : ''} rounded-lg border border-line bg-surface p-4`}>
+      {!flat && (
+        <button
+          type="button"
+          onClick={() => setCompact(!compact)}
+          aria-expanded={!compact}
+          className="mb-3 flex w-full items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2 text-sm font-medium text-ink transition-ui hover:border-line-strong hover:text-ink active:scale-[0.98] motion-reduce:active:scale-100 lg:hidden"
+        >
+          <span className="flex items-center gap-2">
+            <Upload className="h-4 w-4 shrink-0 text-signal" aria-hidden="true" />
+            Upload documents
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 text-muted transition-transform duration-200 ease-out motion-reduce:transition-none ${compact ? '' : 'rotate-180'}`}
+          />
+        </button>
+      )}
       <form onSubmit={submitUrl} className="flex gap-2">
         <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/file.pdf" className="min-w-0 flex-1 rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink" />
-        <button disabled={busy} className="rounded-md bg-signal px-4 text-sm text-onsignal disabled:opacity-50">Fetch</button>
+        <button disabled={busy} className="rounded-md bg-signal px-4 text-sm font-medium text-onsignal transition-transform active:scale-[0.96] disabled:opacity-50 motion-reduce:active:scale-100">Fetch</button>
       </form>
       <button
         type="button"

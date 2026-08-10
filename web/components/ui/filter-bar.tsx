@@ -63,6 +63,7 @@ export function SegmentedTabs({
   onChange,
   label,
   leadingItem,
+  scrollOnMobile = false,
 }: {
   tabs: readonly FilterTab[];
   value: string;
@@ -72,6 +73,11 @@ export function SegmentedTabs({
    * page-level action that should flow with the chips on mobile (e.g. the feed's
    * Submit trigger). Not a tab: it never participates in value/thumb logic. */
   leadingItem?: React.ReactNode;
+  /** Mobile (< sm) layout. Default is the 4-column wrap grid (the feed places its
+   * leadingItem into that grid). `true` swaps it for a single horizontally
+   * scrollable row so a tab set that doesn't divide evenly into 4 (e.g.
+   * doc-parser's five format chips) never orphans a chip onto a second row. */
+  scrollOnMobile?: boolean;
 }) {
   const refs = useRef<(HTMLElement | null)[]>([]);
   const [thumb, setThumb] = useState<{
@@ -101,7 +107,11 @@ export function SegmentedTabs({
     <div
       role="group"
       aria-label={label}
-      className="relative grid w-full grid-cols-4 gap-2 px-1 sm:flex sm:w-auto sm:flex-nowrap sm:gap-1 sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1 sm:px-0"
+      className={`relative px-1 sm:flex sm:w-auto sm:flex-nowrap sm:gap-1 sm:overflow-visible sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1 sm:px-0 ${
+        scrollOnMobile
+          ? 'flex w-full flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+          : 'grid w-full grid-cols-4 gap-2'
+      }`}
     >
       {thumb && (
         <span
@@ -120,7 +130,7 @@ export function SegmentedTabs({
         const labelText = tab.badge
           ? `${tab.label} (${tab.badge})`
           : `${tab.label} ${tab.count ?? ''}`.trim();
-        const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-button font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${
+        const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-button font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${scrollOnMobile ? 'shrink-0 whitespace-nowrap ' : ''}${
           active
             ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
             : tab.disabled
@@ -234,6 +244,7 @@ export function FilterBar({
   actionSlot,
   hideSearchAndFilters = false,
   searchSlot,
+  scrollTabsOnMobile = false,
 }: {
   tabs: readonly FilterTab[];
   tabValue: string;
@@ -260,6 +271,9 @@ export function FilterBar({
    * the tabs — for views (e.g. Links) whose search bar carries extra controls
    * (a page-size picker) and filters through its own state, not `query`. */
   searchSlot?: React.ReactNode;
+  /** Forwarded to SegmentedTabs — see its `scrollOnMobile`. Use for tab sets
+   * that don't divide evenly into the mobile 4-column grid. */
+  scrollTabsOnMobile?: boolean;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed; component remounts on navigation so it resets naturally.
@@ -313,6 +327,7 @@ export function FilterBar({
             onChange={onTabChange}
             label={tabsLabel}
             leadingItem={actionSlot}
+            scrollOnMobile={scrollTabsOnMobile}
           />
         </div>
         {searchSlot ? (
