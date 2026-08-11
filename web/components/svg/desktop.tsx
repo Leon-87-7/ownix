@@ -17,13 +17,13 @@ export function DesktopIcon(props: React.SVGProps<SVGSVGElement>) {
         y="48"
         width="192"
         height="144"
-        rx="16"
+        rx="8"
         transform="translate(256 240) rotate(180)"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
       <line
         x1="160"
@@ -34,7 +34,7 @@ export function DesktopIcon(props: React.SVGProps<SVGSVGElement>) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
       <line
         x1="32"
@@ -45,7 +45,7 @@ export function DesktopIcon(props: React.SVGProps<SVGSVGElement>) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
       <line
         x1="128"
@@ -56,7 +56,7 @@ export function DesktopIcon(props: React.SVGProps<SVGSVGElement>) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
     </svg>
   );

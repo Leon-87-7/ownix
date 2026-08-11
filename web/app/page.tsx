@@ -606,25 +606,36 @@ export default async function LandingPage() {
           className="border-t border-line py-10 md:py-14"
         >
           <div className="mx-auto max-w-[960px] px-6">
+            {/* The ask (copy) and the action (widget) sit side by side instead
+              of stacked, so the column doesn't dead-end in empty space below
+              the paragraph. The marquee stays full-card-width below - it's a
+              w-max looping track that only reads correctly (and only avoids a
+              grid-blowout clip fight) with the full measure to animate across. */}
             <div className="rounded-lg border border-line bg-surface p-8">
-              <h2
-                id="h-invite"
-                className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
-              >
-                Invite-only for now.
-              </h2>
-              <p className="text-pretty mb-6 max-w-[52ch] text-prose leading-relaxed">
-                Sign in with Telegram and the Ownix bot asks for your
-                email. I approve every member personally, usually
-                within a few hours. Then you&apos;ll get a hello from
-                me - and a question: want to help build what Ownix
-                becomes?
-              </p>
-              <TelegramLoginWidget align="start" />
-              <p className="text-pretty font-mono text-xs text-muted">
-                no password ◉ the bot asks for your email ◉ approval
-                within hours
-              </p>
+              <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
+                <div>
+                  <h2
+                    id="h-invite"
+                    className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+                  >
+                    Invite-only for now.
+                  </h2>
+                  <p className="text-pretty max-w-[52ch] text-prose leading-relaxed">
+                    Sign in with Telegram and the Ownix bot asks for
+                    your email. I approve every member personally,
+                    usually within a few hours. Then you&apos;ll get a
+                    hello from me - and a question: want to help build
+                    what Ownix becomes?
+                  </p>
+                </div>
+                <div>
+                  <TelegramLoginWidget align="start" />
+                  <p className="text-pretty font-mono text-xs text-muted">
+                    no password ◉ the bot asks for your email ◉
+                    approval within hours
+                  </p>
+                </div>
+              </div>
 
               <div className="mt-8 border-t border-line pt-6">
                 <div className="flex items-center gap-3">

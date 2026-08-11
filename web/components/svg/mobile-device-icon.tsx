@@ -19,13 +19,13 @@ export function MobileDeviceIcon(
         y="64"
         width="208"
         height="128"
-        rx="16"
+        rx="8"
         transform="translate(256) rotate(90)"
         fill="none"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
       <line
         x1="96"
@@ -36,7 +36,7 @@ export function MobileDeviceIcon(
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="16"
+        strokeWidth="8"
       />
     </svg>
   );
