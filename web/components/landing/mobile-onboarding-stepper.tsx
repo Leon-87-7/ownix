@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { STEPS } from './onboarding-stepper';
 import { WordmarkMarquee } from './wordmark-marquee';
 
@@ -137,6 +137,18 @@ export function MobileOnboardingStepper() {
                   <p className="mt-4 font-mono text-xs text-muted">
                     {item.meta}
                   </p>
+                  {index === 0 && (
+                    <a
+                      href="#capture"
+                      className="mt-3 inline-flex items-center gap-1 text-sm text-muted transition-ui hover:text-body hover:underline"
+                    >
+                      More ways to add
+                      <ArrowDown
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                      />
+                    </a>
+                  )}
                 </article>
               );
             })}
