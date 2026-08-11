@@ -291,8 +291,8 @@ async def checklists_command(chat_id: int, parts: list[str]) -> IntakeResponse:
         return responses.error("Checklist generation failed. Try again.", retryable=True)
 
     generated_at = datetime.now(timezone.utc).isoformat()
-    await database.update_job_status(
-        job["id"], job["status"], checklists_md=md, checklists_generated_at=generated_at
+    await database.update_job_fields(
+        job["id"], checklists_md=md, checklists_generated_at=generated_at
     )
     log.info("checklists.generated", job_id=job["id"], chat_id=chat_id)
     return IntakeResponse(kind="checklists_result", text=md, job_id=job["id"])

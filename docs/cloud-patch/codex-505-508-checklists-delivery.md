@@ -1,6 +1,7 @@
 # Codex prompt — implement issues #505–#508 (checklists command delivery)
 
 > Working-tree changes only. **Do not commit, do not push, do not open PRs.**
+>
 > Leave all changes uncommitted for human review.
 
 > **Base branch: `worktree-checklists-command`, not `main`.** Plan Tasks 1-5

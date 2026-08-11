@@ -116,6 +116,45 @@ class TestChecklistsCommand:
         assert resp.kind == "checklists_result"
         assert "No actionable" in resp.text
 
+    def test_generation_does_not_restore_stale_status(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        db_file = tmp_path / "checklists_status_race.db"
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+
+        from src import database
+
+        asyncio.run(database.init_db())
+        job_id = asyncio.run(
+            database.create_job(
+                chat_id=CHAT_ID,
+                url="https://youtube.com/watch?v=abc",
+                content_type="long",
+            )
+        )
+        asyncio.run(
+            database.update_job_status(
+                job_id, "transcript_done", transcript="engineering advice"
+            )
+        )
+
+        async def generate_then_advance(_job: dict) -> tuple[dict, str]:
+            await database.update_job_status(job_id, "done")
+            return {"topics": []}, "# Checklist\n"
+
+        monkeypatch.setattr("src.processors.checklists.run_checklists", generate_then_advance)
+        resp = asyncio.run(
+            commands.SHARED_COMMANDS["/checklists"].handler(
+                CHAT_ID, ["/checklists", job_id[-4:]]
+            )
+        )
+
+        assert resp.kind == "checklists_result"
+        job = asyncio.run(database.get_job(job_id))
+        assert job["status"] == "done"
+        assert job["checklists_md"] == "# Checklist\n"
+
     def test_gemini_failure_returns_retryable_error(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

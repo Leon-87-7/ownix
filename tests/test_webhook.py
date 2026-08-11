@@ -1658,6 +1658,24 @@ async def test_cmd_checklists_sends_markdown_document(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_dispatch_slash_routes_checklists(monkeypatch):
+    from src.telegram.webhook import _HELP_TEXT, _dispatch_slash
+
+    command = AsyncMock()
+    monkeypatch.setitem(webhook._SLASH_TABLE, "/checklists", command)
+    monkeypatch.setattr("src.telegram.webhook.database.clear_chat_state", AsyncMock())
+    redis = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.queue._client", lambda: redis)
+
+    await _dispatch_slash(42, "/checklists abcd", message_id=7)
+
+    command.assert_awaited_once()
+    ctx = command.await_args.args[0]
+    assert ctx.parts == ["/checklists", "abcd"]
+    assert "`/checklists` <suffix>" in _HELP_TEXT
+
+
+@pytest.mark.asyncio
 async def test_cmd_find_no_results_keeps_the_rebuild_graph_hint(monkeypatch):
     """The shared migration (#485) must not drop Telegram's own copy/formatting."""
     from src.telegram.webhook import SlashCtx, _cmd_find

@@ -613,7 +613,9 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
     job = await get_owned_job(job_id, request)
     if job.get("content_type") not in {"short", "long"}:
         raise HTTPException(status_code=422, detail="Checklists require a short or long video")
-    if job.get("status") not in {"transcript_done", "done"} or not job.get("transcript"):
+    if job.get("status") not in {"transcript_done", "done"} or not (
+        job.get("transcript") or ""
+    ).strip():
         raise HTTPException(status_code=422, detail="A completed transcript is required")
 
     from src.processors.checklists import run_checklists
@@ -627,9 +629,8 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
         raise HTTPException(status_code=502, detail="Checklist generation failed") from exc
 
     generated_at = datetime.now(UTC).isoformat()
-    await database.update_job_status(
+    await database.update_job_fields(
         job_id,
-        job["status"],
         checklists_md=markdown,
         checklists_generated_at=generated_at,
     )

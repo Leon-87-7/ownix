@@ -17,6 +17,10 @@
 | [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth        | Merged; PR #453; closed on GH  |
 | [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval         | Jobs / Ops         | Merged; PR #453; closed on GH  |
 | [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved    | Telegram / Copy    | Merged; PR #453; closed on GH  |
+| [#505](https://github.com/Leon-87-7/ownix/issues/505) | Extract shared CopyButton component                                | Web / Jobs         | Delivered in PR #509           |
+| [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery                              | Telegram           | Delivered in PR #509           |
+| [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists                | Web / Jobs         | Delivered in PR #509; #505     |
+| [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results           | Web / Intake       | Delivered in PR #509; #505     |
 
 ---
 
@@ -65,10 +69,6 @@
 | [#495](https://github.com/Leon-87-7/ownix/issues/495) | Parse and insert links, skip existing (snapshot ingest) | Bookmarks / Parser | #490, #492 |
 | [#496](https://github.com/Leon-87-7/ownix/issues/496) | Deferred import-scoped enrichment pass | Bookmarks / Brain | #495 |
 | [#497](https://github.com/Leon-87-7/ownix/issues/497) | Folder-to-tag opt-in form | Bookmarks / Tags | #495 |
-| [#505](https://github.com/Leon-87-7/ownix/issues/505) | Extract shared CopyButton component | Web / Jobs | — |
-| [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery | Telegram | — |
-| [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists | Web / Jobs | #505 |
-| [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results | Web / Intake | #505 |
 
 ---
 

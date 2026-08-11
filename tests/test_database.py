@@ -1412,3 +1412,20 @@ async def test_checklists_columns_exist_after_init(tmp_path, monkeypatch) -> Non
 
     assert "checklists_md" in columns
     assert "checklists_generated_at" in columns
+
+
+@pytest.mark.asyncio
+async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
+    """The v40 migration must upgrade databases created before checklist support."""
+    from src import database
+
+    db_file = tmp_path / "checklists_v39.db"
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY)")
+        await conn.execute("PRAGMA user_version = 39")
+        await conn.commit()
+        await database._run_migrations(conn)
+        cur = await conn.execute("PRAGMA table_info(jobs)")
+        columns = {row[1] for row in await cur.fetchall()}
+
+    assert {"checklists_md", "checklists_generated_at"} <= columns

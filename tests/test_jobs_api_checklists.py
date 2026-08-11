@@ -63,7 +63,12 @@ def test_generates_and_returns_checklist(client: TestClient, monkeypatch: pytest
 
 @pytest.mark.parametrize(
     ("content_type", "status", "transcript"),
-    [("article", "done", "text"), ("long", "processing", "text"), ("short", "done", None)],
+    [
+        ("article", "done", "text"),
+        ("long", "processing", "text"),
+        ("short", "done", None),
+        ("short", "done", "   "),
+    ],
 )
 def test_rejects_ineligible_jobs(client: TestClient, content_type: str, status: str, transcript: str | None) -> None:
     seed_job(content_type=content_type, status=status, transcript=transcript)
