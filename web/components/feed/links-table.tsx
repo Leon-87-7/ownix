@@ -203,7 +203,7 @@ function LinkTagCluster({ link }: { link: LinkRow }) {
           ? `Edit ${linkTags.length} link tags`
           : 'Add link tag'
       }
-      className="inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded border border-line px-1.5 text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+      className="relative inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded border border-line px-1.5 text-muted transition-ui before:absolute before:-inset-x-2 before:-inset-y-2.5 hover:border-line-strong hover:bg-raised hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas active:scale-[0.96] motion-reduce:active:scale-100"
     >
       {linkTags.length === 0 ? (
         <span className="text-sm leading-none opacity-70">+</span>

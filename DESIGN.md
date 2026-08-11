@@ -8,8 +8,8 @@ colors:
   surface-selected: '#2a2e36' # selection plate — see §5 Chips, stepper carve-out
   hairline: '#30343d'
   hairline-strong: '#343a44'
-  ink: '#f4f1eb'
-  body: '#c6c1b8'
+  ink: '#e6e6e6'
+  body: '#b8b8b8'
   muted: '#948e84'
   signal: '#d99a45'
   signal-bright: '#efb566'
@@ -270,7 +270,7 @@ content type.
 - **Canvas** (`#0d0e10`): The page floor — near-black with a restrained premium cast.
 - **Surface** (`#16181c`): The working layer — cards, rows, sidebars, panels, and tiles.
 - **Surface Raised** (`#202329`): Hover plates, active nav plates, and one-step-raised surfaces.
-- **Surface Selected** (`#2a2e36`): One rung above raised, reserved for a *selected* control that must not spend amber — see the stepper carve-out under §5 Chips. It exists so selection never reads as a hovered raised plate. Not a general-purpose surface.
+- **Surface Selected** (`#2a2e36`): One rung above raised, reserved for a _selected_ control that must not spend amber — see the stepper carve-out under §5 Chips. It exists so selection never reads as a hovered raised plate. Not a general-purpose surface.
 - **Hairline** (`#30343d`): Default 1px border on plates and inputs.
 - **Hairline Strong** (`#343a44`): Emphasized borders such as input hover and table header rules.
 - **Ink** (`#f4f1eb`): Headings and primary content text.
@@ -333,7 +333,7 @@ scale in `tailwind.config.ts`); reach for the role name, never an arbitrary
 - **Display** (600, 1.5rem / 24px, 1.2, -0.5px) — token `text-display`: Page titles. One per screen.
 - **Headline** (600, 1.25rem / 20px, 1.25, -0.25px) — token `text-headline`: Section heads inside a page.
 - **Title** (600, 1rem / 16px, 1.4) — token `text-title`: Card and panel titles, item titles in detail view.
-- **Body** (400, 0.875rem / 14px, 1.5) — token `text-copy`: Default UI text. Long prose caps at 65–75ch; data surfaces may run denser. (Named `copy`, not `body`, because `text-body` is already the body *colour*.)
+- **Body** (400, 0.875rem / 14px, 1.5) — token `text-copy`: Default UI text. Long prose caps at 65–75ch; data surfaces may run denser. (Named `copy`, not `body`, because `text-body` is already the body _colour_.)
 - **Body Strong** (500, 0.875rem / 14px) — token `text-copy`: Nav items, emphasized inline text, table-row emphasis.
 - **Label** (500, 0.75rem / 12px) — token `text-label`: Form labels and filter group labels — sentence case, never tracked-uppercase.
 - **Stat Value** (600, 1.75rem / 28px, tabular-nums) — token `text-stat`: Summary tiles. Always `tnum` so counts align.

@@ -5,12 +5,9 @@ description: Grilling session that challenges your plan against the existing dom
 ---
 
 <what-to-do>
+agent-knowledge\skills\grilling\SKILL.md
 
-Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
-
-Ask the questions one at a time, waiting for feedback on each question before continuing.
-
-If a question can be answered by exploring the codebase, explore the codebase instead. If a challenge hinges on how a third-party tool actually behaves — what an external API, SDK, or library can or can't do — you MUST ground yourself in current docs before pressing the point (see "Ground third-party challenges in current docs" below).
+run a grilling session that challenges your plan against the existing domain model and the _current_ docs of any third-party tool it depends on — probing context7 first and falling back to web search whenever a challenge hinges on how an external API/SDK/library actually behaves. Sharpens terminology and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when a plan leans on third-party integrations (greenfield or existing) and you want it stress-tested against real, up-to-date tool behavior rather than stale memory.
 
 </what-to-do>
 
@@ -77,9 +74,9 @@ Check `docs/seed/CAPABILITY_MAP.md` (does a module already own this capability?)
 When you're about to challenge a point that depends on a third-party tool's real behavior — greenfield or already integrated — do not grill from memory or from existing code paths, both of which go stale. This is a hard rule, not a suggestion.
 
 1. **Probe context7 first** (`ctx7` CLI / context7 MCP) for the specific capability in question.
-2. **Fall back to web search** if context7 has no match *or* returns docs that don't cover the specific capability being challenged.
+2. **Fall back to web search** if context7 has no match _or_ returns docs that don't cover the specific capability being challenged.
 3. Fire **lazily** — only at the moment a specific claim hinges on the tool, not the instant a tool name is mentioned.
-4. When a verified fact *drives a design decision*, capture it in the relevant **ADR's Context/Consequences** — never in `CONTEXT.md` (that stays domain vocabulary only).
+4. When a verified fact _drives a design decision_, capture it in the relevant **ADR's Context/Consequences** — never in `CONTEXT.md` (that stays domain vocabulary only).
 
 ### Update CONTEXT.md inline
 

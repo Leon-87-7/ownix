@@ -76,7 +76,7 @@ export function DocUploadPanel({
           type="button"
           onClick={() => setCompact(!compact)}
           aria-expanded={!compact}
-          className="mb-3 flex w-full items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2 text-sm font-medium text-ink transition-ui hover:border-line-strong hover:text-ink active:scale-[0.98] motion-reduce:active:scale-100 lg:hidden"
+          className="mb-3 flex w-full items-center justify-between gap-2 rounded-md border border-line bg-raised px-3 py-2 text-sm font-medium text-ink transition-ui hover:border-line-strong hover:text-ink active:scale-[0.96] motion-reduce:active:scale-100 lg:hidden"
         >
           <span className="flex items-center gap-2">
             <Upload className="h-4 w-4 shrink-0 text-signal" aria-hidden="true" />
