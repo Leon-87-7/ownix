@@ -1393,3 +1393,22 @@ async def test_migration_creates_audit_log_and_triggers_directly(tmp_path, monke
 
         cur = await conn.execute("PRAGMA user_version")
         assert (await cur.fetchone())[0] == len(database._MIGRATIONS)
+
+
+@pytest.mark.asyncio
+async def test_checklists_columns_exist_after_init(tmp_path, monkeypatch) -> None:
+    """A fresh init_db() must create the checklists_md / checklists_generated_at columns."""
+    from src import database
+
+    db_file = str(tmp_path / "checklists_columns.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+
+    await database.init_db()
+
+    async with database.connection() as conn:
+        cur = await conn.execute("PRAGMA table_info(jobs)")
+        columns = {row["name"] for row in await cur.fetchall()}
+
+    assert "checklists_md" in columns
+    assert "checklists_generated_at" in columns

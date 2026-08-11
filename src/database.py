@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
+    checklists_md               TEXT,
+    checklists_generated_at     TEXT,
     CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
@@ -1337,6 +1339,15 @@ _AUDIT_LOG_MIGRATION = [
        END""",
 ]
 _MIGRATIONS.append(_AUDIT_LOG_MIGRATION)
+
+# v39 → v40: on-demand "/checklists" command — one inline Gemini call per
+# invocation, cached directly on the job row. No lock/status column: unlike
+# the Mini-PRD slots, nothing else can race to generate this concurrently
+# (see docs/superpowers/plans/2026-08-11-checklists-command.md).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN checklists_md TEXT",
+    "ALTER TABLE jobs ADD COLUMN checklists_generated_at TEXT",
+])
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
