@@ -65,6 +65,10 @@
 | [#495](https://github.com/Leon-87-7/ownix/issues/495) | Parse and insert links, skip existing (snapshot ingest) | Bookmarks / Parser | #490, #492 |
 | [#496](https://github.com/Leon-87-7/ownix/issues/496) | Deferred import-scoped enrichment pass | Bookmarks / Brain | #495 |
 | [#497](https://github.com/Leon-87-7/ownix/issues/497) | Folder-to-tag opt-in form | Bookmarks / Tags | #495 |
+| [#505](https://github.com/Leon-87-7/ownix/issues/505) | Extract shared CopyButton component | Web / Jobs | — |
+| [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery | Telegram | — |
+| [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists | Web / Jobs | #505 |
+| [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results | Web / Intake | #505 |
 
 ---
 
@@ -577,6 +581,14 @@ Intake console makeover — conversational + informing (grill 2026-08-06; CONTEX
 └── #487 Migrate /freestyle to shared intake commands
 Critical path: none — four independent roots (#481, #482, #483, #484). #488 off #481; #489 off #482.
 Note: #485/#486/#487 are drawn under #484 as *content*, not as blockers — the palette derives its list from SHARED_COMMANDS, so each migration lights up its own entry on landing and all four can proceed in parallel. Builds on the shipped intake-channels batch (#472–#479). Deliberately excluded: the other eleven Telegram commands, SSE, /undo, per-flow pending state, and ?tag= feed filtering (the last is in docs/TASK.md Inbox — #489's bare-token warning links nowhere until it exists).
+
+/checklists command — engineering-recommendation checklist from short/long video transcripts, pasteable straight into a coding agent (docs/superpowers/plans/2026-08-11-checklists-command.md)
+#505 Extract shared CopyButton component (root, unblocked — needed by both #507 and #508)
+├── #507 Dashboard job detail: generate & display checklists (API endpoint + hook + UI; needs the shared CopyButton)
+└── #508 Intake response card: copy button for checklists results (small UI addition; needs the shared CopyButton)
+#506 Telegram /checklists command delivery (root, unblocked — thin adapter over the already-shipped shared checklists_command core)
+Critical path: #505 → {#507, #508}; #506 fully parallel
+Note: the shared checklists_command core (SHARED_COMMANDS handler, DB columns, Gemini prompt/schema, run_checklists) already shipped directly on branch worktree-checklists-command (plan Tasks 1-5) — these four issues cover only the remaining Telegram and dashboard delivery surfaces.
 ```
 
 ---
