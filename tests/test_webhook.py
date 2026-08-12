@@ -1639,7 +1639,7 @@ async def test_cmd_checklists_sends_errors_as_messages(monkeypatch):
     monkeypatch.setattr("src.telegram.webhook.edit_message_text", edited)
     await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "abcd"], message_id=None))
     command.assert_awaited_once_with(42, ["/checklists", "abcd"])
-    sent.assert_awaited_once_with(42, "checking the lists 🙃")
+    sent.assert_awaited_once_with(42, "checking lists 🙃")
     edited.assert_awaited_once_with(42, 91, "Not ready")
 
 
@@ -1659,7 +1659,7 @@ async def test_cmd_checklists_sends_markdown_document(monkeypatch):
     monkeypatch.setattr("src.telegram.webhook.delete_message", deleted)
     monkeypatch.setattr("src.telegram.webhook.send_document", document)
     await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "job_abcd"], message_id=None))
-    sent.assert_awaited_once_with(42, "checking the lists 🙃")
+    sent.assert_awaited_once_with(42, "checking lists 🙃")
     deleted.assert_awaited_once_with(42, 91)
     document.assert_awaited_once_with(
         42, "# Checklist".encode("utf-8-sig"), "checklist_abcd.md", caption="✅ Checklist ready"

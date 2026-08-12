@@ -676,7 +676,7 @@ async def _cmd_checklists(ctx: SlashCtx) -> None:
 
     from src.intake import commands as intake_commands
 
-    status_result = await send_message(ctx.chat_id, "checking the lists 🙃")
+    status_result = await send_message(ctx.chat_id, "checking lists 🙃")
     status_message_id = status_result.get("message_id")
     resp = await intake_commands.checklists_command(ctx.chat_id, ctx.parts)
     if resp.kind in ("error", "command_result"):
