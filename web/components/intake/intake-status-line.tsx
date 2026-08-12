@@ -1,7 +1,13 @@
 import { StatusBadge } from '@/components/ui/badges';
 
 /** Statuses that mean "still working" — mirrors `useIntakeThread`. */
-const IN_FLIGHT = new Set(['pending', 'queued', 'processing', 'transcript_done', 'enriching']);
+const IN_FLIGHT = new Set([
+  'pending',
+  'queued',
+  'processing',
+  'transcript_done',
+  'enriching',
+]);
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Queued',
@@ -31,9 +37,9 @@ export function IntakeStatusLine({ status }: { status: string }) {
   return (
     <div className="mt-2 flex items-center gap-2">
       <span
-        // `text-body` is the reduced-motion fallback: `.intake-shimmer` only
+        // `text-body` is the reduced-motion fallback: `.ownix-shimmer` only
         // takes effect under `prefers-reduced-motion: no-preference`.
-        className={`font-mono text-label text-body ${inFlight ? 'intake-shimmer' : ''}`}
+        className={`font-mono text-label text-body ${inFlight ? 'ownix-shimmer' : ''}`}
       >
         {label}
         {inFlight ? '…' : ''}

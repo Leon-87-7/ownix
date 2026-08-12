@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type JSX,
+  type ReactNode,
+} from 'react';
 import Link from 'next/link';
 import {
   useParams,
@@ -540,12 +546,15 @@ function JobActionsBar({
 function ChecklistsSection({ job }: { job: JobDetail }) {
   const { generating, error, run } = useChecklists(job.id);
   const [markdown, setMarkdown] = useState(job.checklists_md);
-  const [generatedAt, setGeneratedAt] = useState(job.checklists_generated_at);
+  const [generatedAt, setGeneratedAt] = useState(
+    job.checklists_generated_at,
+  );
 
   if (
     !['short', 'long'].includes(job.content_type) ||
     !['transcript_done', 'done'].includes(job.status)
-  ) return null;
+  )
+    return null;
 
   const handleRun = async () => {
     const result = await run();
@@ -559,7 +568,9 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-title font-semibold text-ink">Checklists</h2>
+          <h2 className="text-title font-semibold text-ink">
+            Checklists
+          </h2>
           {generatedAt && (
             <p className="mt-1 font-mono text-label text-muted">
               Generated {new Date(generatedAt).toLocaleString()}
@@ -570,22 +581,47 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
           type="button"
           onClick={handleRun}
           disabled={generating}
-          className="h-8 rounded-md bg-signal px-3 text-button font-medium text-on-signal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+          className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
         >
-          {generating ? 'Generating…' : markdown ? 'Regenerate' : 'Run Checklists'}
+          {generating ? (
+            // `.ownix-shimmer` only takes effect under
+            // `prefers-reduced-motion: no-preference` — otherwise it inherits
+            // the button's own `disabled:text-muted`.
+            <span className="ownix-shimmer">Generating…</span>
+          ) : markdown ? (
+            'Regenerate'
+          ) : (
+            'Run Checklists'
+          )}
         </button>
       </div>
-      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
+          {error}
+        </p>
+      )}
       {markdown && (
         <>
           <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 font-mono text-xs text-body">
             {markdown}
           </pre>
           <div className="flex flex-wrap gap-2">
-            <CopyButton value={markdown} ariaLabel="Copy checklist" label="Copy" />
+            <CopyButton
+              value={markdown}
+              ariaLabel="Copy checklist"
+              label="Copy"
+            />
             <button
               type="button"
-              onClick={() => downloadMarkdownFile(`checklist_${job.id.slice(-4)}.md`, markdown)}
+              onClick={() =>
+                downloadMarkdownFile(
+                  `checklist_${job.id.slice(-4)}.md`,
+                  markdown,
+                )
+              }
               className="inline-flex items-center rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink"
             >
               Download .md
@@ -736,7 +772,11 @@ export default function JobDetailPage() {
         {presentFields.map(({ key, label, render }) => (
           <FieldCard
             key={key}
-            label={key === 'code' && job.code_lang ? `${label} (${job.code_lang})` : label}
+            label={
+              key === 'code' && job.code_lang
+                ? `${label} (${job.code_lang})`
+                : label
+            }
             value={String(job[key])}
             render={render}
           />
@@ -759,32 +799,34 @@ export default function JobDetailPage() {
             onSave={handleSave}
           />
         ))}
-      {!restricted && job.content_type === 'link' && job.url?.startsWith('bookmarks:') && (
-        <div className="border-t border-line pt-5">
-          <div className="flex items-stretch gap-4 max-[620px]:flex-col">
-            <div className="flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setFolderTagFormOpen(true)}
-                className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised"
-              >
-                Create tags from folders
-              </button>
+      {!restricted &&
+        job.content_type === 'link' &&
+        job.url?.startsWith('bookmarks:') && (
+          <div className="border-t border-line pt-5">
+            <div className="flex items-stretch gap-4 max-[620px]:flex-col">
+              <div className="flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFolderTagFormOpen(true)}
+                  className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised"
+                >
+                  Create tags from folders
+                </button>
+              </div>
+              <div className="border-l border-line max-[620px]:hidden" />
+              <p className="text-sm text-body">
+                Turn this import&apos;s bookmark folders into link
+                tags, applied to every link in that folder. Safe to
+                run any time — nothing is lost by skipping it now.
+              </p>
             </div>
-            <div className="border-l border-line max-[620px]:hidden" />
-            <p className="text-sm text-body">
-              Turn this import&apos;s bookmark folders into link tags, applied
-              to every link in that folder. Safe to run any time — nothing is
-              lost by skipping it now.
-            </p>
+            <FolderTagForm
+              jobId={id}
+              open={folderTagFormOpen}
+              onOpenChange={setFolderTagFormOpen}
+            />
           </div>
-          <FolderTagForm
-            jobId={id}
-            open={folderTagFormOpen}
-            onOpenChange={setFolderTagFormOpen}
-          />
-        </div>
-      )}
+        )}
       {!restricted && (
         <div className="border-t border-line pt-5">
           <div className="flex items-stretch gap-4 max-[620px]:flex-col">
@@ -803,21 +845,24 @@ export default function JobDetailPage() {
               >
                 {/* ADR-0046: links outlive the job by default — this is the
                     opt-in back into the old cascade. */}
-                {typeof job.link_count === 'number' && job.link_count > 0 && (
-                  <label className="flex items-start gap-2 text-xs text-body">
-                    <input
-                      type="checkbox"
-                      checked={withLinks}
-                      onChange={(event) => setWithLinks(event.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      Also remove the {job.link_count}{' '}
-                      {job.link_count === 1 ? 'link' : 'links'} this job added
-                      to your Brain
-                    </span>
-                  </label>
-                )}
+                {typeof job.link_count === 'number' &&
+                  job.link_count > 0 && (
+                    <label className="flex items-start gap-2 text-xs text-body">
+                      <input
+                        type="checkbox"
+                        checked={withLinks}
+                        onChange={(event) =>
+                          setWithLinks(event.target.checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Also remove the {job.link_count}{' '}
+                        {job.link_count === 1 ? 'link' : 'links'} this
+                        job added to your Brain
+                      </span>
+                    </label>
+                  )}
               </ConfirmDialog>
               {deleteFailed && (
                 <p className="text-xs text-status-error">
@@ -827,10 +872,10 @@ export default function JobDetailPage() {
             </div>
             <div className="border-l border-line max-[620px]:hidden" />
             <p className="text-sm text-body">
-              Permanently removes this job, its notes and tags, and its files
-              in Drive, Sheets and storage. Its Brain links stay in your Index
-              unless you choose to remove them below. This can&apos;t be
-              undone.
+              Permanently removes this job, its notes and tags, and
+              its files in Drive, Sheets and storage. Its Brain links
+              stay in your Index unless you choose to remove them
+              below. This can&apos;t be undone.
             </p>
           </div>
         </div>

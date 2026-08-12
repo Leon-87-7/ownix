@@ -1,19 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import type { LucideIcon } from 'lucide-react';
-
-// useLayoutEffect on the server warns; fall back to useEffect there (no DOM to measure anyway).
-const useIsoLayoutEffect =
-  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 function isEditableShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -52,9 +42,9 @@ export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
   { label: 'Error', value: 'error' },
 ];
 
-// Segmented control (motion-primitives "animated background"): one signal-orange
-// thumb slides under the active tab. ponytail: pure-CSS slide via measured
-// offsetLeft/width — no framer-motion dependency for a single sliding highlight.
+// Segmented control (motion-primitives "animated background"): the active tab
+// fills bottom-to-top with the signal color via an animated clip-path, with a
+// slight overshoot easing so it reads as poured rather than mechanical.
 // Exported so view-switcher tablists (e.g. Brain) can share the same look without
 // pulling in FilterBar's search + status-panel machinery.
 export function SegmentedTabs({
@@ -71,7 +61,7 @@ export function SegmentedTabs({
   label: string;
   /** Rendered as the first item inside the wrap grid, before the tabs — for a
    * page-level action that should flow with the chips on mobile (e.g. the feed's
-   * Submit trigger). Not a tab: it never participates in value/thumb logic. */
+   * Submit trigger). Not a tab: it never participates in value/fill logic. */
   leadingItem?: React.ReactNode;
   /** Mobile (< sm) layout. Default is the 4-column wrap grid (the feed places its
    * leadingItem into that grid). `true` swaps it for a single horizontally
@@ -79,52 +69,18 @@ export function SegmentedTabs({
    * doc-parser's five format chips) never orphans a chip onto a second row. */
   scrollOnMobile?: boolean;
 }) {
-  const refs = useRef<(HTMLElement | null)[]>([]);
-  const [thumb, setThumb] = useState<{
-    left: number;
-    width: number;
-  } | null>(null);
-  const activeIndex = tabs.findIndex((t) => t.value === value);
-
-  // Measure before paint so the orange thumb shows on first frame (no flash of no selection).
-  useIsoLayoutEffect(() => {
-    const el = refs.current[activeIndex];
-    if (!el) return;
-    const update = () => {
-      const next = { left: el.offsetLeft, width: el.offsetWidth };
-      setThumb((prev) =>
-        prev && prev.left === next.left && prev.width === next.width
-          ? prev
-          : next,
-      );
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [activeIndex, tabs]);
-
   return (
     <div
       role="group"
       aria-label={label}
-      className={`relative px-1 sm:flex sm:w-auto sm:flex-nowrap sm:gap-1 sm:overflow-visible sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1 sm:px-0 ${
+      className={`relative px-1 sm:flex sm:w-auto sm:flex-nowrap sm:gap-1 sm:overflow-visible sm:rounded-lg sm:border sm:border-line sm:bg-surface sm:p-1 ${
         scrollOnMobile
           ? 'flex w-full flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
           : 'grid w-full grid-cols-4 gap-2'
       }`}
     >
-      {thumb && (
-        <span
-          aria-hidden="true"
-          className="absolute bottom-1 top-1 left-0 hidden rounded-md bg-signal transition-[transform,width] duration-200 ease-out motion-reduce:transition-none sm:block"
-          style={{
-            transform: `translateX(${thumb.left}px)`,
-            width: thumb.width,
-          }}
-        />
-      )}
       {leadingItem}
-      {tabs.map((tab, i) => {
+      {tabs.map((tab) => {
         const active = !tab.href && tab.value === value;
         const Icon = tab.icon;
         const labelText = tab.badge
@@ -132,11 +88,23 @@ export function SegmentedTabs({
           : `${tab.label} ${tab.count ?? ''}`.trim();
         const className = `relative z-10 flex h-9 items-center justify-center gap-1.5 rounded-md border px-1.5 text-button font-medium transition-colors disabled:cursor-default sm:gap-2 sm:border-0 sm:px-3 ${scrollOnMobile ? 'shrink-0 whitespace-nowrap ' : ''}${
           active
-            ? 'border-signal bg-signal text-onsignal sm:bg-transparent'
+            ? 'border-signal text-onsignal'
             : tab.disabled
               ? 'border-line bg-surface text-muted'
               : 'border-line bg-surface text-body hover:text-ink sm:after:absolute sm:after:inset-x-3 sm:after:bottom-1 sm:after:h-0.5 sm:after:origin-center sm:after:scale-x-0 sm:after:rounded-full sm:after:bg-contrasignal/70 sm:after:transition-transform sm:after:duration-200 sm:after:ease-out sm:hover:after:scale-x-100 motion-reduce:after:transition-none'
         }`;
+        // Bottom-to-top fill: clipped fully away when inactive, revealed via
+        // clip-path on activation. -z-10 keeps it under the (non-positioned,
+        // so paint-order-first) label/badge content without a wrapper.
+        const fill = (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 rounded-md bg-signal transition-[clip-path] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none"
+            style={{
+              clipPath: active ? 'inset(0 0 0 0)' : 'inset(100% 0 0 0)',
+            }}
+          />
+        );
         const content = (
           <>
             {Icon && (
@@ -169,20 +137,15 @@ export function SegmentedTabs({
             )}
             {tab.href ? (
               <Link
-                ref={(el) => {
-                  refs.current[i] = el;
-                }}
                 href={tab.href}
                 aria-label={labelText}
                 className={className}
               >
+                {fill}
                 {content}
               </Link>
             ) : (
               <button
-                ref={(el) => {
-                  refs.current[i] = el;
-                }}
                 type="button"
                 aria-pressed={active}
                 aria-label={labelText}
@@ -190,6 +153,7 @@ export function SegmentedTabs({
                 onClick={() => onChange(tab.value)}
                 className={className}
               >
+                {fill}
                 {content}
               </button>
             )}
