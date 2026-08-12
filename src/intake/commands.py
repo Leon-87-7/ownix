@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from src.intake import responses, state
@@ -247,6 +248,56 @@ async def freestyle_command(
     return responses.job_created({"id": job_id, "content_type": pipeline})
 
 
+_CHECKLISTS_CONTENT_TYPES = ("short", "long")
+_CHECKLISTS_READY_STATUSES = ("transcript_done", "done")
+
+
+async def checklists_command(chat_id: int, parts: list[str]) -> IntakeResponse:
+    """`/checklists <suffix>` — on-demand engineering-recommendation checklist.
+
+    Channel-agnostic: reached identically from Telegram and the dashboard
+    composer. One inline Gemini call, no lock, no queue (see
+    docs/superpowers/plans/2026-08-11-checklists-command.md).
+    """
+    if len(parts) < 2:
+        return responses.command_result("Usage: /checklists <suffix>")
+    suffix = parts[1][-4:]
+
+    from src import database
+    from src.processors.checklists import run_checklists
+    from src.services.gemini import GeminiUnavailableError
+
+    rows = await database.find_jobs_by_suffix(chat_id, suffix)
+    candidates = [
+        j
+        for j in rows
+        if j["content_type"] in _CHECKLISTS_CONTENT_TYPES
+        and j["status"] in _CHECKLISTS_READY_STATUSES
+        and (j.get("transcript") or "").strip()
+    ]
+    if not candidates:
+        return responses.error(f"No short/long job ending in {suffix} with a transcript ready.")
+
+    job = candidates[0]
+    try:
+        _, md = await run_checklists(job)
+    except GeminiUnavailableError:
+        log.warning("checklists.gemini_failed", job_id=job["id"])
+        return responses.error(
+            "Checklist generation failed — Gemini is unavailable. Try again.", retryable=True
+        )
+    except Exception:
+        log.exception("checklists.failed", job_id=job["id"])
+        return responses.error("Checklist generation failed. Try again.", retryable=True)
+
+    generated_at = datetime.now(timezone.utc).isoformat()
+    await database.update_job_fields(
+        job["id"], checklists_md=md, checklists_generated_at=generated_at
+    )
+    log.info("checklists.generated", job_id=job["id"], chat_id=chat_id)
+    return IntakeResponse(kind="checklists_result", text=md, job_id=job["id"])
+
+
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
@@ -254,6 +305,12 @@ SHARED_COMMANDS: dict[str, Command] = {
     "/force": Command("/force", "reprocess a URL (skip cache)", force_command, args="<url>"),
     "/freestyle": Command(
         "/freestyle", "use a custom Gemini prompt for the next job", freestyle_command, args="<url>"
+    ),
+    "/checklists": Command(
+        "/checklists",
+        "engineering checklist from a short/long transcript",
+        checklists_command,
+        args="<suffix>",
     ),
 }
 

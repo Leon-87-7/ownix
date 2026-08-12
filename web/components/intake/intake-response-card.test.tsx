@@ -39,6 +39,11 @@ function item(overrides: Partial<IntakeThreadItem> = {}): IntakeThreadItem {
 }
 
 describe('IntakeResponseCard', () => {
+  it('labels checklist results and offers to copy them', () => {
+    render(<IntakeResponseCard item={item({ response: response({ kind: 'checklists_result', text: '# Checklist' }) })} />);
+    expect(screen.getByText('Checklist')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
+  });
   it('echoes what the user submitted above the card', () => {
     render(<IntakeResponseCard item={item({ echo: 'https://youtube.com/shorts/abc' })} />);
     expect(screen.getByText('https://youtube.com/shorts/abc')).toBeInTheDocument();

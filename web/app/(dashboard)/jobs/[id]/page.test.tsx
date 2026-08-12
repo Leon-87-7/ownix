@@ -81,6 +81,8 @@ const JOB = {
   code_lang: null,
   key_phrases: null,
   links: null,
+  checklists_md: null,
+  checklists_generated_at: null,
 };
 
 function setupMocks(
@@ -120,25 +122,28 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('CopyButton', () => {
-  it('does not warn about setState after unmount when copy timer is pending', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
-
-    // CopyButton is page-local (Next.js forbids extra page exports); reach it through the page.
-    const { unmount } = render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: /copy all/i }));
-    await waitFor(() => expect(screen.getByText('Copied!')).toBeInTheDocument());
-
-    unmount();
-    await new Promise((r) => setTimeout(r, 1600));
-
-    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('unmounted component'));
-    errorSpy.mockRestore();
-  });
-});
-
 describe('JobDetailPage', () => {
+  it('shows the Copy all action for populated job fields', () => {
+    render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: /copy all fields/i })).toBeInTheDocument();
+  });
+
+  it('generates and displays a checklist', async () => {
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        }),
+      ),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));
+    await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download .md' })).toBeInTheDocument();
+  });
   it('shows loading skeleton when fetchState is loading', () => {
     setupMocks({ fetchState: 'loading', job: null });
     render(<JobDetailPage />);

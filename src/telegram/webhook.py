@@ -668,6 +668,26 @@ async def _cmd_spec(ctx: SlashCtx) -> None:
     await _handle_spec(ctx.chat_id, ctx.parts)
 
 
+async def _cmd_checklists(ctx: SlashCtx) -> None:
+    if len(ctx.parts) < 2:
+        await send_message(ctx.chat_id, "Usage: /checklists <suffix>")
+        return
+
+    from src.intake import commands as intake_commands
+
+    resp = await intake_commands.checklists_command(ctx.chat_id, ctx.parts)
+    if resp.kind in ("error", "command_result"):
+        await send_message(ctx.chat_id, resp.text)
+    elif resp.kind == "checklists_result":
+        suffix = ctx.parts[1][-4:]
+        await send_document(
+            ctx.chat_id,
+            resp.text.encode("utf-8-sig"),
+            f"checklist_{suffix}.md",
+            caption="✅ Checklist ready",
+        )
+
+
 async def _cmd_find(ctx: SlashCtx) -> None:
     # Search, score-filter (0.58) and GitHub enrichment are shared with the
     # dashboard's /find (issue #485, src/intake/commands.py:find_command) —
@@ -1045,6 +1065,7 @@ _HELP_TEXT = (
     "`/help` — this message\n"
     "`/find` <query> — search your processed content\n"
     "`/spec` <suffix> [intent] — generate a mini-PRD from a long video\n"
+    "`/checklists` <suffix> — generate an engineering checklist\n"
     "`/freestyle` — use a custom Gemini prompt for the next job\n"
     "`/force` <url> — reprocess a URL (skip cache)\n"
     "`/cancel` — cancel the current pending prompt\n"
@@ -1080,6 +1101,7 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
     "/help": _cmd_help,
     "/cancel": _cmd_cancel,
     "/spec": _cmd_spec,
+    "/checklists": _cmd_checklists,
     "/find": _cmd_find,
     "/rebuild-graph": _cmd_rebuild_graph,
     "/force": _cmd_force,

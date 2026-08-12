@@ -10,6 +10,7 @@ import { IntakeTagOffer } from '@/components/intake/intake-tag-offer';
 import { PreviewCard } from '@/components/feed/preview-card';
 import type { IntakeThreadItem } from '@/lib/hooks/useIntakeThread';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';
+import { CopyButton } from '@/components/ui/copy-button';
 
 const KIND_LABEL: Record<string, string> = {
   job_created: 'Job created',
@@ -18,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
   rejected: 'Rejected',
   error: 'Error',
   command_result: 'Command',
+  checklists_result: 'Checklist',
   state_update: 'State',
   action_ack: 'Action',
 };
@@ -91,6 +93,12 @@ export function IntakeResponseCard({
         </div>
 
         <p className="mt-1 whitespace-pre-wrap text-sm text-body">{response.text}</p>
+
+        {response.kind === 'checklists_result' && (
+          <div className="mt-3">
+            <CopyButton value={response.text} ariaLabel="Copy checklist" label="Copy" />
+          </div>
+        )}
 
         {links.length > 0 && <IntakeLinksList links={links} />}
 

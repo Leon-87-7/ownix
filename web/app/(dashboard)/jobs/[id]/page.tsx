@@ -8,7 +8,6 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Check, Copy } from 'lucide-react';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
@@ -27,10 +26,13 @@ import {
   buildMarkdown,
   parseLinks,
   jobScopeQuery,
+  downloadMarkdownFile,
 } from '@/lib/job-detail-utils';
+import { useChecklists } from '@/lib/hooks/useChecklists';
 import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
+import { CopyButton } from '@/components/ui/copy-button';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
@@ -174,47 +176,6 @@ function TemplateAnalysis({ raw }: { raw: string }) {
 }
 
 // --- UI pieces ---
-
-function CopyButton({
-  value,
-  ariaLabel,
-  label,
-}: {
-  value: string;
-  ariaLabel: string;
-  label?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {}
-  };
-  return (
-    <Tooltip content={ariaLabel}>
-      <button
-        onClick={handleCopy}
-        aria-label={ariaLabel}
-        className="inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink"
-      >
-        {copied ? (
-          <Check className="h-3.5 w-3.5" />
-        ) : (
-          <Copy className="h-3.5 w-3.5" />
-        )}
-        {label && <span>{copied ? 'Copied!' : label}</span>}
-      </button>
-    </Tooltip>
-  );
-}
 
 function FieldBody({
   value,
@@ -576,6 +537,66 @@ function JobActionsBar({
   );
 }
 
+function ChecklistsSection({ job }: { job: JobDetail }) {
+  const { generating, error, run } = useChecklists(job.id);
+  const [markdown, setMarkdown] = useState(job.checklists_md);
+  const [generatedAt, setGeneratedAt] = useState(job.checklists_generated_at);
+
+  if (
+    !['short', 'long'].includes(job.content_type) ||
+    !['transcript_done', 'done'].includes(job.status)
+  ) return null;
+
+  const handleRun = async () => {
+    const result = await run();
+    if (result) {
+      setMarkdown(result.checklists_md);
+      setGeneratedAt(result.checklists_generated_at);
+    }
+  };
+
+  return (
+    <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-title font-semibold text-ink">Checklists</h2>
+          {generatedAt && (
+            <p className="mt-1 font-mono text-label text-muted">
+              Generated {new Date(generatedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={generating}
+          className="h-8 rounded-md bg-signal px-3 text-button font-medium text-on-signal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+        >
+          {generating ? 'Generating…' : markdown ? 'Regenerate' : 'Run Checklists'}
+        </button>
+      </div>
+      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+      {markdown && (
+        <>
+          <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 font-mono text-xs text-body">
+            {markdown}
+          </pre>
+          <div className="flex flex-wrap gap-2">
+            <CopyButton value={markdown} ariaLabel="Copy checklist" label="Copy" />
+            <button
+              type="button"
+              onClick={() => downloadMarkdownFile(`checklist_${job.id.slice(-4)}.md`, markdown)}
+              className="inline-flex items-center rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink"
+            >
+              Download .md
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function JobDetailPage() {
   // Next 16 passes `params` as a Promise to page props; reading it as a plain
   // object yields `undefined`, which sent every detail fetch to
@@ -708,6 +729,8 @@ export default function JobDetailPage() {
         job={job}
         hasFields={presentFields.length > 0}
       />
+
+      {!restricted && <ChecklistsSection job={job} />}
 
       <div className="space-y-3">
         {presentFields.map(({ key, label, render }) => (

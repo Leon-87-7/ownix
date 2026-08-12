@@ -1617,6 +1617,65 @@ async def test_cmd_find_no_query_sends_usage(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_cmd_checklists_no_suffix_sends_usage(monkeypatch):
+    from src.telegram.webhook import SlashCtx, _cmd_checklists
+
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists"], message_id=None))
+    sent.assert_awaited_once_with(42, "Usage: /checklists <suffix>")
+
+
+@pytest.mark.asyncio
+async def test_cmd_checklists_sends_errors_as_messages(monkeypatch):
+    from src.intake.models import IntakeResponse
+    from src.telegram.webhook import SlashCtx, _cmd_checklists
+
+    command = AsyncMock(return_value=IntakeResponse(kind="error", text="Not ready"))
+    sent = AsyncMock()
+    monkeypatch.setattr("src.intake.commands.checklists_command", command)
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "abcd"], message_id=None))
+    command.assert_awaited_once_with(42, ["/checklists", "abcd"])
+    sent.assert_awaited_once_with(42, "Not ready")
+
+
+@pytest.mark.asyncio
+async def test_cmd_checklists_sends_markdown_document(monkeypatch):
+    from src.intake.models import IntakeResponse
+    from src.telegram.webhook import SlashCtx, _cmd_checklists
+
+    command = AsyncMock(
+        return_value=IntakeResponse(kind="checklists_result", text="# Checklist")
+    )
+    document = AsyncMock()
+    monkeypatch.setattr("src.intake.commands.checklists_command", command)
+    monkeypatch.setattr("src.telegram.webhook.send_document", document)
+    await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "job_abcd"], message_id=None))
+    document.assert_awaited_once_with(
+        42, "# Checklist".encode("utf-8-sig"), "checklist_abcd.md", caption="✅ Checklist ready"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_slash_routes_checklists(monkeypatch):
+    from src.telegram.webhook import _HELP_TEXT, _dispatch_slash
+
+    command = AsyncMock()
+    monkeypatch.setitem(webhook._SLASH_TABLE, "/checklists", command)
+    monkeypatch.setattr("src.telegram.webhook.database.clear_chat_state", AsyncMock())
+    redis = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.queue._client", lambda: redis)
+
+    await _dispatch_slash(42, "/checklists abcd", message_id=7)
+
+    command.assert_awaited_once()
+    ctx = command.await_args.args[0]
+    assert ctx.parts == ["/checklists", "abcd"]
+    assert "`/checklists` <suffix>" in _HELP_TEXT
+
+
+@pytest.mark.asyncio
 async def test_cmd_find_no_results_keeps_the_rebuild_graph_hint(monkeypatch):
     """The shared migration (#485) must not drop Telegram's own copy/formatting."""
     from src.telegram.webhook import SlashCtx, _cmd_find

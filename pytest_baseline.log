@@ -1,0 +1,3201 @@
+........................................................................ [  6%]
+....F............F...................................................FF. [ 12%]
+..F..................................................................... [ 18%]
+........................................................................ [ 24%]
+........................................................................ [ 30%]
+........................................................................ [ 36%]
+........................................................................ [ 42%]
+....................................EEEEEEEEEEEE.......FF............... [ 48%]
+........................................................................ [ 54%]
+........................................................................ [ 60%]
+.................................................................FFFF.FF [ 66%]
+FF................FF.........................F.......................... [ 72%]
+........FFFFFFFFF....................................................... [ 78%]
+........................................................................ [ 84%]
+........................................................................ [ 90%]
+........................................................................ [ 96%]
+..........................................                               [100%]
+=================================== ERRORS ====================================
+_ ERROR at setup of test_delete_job_leaves_brain_links_standing_and_enqueues_refs _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479DD70>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_delete_job_leaves_brain_l0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEF95E890>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_______ ERROR at setup of test_delete_job_with_links_flag_removes_them ________
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479D8F0>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_delete_job_with_links_fla0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5E0F620>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+___ ERROR at setup of test_delete_job_unknown_and_foreign_leave_rows_intact ___
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479CDB0>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_delete_job_unknown_and_fo0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF6306A50>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+____ ERROR at setup of test_get_job_link_topics_returns_owned_jobs_folders ____
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479CC30>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_get_job_link_topics_retur0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF6306C80>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+____ ERROR at setup of test_get_job_link_topics_forbidden_for_foreign_job _____
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479E1F0>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_get_job_link_topics_forbi0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5A1DA90>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_first_request_sets_cache_control_and_etag _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479C4B0>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_first_request_sets_cache_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5A1F770>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_matching_if_none_match_returns_304[{etag}] _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479EC70>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_matching_if_none_match_re0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5A4E890>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_matching_if_none_match_returns_304[*] _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF240B330>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_matching_if_none_match_re1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF2425080>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_matching_if_none_match_returns_304["stale", {etag}] _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479F030>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_matching_if_none_match_re2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5A4EC80>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_matching_if_none_match_returns_304[W/{etag}] _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479ED30>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_matching_if_none_match_re3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF60D3150>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_mismatched_if_none_match_returns_200 _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479EA30>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_mismatched_if_none_match_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF6305630>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+_ ERROR at setup of TestJobThumbnailCaching.test_foreign_job_thumbnail_still_forbidden _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+>               await self._connect()
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:895: in _connect
+    reader, writer = await asyncio.open_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py:48: in open_connection
+    transport, _ = await loop.create_connection(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1176: in create_connection
+    raise exceptions[0]
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1146: in create_connection
+    sock = await self._connect_sock(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:1045: in _connect_sock
+    await self.sock_connect(sock, address)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py:728: in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:804: in _poll
+    value = callback(transferred, key, ov)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+trans = 0, key = 0, ov = <_overlapped.Overlapped object at 0x0000016EF479C930>
+
+    def finish_connect(trans, key, ov):
+>       ov.getresult()
+E       ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py:600: ConnectionRefusedError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = WindowsPath('C:/Users/leone/AppData/Local/Temp/pytest-of-leone/pytest-418/test_foreign_job_thumbnail_sti0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEF837D90>
+
+    @pytest.fixture
+    def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+        """A FastAPI app with SessionMiddleware + jobs_router over a fresh file DB.
+    
+        Mints real sessions via src.auth.session.mint() (rather than hand-seeding a
+        store) so the fixture works regardless of the local SESSION_BACKEND
+        (memory vs redis) — hand-seeding a FakeRedis store, like
+        tests/test_spaces.py does, silently no-ops when SESSION_BACKEND=memory
+        since resolve() then reads an in-process dict instead.
+        """
+        db_file = tmp_path / "jobs_test.db"
+        monkeypatch.setenv("DB_PATH", str(db_file))
+        monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+        monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    
+        from src import database
+    
+        async def _setup() -> tuple[str, str]:
+            await database.init_db()
+            await database.set_user_status(USER_A["id"], "approved")
+            await database.set_user_status(USER_B["id"], "approved")
+            return await session_module.mint(USER_A), await session_module.mint(USER_B)
+    
+        from src.api.jobs import jobs_router
+        from src.auth.middleware import SessionMiddleware
+        from src.auth import session as session_module
+    
+        test_app = FastAPI()
+        test_app.add_middleware(SessionMiddleware)
+        test_app.include_router(jobs_router)
+    
+>       session_a, session_b = asyncio.run(_setup())
+                               ^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_jobs_api.py:499: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py:725: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests\test_jobs_api.py:489: in _setup
+    return await session_module.mint(USER_A), await session_module.mint(USER_B)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\auth\session.py:71: in mint
+    await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py:764: in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\utils.py:227: in async_wrapper
+    return await func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1448: in get_connection
+    await self.ensure_connection(connection)
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:1489: in ensure_connection
+    await connection.connect()
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:340: in connect
+    await self.retry.call_with_retry(
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:81: in call_with_retry
+    raise error
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py:69: in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <redis.asyncio.connection.Connection(host=localhost,port=6379,db=0)>
+check_health = True, retry_socket_connect = False
+
+    async def connect_check_health(
+        self, check_health: bool = True, retry_socket_connect: bool = True
+    ):
+        if self.is_connected:
+            return
+        # Track actual retry attempts for error reporting
+        actual_retry_attempts = 0
+    
+        def failure_callback(error, failure_count):
+            nonlocal actual_retry_attempts
+            actual_retry_attempts = failure_count
+            return self.disconnect(error=error, failure_count=failure_count)
+    
+        try:
+            if retry_socket_connect:
+                await self.retry.call_with_retry(
+                    lambda: self._connect(),
+                    failure_callback,
+                    with_failure_count=True,
+                )
+            else:
+                await self._connect()
+        except asyncio.CancelledError:
+            raise  # in 3.7 and earlier, this is an Exception, not BaseException
+        except (socket.timeout, asyncio.TimeoutError):
+            e = TimeoutError("Timeout connecting to server")
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+            raise e
+        except OSError as e:
+            e = ConnectionError(self._error_message(e))
+            await record_error_count(
+                server_address=getattr(self, "host", None),
+                server_port=getattr(self, "port", None),
+                network_peer_address=getattr(self, "host", None),
+                network_peer_port=getattr(self, "port", None),
+                error_type=e,
+                retry_attempts=actual_retry_attempts,
+                is_internal=False,
+            )
+>           raise e
+E           redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py:397: ConnectionError
+================================== FAILURES ===================================
+_ TestSessionMiddleware.test_dev_login_email_save_sends_marked_ops_card_with_input_email _
+
+self = <tests.test_auth.TestSessionMiddleware object at 0x0000016EE7315FD0>
+auth_client = <starlette.testclient.TestClient object at 0x0000016EF1E48050>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF1D62200>
+
+    def test_dev_login_email_save_sends_marked_ops_card_with_input_email(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        notify = AsyncMock()
+        monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+        monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456791)
+    
+        login = auth_client.post("/api/auth/dev-login")
+        assert login.status_code == 200
+        notify.assert_not_awaited()
+    
+        resp = auth_client.put("/api/auth/email", json={"email": "Typed@Example.COM"})
+    
+>       assert resp.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests\test_auth.py:568: AssertionError
+________________ test_backfill_dry_run_reports_without_writing ________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF1E03850>
+capsys = <_pytest.capture.CaptureFixture object at 0x0000016EF1B28D70>
+
+    @pytest.mark.asyncio
+    async def test_backfill_dry_run_reports_without_writing(monkeypatch, capsys) -> None:
+        class FakeCursor:
+            async def fetchall(self):
+                return [{"id": "job1", "url": "https://example.com/post"}]
+    
+        class FakeConn:
+            async def execute(self, *_args, **_kwargs):
+                return FakeCursor()
+    
+        class FakeConnection:
+            async def __aenter__(self):
+                return FakeConn()
+    
+            async def __aexit__(self, *_args):
+                return None
+    
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+    
+            async def __aexit__(self, *_args):
+                return None
+    
+            async def get(self, _url):
+                return SimpleNamespace(
+                    text='<meta property="og:image" content="https://cdn.example.com/og.jpg">',
+                    url="https://example.com/post",
+                    raise_for_status=lambda: None,
+                )
+    
+        update_job_status = AsyncMock()
+        monkeypatch.setattr(backfill.database, "connection", lambda: FakeConnection())
+        monkeypatch.setattr(backfill.database, "update_job_status", update_job_status)
+>       monkeypatch.setattr(backfill.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+                            ^^^^^^^^^^^^^^
+E       AttributeError: module 'scripts.backfill_article_og_images' has no attribute 'httpx'
+
+tests\test_backfill_article_og_images.py:45: AttributeError
+_________________________ test_soft_dedup_seen_count __________________________
+
+    @pytest.mark.asyncio
+    async def test_soft_dedup_seen_count():
+        """Ingesting the same URL twice must yield one row with seen_count=2, updated_at unchanged."""
+        import aiosqlite
+        import tempfile
+        import os
+        from src.brain import ingest_links, SCHEMA_SQL
+    
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            db_path = tmp.name
+    
+        try:
+            # Bootstrap schema
+            async with aiosqlite.connect(db_path) as conn:
+                await conn.executescript(SCHEMA_SQL)
+                # Also need the jobs table for source-job lookup
+                await conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        id TEXT PRIMARY KEY,
+                        url TEXT,
+                        drive_url TEXT
+                    );
+                    INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                    """
+                )
+                await conn.commit()
+    
+            url = "https://example.com/tool"
+            link = {"url": url, "title": "Example Tool"}
+    
+            with patch("src.brain.settings") as mock_settings, \
+                 patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+                 patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+                 patch(
+                     "src.brain._resolve_identity",
+                     new=AsyncMock(return_value=("Example Tool — Official Site", GOOD_DESC, True)),
+                 ):
+    
+                mock_settings.DB_PATH = db_path
+                mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+                mock_settings.BRAIN_MIN_SCORE = 0.5
+                mock_embed.return_value = _rand_vec()
+                mock_upload.return_value = ("file-id-123", "https://drive.google.com/file/x")
+    
+                # First ingest
+                await ingest_links([link], topic="tools", source_job_id="job_001")
+                # Second ingest (same URL)
+                await ingest_links([link], topic="tools", source_job_id="job_001")
+    
+            async with aiosqlite.connect(db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute(
+                    "SELECT COUNT(*) as cnt, MAX(seen_count) as max_seen, MAX(title) as title, "
+                    "MAX(description) as description FROM links WHERE url = ?",
+                    (url,),
+                )
+                row = await cursor.fetchone()
+    
+>           assert row["cnt"] == 1, "Expected exactly one row per URL"
+E           AssertionError: Expected exactly one row per URL
+E           assert 0 == 1
+
+tests\test_brain.py:252: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:30.371394"}
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:30.377702"}
+____________ test_touch_existing_link_updates_drive_file_in_place _____________
+
+self = <AsyncMock name='upload_file' id='1576013040000'>
+
+    def assert_awaited_once(self):
+        """
+        Assert that the mock was awaited exactly once.
+        """
+        if not self.await_count == 1:
+            msg = (f"Expected {self._mock_name or 'mock'} to have been awaited once."
+                   f" Awaited {self.await_count} times.")
+>           raise AssertionError(msg)
+E           AssertionError: Expected upload_file to have been awaited once. Awaited 0 times.
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:2364: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.mark.asyncio
+    async def test_touch_existing_link_updates_drive_file_in_place():
+        """#493 regression: re-ingesting a known URL must update the existing
+        Drive file, not create a second one that orphans drive_file_id."""
+        import aiosqlite
+        import tempfile
+        import os
+        from src.brain import ingest_links, SCHEMA_SQL
+    
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            db_path = tmp.name
+    
+        try:
+            async with aiosqlite.connect(db_path) as conn:
+                await conn.executescript(SCHEMA_SQL)
+                await conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS jobs (
+                        id TEXT PRIMARY KEY,
+                        url TEXT,
+                        drive_url TEXT
+                    );
+                    INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                    """
+                )
+                await conn.commit()
+    
+            url = "https://example.com/tool"
+            link = {"url": url, "title": "Example Tool"}
+    
+            with patch("src.brain.settings") as mock_settings, \
+                 patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+                 patch("src.brain.update_file", new_callable=AsyncMock) as mock_update, \
+                 patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+                 patch(
+                     "src.brain._resolve_identity",
+                     new=AsyncMock(return_value=("Example Tool — Official Site", GOOD_DESC, True)),
+                 ):
+    
+                mock_settings.DB_PATH = db_path
+                mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+                mock_settings.BRAIN_MIN_SCORE = 0.5
+                mock_embed.return_value = _rand_vec()
+                mock_upload.return_value = ("file-id-123", "https://drive.google.com/file/x")
+                mock_update.return_value = "https://drive.google.com/file/x"
+    
+                await ingest_links([link], topic="tools", source_job_id="job_001")
+>               mock_upload.assert_awaited_once()  # first sighting: create the file
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               AssertionError: Expected upload_file to have been awaited once. Awaited 0 times.
+
+tests\test_brain.py:309: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:30.690069"}
+_____________________ test_normalized_url_dedup_variants ______________________
+
+    @pytest.mark.asyncio
+    async def test_normalized_url_dedup_variants():
+        """Query strings, fragments, and trailing slashes collapse to one Brain node."""
+        import aiosqlite
+        import os
+        import tempfile
+        from src.brain import SCHEMA_SQL
+    
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            db_path = tmp.name
+    
+        try:
+            async with aiosqlite.connect(db_path) as conn:
+                await conn.executescript(SCHEMA_SQL)
+                await conn.executescript("""
+                    CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT);
+                    INSERT INTO jobs (id, url, drive_url) VALUES ('job_norm', 'https://yt.com/watch?v=1', NULL);
+                """)
+                await conn.commit()
+    
+            with patch("src.brain.settings") as mock_settings, \
+                 patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
+                 patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
+                 patch("src.brain._resolve_identity", new=AsyncMock(return_value=("Tool", "", True))):
+                mock_settings.DB_PATH = db_path
+                mock_settings.GOOGLE_DRIVE_FOLDER_BRAIN = "fake-folder-id"
+                mock_settings.BRAIN_MIN_SCORE = 0.5
+                mock_embed.return_value = _rand_vec()
+                mock_upload.return_value = ("file-id", "drive-url")
+    
+                await ingest_links([{"url": "https://example.com/tool/?v=X&t=10#frag", "title": "Tool"}], "tools", "job_norm")
+                await ingest_links([{"url": "https://example.com/tool/?v=X", "title": "Tool"}], "tools", "job_norm")
+                await ingest_links([{"url": "https://example.com/tool/", "title": "Tool"}], "tools", "job_norm")
+    
+            async with aiosqlite.connect(db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                cursor = await conn.execute("SELECT url, seen_count FROM links")
+                rows = await cursor.fetchall()
+    
+            assert normalize_url("https://example.com/tool/?v=X#frag") == "https://example.com/tool"
+            # Root-domain URLs collapse to one canonical form regardless of trailing slash.
+            assert normalize_url("https://example.com/") == normalize_url("https://example.com") == "https://example.com"
+>           assert len(rows) == 1
+E           assert 0 == 1
+E            +  where 0 = len([])
+
+tests\test_brain.py:437: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:31.383417"}
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:31.404707"}
+{"url": "https://example.com/tool", "error": "no such column: chat_id", "event": "brain.ingest_link_error", "level": "error", "timestamp": "2026-08-11T18:02:31.421581"}
+____________________________ test_append_long_row _____________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEF95ED60>
+
+    @pytest.mark.asyncio
+    async def test_append_long_row(monkeypatch) -> None:
+        """append_long_row writes to the consolidated workbook's YouTube Transcript Index tab."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "consolidated-sheet-id")
+    
+        captured: list = []
+    
+        def fake_append_sync(tab_name, values):
+            captured.append((tab_name, values))
+    
+        with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
+            await sheets_svc.append_long_row(
+                {"id": "job1", "url": "https://youtube.com/watch?v=x", "title": "Test Video", "drive_url": "https://drive.google.com/x"},
+                video_id="vid123",
+                channel="Test Channel",
+                views="1000",
+                description_links_raw="https://example.com",
+                char_count=5000,
+                drive_file_id="file-abc",
+            )
+    
+>       assert len(captured) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests\test_long_video.py:80: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "job1", "event": "sheets_long_failed", "level": "error", "timestamp": "2026-08-11T18:04:47.182067", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 287, in append_long_row\n    await asyncio.to_thread(_append_sync, TAB_LONG, row, job.get(\"chat_id\"))\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\concurrent\\futures\\thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1169, in __call__\n    return self._mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1173, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1234, in _execute_mock_call\n    result = effect(*args, **kwargs)\nTypeError: test_append_long_row.<locals>.fake_append_sync() takes 2 positional arguments but 3 were given"}
+__________________ test_append_long_row_tab_qualified_range ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF5A08280>
+
+    @pytest.mark.asyncio
+    async def test_append_long_row_tab_qualified_range(monkeypatch) -> None:
+        """End-to-end: append_long_row resolves to range='YouTube Transcript Index!A1'."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "consolidated-sheet-id")
+    
+        mock_values = MagicMock()
+        mock_values.append.return_value.execute.return_value = {}
+        mock_spreadsheets = MagicMock()
+        mock_spreadsheets.values.return_value = mock_values
+        mock_service = MagicMock()
+        mock_service.spreadsheets.return_value = mock_spreadsheets
+    
+        with patch("src.services.sheets._build_service", return_value=mock_service):
+            await sheets_svc.append_long_row(
+                {"id": "job1", "url": "https://youtube.com/watch?v=x", "title": "T", "drive_url": "https://d/x"},
+                video_id="vid123",
+                channel="C",
+                views="1",
+                description_links_raw="",
+                char_count=1,
+                drive_file_id="fid",
+            )
+    
+        mock_values.append.assert_called_once()
+        call_kwargs = mock_values.append.call_args.kwargs
+        assert call_kwargs["spreadsheetId"] == "consolidated-sheet-id"
+>       assert call_kwargs["range"] == "YouTube Transcript Index!A1"
+E       assert "'YouTube Tra...ipt Index'!A1" == 'YouTube Transcript Index!A1'
+E         
+E         - YouTube Transcript Index!A1
+E         + 'YouTube Transcript Index'!A1
+E         ? +                        +
+
+tests\test_long_video.py:119: AssertionError
+_________________ test_append_sync_builds_tab_qualified_range _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEFA78B40>
+
+    def test_append_sync_builds_tab_qualified_range(monkeypatch) -> None:
+        """_append_sync must construct range=f'{tab_name}!A1' against GOOGLE_SHEETS_ID."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "wb-123")
+    
+        mock_values = MagicMock()
+        mock_values.append.return_value.execute.return_value = {}
+        mock_spreadsheets = MagicMock()
+        mock_spreadsheets.values.return_value = mock_values
+        mock_service = MagicMock()
+        mock_service.spreadsheets.return_value = mock_spreadsheets
+    
+        with patch("src.services.sheets._build_service", return_value=mock_service):
+            sheets_svc._append_sync("My Tab", ["a", "b", "c"])
+    
+        mock_values.append.assert_called_once()
+        call_kwargs = mock_values.append.call_args.kwargs
+        assert call_kwargs["spreadsheetId"] == "wb-123"
+>       assert call_kwargs["range"] == "My Tab!A1"
+E       assert "'My Tab'!A1" == 'My Tab!A1'
+E         
+E         - My Tab!A1
+E         + 'My Tab'!A1
+E         ? +      +
+
+tests\test_sheets.py:72: AssertionError
+_________________ test_append_prd_row_routes_to_mini_prd_tab __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF62B43D0>
+
+    @pytest.mark.asyncio
+    async def test_append_prd_row_routes_to_mini_prd_tab(monkeypatch) -> None:
+        """append_prd_row must write to the 'mini PRD' tab."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "wb-123")
+    
+        mock_values = MagicMock()
+        mock_values.append.return_value.execute.return_value = {}
+        mock_spreadsheets = MagicMock()
+        mock_spreadsheets.values.return_value = mock_values
+        mock_service = MagicMock()
+        mock_service.spreadsheets.return_value = mock_spreadsheets
+    
+        with patch("src.services.sheets._build_service", return_value=mock_service):
+            await sheets_svc.append_prd_row(
+                job_id="job_prd_1",
+                video_url="https://youtube.com/watch?v=x",
+                title="PRD title",
+                drive_url="https://drive/x",
+                slot="auto",
+                intent_text=None,
+            )
+    
+        mock_values.append.assert_called_once()
+        call_kwargs = mock_values.append.call_args.kwargs
+        assert call_kwargs["spreadsheetId"] == "wb-123"
+>       assert call_kwargs["range"] == "mini PRD!A1"
+E       assert "'mini PRD'!A1" == 'mini PRD!A1'
+E         
+E         - mini PRD!A1
+E         + 'mini PRD'!A1
+E         ? +        +
+
+tests\test_sheets.py:106: AssertionError
+__________________ test_append_short_row_routes_to_short_tab __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF62B62E0>
+
+    @pytest.mark.asyncio
+    async def test_append_short_row_routes_to_short_tab(monkeypatch) -> None:
+        """append_short_row must write to the 'Short Video Analysis' tab."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "wb-123")
+    
+        captured: list = []
+    
+        def fake_append_sync(tab_name, values):
+            captured.append((tab_name, values))
+    
+        with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
+            await sheets_svc.append_short_row({"id": "j", "url": "https://x", "links": []})
+    
+>       assert len(captured) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests\test_sheets.py:122: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "j", "event": "sheets_short_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.199508", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 239, in append_short_row\n    await asyncio.to_thread(_append_sync, TAB_SHORT, row, job.get(\"chat_id\"))\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\concurrent\\futures\\thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1169, in __call__\n    return self._mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1173, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1234, in _execute_mock_call\n    result = effect(*args, **kwargs)\nTypeError: test_append_short_row_routes_to_short_tab.<locals>.fake_append_sync() takes 2 positional arguments but 3 were given"}
+___________________ test_append_long_row_routes_to_long_tab ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EF62B60B0>
+
+    @pytest.mark.asyncio
+    async def test_append_long_row_routes_to_long_tab(monkeypatch) -> None:
+        """append_long_row must write to the 'YouTube Transcript Index' tab."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "wb-123")
+    
+        captured: list = []
+    
+        def fake_append_sync(tab_name, values):
+            captured.append((tab_name, values))
+    
+        with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
+            await sheets_svc.append_long_row(
+                {"id": "j", "url": "https://yt/x", "title": "T", "drive_url": "https://d/x"},
+                video_id="vid",
+                channel="C",
+                views="1",
+                description_links_raw="",
+                char_count=1,
+                drive_file_id="fid",
+            )
+    
+>       assert len(captured) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests\test_sheets.py:148: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "j", "event": "sheets_long_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.266849", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 287, in append_long_row\n    await asyncio.to_thread(_append_sync, TAB_LONG, row, job.get(\"chat_id\"))\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\asyncio\\threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\concurrent\\futures\\thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1169, in __call__\n    return self._mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1173, in _mock_call\n    return self._execute_mock_call(*args, **kwargs)\n           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\unittest\\mock.py\", line 1234, in _execute_mock_call\n    result = effect(*args, **kwargs)\nTypeError: test_append_long_row_routes_to_long_tab.<locals>.fake_append_sync() takes 2 positional arguments but 3 were given"}
+__________________ test_append_repo_row_produces_20_columns ___________________
+
+    @pytest.mark.asyncio
+    async def test_append_repo_row_produces_20_columns() -> None:
+        rows: list[list] = []
+    
+        async def patched_to_thread(fn, *args):
+            return fn(*args)
+    
+        with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+             _patch("asyncio.to_thread", patched_to_thread):
+            await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+    
+>       assert rows, "no row appended"
+E       AssertionError: no row appended
+E       assert []
+
+tests\test_sheets.py:209: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "20260101_120000_ABCD", "event": "sheets_repo_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.419300", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 75, in _append_row_logged\n    row_idx = await asyncio.to_thread(_append_sync, tab, row, chat_id)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\tests\\test_sheets.py\", line 203, in patched_to_thread\n    return fn(*args)\nTypeError: test_append_repo_row_produces_20_columns.<locals>.<lambda>() takes 2 positional arguments but 3 were given"}
+_______________ test_append_repo_row_tech_stack_newline_joined ________________
+
+    @pytest.mark.asyncio
+    async def test_append_repo_row_tech_stack_newline_joined() -> None:
+        rows: list[list] = []
+    
+        async def patched_to_thread(fn, *args):
+            return fn(*args)
+    
+        with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+             _patch("asyncio.to_thread", patched_to_thread):
+            await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+    
+>       tech_col = rows[0][6]  # column index 6
+                   ^^^^^^^
+E       IndexError: list index out of range
+
+tests\test_sheets.py:224: IndexError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "20260101_120000_ABCD", "event": "sheets_repo_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.447279", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 75, in _append_row_logged\n    row_idx = await asyncio.to_thread(_append_sync, tab, row, chat_id)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\tests\\test_sheets.py\", line 218, in patched_to_thread\n    return fn(*args)\nTypeError: test_append_repo_row_tech_stack_newline_joined.<locals>.<lambda>() takes 2 positional arguments but 3 were given"}
+_____________ test_append_repo_row_curriculum_hooks_serialization _____________
+
+    @pytest.mark.asyncio
+    async def test_append_repo_row_curriculum_hooks_serialization() -> None:
+        rows: list[list] = []
+    
+        async def patched_to_thread(fn, *args):
+            return fn(*args)
+    
+        with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+             _patch("asyncio.to_thread", patched_to_thread):
+            await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
+    
+>       hooks_col = rows[0][17]  # column index 17
+                    ^^^^^^^
+E       IndexError: list index out of range
+
+tests\test_sheets.py:241: IndexError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "20260101_120000_ABCD", "event": "sheets_repo_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.492337", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 75, in _append_row_logged\n    row_idx = await asyncio.to_thread(_append_sync, tab, row, chat_id)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\tests\\test_sheets.py\", line 235, in patched_to_thread\n    return fn(*args)\nTypeError: test_append_repo_row_curriculum_hooks_serialization.<locals>.<lambda>() takes 2 positional arguments but 3 were given"}
+_____________ test_append_repo_row_archived_is_TRUE_FALSE_string ______________
+
+    @pytest.mark.asyncio
+    async def test_append_repo_row_archived_is_TRUE_FALSE_string() -> None:
+        rows: list[list] = []
+        bundle = {**_SHEETS_BUNDLE, "metadata": {**_SHEETS_BUNDLE["metadata"], "archived": True}}
+    
+        async def patched_to_thread(fn, *args):
+            return fn(*args)
+    
+        with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+             _patch("asyncio.to_thread", patched_to_thread):
+            await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, bundle)
+    
+>       assert rows[0][11] == "TRUE"  # archived column
+               ^^^^^^^
+E       IndexError: list index out of range
+
+tests\test_sheets.py:259: IndexError
+---------------------------- Captured stdout call -----------------------------
+{"job_id": "20260101_120000_ABCD", "event": "sheets_repo_failed", "level": "error", "timestamp": "2026-08-11T18:05:14.554227", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\sheets.py\", line 75, in _append_row_logged\n    row_idx = await asyncio.to_thread(_append_sync, tab, row, chat_id)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\tests\\test_sheets.py\", line 253, in patched_to_thread\n    return fn(*args)\nTypeError: test_append_repo_row_archived_is_TRUE_FALSE_string.<locals>.<lambda>() takes 2 positional arguments but 3 were given"}
+___________________ test_get_job_short_returns_short_fields ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEF9EF460>
+
+    @pytest.mark.asyncio
+    async def test_get_job_short_returns_short_fields(monkeypatch) -> None:
+        job = _make_job()
+    
+        async def _get_owned_job(job_id, request):
+            return job
+    
+        monkeypatch.setattr(jobs_module, "get_owned_job", _get_owned_job)
+    
+>       response = await jobs_module.get_job(
+            "job1",
+            SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        )
+
+tests\test_short_detail.py:123: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\api\jobs.py:603: in get_job
+    detail["link_count"] = await database.count_job_links(job_id)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\database.py:2470: in count_job_links
+    row = await _fetch_one("SELECT COUNT(*) AS n FROM links WHERE source_job = ?", (job_id,))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\database.py:1473: in _fetch_one
+    cur = await conn.execute(sql, params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:193: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:132: in _execute
+    return await future
+           ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <Connection(Thread-2598, stopped 19828)>
+
+    def run(self) -> None:
+        """
+        Execute function calls on a separate thread.
+    
+        :meta private:
+        """
+        while True:
+            # Continues running until all queue items are processed,
+            # even after connection is closed (so we can finalize all
+            # futures)
+    
+            tx_item = self._tx.get()
+            if tx_item is _STOP_RUNNING_SENTINEL:
+                break
+    
+            future, function = tx_item
+    
+            try:
+                LOG.debug("executing %s", function)
+>               result = function()
+                         ^^^^^^^^^^
+E               sqlite3.OperationalError: no such table: links
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:115: OperationalError
+____________________ test_get_job_long_returns_long_fields ____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEF9EE890>
+
+    @pytest.mark.asyncio
+    async def test_get_job_long_returns_long_fields(monkeypatch) -> None:
+        job = _make_job(
+            content_type="long",
+            url="https://youtube.com/watch?v=abc",
+        )
+    
+        async def _get_owned_job(job_id, request):
+            return job
+    
+        monkeypatch.setattr(jobs_module, "get_owned_job", _get_owned_job)
+    
+>       response = await jobs_module.get_job(
+            "job1",
+            SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        )
+
+tests\test_short_detail.py:149: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\api\jobs.py:603: in get_job
+    detail["link_count"] = await database.count_job_links(job_id)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\database.py:2470: in count_job_links
+    row = await _fetch_one("SELECT COUNT(*) AS n FROM links WHERE source_job = ?", (job_id,))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\database.py:1473: in _fetch_one
+    cur = await conn.execute(sql, params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:193: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:132: in _execute
+    return await future
+           ^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <Connection(Thread-2600, stopped 6984)>
+
+    def run(self) -> None:
+        """
+        Execute function calls on a separate thread.
+    
+        :meta private:
+        """
+        while True:
+            # Continues running until all queue items are processed,
+            # even after connection is closed (so we can finalize all
+            # futures)
+    
+            tx_item = self._tx.get()
+            if tx_item is _STOP_RUNNING_SENTINEL:
+                break
+    
+            future, function = tx_item
+    
+            try:
+                LOG.debug("executing %s", function)
+>               result = function()
+                         ^^^^^^^^^^
+E               sqlite3.OperationalError: no such table: links
+
+C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\aiosqlite\core.py:115: OperationalError
+________________________ test_sheets_append_short_row _________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016EEFAABD90>
+
+    @pytest.mark.asyncio
+    async def test_sheets_append_short_row(monkeypatch) -> None:
+        """append_short_row writes to the consolidated workbook and Short Video Analysis tab."""
+        monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "consolidated-sheet-id")
+    
+        mock_values = MagicMock()
+        mock_values.append.return_value.execute.return_value = {}
+        mock_spreadsheets = MagicMock()
+        mock_spreadsheets.values.return_value = mock_values
+        mock_service = MagicMock()
+        mock_service.spreadsheets.return_value = mock_spreadsheets
+    
+        with patch("src.services.sheets._build_service", return_value=mock_service):
+            await sheets_svc.append_short_row(
+                {
+                    "id": "job1",
+                    "chat_id": 123,
+                    "url": "https://youtube.com/shorts/x",
+                    "title": "Test",
+                    "platform": "youtube_shorts",
+                    "drive_url": "https://drive.google.com/x",
+                    "processing_time_ms": 1000,
+                    "created_at": "2026-01-01T00:00:00",
+                }
+            )
+    
+        mock_values.append.assert_called_once()
+        call_kwargs = mock_values.append.call_args.kwargs
+        assert call_kwargs["spreadsheetId"] == "consolidated-sheet-id"
+>       assert call_kwargs["range"] == "Short Video Analysis!A1"
+E       assert "'Short Video Analysis'!A1" == 'Short Video Analysis!A1'
+E         
+E         - Short Video Analysis!A1
+E         + 'Short Video Analysis'!A1
+E         ? +                    +
+
+tests\test_short_video.py:174: AssertionError
+---------------------------- Captured stdout call -----------------------------
+{"chat_id": 123, "event": "google_token_sync_load_db_failed", "level": "error", "timestamp": "2026-08-11T18:05:16.312001", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\leone\\Desktop\\codeKitchen\\ownix\\.claude\\worktrees\\checklists-command\\src\\services\\google_tokens.py\", line 96, in load_google_token_sync\n    cur = conn.execute(\"SELECT encrypted_token FROM google_oauth_tokens WHERE chat_id = ? LIMIT 1\", (chat_id,))\nsqlite3.OperationalError: no such table: google_oauth_tokens"}
+_________________________ test_create_and_list_space __________________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF62211D0>
+
+    def test_create_and_list_space(spaces_client: TestClient) -> None:
+>       space_id = _make_space(spaces_client, AS_A, "Research")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF62211D0>
+cookies = {'vig_session': 'sid-a'}, name = 'Research'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+_______________________ test_spaces_are_tenant_isolated _______________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF5BA6A50>
+
+    def test_spaces_are_tenant_isolated(spaces_client: TestClient) -> None:
+>       space_id = _make_space(spaces_client, AS_A, "Alice only")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF5BA6A50>
+cookies = {'vig_session': 'sid-a'}, name = 'Alice only'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+_______________________ test_list_space_urls_roundtrip ________________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF59DE970>
+
+    def test_list_space_urls_roundtrip(spaces_client: TestClient) -> None:
+        """Regression for the one-arg ``list_space_urls(space_id)`` 500."""
+>       space_id = _make_space(spaces_client, AS_A)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:147: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF59DE970>
+cookies = {'vig_session': 'sid-a'}, name = 'Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+___________________ test_add_space_url_rejects_foreign_job ____________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF5ADDEF0>
+
+    def test_add_space_url_rejects_foreign_job(spaces_client: TestClient) -> None:
+        """A owns the space but the job belongs to B -> 404 (no cross-tenant pin)."""
+>       space_id = _make_space(spaces_client, AS_A)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:167: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF5ADDEF0>
+cookies = {'vig_session': 'sid-a'}, name = 'Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+___________________ test_add_space_url_rejects_missing_job ____________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF5A27690>
+
+    def test_add_space_url_rejects_missing_job(spaces_client: TestClient) -> None:
+>       space_id = _make_space(spaces_client, AS_A)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:177: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF5A27690>
+cookies = {'vig_session': 'sid-a'}, name = 'Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+__________________ test_list_space_urls_filters_foreign_jobs __________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF59DFA10>
+
+    def test_list_space_urls_filters_foreign_jobs(spaces_client: TestClient) -> None:
+        """Even if a cross-tenant link exists in space_urls (inserted at the DB
+        layer, bypassing the API guard), the chat_id JOIN must hide the foreign job.
+        """
+        from src import database
+    
+>       space_id = _make_space(spaces_client, AS_A)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:195: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF59DFA10>
+cookies = {'vig_session': 'sid-a'}, name = 'Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+___________________________ test_context_blobs_crud ___________________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF5968F30>
+
+    def test_context_blobs_crud(spaces_client: TestClient) -> None:
+        """Create, list, update, and delete context blobs via the API."""
+>       space_id = _make_space(spaces_client, AS_A, "Blob Space")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:217: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF5968F30>
+cookies = {'vig_session': 'sid-a'}, name = 'Blob Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+_____________________ test_context_blobs_tenant_isolation _____________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF48F7AF0>
+
+    def test_context_blobs_tenant_isolation(spaces_client: TestClient) -> None:
+        """User B must not read or modify blobs owned by user A."""
+>       space_id = _make_space(spaces_client, AS_A, "A Context Space")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF48F7AF0>
+cookies = {'vig_session': 'sid-a'}, name = 'A Context Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+_________________ test_delete_space_cascades_to_context_blobs _________________
+
+spaces_client = <starlette.testclient.TestClient object at 0x0000016EF6069390>
+
+    def test_delete_space_cascades_to_context_blobs(spaces_client: TestClient) -> None:
+        """Deleting a space must remove its context_blobs (FK CASCADE, proves #83)."""
+        from src import database
+    
+>       space_id = _make_space(spaces_client, AS_A, "Cascade Space")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_spaces.py:282: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x0000016EF6069390>
+cookies = {'vig_session': 'sid-a'}, name = 'Cascade Space'
+
+    def _make_space(client: TestClient, cookies: dict[str, str], name: str = "Space") -> str:
+        resp = client.post("/api/spaces", json={"name": name}, cookies=cookies)
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"Approval required"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests\test_spaces.py:94: AssertionError
+============================== warnings summary ===============================
+tests/test_auth.py: 7 warnings
+tests/test_preview_api.py: 33 warnings
+tests/test_spaces.py: 9 warnings
+  C:\Users\leone\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\testclient.py:445: DeprecationWarning: Setting per-request cookies=<...> is being deprecated, because the expected behaviour on cookie persistence is ambiguous. Set cookies directly on the client instance instead.
+    return super().request(
+
+tests/test_short_video.py::test_too_long_error_surfaces
+  C:\Users\leone\Desktop\codeKitchen\ownix\.claude\worktrees\checklists-command\tests\test_short_video.py:201: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    with pytest.raises(RuntimeError):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/test_jobs_api.py::test_delete_job_leaves_brain_links_standing_and_enqueues_refs
+ERROR tests/test_jobs_api.py::test_delete_job_with_links_flag_removes_them - ...
+ERROR tests/test_jobs_api.py::test_delete_job_unknown_and_foreign_leave_rows_intact
+ERROR tests/test_jobs_api.py::test_get_job_link_topics_returns_owned_jobs_folders
+ERROR tests/test_jobs_api.py::test_get_job_link_topics_forbidden_for_foreign_job
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_first_request_sets_cache_control_and_etag
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_matching_if_none_match_returns_304[{etag}]
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_matching_if_none_match_returns_304[*]
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_matching_if_none_match_returns_304["stale", {etag}]
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_matching_if_none_match_returns_304[W/{etag}]
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_mismatched_if_none_match_returns_200
+ERROR tests/test_jobs_api.py::TestJobThumbnailCaching::test_foreign_job_thumbnail_still_forbidden
+FAILED tests/test_auth.py::TestSessionMiddleware::test_dev_login_email_save_sends_marked_ops_card_with_input_email
+FAILED tests/test_backfill_article_og_images.py::test_backfill_dry_run_reports_without_writing
+FAILED tests/test_brain.py::test_soft_dedup_seen_count - AssertionError: Expe...
+FAILED tests/test_brain.py::test_touch_existing_link_updates_drive_file_in_place
+FAILED tests/test_brain.py::test_normalized_url_dedup_variants - assert 0 == 1
+FAILED tests/test_long_video.py::test_append_long_row - assert 0 == 1
+FAILED tests/test_long_video.py::test_append_long_row_tab_qualified_range - a...
+FAILED tests/test_sheets.py::test_append_sync_builds_tab_qualified_range - as...
+FAILED tests/test_sheets.py::test_append_prd_row_routes_to_mini_prd_tab - ass...
+FAILED tests/test_sheets.py::test_append_short_row_routes_to_short_tab - asse...
+FAILED tests/test_sheets.py::test_append_long_row_routes_to_long_tab - assert...
+FAILED tests/test_sheets.py::test_append_repo_row_produces_20_columns - Asser...
+FAILED tests/test_sheets.py::test_append_repo_row_tech_stack_newline_joined
+FAILED tests/test_sheets.py::test_append_repo_row_curriculum_hooks_serialization
+FAILED tests/test_sheets.py::test_append_repo_row_archived_is_TRUE_FALSE_string
+FAILED tests/test_short_detail.py::test_get_job_short_returns_short_fields - ...
+FAILED tests/test_short_detail.py::test_get_job_long_returns_long_fields - sq...
+FAILED tests/test_short_video.py::test_sheets_append_short_row - assert "'Sho...
+FAILED tests/test_spaces.py::test_create_and_list_space - AssertionError: {"d...
+FAILED tests/test_spaces.py::test_spaces_are_tenant_isolated - AssertionError...
+FAILED tests/test_spaces.py::test_list_space_urls_roundtrip - AssertionError:...
+FAILED tests/test_spaces.py::test_add_space_url_rejects_foreign_job - Asserti...
+FAILED tests/test_spaces.py::test_add_space_url_rejects_missing_job - Asserti...
+FAILED tests/test_spaces.py::test_list_space_urls_filters_foreign_jobs - Asse...
+FAILED tests/test_spaces.py::test_context_blobs_crud - AssertionError: {"deta...
+FAILED tests/test_spaces.py::test_context_blobs_tenant_isolation - AssertionE...
+FAILED tests/test_spaces.py::test_delete_space_cascades_to_context_blobs - As...
+27 failed, 1155 passed, 50 warnings, 12 errors in 312.87s (0:05:12)

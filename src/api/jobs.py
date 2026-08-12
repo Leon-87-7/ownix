@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
@@ -508,6 +509,8 @@ _DETAIL_FIELDS_COMMON = (
     "drive_url",
     "telegram_delivery",
     "sheets_row_id",
+    "checklists_md",
+    "checklists_generated_at",
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)
@@ -602,6 +605,36 @@ async def get_job(job_id: str, request: Request) -> dict:
     # checkbox (ADR-0046), so it rides outside the content-type field filter.
     detail["link_count"] = await database.count_job_links(job_id)
     return detail
+
+
+@jobs_router.post("/{job_id}/checklists")
+async def generate_job_checklists(job_id: str, request: Request) -> dict:
+    """Generate and persist a checklist for an owned video job."""
+    job = await get_owned_job(job_id, request)
+    if job.get("content_type") not in {"short", "long"}:
+        raise HTTPException(status_code=422, detail="Checklists require a short or long video")
+    if job.get("status") not in {"transcript_done", "done"} or not (
+        job.get("transcript") or ""
+    ).strip():
+        raise HTTPException(status_code=422, detail="A completed transcript is required")
+
+    from src.processors.checklists import run_checklists
+    from src.services.gemini import GeminiUnavailableError
+
+    try:
+        _, markdown = await run_checklists(job)
+    except GeminiUnavailableError as exc:
+        raise HTTPException(status_code=502, detail=f"Gemini unavailable: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Checklist generation failed") from exc
+
+    generated_at = datetime.now(UTC).isoformat()
+    await database.update_job_fields(
+        job_id,
+        checklists_md=markdown,
+        checklists_generated_at=generated_at,
+    )
+    return {"checklists_md": markdown, "checklists_generated_at": generated_at}
 
 
 @jobs_router.get("/{job_id}/link-topics")

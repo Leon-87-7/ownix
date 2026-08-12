@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at                TIMESTAMP,
+    checklists_md               TEXT,
+    checklists_generated_at     TEXT,
     CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
@@ -1338,6 +1340,15 @@ _AUDIT_LOG_MIGRATION = [
 ]
 _MIGRATIONS.append(_AUDIT_LOG_MIGRATION)
 
+# v39 → v40: on-demand "/checklists" command — one inline Gemini call per
+# invocation, cached directly on the job row. Checklist persistence is a
+# fields-only update because normal job progression can overlap generation
+# (see docs/superpowers/plans/2026-08-11-checklists-command.md).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN checklists_md TEXT",
+    "ALTER TABLE jobs ADD COLUMN checklists_generated_at TEXT",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1753,6 +1764,25 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
         )
         await conn.commit()
     log.info("job_status_updated", job_id=job_id, status=status)
+
+
+async def update_job_fields(job_id: str, **fields: Any) -> None:
+    """Update job fields without changing its workflow status."""
+    if not fields:
+        return
+    set_parts = ["updated_at = CURRENT_TIMESTAMP"]
+    params: list[Any] = []
+    for col, val in fields.items():
+        set_parts.append(f"{col} = ?")
+        params.append(val)
+    params.append(job_id)
+    async with connection() as conn:
+        await conn.execute(
+            f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",
+            params,
+        )
+        await conn.commit()
+    log.info("job_fields_updated", job_id=job_id, fields=list(fields))
 
 
 async def backfill_og_image_url(job_id: str, og_image_url: str) -> bool:
