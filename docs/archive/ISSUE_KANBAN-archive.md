@@ -445,3 +445,15 @@
 | [#454](https://github.com/Leon-87-7/ownix/pull/454) | Polish invite approval flow | codex/invite-approval-polish→main | — | ✅ Merged |
 | [#455](https://github.com/Leon-87-7/ownix/pull/455) | Invite-approval polish + scroll-driven landing onboarding stepper | codex/invite-approval-polish→main | — | ✅ Merged |
 | [#401](https://github.com/Leon-87-7/ownix/pull/401) | chore(web): configure ESLint | chore/web-eslint-setup→main | — | ❌ Closed |
+| [#465](https://github.com/Leon-87-7/ownix/pull/465) | feat(web): robots.txt, sitemap, JSON-LD schema, noindex login | feat/seo-audit-fixes-robots-sitemap-schema→main | — | ✅ Merged |
+| [#464](https://github.com/Leon-87-7/ownix/pull/464) | feat(brain): tenant-scoped link deletion | feat/brain-links-tenant-scoped-delete→main | — | ✅ Merged |
+| [#463](https://github.com/Leon-87-7/ownix/pull/463) | feat(web): upgrade to Next.js 16, React 19 (#365-368) | feat/next16-upgrade-365-368→main | #365 | ✅ Merged |
+| [#462](https://github.com/Leon-87-7/ownix/pull/462) | Short pipeline: extract on-screen code snippets | short-code-snippets→main | — | ✅ Merged |
+| [#502](https://github.com/Leon-87-7/ownix/pull/502) | feat(db): add append-only audit_log table (v38→v39) | worktree-audit-log-table→main | — | ✅ Merged |
+| [#501](https://github.com/Leon-87-7/ownix/pull/501) | feat: copyable image-intake links, plain URL list, and compact mobile tag chips | claude/links-list-format-xqfwv6→main | — | ✅ Merged |
+| [#500](https://github.com/Leon-87-7/ownix/pull/500) | feat(auth): add Chrome reviewer login | codex/chrome-reviewer-login→main | — | ✅ Merged |
+| [#499](https://github.com/Leon-87-7/ownix/pull/499) | Batch link intake: paste-a-list + bookmark-file import | feat/batch-link-intake→main | #490–#497 | ✅ Merged |
+| [#498](https://github.com/Leon-87-7/ownix/pull/498) | feat(intake): conversational, informing console — live cards, tags, palette | feat/intake-console-makeover→main | #481–#489 | ✅ Merged |
+| [#480](https://github.com/Leon-87-7/ownix/pull/480) | feat(intake): Ownix Intake channels — dashboard, router, share sheet, Telegram adapter, Chrome extension (#472-#479) | claude/plan-file-hardening-1kwqp3→main | #472–#479 | ✅ Merged |
+| [#471](https://github.com/Leon-87-7/ownix/pull/471) | feat(video): route Facebook + X as `unsized`, resolve short/long by duration (#466, #467) | feat/466-467-unsized-video-duration→fix/317-md-mojibake-bom-dash | #466–#467 | ✅ Merged |
+| [#470](https://github.com/Leon-87-7/ownix/pull/470) | fix(telegram): .md documents preview as mojibake — UTF-8 BOM + strip Gemini em-dashes | fix/317-md-mojibake-bom-dash→main | #317 | ✅ Merged |

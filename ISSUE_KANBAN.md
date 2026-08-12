@@ -17,10 +17,11 @@
 | [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth        | Merged; PR #453; closed on GH  |
 | [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval         | Jobs / Ops         | Merged; PR #453; closed on GH  |
 | [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved    | Telegram / Copy    | Merged; PR #453; closed on GH  |
-| [#505](https://github.com/Leon-87-7/ownix/issues/505) | Extract shared CopyButton component                                | Web / Jobs         | Delivered in PR #509           |
-| [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery                              | Telegram           | Delivered in PR #509           |
-| [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists                | Web / Jobs         | Delivered in PR #509; #505     |
-| [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results           | Web / Intake       | Delivered in PR #509; #505     |
+| [#317](https://github.com/Leon-87-7/ownix/issues/317) | fix(telegram): .md documents preview as mojibake — send UTF-8 BOM + strip Gemini em-dashes | Telegram / Gemini | Merged; PR #470; closed on GH |
+| [#457](https://github.com/Leon-87-7/ownix/issues/457) | refactor(brain): links.chat_id + backfill + owner-scoped ingest (per-tenant Second Brain) | Brain / Schema | closed on GH |
+| [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | closed on GH |
+| [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | closed on GH |
+| [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | closed on GH |
 
 ---
 
@@ -28,7 +29,6 @@
 
 |                                                   # | Title                                                                                       | Area             | Depends On |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------- | ---------------- | ---------- |
-| [#275](https://github.com/Leon-87-7/vig/issues/275) | tests/test_sheets.py: 6 tests fail on main — mocks predate _append_sync chat_id signature change (#264) | Tests / Sheets | —  |
 | [#339](https://github.com/Leon-87-7/vig/issues/339) | Use Docker-internal ntfy URL for app publishing                                             | Ops / ntfy       | —          |
 | [#340](https://github.com/Leon-87-7/vig/issues/340) | Expose ntfy configuration status at startup and in health output                            | Ops / ntfy       | —          |
 | [#341](https://github.com/Leon-87-7/vig/issues/341) | Only throttle ntfy alerts after a confirmed publish                                         | Ops / ntfy       | —          |
@@ -47,11 +47,7 @@
 | [#444](https://github.com/Leon-87-7/ownix/issues/444) | feat(web): permanent delete on the job details page | Web / Jobs | — |
 | [#445](https://github.com/Leon-87-7/ownix/issues/445) | fix(worker): drop task envelopes whose job row is gone | Worker / Queue | #444 |
 | [#446](https://github.com/Leon-87-7/ownix/issues/446) | feat(worker): job_purge — delete the job's Drive, GCS and Sheets artifacts | Purge / Cloud | #444 |
-| [#457](https://github.com/Leon-87-7/ownix/issues/457) | refactor(brain): links.chat_id + backfill + owner-scoped ingest (per-tenant Second Brain) | Brain / Schema | — |
-| [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | #457 |
 | [#459](https://github.com/Leon-87-7/ownix/issues/459) | feat(telegram): scope /find and /rebuild-graph to the sender's own Brain | Telegram / Brain | #457 |
-| [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | #457 |
-| [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | #458 |
 | [#481](https://github.com/Leon-87-7/ownix/issues/481) | Live intake card — poll job state and render it walking the FSM | Intake / Console | — |
 | [#482](https://github.com/Leon-87-7/ownix/issues/482) | Parse #tag tokens in the intake router and attach existing tags | Intake / Router | — |
 | [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | — |
@@ -69,6 +65,10 @@
 | [#495](https://github.com/Leon-87-7/ownix/issues/495) | Parse and insert links, skip existing (snapshot ingest) | Bookmarks / Parser | #490, #492 |
 | [#496](https://github.com/Leon-87-7/ownix/issues/496) | Deferred import-scoped enrichment pass | Bookmarks / Brain | #495 |
 | [#497](https://github.com/Leon-87-7/ownix/issues/497) | Folder-to-tag opt-in form | Bookmarks / Tags | #495 |
+| [#505](https://github.com/Leon-87-7/ownix/issues/505) | Extract shared CopyButton component | Web / Jobs | — |
+| [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery | Telegram | — |
+| [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists | Web / Jobs | #505 |
+| [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results | Web / Intake | #505 |
 
 ---
 
@@ -78,7 +78,6 @@ Ordered by unblocked-first, then dependency chain.
 
 |                                                   # | Title                                                                                            | Area                     | Depends On       |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------------ | ------------------------ | ---------------- |
-| [#317](https://github.com/Leon-87-7/vig/issues/317) | fix(telegram): .md documents preview as mojibake (â€”) — UTF-8 BOM + strip Gemini em-dashes       | Telegram / Gemini        | —                |
 | [#414](https://github.com/Leon-87-7/ownix/issues/414) | test_sheets_append_short_row fails: export_blocked() not mocked | Tests / Sheets | — |
 | [#466](https://github.com/Leon-87-7/ownix/issues/466) | Sidecar: /metadata exposes duration; _detect_platform reports real extractor keys | Sidecar / Transcript | — |
 | [#467](https://github.com/Leon-87-7/ownix/issues/467) | Route Facebook + X as `unsized`, resolve short/long by duration in the worker | Worker / Validators | #466 |
@@ -92,6 +91,10 @@ Ordered by unblocked-first, then dependency chain.
 | [#477](https://github.com/Leon-87-7/ownix/issues/477) | Refactor Telegram webhook into an intake-router adapter | Telegram / Intake | #473 |
 | [#478](https://github.com/Leon-87-7/ownix/issues/478) | Chrome extension MVP — capture current tab / context-menu links into Ownix Intake | Extension | #472 |
 | [#479](https://github.com/Leon-87-7/ownix/issues/479) | Production-safe Chrome extension auth via one-time pairing tokens | Extension / Auth | #478 |
+| [#511](https://github.com/Leon-87-7/ownix/issues/511) | feat(tags): canonical token vocabulary and collision safety | Intake / Tags | — |
+| [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | #511 |
+| [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | #511 |
+| [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | #511, #512 |
 
 ---
 
@@ -529,11 +532,11 @@ Critical path: #449 → {#451, #452}; #450 parallel
 Note: web-side submission for pending users and the INVITE_AUTO_APPROVE flag are deliberately out of scope; #352 (auto-approve) is the related open idea.
 
 Per-tenant Second Brain (docs/TASK.md task 11 session 2 — grill-with-docs 2026-07-31; ADR-0043; CONTEXT.md `Second Brain`)
-#457 links.chat_id + backfill + owner-scoped ingest (root, unblocked — owns the migration, the COALESCE backfill, and the ingest reuse SELECT) [HITL]
-├── #458 viewer-scoped Brain reads on the dashboard (list/search/graph/preview + the get_link_preview IDOR)
-│   └── #461 restricted-mode Brain reads the Operator graph (needs scoped reads to exist before it can name an owner; supersedes ADR-0035 line 81)
+#457 links.chat_id + backfill + owner-scoped ingest (root, unblocked — owns the migration, the COALESCE backfill, and the ingest reuse SELECT) [HITL] ✅-Done
+├── #458 viewer-scoped Brain reads on the dashboard (list/search/graph/preview + the get_link_preview IDOR) ✅-Done
+│   └── #461 restricted-mode Brain reads the Operator graph (needs scoped reads to exist before it can name an owner; supersedes ADR-0035 line 81) ✅-Done
 ├── #459 scope /find and /rebuild-graph to the sender (Telegram half of #458, ships independently)
-└── #460 Brain Drive writes obey the ADR-0030 export gate (needs per-row chat_id so aggregates stop relying on export_blocked(None))
+└── #460 Brain Drive writes obey the ADR-0030 export gate (needs per-row chat_id so aggregates stop relying on export_blocked(None)) ✅-Done
 Critical path: #457 → #458 → #461; {#459, #460} parallel off #457
 Note: #457 is HITL — the backfill runs against live data and aborts if OPERATOR_CHAT_ID is unset while the 137 orphan rows exist. Community Brain + Sharer window are deliberately split out of task 11 and not yet broken into issues.
 
@@ -589,6 +592,13 @@ Note: #485/#486/#487 are drawn under #484 as *content*, not as blockers — the 
 #506 Telegram /checklists command delivery (root, unblocked — thin adapter over the already-shipped shared checklists_command core)
 Critical path: #505 → {#507, #508}; #506 fully parallel
 Note: the shared checklists_command core (SHARED_COMMANDS handler, DB columns, Gemini prompt/schema, run_checklists) already shipped directly on branch worktree-checklists-command (plan Tasks 1-5) — these four issues cover only the remaining Telegram and dashboard delivery surfaces.
+
+Telegram tagged URL submission (grill-with-docs 2026-08-12; ADR-0049; CONTEXT.md `Tag token` / `Tagged URL submission` / `/taglist command`)
+#511 Canonical tag-token vocabulary + collision safety (root, unblocked — shared codec and catalog invariant)
+├── #512 Tagged /force with document-safe reprocessing
+│   └── #513 Telegram tagged URL submission via /tag + plain intake ◄── also #511
+└── #514 Telegram /taglist vocabulary view
+Critical path: #511 → #512 → #513; #514 parallel after #511
 ```
 
 ---
@@ -603,7 +613,7 @@ Note: the shared checklists_command core (SHARED_COMMANDS handler, DB columns, G
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
-| [#465](https://github.com/Leon-87-7/ownix/pull/465) | feat(web): robots.txt, sitemap, JSON-LD schema, noindex login | feat/seo-audit-fixes-robots-sitemap-schema→main | — | ✅ Merged |
-| [#464](https://github.com/Leon-87-7/ownix/pull/464) | feat(brain): tenant-scoped link deletion | feat/brain-links-tenant-scoped-delete→main | — | ✅ Merged |
-| [#463](https://github.com/Leon-87-7/ownix/pull/463) | feat(web): upgrade to Next.js 16, React 19 (#365-368) | feat/next16-upgrade-365-368→main | #365 | ✅ Merged |
-| [#462](https://github.com/Leon-87-7/ownix/pull/462) | Short pipeline: extract on-screen code snippets | short-code-snippets→main | — | ✅ Merged |
+| [#510](https://github.com/Leon-87-7/ownix/pull/510) | feat(telegram): show checklist generation feedback | codex/checklists-telegram-feedback→main | — | ✅ Merged |
+| [#509](https://github.com/Leon-87-7/ownix/pull/509) | feat(checklists): /checklists command delivery (Telegram, dashboard, job detail) | worktree-checklists-command→main | #505–#508 | ✅ Merged |
+| [#504](https://github.com/Leon-87-7/ownix/pull/504) | feat(web): rework landing page capture section and copy | claude/landing-page-copy-and-icons→main | — | ✅ Merged |
+| [#503](https://github.com/Leon-87-7/ownix/pull/503) | spike: route non-PDF documents through anydoc, keep PDF on liteparse | claude/anydoc-docs-parser-eval-jii4ro→main | — | ✅ Merged |
