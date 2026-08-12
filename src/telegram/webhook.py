@@ -37,6 +37,7 @@ from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
+    delete_message,
     download_file,
     download_photo,
     edit_message_text,
@@ -675,9 +676,14 @@ async def _cmd_checklists(ctx: SlashCtx) -> None:
 
     from src.intake import commands as intake_commands
 
+    status_result = await send_message(ctx.chat_id, "checking lists 🙃")
+    status_message_id = status_result.get("message_id")
     resp = await intake_commands.checklists_command(ctx.chat_id, ctx.parts)
     if resp.kind in ("error", "command_result"):
-        await send_message(ctx.chat_id, resp.text)
+        if status_message_id:
+            await edit_message_text(ctx.chat_id, status_message_id, resp.text)
+        else:
+            await send_message(ctx.chat_id, resp.text)
     elif resp.kind == "checklists_result":
         suffix = ctx.parts[1][-4:]
         await send_document(
@@ -686,6 +692,11 @@ async def _cmd_checklists(ctx: SlashCtx) -> None:
             f"checklist_{suffix}.md",
             caption="✅ Checklist ready",
         )
+        if status_message_id:
+            # Cleanup must not turn an accepted document upload into a webhook
+            # failure, which could make Telegram retry and duplicate the file.
+            with suppress(Exception):
+                await delete_message(ctx.chat_id, status_message_id)
 
 
 async def _cmd_find(ctx: SlashCtx) -> None:
