@@ -1261,6 +1261,47 @@ async def test_update_tag_preserves_and_clears_icon(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_tag_writes_reject_canonical_token_collisions(temp_db):
+    from src import database as db
+
+    original = await db.create_tag(
+        chat_id=1,
+        name="Read Later",
+        meaning="",
+        color="#8b5cf6",
+    )
+
+    with pytest.raises(db.TagTokenCollisionError):
+        await db.create_tag(
+            chat_id=1,
+            name="read_later",
+            meaning="",
+            color="#8b5cf6",
+        )
+
+    other = await db.create_tag(
+        chat_id=1,
+        name="Archive",
+        meaning="",
+        color="#60a5fa",
+    )
+    with pytest.raises(db.TagTokenCollisionError):
+        await db.update_tag(
+            chat_id=1,
+            tag_id=other["id"],
+            name="read_later",
+            meaning="",
+            color="#60a5fa",
+        )
+
+    tags = await db.list_tags(1)
+    assert [(tag["id"], tag["name"]) for tag in tags] == [
+        (other["id"], "Archive"),
+        (original["id"], "Read Later"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_banned_palette_colors_remap_on_migration(temp_db):
     """v29 remaps orange/yellow-band tag colors to the nearest allowed hue."""
     from src import database as db

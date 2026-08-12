@@ -142,8 +142,8 @@ async def force_command(
     if len(parts) < 2:
         return responses.command_result("Usage: /force <url> [#tags]")
     url = parts[1]
-    _, tag_names = tag_tokens.extract(" ".join(parts[2:]))
-    if parts[2:] and len(tag_names) != len(parts[2:]):
+    remaining, tag_names = tag_tokens.extract(" ".join(parts[2:]))
+    if remaining:
         return responses.command_result("Usage: /force <url> [#tags]")
 
     async def with_tags(response: IntakeResponse, job_id: str) -> IntakeResponse:

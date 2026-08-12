@@ -63,6 +63,36 @@ class TestForceCommand:
         job = asyncio.run(db.get_job(resp.job_id))
         assert job["content_type"] == "short"
 
+    def test_accepts_duplicate_canonical_tag_tokens(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        asyncio.run(
+            db.create_tag(
+                chat_id=CHAT_ID,
+                name="Read Later",
+                meaning="",
+                color="#8b5cf6",
+            )
+        )
+
+        resp = asyncio.run(
+            commands.SHARED_COMMANDS["/force"].handler(
+                CHAT_ID,
+                [
+                    "/force",
+                    "https://youtube.com/shorts/force-tags",
+                    "#read_later",
+                    "#READ_LATER",
+                ],
+            )
+        )
+
+        assert resp.kind == "job_created"
+        assert resp.job_id is not None
+        tags = asyncio.run(db.list_job_tags(resp.job_id))
+        assert [tag["name"] for tag in tags] == ["Read Later"]
+
     def test_bypasses_dedup_and_reprocesses_an_existing_job(
         self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
