@@ -95,6 +95,12 @@ Ordered by unblocked-first, then dependency chain.
 | [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | #511 |
 | [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | #511 |
 | [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | #511, #512 |
+| [#515](https://github.com/Leon-87-7/ownix/issues/515) | Auto-snapshot the DB before running migrations | DB / Migrations | — |
+| [#516](https://github.com/Leon-87-7/ownix/issues/516) | CI dry-run of migrations against a sanitized prod snapshot | CI / Migrations | — |
+| [#517](https://github.com/Leon-87-7/ownix/issues/517) | DB restore script + ops-runbook backup/rollback section | DB / Ops | #515 |
+| [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | #515 |
+| [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | #515 |
+| [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | #516 |
 
 ---
 
@@ -599,6 +605,16 @@ Telegram tagged URL submission (grill-with-docs 2026-08-12; ADR-0049; CONTEXT.md
 │   └── #513 Telegram tagged URL submission via /tag + plain intake ◄── also #511
 └── #514 Telegram /taglist vocabulary view
 Critical path: #511 → #512 → #513; #514 parallel after #511
+
+DB migration safety (docs/plans/2026-08-12-database-migration-strategy-audit.md — spec-to-kanban 2026-08-12; ADR-0001)
+#515 Auto-snapshot the DB before running migrations (root, unblocked — the pre-migration rollback artifact)
+├── #517 Restore script + ops-runbook backup/rollback section ◄── #515
+├── #518 Startup guard — auto-restore + clean abort on failed migration ◄── #515
+└── #519 Migration-authoring conventions — rollback note + deprecate-then-drop ◄── #515
+#516 CI dry-run of migrations against a sanitized prod snapshot (root, unblocked)
+└── #520 Dedicated staging tier + gated two-stage deploy ◄── #516
+Critical path: #515 → {#517, #518, #519}; #516 → #520
+Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/rollback + test-rehearsal safety, not a Postgres migration. #520 (staging tier) carries an owner deploy-cadence decision as its first acceptance gate.
 ```
 
 ---
