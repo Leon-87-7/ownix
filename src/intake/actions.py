@@ -62,8 +62,11 @@ async def _create_tag(chat_id: int, action: IntakeAction) -> IntakeResponse:
             return responses.error("Job not found.", retryable=False)
 
     key = tag_tokens.normalize(name)
-    existing = {tag_tokens.normalize(t["name"]): t for t in await database.list_tags(chat_id)}
-    tag = existing.get(key)
+    existing = tag_tokens.groups(await database.list_tags(chat_id))
+    matches = existing.get(key, [])
+    if len(matches) > 1:
+        return responses.error("That tag token is ambiguous. Rename it in Controls.", retryable=False)
+    tag = matches[0] if matches else None
     created = tag is None
     if tag is None:
         try:
@@ -76,10 +79,10 @@ async def _create_tag(chat_id: int, action: IntakeAction) -> IntakeResponse:
                 color=str(payload.get("color") or "#8b5cf6"),
                 icon=payload.get("icon") or None,
             )
-        except aiosqlite.IntegrityError:
+        except (aiosqlite.IntegrityError, database.TagTokenCollisionError):
             created = False
-            existing = {t["name"]: t for t in await database.list_tags(chat_id)}
-            tag = existing.get(name)
+            matches = tag_tokens.groups(await database.list_tags(chat_id)).get(key, [])
+            tag = matches[0] if len(matches) == 1 else None
             if tag is None:
                 raise
 

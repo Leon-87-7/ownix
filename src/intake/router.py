@@ -116,23 +116,45 @@ async def apply_tag_tokens(
     "Read Later" instead of reading as a new tag (CONTEXT.md "Tag token").
     An unmatched name never fails the submit — the job is already created.
     """
-    existing = {tag_tokens.normalize(t["name"]): t for t in await database.list_tags(chat_id)}
+    existing = tag_tokens.groups(await database.list_tags(chat_id))
 
     attached: list[str] = []
     unknown: list[str] = []
+    ambiguous: list[str] = []
+    invalid: list[str] = []
+    failed: list[str] = []
     for name in names:
-        tag = existing.get(tag_tokens.normalize(name))
-        if tag is None:
+        key = tag_tokens.normalize(name)
+        if not key:
+            invalid.append(name)
+            continue
+        matches = existing.get(key, [])
+        if not matches:
             unknown.append(name)
             continue
-        await database.attach_job_tag(job_id, tag["id"])
-        attached.append(tag["name"])
+        if len(matches) > 1:
+            ambiguous.append(name)
+            continue
+        tag = matches[0]
+        try:
+            await database.attach_job_tag(job_id, tag["id"])
+        except Exception:
+            log.exception("intake.tag_attachment_failed", job_id=job_id, tag_id=tag["id"])
+            failed.append(name)
+        else:
+            attached.append(tag["name"])
 
     notes = []
     if attached:
         notes.append("Tagged " + ", ".join(f"#{n}" for n in attached) + ".")
     if unknown:
         notes.append("No tag named " + ", ".join(f"#{n}" for n in unknown) + " yet.")
+    if ambiguous:
+        notes.append("Ambiguous " + ", ".join(f"#{n}" for n in ambiguous) + ".")
+    if invalid:
+        notes.append("Invalid " + ", ".join(f"#{n}" for n in invalid) + ".")
+    if failed:
+        notes.append("Could not attach " + ", ".join(f"#{n}" for n in failed) + ".")
 
     # One offer per unknown name. The console opens them one at a time, so each
     # save is its own committed step — cancelling the second never rolls back
@@ -149,6 +171,10 @@ async def apply_tag_tokens(
     ]
 
     update: dict = {}
+    update["tag_outcome"] = {
+        "attached": attached, "unknown": unknown, "ambiguous": ambiguous,
+        "invalid": invalid, "failed": failed,
+    }
     if notes:
         update["text"] = f"{result.text} " + " ".join(notes)
     if offers:

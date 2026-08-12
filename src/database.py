@@ -2169,9 +2169,33 @@ async def get_tag(chat_id: int, tag_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+class TagTokenCollisionError(ValueError):
+    """A create/rename would introduce a canonical token collision."""
+
+
+async def _reject_tag_token_collision(chat_id: int, name: str, *, exclude_id: str | None = None) -> None:
+    from src.intake.tag_tokens import normalize
+
+    wanted = normalize(name)
+    for tag in await list_tags(chat_id):
+        if tag["id"] != exclude_id and normalize(tag["name"]) == wanted:
+            raise TagTokenCollisionError(f"Tag token #{wanted} already belongs to {tag['name']!r}")
+
+
 async def create_tag(*, chat_id: int, name: str, meaning: str, color: str, icon: str | None = None) -> dict:
     tag_id = generate_id()
     async with connection() as conn:
+        # Serialize the canonical check with the write. SQLite's exact-name
+        # UNIQUE constraint cannot protect alternate spellings of one token.
+        await conn.execute("BEGIN IMMEDIATE")
+        from src.intake.tag_tokens import normalize
+        rows = await (await conn.execute("SELECT id, name FROM tags WHERE chat_id = ?", (chat_id,))).fetchall()
+        wanted = normalize(name)
+        for row in rows:
+            if normalize(row["name"]) == wanted:
+                raise TagTokenCollisionError(
+                    f"Tag token #{wanted} already belongs to {row['name']!r}"
+                )
         await conn.execute(
             "INSERT INTO tags (id, chat_id, name, meaning, color, icon) VALUES (?, ?, ?, ?, ?, ?)",
             (tag_id, chat_id, name, meaning, color, icon),
@@ -2181,13 +2205,22 @@ async def create_tag(*, chat_id: int, name: str, meaning: str, color: str, icon:
 
 
 async def update_tag(*, chat_id: int, tag_id: str, name: str, meaning: str, color: str, icon: str | None = None) -> bool:
-    return (
-        await _execute_rowcount(
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        from src.intake.tag_tokens import normalize
+        rows = await (await conn.execute("SELECT id, name FROM tags WHERE chat_id = ?", (chat_id,))).fetchall()
+        wanted = normalize(name)
+        for row in rows:
+            if row["id"] != tag_id and normalize(row["name"]) == wanted:
+                raise TagTokenCollisionError(
+                    f"Tag token #{wanted} already belongs to {row['name']!r}"
+                )
+        cursor = await conn.execute(
             "UPDATE tags SET name = ?, meaning = ?, color = ?, icon = ? WHERE id = ? AND chat_id = ?",
             (name, meaning, color, icon, tag_id, chat_id),
         )
-        > 0
-    )
+        await conn.commit()
+        return cursor.rowcount > 0
 
 
 async def delete_tag(*, chat_id: int, tag_id: str) -> bool:

@@ -81,3 +81,5 @@ class IntakeResponse(BaseModel):
     state: dict[str, Any] | None = None
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     retryable: bool = False
+    # Structured, adapter-neutral result of best-effort Job-tag attachment.
+    tag_outcome: dict[str, list[str]] | None = None

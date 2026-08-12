@@ -879,7 +879,7 @@ async def _cmd_force(ctx: SlashCtx) -> None:
     from src.intake import commands as intake_commands
 
     if len(ctx.parts) < 2:
-        await send_message(ctx.chat_id, "Usage: /force <url>")
+        await send_message(ctx.chat_id, "Usage: /force <url> [#tags]")
         return
 
     resp = await intake_commands.force_command(
@@ -897,7 +897,61 @@ async def _cmd_force(ctx: SlashCtx) -> None:
         # Only reachable non-usage case left is "cache cleared".
         await send_message(ctx.chat_id, f"🗑️ {resp.text}")
     else:
-        await send_message(ctx.chat_id, f"🔁 Force-reprocessing!\njob_{resp.job_id[-4:]}")
+        await send_message(ctx.chat_id, _tagged_ack(resp, prefix="🔁 Force-reprocessing!"))
+
+
+def _tagged_ack(resp, *, prefix: str = "📥 Received!") -> str:
+    """Render an intake tag outcome without Telegram markup injection."""
+    lines = [prefix, f"job_{resp.job_id[-4:]}"]
+    labels = {
+        "attached": "Attached", "unknown": "Unknown", "ambiguous": "Ambiguous",
+        "invalid": "Invalid", "failed": "Failed",
+    }
+    for key, label in labels.items():
+        values = (resp.tag_outcome or {}).get(key, [])
+        if values:
+            lines.append(f"{label}: " + ", ".join(f"#{value}" for value in values))
+    return "\n".join(lines)
+
+
+async def _cmd_tag(ctx: SlashCtx) -> None:
+    await _route_tagged_submission(ctx.chat_id, " ".join(ctx.parts[1:]), ctx.message_id, explicit=True)
+
+
+async def _cmd_taglist(ctx: SlashCtx) -> None:
+    from src.intake import tag_tokens
+    if len(ctx.parts) != 1:
+        await send_message(ctx.chat_id, "Usage: /taglist")
+        return
+    tags = await database.list_tags(ctx.chat_id)
+    if not tags:
+        await send_message(ctx.chat_id, "No tags yet. Create them in dashboard Controls.")
+        return
+    grouped = tag_tokens.groups(tags)
+    entries = []
+    for tag in tags:
+        collision = len(grouped[tag_tokens.normalize(tag["name"])]) > 1
+        if collision:
+            line = f"⚠️ {html.escape(tag['name'])} — ambiguous"
+        else:
+            token = html.escape("#" + tag_tokens.encode(tag["name"]))
+            line = f"<code>{token}</code> — {html.escape(tag['name'])}"
+        if tag.get("meaning"):
+            line += f" — {html.escape(tag['meaning'])}"
+        entries.append(line)
+    # Split only between complete entries; UTF-16 units are Telegram's limit.
+    chunks, current = [], ""
+    for entry in entries:
+        candidate = f"{current}\n{entry}" if current else entry
+        if current and len(candidate.encode("utf-16-le")) // 2 > 4000:
+            chunks.append(current)
+            current = entry
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    for chunk in chunks:
+        await send_message(ctx.chat_id, chunk, parse_mode="HTML")
 
 
 def _sanitize_title(title: str, url: str, max_len: int = 80) -> str:
@@ -1079,6 +1133,8 @@ _HELP_TEXT = (
     "`/checklists` <suffix> — generate an engineering checklist\n"
     "`/freestyle` — use a custom Gemini prompt for the next job\n"
     "`/force` <url> — reprocess a URL (skip cache)\n"
+    "`/tag` <url> <#tags> — submit a tagged URL\n"
+    "`/taglist` — list your tag vocabulary\n"
     "`/cancel` — cancel the current pending prompt\n"
     "`/ignore` <domain> — hide a domain from link results\n"
     "`/unignore` <domain> — stop hiding a domain\n"
@@ -1116,6 +1172,8 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
     "/find": _cmd_find,
     "/rebuild-graph": _cmd_rebuild_graph,
     "/force": _cmd_force,
+    "/tag": _cmd_tag,
+    "/taglist": _cmd_taglist,
     "/addlink": _cmd_addlink,
     "/ignore": _cmd_ignore,
     "/unignore": _cmd_unignore,
@@ -1137,7 +1195,7 @@ async def _dispatch_slash(chat_id: int, text: str, message_id: int | None = None
     if handler is None:
         return
     ctx = SlashCtx(chat_id=chat_id, parts=parts, message_id=message_id)
-    if cmd != "/cancel":
+    if cmd not in {"/cancel", "/tag", "/taglist"}:
         await database.clear_chat_state(chat_id)
         await queue._client().delete(f"pending_template:{chat_id}")
     await handler(ctx)
@@ -1705,7 +1763,9 @@ async def _safe_get_pdf(url: str) -> bytes | None:
     return None  # too many redirects
 
 
-async def _route_document_url(chat_id: int, url: str, message_id: int | None) -> None:
+async def _route_document_url(
+    chat_id: int, url: str, message_id: int | None, *, tag_names: list[str] | None = None
+) -> None:
     """Fetch a document URL, store it content-addressed, and enqueue a job (#152)."""
     try:
         data = await _safe_get_pdf(url)
@@ -1720,7 +1780,7 @@ async def _route_document_url(chat_id: int, url: str, message_id: int | None) ->
         await send_message(chat_id, "📄 That link didn't return a supported document.")
         log.info("document_url_unsupported", chat_id=chat_id, url=url)
         return
-    await _enqueue_document_job(chat_id, data, ext, message_id)
+    await _enqueue_document_job(chat_id, data, ext, message_id, tag_names=tag_names)
 
 
 async def _settle_ops_invite_card(
@@ -2073,7 +2133,14 @@ async def _handle_document_update(chat_id: int, message: dict, document: dict) -
     spawn_background(_ingest_document(chat_id, document, message.get("message_id")))
 
 
-async def _enqueue_document_job(chat_id: int, data: bytes, ext: str, message_id: int | None) -> None:
+async def _enqueue_document_job(
+    chat_id: int,
+    data: bytes,
+    ext: str,
+    message_id: int | None,
+    *,
+    tag_names: list[str] | None = None,
+) -> None:
     """Store document bytes content-addressed, create + enqueue the job, ack the user."""
     sha = hashlib.sha256(data).hexdigest()
     key = storage.object_key("documents", sha, ext)
@@ -2085,7 +2152,16 @@ async def _enqueue_document_job(chat_id: int, data: bytes, ext: str, message_id:
         message_id=message_id,
     )
     await queue.enqueue({"task": "document", "job_id": job_id})
-    await send_message(chat_id, f"📥 Received!\njob_{job_id[-4:]}")
+    if tag_names:
+        from src.intake.models import IntakeResponse
+        from src.intake.router import apply_tag_tokens
+
+        resp = await apply_tag_tokens(
+            chat_id, job_id, tag_names, IntakeResponse(kind="job_created", text="", job_id=job_id)
+        )
+        await send_message(chat_id, _tagged_ack(resp))
+    else:
+        await send_message(chat_id, f"📥 Received!\njob_{job_id[-4:]}")
 
 
 async def _ingest_document(chat_id: int, document: dict, message_id: int | None) -> None:
@@ -2122,12 +2198,21 @@ async def _route_text(
     if not await _invite_gate_allows(chat_id, text, identity):
         return
 
-    # 1. Slash command path
+    # 1. Slash command path — includes /tag and /taglist (registered in
+    # _SLASH_TABLE), so an explicit tagged submission is just another command.
     if text.startswith("/"):
         await _dispatch_slash(chat_id, text, message_id)
         return
 
-    # 2. Awaiting-intent path
+    # 2. Plain tag-bearing text outranks an unrelated awaiting prompt. This is
+    # a deliberately narrow adapter over the channel-neutral intake router.
+    from src.intake import tag_tokens
+    _, submitted_tags = tag_tokens.extract(text)
+    if submitted_tags:
+        await _route_tagged_submission(chat_id, text, message_id, explicit=False)
+        return
+
+    # 3. Awaiting-intent path
     state = await database.get_chat_state(chat_id)
     if state:
         if _resolve_chat_state(state):
@@ -2139,15 +2224,48 @@ async def _route_text(
         log.info("prd.chat_state.expired_or_missed", chat_id=chat_id)
         # fall through to normal URL routing
 
-    # 3. Plain-text command shortcut: "find code" → "/find code", "rebuild-graph" → "/rebuild-graph"
+    # 4. Plain-text command shortcut: "find code" → "/find code", "rebuild-graph" → "/rebuild-graph"
     first_word = text.split()[0].lower()
     if ("/" + first_word) in _SLASH_TABLE:
         await _dispatch_slash(chat_id, "/" + text, message_id)
         return
 
-    # 3b. User-template shortcut: "-mytemplate <url>"
+    # 4b. User-template shortcut: "-mytemplate <url>"
     if await _handle_user_template_shortcut(chat_id, text, message_id):
         return
 
-    # 4. Normal URL routing
+    # 5. Normal URL routing
     await _route_url(chat_id, text, message_id)
+
+
+async def _route_tagged_submission(
+    chat_id: int, text: str, message_id: int | None, *, explicit: bool
+) -> None:
+    """Validate Telegram grammar, then invoke shared tagged intake mechanics."""
+    from src.intake import router as intake_router, tag_tokens
+    from src.intake.models import IntakeActor, IntakeMessage
+
+    candidate, names = tag_tokens.extract(text)
+    parts = candidate.split()
+    if not names or len(parts) != 1:
+        usage = "Usage: /tag <url> #tag [#tag...]" if explicit else "Send one URL with #tags."
+        await send_message(chat_id, usage)
+        return
+    pipeline = detect_pipeline(parts[0], frozenset(await database.list_allowed_domains(chat_id)))
+    if pipeline == "rejected":
+        await send_message(chat_id, "❌ Unsupported URL.")
+        return
+    if pipeline == "document":
+        # Preserve the established safe download/content-addressed document path.
+        await _route_document_url(chat_id, parts[0], message_id, tag_names=names)
+        return
+    actor = IntakeActor(
+        user_id=chat_id, channel_id=str(chat_id), channel_type="telegram", legacy_chat_id=chat_id
+    )
+    resp = await intake_router.handle(
+        IntakeMessage(actor=actor, text=text, source_message_id=message_id)
+    )
+    if resp.job_id:
+        await send_message(chat_id, _tagged_ack(resp))
+    else:
+        await send_message(chat_id, resp.text)

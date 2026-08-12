@@ -66,6 +66,8 @@ async def create_tag(body: TagIn, request: Request) -> dict:
         return await database.create_tag(
             chat_id=chat_id, name=body.name.strip(), meaning=body.meaning, color=body.color, icon=body.icon
         )
+    except database.TagTokenCollisionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         if "UNIQUE constraint failed" in str(exc):
             raise HTTPException(status_code=409, detail="Tag name already exists")
@@ -75,9 +77,12 @@ async def create_tag(body: TagIn, request: Request) -> dict:
 @controls_router.put("/tags/{tag_id}")
 async def update_tag(tag_id: str, body: TagIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
-    ok = await database.update_tag(
-        chat_id=chat_id, tag_id=tag_id, name=body.name.strip(), meaning=body.meaning, color=body.color, icon=body.icon
-    )
+    try:
+        ok = await database.update_tag(
+            chat_id=chat_id, tag_id=tag_id, name=body.name.strip(), meaning=body.meaning, color=body.color, icon=body.icon
+        )
+    except database.TagTokenCollisionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not ok:
         raise HTTPException(status_code=404, detail="Tag not found")
     return {"id": tag_id, "name": body.name, "meaning": body.meaning, "color": body.color, "icon": body.icon}

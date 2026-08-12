@@ -63,6 +63,43 @@ class TestForceCommand:
         job = asyncio.run(db.get_job(resp.job_id))
         assert job["content_type"] == "short"
 
+    def test_accepts_duplicate_canonical_tag_tokens(
+        self, db, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        asyncio.run(
+            db.create_tag(
+                chat_id=CHAT_ID,
+                name="Read Later",
+                meaning="",
+                color="#8b5cf6",
+            )
+        )
+
+        resp = asyncio.run(
+            commands.SHARED_COMMANDS["/force"].handler(
+                CHAT_ID,
+                [
+                    "/force",
+                    "https://youtube.com/shorts/force-tags",
+                    "#read_later",
+                    "#READ_LATER",
+                ],
+            )
+        )
+
+        assert resp.kind == "job_created"
+        assert resp.job_id is not None
+        assert resp.tag_outcome == {
+            "attached": ["Read Later"],
+            "unknown": [],
+            "ambiguous": [],
+            "invalid": [],
+            "failed": [],
+        }
+        tags = asyncio.run(db.list_job_tags(resp.job_id))
+        assert [tag["name"] for tag in tags] == ["Read Later"]
+
     def test_bypasses_dedup_and_reprocesses_an_existing_job(
         self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -79,7 +116,7 @@ class TestForceCommand:
         assert job["status"] == "pending"
         assert asyncio.run(db.get_job(job_id)) is not None
 
-    def test_clears_an_orphaned_cache_row_without_creating_a_job(
+    def test_clears_an_orphaned_cache_row_and_continues_to_a_job(
         self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         _enqueue_noop(monkeypatch)
@@ -88,10 +125,10 @@ class TestForceCommand:
 
         resp = asyncio.run(commands.SHARED_COMMANDS["/force"].handler(CHAT_ID, ["/force", url]))
 
-        assert resp.kind == "command_result"
-        assert resp.job_id is None
+        assert resp.kind == "job_created"
+        assert resp.job_id is not None
         assert asyncio.run(db.get_markdown_cache(url)) is None
-        assert asyncio.run(db.find_recent_job_by_url(CHAT_ID, url)) is None
+        assert asyncio.run(db.find_recent_job_by_url(CHAT_ID, url)) is not None
 
     def test_reachable_through_the_router(self, db, monkeypatch: pytest.MonkeyPatch) -> None:
         _enqueue_noop(monkeypatch)

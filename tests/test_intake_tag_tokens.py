@@ -68,9 +68,13 @@ class TestExtract:
 
 
 class TestNormalize:
-    @pytest.mark.parametrize("raw", ["readlater", "ReadLater", "read-later", "Read Later", "READ_LATER"])
-    def test_variants_collapse_to_one_key(self, raw: str) -> None:
-        assert tag_tokens.normalize(raw) == "readlater"
+    @pytest.mark.parametrize("raw", ["Read Later", "READ_LATER", "  read   later  "])
+    def test_whitespace_and_underscore_share_one_key(self, raw: str) -> None:
+        assert tag_tokens.normalize(raw) == "read_later"
+
+    def test_other_punctuation_is_literal(self) -> None:
+        assert tag_tokens.normalize("read-later") == "read-later"
+        assert tag_tokens.normalize("readlater") == "readlater"
 
     def test_non_ascii_survives(self) -> None:
         """`str.isalnum` keeps Cyrillic/CJK — a regex of [a-z0-9] would blank them."""
@@ -78,7 +82,12 @@ class TestNormalize:
         assert tag_tokens.normalize("読む") == "読む"
 
     def test_matches_existing_tag_name(self) -> None:
-        assert tag_tokens.normalize("#readlater".lstrip("#")) == tag_tokens.normalize("Read Later")
+        assert tag_tokens.normalize("#read_later".lstrip("#")) == tag_tokens.normalize("Read Later")
+
+    @pytest.mark.parametrize("payload", ["c++", "r&d", "ai/ml", "foo#bar", "design_🎨"])
+    def test_arbitrary_non_whitespace_payload_is_lossless(self, payload: str) -> None:
+        _, names = tag_tokens.extract(f"https://example.com/x #{payload}")
+        assert names == [tag_tokens.decode(payload)]
 
     def test_casefold_beyond_ascii_lower(self) -> None:
         """`str.lower` doesn't case-fold; `Straße`/`STRASSE` must still collide."""
