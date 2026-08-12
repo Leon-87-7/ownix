@@ -125,7 +125,7 @@ class TestTagTokens:
     def test_normalized_name_matches_existing_tag(self, db, monkeypatch: pytest.MonkeyPatch) -> None:
         _enqueue_noop(monkeypatch)
         self._tag(db, "Read Later")
-        resp = asyncio.run(router.handle(_msg(text="https://youtube.com/shorts/tag3 #readlater")))
+        resp = asyncio.run(router.handle(_msg(text="https://youtube.com/shorts/tag3 #read_later")))
         assert self._job_tag_names(db, resp.job_id) == ["Read Later"]
 
     def test_url_fragment_survives_and_yields_no_tag(

@@ -2087,13 +2087,13 @@ async def test_force_jobs_and_cache_clears_cache_and_reprocesses(
 
 
 @pytest.mark.asyncio
-async def test_force_cache_only_deletes_cache_and_acks(
+async def test_force_cache_only_clears_cache_and_continues_to_a_job(
     temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
 ):
-    """State 2: no video job, cache exists → cache deleted, ack sent."""
+    """State 2: no video job, cache exists → cache deleted, job created and enqueued."""
     from src import database as db
 
-    url = "https://example.com/article"
+    url = "https://youtube.com/watch?v=cache1"
     await db.insert_markdown_cache(url, "cached content")
 
     enq = AsyncMock()
@@ -2104,11 +2104,9 @@ async def test_force_cache_only_deletes_cache_and_acks(
     await _post_webhook(f"/force {url}")
 
     assert await db.get_markdown_cache(url) is None
-    enq.assert_not_awaited()
+    enq.assert_awaited_once()
     sent.assert_awaited_once()
-    # Ack message must mention cache/cleared
-    msg = sent.await_args.args[1].lower()
-    assert "cache" in msg or "cleared" in msg
+    assert await db.find_recent_job_by_url(100, url) is not None
 
 
 @pytest.mark.asyncio
@@ -2181,6 +2179,131 @@ async def test_force_repo_deletes_both_redis_cache_keys(
 
     assert "github_repo_bundle:owner/repo" in deleted
     assert "github_meta:owner/repo" in deleted
+
+
+# ---------------------------------------------------------------------------
+# Tagged intake (issues #511-514): /tag, /taglist, plain tag-bearing URLs, and
+# slash commands (like tagged /force) must not be hijacked by the tag check.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_force_with_hashtag_argument_still_dispatches_and_attaches_tag(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """A `#tag` in /force's arguments must not hijack the message before slash dispatch."""
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    url = "https://youtube.com/watch?v=forcetag1"
+    await _post_webhook(f"/force {url} #read_later")
+
+    enq.assert_awaited_once()
+    job = await db.find_recent_job_by_url(100, url)
+    assert job is not None
+    tags = await db.list_job_tags(job["id"])
+    assert [t["name"] for t in tags] == ["Read Later"]
+    sent.assert_awaited_once()
+    assert "Read Later" in sent.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_plain_url_with_hashtag_attaches_tag(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    enq = AsyncMock()
+    monkeypatch.setattr("src.queue.enqueue", enq)
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    url = "https://youtube.com/shorts/plaintag1"
+    await _post_webhook(f"{url} #read_later")
+
+    job = await db.find_recent_job_by_url(100, url)
+    assert job is not None
+    tags = await db.list_job_tags(job["id"])
+    assert [t["name"] for t in tags] == ["Read Later"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_tag_command_attaches_tag(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    monkeypatch.setattr("src.queue.enqueue", AsyncMock())
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    url = "https://youtube.com/shorts/tagcmd1"
+    await _post_webhook(f"/tag {url} #read_later")
+
+    job = await db.find_recent_job_by_url(100, url)
+    assert job is not None
+    tags = await db.list_job_tags(job["id"])
+    assert [t["name"] for t in tags] == ["Read Later"]
+
+
+@pytest.mark.asyncio
+async def test_taglist_lists_the_catalog(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="revisit", color="#8b5cf6")
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _post_webhook("/taglist")
+
+    sent.assert_awaited_once()
+    msg = sent.await_args.args[1]
+    assert "read_later" in msg
+    assert "Read Later" in msg
+
+
+@pytest.mark.asyncio
+async def test_taglist_empty_catalog(temp_db, _patch_webhook_secret, _patch_redis, monkeypatch):
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _post_webhook("/taglist")
+
+    sent.assert_awaited_once()
+    assert "No tags yet" in sent.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_tagged_document_job_attaches_tag_instead_of_dropping_it(
+    temp_db, _patch_redis, monkeypatch
+):
+    """A #tag alongside a document URL must not be silently discarded."""
+    from src import database as db
+    from src.telegram.webhook import _enqueue_document_job
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    monkeypatch.setattr("src.queue.enqueue", AsyncMock())
+    monkeypatch.setattr("src.services.storage.upload", AsyncMock())
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+
+    await _enqueue_document_job(100, b"%PDF-1.4 fake", "pdf", None, tag_names=["read_later"])
+
+    jobs = await db.get_recent_jobs(100, 5)
+    assert len(jobs) == 1
+    tags = await db.list_job_tags(jobs[0]["id"])
+    assert [t["name"] for t in tags] == ["Read Later"]
+    sent.assert_awaited_once()
+    assert "Read Later" in sent.await_args.args[1]
 
 
 # ---------------------------------------------------------------------------

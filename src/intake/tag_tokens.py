@@ -1,57 +1,55 @@
-"""`#tag` token parsing for intake messages (issue #482, CONTEXT.md "Tag token").
-
-Channel-neutral on purpose: Telegram, the dashboard and the extension all route
-through `src/intake/router.py`, so parsing here is what guarantees they agree.
-Telegram additionally auto-highlights hashtags client-side as `MessageEntity`,
-but the adapter deliberately does not read `entities` — this parse is the single
-source of truth.
-"""
+"""Canonical codec and catalog matching for intake ``#tag`` tokens."""
 
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from collections.abc import Iterable, Mapping
 
-# The `#` must be whitespace- or start-anchored. A URL fragment's `#` never is,
-# so `…/guide#installation` keeps its fragment instead of being truncated into a
-# job URL plus a tag named `installation`.
-TAG_TOKEN = re.compile(r"(?:^|\s)#([\w-]+)")
+# A hash is syntax only at the start of the input or after whitespace.  The
+# payload deliberately includes every non-whitespace character (ADR-0049).
+TAG_TOKEN = re.compile(r"(?<!\S)#(\S+)")
+
+
+def decode(payload: str) -> str:
+    """Decode a token payload to display text (underscores encode whitespace)."""
+    return " ".join(payload.replace("_", " ").split())
+
+
+def encode(name: str) -> str:
+    """Return the canonical, copyable payload for a stored display name."""
+    return "_".join(name.split()).casefold()
 
 
 def normalize(name: str) -> str:
-    """Collapse a tag name to its match key: casefolded, alphanumerics only.
+    """Return the canonical comparison key for display text or decoded text."""
+    return encode(name)
 
-    Uses `str.isalnum` rather than an `[a-z0-9]` class so Cyrillic/CJK names
-    survive — a regex class would blank them and make every non-Latin tag
-    collide on the empty string.
-    """
-    return "".join(ch for ch in name.casefold() if ch.isalnum())
+
+def groups(tags: Iterable[Mapping]) -> dict[str, list[Mapping]]:
+    """Group catalog rows by canonical token without hiding collisions."""
+    result: dict[str, list[Mapping]] = defaultdict(list)
+    for tag in tags:
+        result[normalize(str(tag["name"]))].append(tag)
+    return dict(result)
 
 
 def extract(text: str) -> tuple[str, list[str]]:
-    """Split `text` into (remaining text, tag names).
-
-    Names keep the casing the user typed — that is what a newly created tag is
-    named — but duplicates are collapsed on the normalized key, so `#GoTo #goto`
-    yields one name.
-    """
+    """Split text into remaining prose and deduplicated decoded tag names."""
     if not text:
         return "", []
-
     names: list[str] = []
     seen: set[str] = set()
 
-    def _take(match: re.Match[str]) -> str:
-        raw = match.group(1)
-        key = normalize(raw)
-        if key and key not in seen:
+    def take(match: re.Match[str]) -> str:
+        name = decode(match.group(1))
+        key = normalize(name)
+        if name and key not in seen:
             seen.add(key)
-            names.append(raw)
-        # Replace with a space, not "": the token may have been separating two
-        # words, and the caller re-collapses whitespace anyway.
+            names.append(name)
         return " "
 
-    remaining = TAG_TOKEN.sub(_take, text)
-    return " ".join(remaining.split()), names
+    return " ".join(TAG_TOKEN.sub(take, text).split()), names
 
 
-__all__ = ["TAG_TOKEN", "extract", "normalize"]
+__all__ = ["TAG_TOKEN", "decode", "encode", "extract", "groups", "normalize"]

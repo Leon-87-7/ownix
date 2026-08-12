@@ -196,21 +196,21 @@ class TestCreateTagAction:
         asyncio.run(_insert_job("job_tag_3"))
         _login(action_client)
 
-        # Normalized match: `#readlater` must find the existing "Read Later".
+        # Canonical match: an underscore encodes the space in "Read Later".
         resp = action_client.post(
             "/api/intake/action",
             json={
                 "action_id": "create-tag-3",
                 "kind": "create_tag",
                 "job_id": "job_tag_3",
-                "payload": {"tag_name": "readlater"},
+                "payload": {"tag_name": "read later"},
             },
         )
 
         assert resp.status_code == 200
         names = [t["name"] for t in self._tags()]
         assert names.count("Read Later") == 1
-        assert "readlater" not in names
+        assert "read later" not in names
         attached = asyncio.run(database.list_job_tags("job_tag_3"))
         assert [t["name"] for t in attached] == ["Read Later"]
 

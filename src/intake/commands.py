@@ -135,12 +135,23 @@ async def force_command(
     function — the dashboard simply omits it.
     """
     from src import database, queue
+    from src.intake import tag_tokens
     from src.services.jobs import task_for_content_type
     from src.utils.validators import detect_pipeline, normalize_repo_url
 
     if len(parts) < 2:
-        return responses.command_result("Usage: /force <url>")
+        return responses.command_result("Usage: /force <url> [#tags]")
     url = parts[1]
+    _, tag_names = tag_tokens.extract(" ".join(parts[2:]))
+    if parts[2:] and len(tag_names) != len(parts[2:]):
+        return responses.command_result("Usage: /force <url> [#tags]")
+
+    async def with_tags(response: IntakeResponse, job_id: str) -> IntakeResponse:
+        if not tag_names:
+            return response
+        # Local import avoids making router/commands module initialization circular.
+        from src.intake.router import apply_tag_tokens
+        return await apply_tag_tokens(chat_id, job_id, tag_names, response)
 
     extra_domains = await database.list_allowed_domains(chat_id)
     pipeline = detect_pipeline(url, frozenset(extra_domains))
@@ -170,11 +181,12 @@ async def force_command(
             except Exception:
                 log.warning("force.repo_cache_clear_failed", url=lookup_url)
         await queue.enqueue({"task": task_type, "job_id": job_id})
-        return responses.action_ack(f"Force-reprocessing job_{job_id[-4:]}.", job_id=job_id)
+        return await with_tags(
+            responses.action_ack(f"Force-reprocessing job_{job_id[-4:]}.", job_id=job_id), job_id
+        )
 
     if existing_cache:
         await database.delete_markdown_cache(url)
-        return responses.command_result("Markdown cache cleared for that URL.")
 
     if pipeline == "rejected":
         return responses.unsupported(
@@ -188,7 +200,7 @@ async def force_command(
     )
     task_type = task_for_content_type(pipeline, default="video")
     await queue.enqueue({"task": task_type, "job_id": job_id})
-    return responses.job_created({"id": job_id, "content_type": pipeline})
+    return await with_tags(responses.job_created({"id": job_id, "content_type": pipeline}), job_id)
 
 
 async def freestyle_command(
