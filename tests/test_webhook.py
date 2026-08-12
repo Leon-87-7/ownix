@@ -1632,12 +1632,15 @@ async def test_cmd_checklists_sends_errors_as_messages(monkeypatch):
     from src.telegram.webhook import SlashCtx, _cmd_checklists
 
     command = AsyncMock(return_value=IntakeResponse(kind="error", text="Not ready"))
-    sent = AsyncMock()
+    sent = AsyncMock(return_value={"message_id": 91})
+    edited = AsyncMock()
     monkeypatch.setattr("src.intake.commands.checklists_command", command)
     monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    monkeypatch.setattr("src.telegram.webhook.edit_message_text", edited)
     await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "abcd"], message_id=None))
     command.assert_awaited_once_with(42, ["/checklists", "abcd"])
-    sent.assert_awaited_once_with(42, "Not ready")
+    sent.assert_awaited_once_with(42, "checking the lists 🙃")
+    edited.assert_awaited_once_with(42, 91, "Not ready")
 
 
 @pytest.mark.asyncio
@@ -1648,13 +1651,42 @@ async def test_cmd_checklists_sends_markdown_document(monkeypatch):
     command = AsyncMock(
         return_value=IntakeResponse(kind="checklists_result", text="# Checklist")
     )
+    sent = AsyncMock(return_value={"message_id": 91})
+    deleted = AsyncMock()
     document = AsyncMock()
     monkeypatch.setattr("src.intake.commands.checklists_command", command)
+    monkeypatch.setattr("src.telegram.webhook.send_message", sent)
+    monkeypatch.setattr("src.telegram.webhook.delete_message", deleted)
     monkeypatch.setattr("src.telegram.webhook.send_document", document)
     await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "job_abcd"], message_id=None))
+    sent.assert_awaited_once_with(42, "checking the lists 🙃")
+    deleted.assert_awaited_once_with(42, 91)
     document.assert_awaited_once_with(
         42, "# Checklist".encode("utf-8-sig"), "checklist_abcd.md", caption="✅ Checklist ready"
     )
+
+
+@pytest.mark.asyncio
+async def test_cmd_checklists_cleanup_failure_does_not_duplicate_delivery(monkeypatch):
+    from src.intake.models import IntakeResponse
+    from src.telegram.webhook import SlashCtx, _cmd_checklists
+
+    command = AsyncMock(
+        return_value=IntakeResponse(kind="checklists_result", text="# Checklist")
+    )
+    monkeypatch.setattr("src.intake.commands.checklists_command", command)
+    monkeypatch.setattr(
+        "src.telegram.webhook.send_message", AsyncMock(return_value={"message_id": 91})
+    )
+    document = AsyncMock()
+    monkeypatch.setattr("src.telegram.webhook.send_document", document)
+    monkeypatch.setattr(
+        "src.telegram.webhook.delete_message", AsyncMock(side_effect=RuntimeError("delete failed"))
+    )
+
+    await _cmd_checklists(SlashCtx(chat_id=42, parts=["/checklists", "abcd"], message_id=None))
+
+    document.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -94,6 +94,19 @@ async def test_send_message_success_returns_result(monkeypatch: pytest.MonkeyPat
     assert result == {"message_id": 42}
 
 
+@pytest.mark.asyncio
+async def test_delete_message_posts_message_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    body = {"ok": True, "result": True}
+    fake_client = _FakeClient(_FakeResponse(200, body))
+    monkeypatch.setattr(sender, "_http", lambda: fake_client)
+    monkeypatch.setattr(sender, "log", MagicMock())
+
+    result = await sender.delete_message(123, 42)
+
+    assert result is True
+    assert fake_client.posted[0]["json"] == {"chat_id": 123, "message_id": 42}
+
+
 def test_endpoint_rejects_explicit_empty_bot_token() -> None:
     with pytest.raises(RuntimeError, match="Telegram bot token"):
         sender._endpoint("sendMessage", bot_token="")

@@ -152,6 +152,24 @@ async def send_message(
     )
 
 
+async def delete_message(
+    chat_id: int,
+    message_id: int,
+    *,
+    bot_token: str | None = None,
+) -> dict[str, Any]:
+    """Delete a Telegram message and return the parsed result."""
+    return await _post_and_parse(
+        "deleteMessage",
+        json_payload={"chat_id": chat_id, "message_id": message_id},
+        chat_id=chat_id,
+        error_event="telegram_delete_failed",
+        success_event="telegram_message_deleted",
+        bot_token=bot_token,
+        message_id=message_id,
+    )
+
+
 async def send_photo(
     chat_id: int,
     photo_bytes: bytes,
