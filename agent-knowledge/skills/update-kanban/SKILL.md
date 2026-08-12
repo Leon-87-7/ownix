@@ -1,6 +1,6 @@
 ---
 name: update-kanban
-disable-model-invocation: true
+disable-model-invocation: false
 description: On-demand reconcile of the project's ISSUE_KANBAN.md board against the authoritative GitHub state — discovers what drifted (issues closed/relabelled/deleted outside the normal flow), previews the delta, and on confirmation rewrites the affected rows and rebuilds an open/closed PR section. Use only when explicitly invoked as /update-kanban — for manual or drift-recovery syncs that aren't tied to a /to-issues or /triage run.
 ---
 

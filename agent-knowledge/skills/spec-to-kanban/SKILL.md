@@ -1,7 +1,7 @@
 ---
 name: spec-to-kanban
 description: Run the plan-to-board pipeline by creating GitHub issues, triaging them, reconciling ISSUE_KANBAN.md, and drafting the Codex Cloud handoff in one sequence.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # spec-to-kanban
