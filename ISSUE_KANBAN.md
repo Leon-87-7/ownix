@@ -92,6 +92,12 @@ Ordered by unblocked-first, then dependency chain.
 | [#477](https://github.com/Leon-87-7/ownix/issues/477) | Refactor Telegram webhook into an intake-router adapter | Telegram / Intake | #473 |
 | [#478](https://github.com/Leon-87-7/ownix/issues/478) | Chrome extension MVP — capture current tab / context-menu links into Ownix Intake | Extension | #472 |
 | [#479](https://github.com/Leon-87-7/ownix/issues/479) | Production-safe Chrome extension auth via one-time pairing tokens | Extension / Auth | #478 |
+| [#515](https://github.com/Leon-87-7/ownix/issues/515) | Auto-snapshot the DB before running migrations | DB / Migrations | — |
+| [#516](https://github.com/Leon-87-7/ownix/issues/516) | CI dry-run of migrations against a sanitized prod snapshot | CI / Migrations | — |
+| [#517](https://github.com/Leon-87-7/ownix/issues/517) | DB restore script + ops-runbook backup/rollback section | DB / Ops | #515 |
+| [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | #515 |
+| [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | #515 |
+| [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | #516 |
 
 ---
 
@@ -589,6 +595,16 @@ Note: #485/#486/#487 are drawn under #484 as *content*, not as blockers — the 
 #506 Telegram /checklists command delivery (root, unblocked — thin adapter over the already-shipped shared checklists_command core)
 Critical path: #505 → {#507, #508}; #506 fully parallel
 Note: the shared checklists_command core (SHARED_COMMANDS handler, DB columns, Gemini prompt/schema, run_checklists) already shipped directly on branch worktree-checklists-command (plan Tasks 1-5) — these four issues cover only the remaining Telegram and dashboard delivery surfaces.
+
+DB migration safety (docs/plans/2026-08-12-database-migration-strategy-audit.md — spec-to-kanban 2026-08-12; ADR-0001)
+#515 Auto-snapshot the DB before running migrations (root, unblocked — the pre-migration rollback artifact)
+├── #517 Restore script + ops-runbook backup/rollback section ◄── #515
+├── #518 Startup guard — auto-restore + clean abort on failed migration ◄── #515
+└── #519 Migration-authoring conventions — rollback note + deprecate-then-drop ◄── #515
+#516 CI dry-run of migrations against a sanitized prod snapshot (root, unblocked)
+└── #520 Dedicated staging tier + gated two-stage deploy ◄── #516
+Critical path: #515 → {#517, #518, #519}; #516 → #520
+Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/rollback + test-rehearsal safety, not a Postgres migration. #520 (staging tier) carries an owner deploy-cadence decision as its first acceptance gate.
 ```
 
 ---
