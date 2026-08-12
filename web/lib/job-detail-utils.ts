@@ -50,6 +50,11 @@ export function buildJobHref(
   return { pathname: `/jobs/${id}`, query: jobScopeQuery(scope) }
 }
 
+/** Guards against `javascript:`/`data:` etc. before a raw URL is used as an href. */
+export function isSafeHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
 export interface JobLink {
   url: string
   label?: string | null

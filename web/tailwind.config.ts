@@ -18,8 +18,8 @@ const config: Config = {
           DEFAULT: '#30343d',
           strong: '#343a44',
         },
-        ink: '#f4f1eb',
-        body: '#c6c1b8',
+        ink: '#e6e6e6',
+        body: '#b8b8b8',
         muted: '#948e84',
         signal: {
           DEFAULT: '#d99a45',

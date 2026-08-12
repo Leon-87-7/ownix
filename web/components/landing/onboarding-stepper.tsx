@@ -4,7 +4,12 @@ import { Fragment, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { Shapes, Fingerprint, BookOpenCheck } from 'lucide-react';
+import {
+  Shapes,
+  Fingerprint,
+  BookOpenCheck,
+  ArrowDown,
+} from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -128,7 +133,16 @@ export function OnboardingStepper() {
           // stale the moment any step's copy or the CTA changes height.
           gsap.set(stage.current, { display: 'grid' });
           gsap.set(steps, { gridArea: '1 / 1' });
-          gsap.set(steps.slice(1), { opacity: 0, y: 28 });
+          // pointerEvents travels with opacity: the grid-stack overlaps every
+          // step in the same cell, and later-DOM steps paint on top of earlier
+          // ones regardless of opacity, so an un-reached step's invisible hit
+          // area would otherwise swallow clicks meant for the step underneath
+          // it (e.g. the collect step's "more ways to add" link).
+          gsap.set(steps.slice(1), {
+            opacity: 0,
+            y: 28,
+            pointerEvents: 'none',
+          });
           gsap.set(fills.slice(1), { scaleX: 0 });
 
           // autoAlpha (opacity + visibility) is deliberate HERE, and is exactly
@@ -171,6 +185,7 @@ export function OnboardingStepper() {
               y: -28,
               duration: 0.35,
               ease: 'power2.in',
+              pointerEvents: 'none',
             })
               // The rail fill spans the whole hand-off so progress stays legible
               // during the gap when neither step is visible.
@@ -184,6 +199,7 @@ export function OnboardingStepper() {
                 y: 0,
                 duration: 0.35,
                 ease: 'power2.out',
+                pointerEvents: 'auto',
               })
               .addLabel(STEPS[i].id);
           }
@@ -246,6 +262,7 @@ export function OnboardingStepper() {
       >
         {STEPS.map((step, i) => {
           const Icon = step.icon;
+          const isFirst = i === 0;
           const isLast = i === STEPS.length - 1;
           return (
             <article
@@ -299,6 +316,25 @@ export function OnboardingStepper() {
               <p className="mt-4 font-mono text-xs text-muted">
                 {step.meta}
               </p>
+
+              {/* Wayfinding, not a second CTA: points at #capture, the
+                  section that already covers share sheet / dashboard intake /
+                  extension in full, rather than duplicating those three
+                  channels inside this card. Plain text link deliberately
+                  undersells itself next to "Get an invite" below - it's an
+                  optional detour, not the ask. */}
+              {isFirst && (
+                <a
+                  href="#capture"
+                  className="inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
+                >
+                  More ways to add
+                  <ArrowDown
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5"
+                  />
+                </a>
+              )}
 
               {/* The pinned section is the most engaged a visitor gets, and
                   without an exit it dead-ends into #showcase with the hero CTA

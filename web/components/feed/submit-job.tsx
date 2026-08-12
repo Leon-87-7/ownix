@@ -782,7 +782,7 @@ export function SubmitJobProvider({
                       setIntakeOpen(false),
                     )
                   }
-                  className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.98] motion-reduce:active:scale-100"
+                  className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] motion-reduce:active:scale-100"
                 >
                   <Icon
                     className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"

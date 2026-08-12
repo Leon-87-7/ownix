@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { STEPS } from './onboarding-stepper';
 import { WordmarkMarquee } from './wordmark-marquee';
 
@@ -137,6 +137,18 @@ export function MobileOnboardingStepper() {
                   <p className="mt-4 font-mono text-xs text-muted">
                     {item.meta}
                   </p>
+                  {index === 0 && (
+                    <a
+                      href="#capture"
+                      className="mt-3 inline-flex items-center gap-1 text-sm text-muted transition-ui hover:text-body hover:underline"
+                    >
+                      More ways to add
+                      <ArrowDown
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5"
+                      />
+                    </a>
+                  )}
                 </article>
               );
             })}
@@ -149,7 +161,7 @@ export function MobileOnboardingStepper() {
                 setActiveIndex((index) => Math.max(0, index - 1))
               }
               disabled={isFirst}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
             >
               <ArrowLeft
                 aria-hidden="true"
@@ -158,7 +170,7 @@ export function MobileOnboardingStepper() {
               Back
             </button>
             {/* `group` so the press drives the arrow as well as the plate: the
-                button sinks 2% and the arrow travels 4px in the direction it
+                button sinks 4% and the arrow travels 4px in the direction it
                 points. Transform-only, and neutralised under motion-reduce. */}
             <button
               type="button"
@@ -169,7 +181,7 @@ export function MobileOnboardingStepper() {
                     : Math.min(STEPS.length - 1, index + 1),
                 )
               }
-              className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-signal px-4 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep active:scale-[0.98] motion-reduce:active:scale-100"
+              className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-signal px-4 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep active:scale-[0.96] motion-reduce:active:scale-100"
             >
               {isLast ? 'Review again' : 'Next'}
               <ArrowRight
