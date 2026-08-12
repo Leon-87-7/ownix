@@ -90,6 +90,13 @@ class TestForceCommand:
 
         assert resp.kind == "job_created"
         assert resp.job_id is not None
+        assert resp.tag_outcome == {
+            "attached": ["Read Later"],
+            "unknown": [],
+            "ambiguous": [],
+            "invalid": [],
+            "failed": [],
+        }
         tags = asyncio.run(db.list_job_tags(resp.job_id))
         assert [tag["name"] for tag in tags] == ["Read Later"]
 
