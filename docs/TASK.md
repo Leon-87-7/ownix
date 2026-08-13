@@ -26,7 +26,7 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - make all detail job pages titles editable
 
-- make the long-pipeline to have it's transcript segment, also Tekegram's "✨ Run Gemini" should be above the the checklists segment in the dashboard. it should be a btn that when clicked upon the recipes slide in-view.
+- custom recipes ("Your recipes" on the Prompts page) aren't wired into template selection anywhere — `enrichment.py` and `_resolve_job_template` (`src/api/jobs.py:173`) only check the hardcoded `PROMPT_TEMPLATES` dict, so a custom recipe can be created and edited but never actually run (discovered while grilling task 35)
 
 - ***
 
@@ -1385,3 +1385,88 @@ makes — worth its own Inbox entry.
 - Does `GENERIC_ROOTS` (`validators.py:226`) need the new hosts? It filters
   social links out of YouTube descriptions — `twitch.tv`/`vimeo.com` appearing
   there is plausible.
+
+## 35. Long-pipeline transcript segment + dashboard "Run Gemini" recipe picker
+
+> **Grilled 2026-08-14** — all open questions resolved below. Written up as
+> **ADR-0050**; `CONTEXT.md`'s **Template picker keyboard** entry updated to
+> cross-reference the dashboard mirror.
+
+> **Grounded:** 2026-08-14
+
+`ENRICHMENT_FIELDS` (`web/lib/job-detail-utils.ts:14`, the field list rendered for
+`long`/`article`/`repo` job details) has no transcript row, even though
+`long_video.py` populates `jobs.transcript` exactly like the short pipeline does
+(`database.update_job_status(job_id, "transcript_done", transcript=transcript, ...)`,
+`long_video.py:121-124`) — only `SHORT_FIELDS` renders it. Telegram's "✨ Run Gemini"
+gate (ADR-0012's enrichment confirmation gate + template picker keyboard) has no
+dashboard equivalent: `POST /api/jobs` only creates new jobs, and nothing triggers
+enrichment on an *existing* job from the web. The gate is structurally long-pipeline-only
+already — `short_video.py` never sets `status='transcript_done'` (it jumps
+`processing → done`, auto-enriching inline), so short/article/repo jobs never reach the
+state Run Gemini requires.
+
+**Wanted:** long-pipeline job detail pages show their transcript the way short-pipeline
+pages already do, and gain a dashboard-native "Run Gemini" trigger — mirroring
+Telegram's flow — that reveals a recipe picker (the five built-in templates + Freestyle)
+and enqueues enrichment on the existing job.
+
+**Backend**
+
+- Add `transcript` to `ENRICHMENT_FIELDS` (`web/lib/job-detail-utils.ts:14`), positioned
+  first (mirrors short's "primary content first" convention). Safe as a shared list:
+  neither `article.py` nor `github.py` ever write `jobs.transcript`, so `presentFields`'
+  empty-value filter means it silently never renders for those content types — only
+  `long` jobs populate it.
+- New `POST /api/jobs/{job_id}/enrich` (`src/api/jobs.py`) — **reuse, don't fork**:
+  ownership via `get_owned_job`, gate on `content_type == 'long'` and
+  `status == 'transcript_done'`, validate `{template, freestyle_prompt}` via the
+  existing `_resolve_job_template` (`jobs.py:173`, already used by `POST /api/jobs`),
+  write `jobs.template` via `database.update_job_fields`, then
+  `queue.enqueue({"task": "enrichment", "job_id": job_id})` — the exact envelope
+  `_cb_template_pick` already uses (`webhook.py:281`). No changes to `enrichment.py`
+  itself. See **ADR-0050** for why this is queued rather than called synchronously
+  the way `POST /api/jobs/{id}/checklists` calls `run_checklists()`.
+- Recipe options: the same 5 built-ins + Freestyle Telegram offers (`_cb_gemini_yes`,
+  `webhook.py:219-260`) — **not** the full `/api/templates` list. Confirmed in grill:
+  custom recipes ("Your recipes" on the Prompts page, `is_builtin=false`) are pure CRUD
+  today — nothing in `enrichment.py` or `_resolve_job_template` ever looks a job's
+  `template` up against the DB `templates` table; both only check the hardcoded
+  `PROMPT_TEMPLATES` dict and silently fall back to `summary` for anything else.
+  Showing custom recipes here would be misleading — flagged as its own Inbox idea.
+- `useJobDetail`/`useFetchDetail` (`web/lib/fetch-utils.ts:129`) gains a `reload()` —
+  it currently only refetches on `jobId` change. Small, reusable addition beyond this
+  feature.
+
+**UI**
+
+- "Run Gemini" button renders above `ChecklistsSection` (`page.tsx`), gated identically
+  to the new endpoint (`content_type === 'long' && status === 'transcript_done'`) — a
+  **one-time gate** matching Telegram exactly, not a repeatable "regenerate" control
+  like Checklists. Plain-text label ("Run Gemini"), no emoji — matches Checklists' own
+  button copy, not Telegram's emoji-laden keyboard.
+- Recipe picker ("recipes panel"): **responsive split**.
+  - Mobile: inline accordion reveal directly under the button, in the page flow
+    (`max-h-0` → `max-h-[Npx]` + opacity transition, `motion-reduce:transition-none`) —
+    pushes Checklists down when open.
+  - Desktop: off-canvas panel sliding in from the viewport edge, mirroring
+    `sidebar.tsx`'s only existing slide-in precedent (`translate-x-full` →
+    `translate-x-0`), showing each recipe's description (`GET /api/templates`, reuse
+    `useTemplateList`, filtered to `is_builtin === true`) so the user has enough context
+    to choose — the info Telegram's flat keyboard never shows.
+  - Five recipes are one-tap-commit (mirrors Telegram); Freestyle reveals a textarea +
+    separate submit (reuses `SubmitUrlForm`'s existing `freestylePrompt` pattern,
+    `web/components/feed/submit-job.tsx`), since Telegram itself treats Freestyle
+    differently (arms `awaiting_freestyle` rather than immediate-enqueue).
+  - On successful POST, optimistically `setData({ ...job, status: 'enriching' })` (via
+    `useFetchDetail`'s existing `setData`) — this immediately hides the button/panel
+    (gated on `status === 'transcript_done'`) and, for free, satisfies the polling
+    condition below. Prevents double-submit without a separate disabled/loading flag.
+  - Poll while `status === 'enriching'`: reuse `startPolling` (`web/lib/polling.ts`)
+    exactly as Feed's `useInFlightPolling` does, calling the new `reload()`. Once a poll
+    lands with `status !== 'enriching'`, the real enrichment fields render via the
+    existing `presentFields` list — no separate "result" UI needed.
+  - Whole feature gated behind `!restricted`, matching every other mutating action
+    already on this page (Checklists, delete).
+
+**Open questions:** none — fully resolved in grill.

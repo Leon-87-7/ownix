@@ -5,11 +5,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { GhostButton } from '../ui/ghost-button';
-import {
-  Shapes,
-  Fingerprint,
-  BookOpenCheck,
-} from 'lucide-react';
+import { Shapes, Fingerprint, BookOpenCheck } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -373,7 +369,7 @@ export function OnboardingStepper() {
                     href="#invite"
                     className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                   >
-                    Get started
+                    Get an invit
                   </GhostButton>
                 </div>
               )}

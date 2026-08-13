@@ -15,6 +15,7 @@ import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
 import { ChromeIcon } from '@/components/svg/chrome-icon';
+import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { PuzzlePieceIcon } from '@/components/svg/puzzle-piece';
 import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
 import { DesktopIcon } from '@/components/svg/desktop';
@@ -22,7 +23,7 @@ import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 import { GhostButton } from '@/components/ui/ghost-button';
 import PreviewMotif from '@/components/ui/preview-motif';
 
-import { Brain, ChevronsRight, Inbox, Share } from 'lucide-react';
+import { Brain, ChevronsRight, Inbox, ListChecks, Share } from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -154,7 +155,7 @@ export default async function LandingPage() {
                     href="#invite"
                     className={`${btnSignal} w-full`}
                   >
-                    Get started
+                    Get an invit
                   </a>
                 </div>
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
@@ -376,6 +377,137 @@ export default async function LandingPage() {
         </section>
 
         <section
+          aria-labelledby="showcase-checklists"
+          className="border-t border-line py-16"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="showcase-checklists"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              Every video becomes a checklist you can run.
+            </h2>
+
+            <div className="mb-8 max-w-[62ch] text-prose leading-relaxed">
+              <h3 className="mb-2 text-title font-semibold text-ink">
+                The Checklists button
+              </h3>
+              <p className="text-pretty mb-4">
+                A reel about migrating an AI-built database schema.
+                I hit Run Checklists on the job page, and the
+                transcript turned into three checks - zero-downtime
+                migrations, a rollback plan, a staging mirror - to
+                run against my own project before I touched a live
+                table.
+              </p>
+              <p className="flex items-center gap-2 font-mono text-xs text-muted">
+                <Image
+                  src={leonAvatar}
+                  alt=""
+                  sizes="40px"
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+                A real workflow from Leon, building Ownix
+              </p>
+            </div>
+
+            <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+              <div
+                role="group"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
+                aria-label="The job page, ready to run checklists"
+              >
+                <InstagramIcon
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-line bg-canvas p-1.5 shadow-md"
+                />
+
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
+                    instagram.com/reel/DbyDJomAkQv
+                  </span>
+                  <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-[0.4px] text-status-done">
+                    DONE
+                  </span>
+                </div>
+                <div className="max-h-[280px] overflow-hidden p-4 [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                  <h4 className="mb-2 text-sm font-semibold leading-snug text-ink">
+                    Database Migrations for AI-Generated Schemas
+                  </h4>
+                  <p className="mb-4 text-xs leading-relaxed text-body">
+                    Your AI built your database, but it never
+                    planned for the day you have to change it
+                    completely - add a field, rename a column,
+                    restructure how two tables relate.
+                  </p>
+                  <span
+                    aria-hidden="true"
+                    className={btnSignal}
+                  >
+                    Run Checklists
+                  </span>
+                </div>
+              </div>
+
+              <ChevronsRight
+                aria-hidden="true"
+                className="mx-auto rotate-90 text-muted md:rotate-0"
+              />
+
+              <div
+                role="group"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
+                aria-label="The checklist Ownix generated from the transcript"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-canvas shadow-md"
+                >
+                  <ListChecks className="h-5 w-5 text-signal" />
+                </span>
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
+                    checklist_db-migrations.md
+                  </span>
+                </div>
+                <pre className="max-h-[280px] overflow-hidden whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-body [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                  <span className="text-muted">
+                    ## Zero-downtime database migrations
+                  </span>
+                  {'\n\n'}
+                  check whether the current project already has
+                  {'\n'}
+                  zero-downtime migration scripts that add new{'\n'}
+                  structures before removing old ones, copy data,
+                  {'\n'}
+                  switch application usage, and drop old structures
+                  {'\n'}
+                  only after confirmation, present a report...
+                  {'\n\n'}
+                  <span className="text-muted">
+                    ## Database migration rollback plans
+                  </span>
+                  {'\n\n'}
+                  check whether the current project has a defined
+                  {'\n'}
+                  rollback plan or script prepared for every{'\n'}
+                  migration before it starts, present a report...
+                </pre>
+              </div>
+            </div>
+
+            <p className="text-pretty mt-6 max-w-[58ch] text-prose leading-relaxed">
+              This one became six real GitHub issues in this exact
+              codebase - a pre-migration snapshot, a restore script, a
+              startup guard, a CI dry-run against a sanitized prod
+              copy. Each checklist item is phrased as an instruction,
+              not a reminder - paste it into your agent and it audits
+              the actual codebase, not just your memory of the video.
+            </p>
+          </div>
+        </section>
+
+        <section
           aria-labelledby="features"
           className="border-t border-line py-16"
         >
@@ -389,7 +521,7 @@ export default async function LandingPage() {
                   id="features"
                   className="text-pretty mb-3 max-w-[16ch] text-[clamp(1.5rem,4vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
                 >
-                  Reverse the feed, Own it.
+                  Never lose it again.
                 </h2>
                 <p className="text-pretty max-w-[52ch] text-prose leading-relaxed text-body">
                   Reels, long videos, articles, repos, screenshots -
@@ -448,8 +580,11 @@ export default async function LandingPage() {
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Collections for when &quot;search later&quot;
-                    stops working. Recipes for when you keep
-                    re-running the same freestyle prompt.
+                    stops working and you need a space to group
+                    content in.
+                    <br />
+                    Prompt templates are stored in Recipes for when
+                    you keep re-running the same freestyle prompt.
                   </p>
                 </div>
               </div>
