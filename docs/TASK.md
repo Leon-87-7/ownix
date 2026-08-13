@@ -89,7 +89,7 @@ and `/freestyle`).
 
 ## 5. Reconcile the export-isolation PRs (#207, #208) before building on them ✅ DONE
 
-## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423
+## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423 - ✅DONE
 
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306 - ✅DONE
 
@@ -966,7 +966,7 @@ as web interactions.
 - Real-time parity: does the web flow need live status push (the bot edits its
   message as the job progresses), or is Feed's existing polling enough?
 
-## 29. Streamline new-user signup — pending is a preview, not a wall ✅ ISSUED TO GITHUB #449 #450 #451 #452
+## 29. Streamline new-user signup — pending is a preview, not a wall ✅ ISSUED TO GITHUB #449 #450 #451 #452 - ✅DONE
 
 ## 30. Link-level tags in the Links table + mobile color-badge redesign ✅ ISSUED TO GITHUB #382 #383 #386 #387 - ✅DONE
 

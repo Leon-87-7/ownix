@@ -101,6 +101,10 @@ Ordered by unblocked-first, then dependency chain.
 | [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | #515 |
 | [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | #515 |
 | [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | #516 |
+| [#523](https://github.com/Leon-87-7/ownix/issues/523) | Route document URLs through shared intake | — | — |
+| [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | #523 |
+| [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | #524 |
+| [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | #525 |
 
 ---
 
@@ -615,6 +619,13 @@ DB migration safety (docs/plans/2026-08-12-database-migration-strategy-audit.md 
 └── #520 Dedicated staging tier + gated two-stage deploy ◄── #516
 Critical path: #515 → {#517, #518, #519}; #516 → #520
 Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/rollback + test-rehearsal safety, not a Postgres migration. #520 (staging tier) carries an owner deploy-cadence decision as its first acceptance gate.
+
+Extension capture commands (source: extension routing grill, 2026-08-13)
+#523 Shared document-URL routing (root, unblocked)
+└── #524 Explicit Article / Link / Document fallback intents
+    └── #525 Background extension capture shortcuts
+        └── #526 Popup shortcut discovery
+Critical path: #523 → #524 → #525 → #526
 ```
 
 ---
@@ -631,5 +642,5 @@ Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/r
 | --: | ----- | ----------- | ------------ | ------ |
 | [#510](https://github.com/Leon-87-7/ownix/pull/510) | feat(telegram): show checklist generation feedback | codex/checklists-telegram-feedback→main | — | ✅ Merged |
 | [#509](https://github.com/Leon-87-7/ownix/pull/509) | feat(checklists): /checklists command delivery (Telegram, dashboard, job detail) | worktree-checklists-command→main | #505–#508 | ✅ Merged |
-| [#504](https://github.com/Leon-87-7/ownix/pull/504) | feat(web): rework landing page capture section and copy | claude/landing-page-copy-and-icons→main | — | ✅ Merged |
-| [#503](https://github.com/Leon-87-7/ownix/pull/503) | spike: route non-PDF documents through anydoc, keep PDF on liteparse | claude/anydoc-docs-parser-eval-jii4ro→main | — | ✅ Merged |
+| [#521](https://github.com/Leon-87-7/ownix/pull/521) | feat(tags): canonical tag tokens and Telegram tagged intake (#511-514) | fix/tag-token-routing-511-514→main | — | ✅ Merged |
+| [#522](https://github.com/Leon-87-7/ownix/pull/522) | feat(ui): CSS clip-path segmented tabs, prototype skill docs, formatting | feat/segmented-tabs-clip-path-and-prototype-docs→main | — | ✅ Merged |
