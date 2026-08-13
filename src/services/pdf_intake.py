@@ -59,7 +59,7 @@ async def assert_public_host(host: str | None) -> None:
         raise HTTPException(status_code=422, detail={"field": "url", "message": "URL host is not allowed"})
 
 
-async def fetch_remote_document(url: str) -> tuple[bytes, str, str]:
+async def fetch_remote_document(url: str, *, require_document_path: bool = True) -> tuple[bytes, str, str]:
     """Validate, SSRF-check, and stream-fetch a remote document.
 
     Returns (data, filename, canonical_ext). The URL extension only gates *which
@@ -68,7 +68,7 @@ async def fetch_remote_document(url: str) -> tuple[bytes, str, str]:
     """
     url = url.strip()
     parsed = urlparse(url)
-    if parsed.scheme != "https" or _ext_from_name(parsed.path) not in SUPPORTED_EXTS:
+    if parsed.scheme != "https" or (require_document_path and _ext_from_name(parsed.path) not in SUPPORTED_EXTS):
         raise HTTPException(status_code=400, detail={"field": "url", "message": _UNSUPPORTED_URL_MSG})
     await assert_public_host(parsed.hostname)
     try:

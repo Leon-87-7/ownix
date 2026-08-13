@@ -24,7 +24,10 @@ export interface IntakeResponseShape {
 export interface IntakePayload {
   url?: string;
   text?: string;
+  intent?: ProcessingIntent;
 }
+
+export type ProcessingIntent = 'automatic' | 'article' | 'link' | 'document';
 
 const HOST_STORAGE_KEY = 'ownixHost';
 
@@ -46,10 +49,10 @@ export async function setOwnixHost(host: string): Promise<void> {
 }
 
 /** URL wins over text — a URL capture (page/link) is always what the user meant to send. */
-export function buildIntakePayload(input: { url?: string; text?: string }): IntakePayload {
+export function buildIntakePayload(input: { url?: string; text?: string; intent?: ProcessingIntent }): IntakePayload {
   const url = input.url?.trim();
   const text = input.text?.trim();
-  if (url) return { url };
+  if (url) return input.intent ? { url, intent: input.intent } : { url };
   if (text) return { text };
   throw new Error('Nothing to send — no URL or text.');
 }

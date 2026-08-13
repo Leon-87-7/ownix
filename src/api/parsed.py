@@ -14,13 +14,16 @@ from src import database
 from src.api.deps import get_owned_job
 from src.intake import mime_sniff
 from src.processors import document as document_processor
-from src.services import parse, storage
+from src.services import storage
+from src.services.document_intake import (
+    DocumentIntakeError,
+    create_document_job as _shared_create_document_job,
+    create_remote_document_job,
+)
 from src.services.parse import ParseError
 from src.services.pdf_intake import (
     MAX_DOC_BYTES,
-    fetch_remote_document,
     read_capped_body,
-    validate_document,
 )
 from src.services.jobs import create_and_enqueue_job
 from src.telegram.sender import send_document
@@ -62,26 +65,14 @@ async def _create_document_job(
     filename: str,
     ext: str | None = None,
 ) -> dict:
-    ext = ext or validate_document(data, filename)  # canonical source ext, or 400
-    source_ext = parse._ext_from_name(filename)
-    if source_ext not in parse.SUPPORTED_EXTS:
-        source_ext = ext
-    sha = _sha(data)
-    key = storage.object_key("documents", sha, source_ext)
-    await storage.upload(key, data, parse.content_type_for(source_ext))
-    job = await create_and_enqueue_job(chat_id=chat_id, url=key, content_type="document")
-    job_id = job["id"]
-    # Dashboard uploads default to NOT delivering to Telegram (user opts in via
-    # the per-job toggle). Bot-submitted jobs keep the DB default ('on') so the
-    # existing Telegram flow is unchanged.
-    if not job.get("_deduped"):
-        await database.set_job_telegram_delivery(job_id, "off")
-    return {
-        "job_id": job_id,
-        "sha256": sha,
-        "gcs_key": key,
-        "status": job.get("status", "pending"),
-    }
+    return await _shared_create_document_job(
+        chat_id,
+        data,
+        filename,
+        ext,
+        job_creator=create_and_enqueue_job,
+        delivery_setter=database.set_job_telegram_delivery,
+    )
 
 
 async def _ocr_image_response(chat_id: int, data: bytes, content_type: str) -> dict:
@@ -131,8 +122,10 @@ class UrlIn(BaseModel):
 
 @parsed_router.post("/url", status_code=201)
 async def upload_url(body: UrlIn, request: Request) -> dict:
-    data, filename, ext = await fetch_remote_document(body.url)
-    return await _create_document_job(request.state.user["id"], data, filename, ext)
+    try:
+        return await create_remote_document_job(request.state.user["id"], body.url)
+    except DocumentIntakeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 class FreestyleIn(BaseModel):

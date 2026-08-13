@@ -63,6 +63,7 @@ async def create_and_enqueue_job(
     skip_cache: bool = False,
     task: str | None = None,
     task_payload: dict[str, Any] | None = None,
+    dedup_url: str | None = None,
 ) -> dict[str, Any]:
     """Create and enqueue a job, or return a recent matching job.
 
@@ -74,7 +75,7 @@ async def create_and_enqueue_job(
     # URL-only job would silently ignore the requested analysis. Callers
     # with template intent the arguments can't express set skip_cache.
     if not skip_cache and template is None and freestyle_prompt is None:
-        cached = await database.find_recent_job_by_url(chat_id, url)
+        cached = await database.find_recent_job_by_url(chat_id, dedup_url or url)
         if cached:
             log.info(
                 "job_create_dedup_hit", chat_id=chat_id, job_id=cached["id"], url=url
@@ -85,6 +86,7 @@ async def create_and_enqueue_job(
         chat_id=chat_id,
         url=url,
         content_type=content_type,
+        source_url=dedup_url,
         message_id=message_id,
         template=template,
         freestyle_prompt=freestyle_prompt,

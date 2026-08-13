@@ -3,6 +3,7 @@
 import { ArrowBigUp, Command } from 'lucide-react';
 import { useSubmitJob } from '@/components/feed/submit-job';
 import { Tooltip } from '@/components/ui/tooltip';
+import { GhostButton } from '@/components/ui/ghost-button';
 import Link from 'next/link';
 
 import { useRestrictedMode } from '@/lib/restricted/context';
@@ -40,12 +41,13 @@ export function AppHeader() {
               <span className="font-semibold text-signal">
                 Restricted mode on
               </span>
-              <Link
+              <GhostButton
+                as={Link}
                 href="/login?from=restricted"
-                className="rounded border border-line border-b-2 border-b-contrasignal-deep bg-raised px-2 py-1 text-xs font-medium text-ink hover:bg-surface hover:text-ink/80"
+                className="bg-raised px-2 py-1 text-xs font-medium text-ink hover:bg-surface hover:text-ink/80"
               >
                 Get access
-              </Link>
+              </GhostButton>
             </div>
             <p className="text-xs text-body">
               Now viewing a read-only sample of Leon&apos;s Index
@@ -78,13 +80,14 @@ export function AppHeader() {
           content="Open command launcher Ctrl+Shift+K"
           side="bottom"
         >
-          <button
+          <GhostButton
             type="button"
+            accent="signal"
             onClick={openCommand}
             aria-label="Open command launcher"
             aria-haspopup="dialog"
             aria-keyshortcuts="Meta+Shift+K Control+Shift+K"
-            className="ml-auto hidden h-9 items-center gap-2 rounded-md border border-line border-b-2 border-b-signal bg-surface px-3 text-sm font-medium text-body transition-ui hover:text-ink active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:inline-flex motion-reduce:active:scale-100"
+            className="ml-auto hidden h-9 gap-2 bg-surface px-3 text-sm font-medium text-body hover:text-ink focus-visible:ring-offset-canvas sm:inline-flex"
           >
             <span>Commands</span>
             <kbd className="ml-2 inline-flex items-center gap-1 rounded border border-line bg-canvas px-1.5 py-1 font-mono text-contrasignal-deep hover:text-contrasignal-bright">
@@ -98,7 +101,7 @@ export function AppHeader() {
               />
               <span className="inline-flex leading-none">K</span>
             </kbd>
-          </button>
+          </GhostButton>
         </Tooltip>
       </div>
     </header>

@@ -12,6 +12,7 @@ import {
 import type { FormEvent, ReactNode } from 'react';
 import { SubmitUrlForm } from '@/components/feed/submit-url-form';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { GhostButton } from '@/components/ui/ghost-button';
 import {
   FileCode2,
   Link2,
@@ -739,13 +740,14 @@ export function SubmitJobProvider({
                 ))}
               </ul>
             )}
-            <button
+            <GhostButton
               type="submit"
+              accent="signal"
               disabled={addLinkSubmitting || addLinkTokenCount === 0}
-              className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-9 bg-canvas px-3 text-sm font-medium text-signal"
             >
               {addLinkButtonLabel}
-            </button>
+            </GhostButton>
           </form>
         </DialogContent>
       </Dialog>

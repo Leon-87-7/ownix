@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { buildIntakePayload, getOwnixHost, sendToOwnix, setOwnixHost } from '../src/api';
+import { buildIntakePayload, getOwnixHost, sendToOwnix, setOwnixHost } from '../src/api.ts';
 
 function fakeChromeStorage(initial: Record<string, unknown> = {}) {
   const store = { ...initial };
@@ -52,6 +52,13 @@ describe('getOwnixHost / setOwnixHost', () => {
     vi.stubGlobal('chrome', fakeChromeStorage());
     await setOwnixHost('https://app.leondev.xyz/settings');
     expect(await getOwnixHost()).toBe('https://app.leondev.xyz');
+  });
+
+  it('includes an explicit processing intent for command captures', () => {
+    expect(buildIntakePayload({
+      url: 'https://example.com',
+      intent: 'document',
+    })).toEqual({ url: 'https://example.com', intent: 'document' });
   });
 
   it('rejects anything outside the Ownix host allowlist instead of storing it', async () => {

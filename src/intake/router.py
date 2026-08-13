@@ -13,6 +13,8 @@ migration is Phase 9, deferred), so every routing decision below keys off
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from src import database
 from src.intake import commands, idempotency, responses, tag_tokens
 from src.intake.models import SCHEMA_VERSION, IntakeAction, IntakeMessage, IntakeResponse
@@ -88,9 +90,27 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
         return responses.unsupported("Send a URL, a command, or upload a file.")
 
     pipeline = detect_pipeline(candidate, frozenset(await database.list_allowed_domains(chat_id)))
-    if pipeline in {"rejected", "document"}:
-        # "document" (.pdf) is a file-shaped pipeline routed via the upload
-        # endpoint, not a plain URL/text submit.
+    if pipeline == "document":
+        return await _create_remote_document(chat_id, candidate)
+    if pipeline == "rejected" and msg.intent == "article":
+        parsed_candidate = urlparse(candidate)
+        hostname = (parsed_candidate.hostname or "").lower()
+        if parsed_candidate.scheme not in {"http", "https"} or not hostname:
+            return responses.unsupported("Article capture needs a valid HTTP(S) URL.")
+        # Consent is deliberately durable even when job creation/enqueue fails.
+        await database.add_allowed_domain(chat_id, hostname)
+        pipeline = "article"
+    elif pipeline == "rejected" and msg.intent == "link":
+        parsed_candidate = urlparse(candidate)
+        if (
+            parsed_candidate.scheme not in {"http", "https"}
+            or not parsed_candidate.hostname
+        ):
+            return responses.unsupported("Link capture needs a valid HTTP(S) URL.")
+        pipeline = "link"
+    elif pipeline == "rejected" and msg.intent == "document":
+        return await _create_remote_document(chat_id, candidate, require_document_path=False)
+    elif pipeline == "rejected":
         return responses.unsupported(
             "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
             "Facebook/X video, allowlisted article domains, and GitHub repos."
@@ -102,6 +122,23 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
     if tag_names:
         result = await apply_tag_tokens(chat_id, job["id"], tag_names, result)
     return result
+
+
+async def _create_remote_document(
+    chat_id: int, url: str, *, require_document_path: bool = True
+) -> IntakeResponse:
+    from src.services.document_intake import DocumentIntakeError, create_remote_document_job
+
+    try:
+        job = await create_remote_document_job(
+            chat_id, url, require_document_path=require_document_path
+        )
+    except DocumentIntakeError as exc:
+        return responses.error(exc.public_message, retryable=exc.status_code >= 500)
+    return responses.job_created(
+        {"id": job["job_id"], "content_type": job.get("content_type", "document")},
+        deduped=bool(job.get("_deduped")),
+    )
 
 
 async def apply_tag_tokens(

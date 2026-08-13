@@ -103,6 +103,18 @@ async def test_fetch_remote_document_blocks_ssrf_before_network(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_extensionless_document_still_blocks_ssrf_before_network(monkeypatch):
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("127.0.0.1", 0))]
+    )
+    with pytest.raises(HTTPException) as exc:
+        await fetch_remote_document(
+            "https://internal.example/download", require_document_path=False
+        )
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_fetch_remote_document_accepts_office_url(monkeypatch, office_samples):
     # A .docx URL passes the extension gate and returns the content-sniffed ext.
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
@@ -134,6 +146,46 @@ async def test_fetch_remote_document_accepts_office_url(monkeypatch, office_samp
     assert data == docx
     assert filename == "report.docx"
     assert ext == "docx"
+
+
+@pytest.mark.asyncio
+async def test_explicit_document_accepts_extensionless_https(monkeypatch):
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
+
+    class FakeStreamResponse:
+        def raise_for_status(self):
+            pass
+
+        async def aiter_bytes(self):
+            yield b"%PDF-1.4 small"
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        @asynccontextmanager
+        async def stream(self, method, url):
+            yield FakeStreamResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    data, filename, ext = await fetch_remote_document(
+        "https://example.com/download", require_document_path=False
+    )
+
+    assert data == b"%PDF-1.4 small"
+    assert filename == "download"
+    assert ext == "pdf"
 
 
 @pytest.mark.asyncio

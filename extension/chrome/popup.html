@@ -11,6 +11,11 @@
         background: #16181c;
         color: #f4f1eb;
       }
+      h2 { font-size: 13px; margin: 16px 0 8px; font-weight: 600; }
+      ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid #30343d; }
+      li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid #30343d; font-size: 12px; color: #c6c1b8; }
+      kbd { font-family: ui-monospace, monospace; color: #f4f1eb; }
+      #shortcut-help { font-size: 11px; color: #948e84; }
       p {
         font-size: 13px;
         color: #c6c1b8;
@@ -31,6 +36,10 @@
         opacity: 0.5;
         cursor: default;
       }
+      button:focus-visible, a:focus-visible {
+        outline: 2px solid #d99a45;
+        outline-offset: 2px;
+      }
       #status {
         margin-top: 8px;
         font-size: 13px;
@@ -49,6 +58,11 @@
       Send to Ownix
     </button>
     <div id="status"></div>
+    <section aria-labelledby="shortcuts-heading">
+      <h2 id="shortcuts-heading">Capture shortcuts</h2>
+      <ul id="shortcuts" aria-label="Ownix capture command shortcuts"></ul>
+      <p id="shortcut-help"></p>
+    </section>
     <script
       type="module"
       src="src/popup.js"

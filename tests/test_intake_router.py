@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -68,12 +69,139 @@ class TestUrlIntake:
         assert resp.job_id is None
         assert resp.retryable is False
 
-    def test_document_pdf_url_is_unsupported_for_plain_submit(
+    def test_document_pdf_url_uses_shared_document_intake(
         self, db, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _enqueue_noop(monkeypatch)
+        async def fake_create(chat_id, url, *, require_document_path=True):
+            assert (chat_id, url, require_document_path) == (
+                CHAT_ID, "https://example.com/file.pdf", True
+            )
+            return {"job_id": "document_abcd"}
+
+        monkeypatch.setattr("src.services.document_intake.create_remote_document_job", fake_create)
         resp = asyncio.run(router.handle(_msg(url="https://example.com/file.pdf")))
+        assert resp.kind == "job_created"
+        assert resp.job_id == "document_abcd"
+
+    def test_detected_pipeline_precedes_explicit_link_intent(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(
+            url="https://youtube.com/watch?v=precedence", intent="link"
+        )))
+        job = asyncio.run(db.get_job(resp.job_id))
+        assert job["content_type"] == "long"
+
+    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document"])
+    @pytest.mark.parametrize(
+        ("url", "expected_type", "allow_domain"),
+        [
+            ("https://youtube.com/watch?v=precedence", "long", None),
+            ("https://github.com/Leon-87-7/ownix", "repo", None),
+            ("https://news.example.com/story", "article", "news.example.com"),
+        ],
+    )
+    def test_every_detected_pipeline_precedes_every_fallback_intent(
+        self, db, monkeypatch, intent, url, expected_type, allow_domain
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        if allow_domain:
+            asyncio.run(db.add_allowed_domain(CHAT_ID, allow_domain))
+
+        resp = asyncio.run(router.handle(_msg(url=url, intent=intent)))
+
+        assert asyncio.run(db.get_job(resp.job_id))["content_type"] == expected_type
+
+    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document"])
+    def test_detected_document_precedes_every_fallback_intent(
+        self, db, monkeypatch, intent
+    ) -> None:
+        create = AsyncMock(return_value={
+            "job_id": "document_abcd",
+            "content_type": "document",
+            "_deduped": False,
+        })
+        monkeypatch.setattr(
+            "src.services.document_intake.create_remote_document_job", create
+        )
+
+        resp = asyncio.run(router.handle(_msg(
+            url="https://example.com/file.pdf", intent=intent
+        )))
+
+        assert resp.job_id == "document_abcd"
+        create.assert_awaited_once_with(
+            CHAT_ID, "https://example.com/file.pdf", require_document_path=True
+        )
+
+    def test_article_fallback_persists_exact_hostname(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(
+            url="https://News.Example.com/story", intent="article"
+        )))
+        assert resp.kind == "job_created"
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == {"news.example.com"}
+
+    def test_article_permission_survives_enqueue_failure(self, db, monkeypatch) -> None:
+        async def fail_enqueue(_payload: dict) -> None:
+            raise RuntimeError("queue unavailable")
+
+        monkeypatch.setattr("src.services.jobs.queue.enqueue", fail_enqueue)
+
+        with pytest.raises(RuntimeError, match="queue unavailable"):
+            asyncio.run(router.handle(_msg(
+                url="https://News.Example.com/story", intent="article"
+            )))
+
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == {"news.example.com"}
+
+    def test_automatic_rejection_has_no_side_effects(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+
+        resp = asyncio.run(router.handle(_msg(url="https://example.com/unsupported")))
+
         assert resp.kind == "unsupported"
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == set()
+        assert asyncio.run(db.find_recent_job_by_url(CHAT_ID, "https://example.com/unsupported")) is None
+
+    def test_link_fallback_creates_link_job(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(url="https://example.com/item", intent="link")))
+        assert asyncio.run(db.get_job(resp.job_id))["content_type"] == "link"
+
+    def test_link_fallback_rejects_url_without_hostname(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(url="https:missing-host", intent="link")))
+        assert resp.kind == "unsupported"
+        assert resp.job_id is None
+
+    def test_explicit_document_allows_extensionless_https(self, db, monkeypatch) -> None:
+        async def fake_create(chat_id, url, *, require_document_path=True):
+            assert require_document_path is False
+            return {"job_id": "document_1234"}
+        monkeypatch.setattr("src.services.document_intake.create_remote_document_job", fake_create)
+        resp = asyncio.run(router.handle(_msg(url="https://example.com/download", intent="document")))
+        assert resp.job_id == "document_1234"
+
+    @pytest.mark.parametrize(
+        ("first_intent", "second_intent"),
+        [("document", "link"), ("link", "document")],
+    )
+    def test_url_deduplication_is_authoritative_across_intents(
+        self, db, monkeypatch, first_intent, second_intent
+    ) -> None:
+        url = "https://example.com/download"
+        _enqueue_noop(monkeypatch)
+        monkeypatch.setattr(
+            "src.services.document_intake.fetch_remote_document",
+            AsyncMock(return_value=(b"%PDF-1.4 small", "document", "pdf")),
+        )
+        monkeypatch.setattr("src.services.document_intake.storage.upload", AsyncMock())
+
+        first = asyncio.run(router.handle(_msg(url=url, intent=first_intent)))
+        second = asyncio.run(router.handle(_msg(url=url, intent=second_intent)))
+
+        assert second.job_id == first.job_id
+        assert second.kind == "job_deduped"
 
 
 class TestCommandInput:

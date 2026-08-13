@@ -531,18 +531,12 @@ def _insert_thumbnail_job(job_id: str, chat_id: int) -> None:
 
 
 def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
-    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    jobs_client: TestClient,
 ) -> None:
     """ADR-0046: a job is a work record, its links are knowledge that outlives it.
 
     Deleting the job leaves `source_job` dangling as pure provenance.
     """
-    captured: list[dict] = []
-
-    async def fake_enqueue(task: dict) -> None:
-        captured.append(task)
-
-    monkeypatch.setattr(jobs.queue, "enqueue", fake_enqueue)
     _insert_thumbnail_job("pending-delete", chat_id=1)
 
     async def seed() -> None:
@@ -573,7 +567,8 @@ def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
         jobs.database._fetch_one("SELECT id FROM links WHERE source_job = ?", ("pending-delete",))
     )
     assert surviving is not None and surviving["id"] == "link-1"
-    assert captured == [
+    pending = asyncio.run(jobs.database.list_pending_purge_tasks())
+    assert [entry["task_payload"] for entry in pending] == [
         {
             "task": "job_purge",
             "job_id": "pending-delete",
@@ -586,10 +581,9 @@ def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
 
 
 def test_delete_job_with_links_flag_removes_them(
-    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    jobs_client: TestClient,
 ) -> None:
     """The old cascade survives as an opt-in — same SQL, opposite default."""
-    monkeypatch.setattr(jobs.queue, "enqueue", lambda _task: None)
     _insert_thumbnail_job("delete-with-links", chat_id=1)
 
     async def seed() -> None:
@@ -619,9 +613,8 @@ def test_delete_job_with_links_flag_removes_them(
 
 
 def test_delete_job_unknown_and_foreign_leave_rows_intact(
-    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    jobs_client: TestClient,
 ) -> None:
-    monkeypatch.setattr(jobs.queue, "enqueue", lambda _task: None)
     _insert_thumbnail_job("owned-by-a", chat_id=1)
     jobs_client.cookies.set("vig_session", jobs_client.session_b)
     assert jobs_client.delete("/api/jobs/owned-by-a").status_code == 403

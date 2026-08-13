@@ -4,11 +4,11 @@ import { Fragment, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
+import { GhostButton } from '../ui/ghost-button';
 import {
   Shapes,
   Fingerprint,
   BookOpenCheck,
-  ArrowDown,
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -105,6 +105,12 @@ export function OnboardingStepper() {
             root.current,
           );
           if (steps.length === 0) return;
+          const focusables = steps.map((step) =>
+            gsap.utils.toArray<HTMLElement>(
+              'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+              step,
+            ),
+          );
 
           // Pin the whole <section>, not just this component, so the section
           // heading ("Three taps. Nothing new to learn.") stays on screen with
@@ -142,6 +148,9 @@ export function OnboardingStepper() {
             opacity: 0,
             y: 28,
             pointerEvents: 'none',
+          });
+          gsap.set(focusables.slice(1).flat(), {
+            attr: { tabindex: -1 },
           });
           gsap.set(fills.slice(1), { scaleX: 0 });
 
@@ -187,6 +196,7 @@ export function OnboardingStepper() {
               ease: 'power2.in',
               pointerEvents: 'none',
             })
+              .set(focusables[i - 1], { attr: { tabindex: -1 } }, '<')
               // The rail fill spans the whole hand-off so progress stays legible
               // during the gap when neither step is visible.
               .to(
@@ -201,6 +211,7 @@ export function OnboardingStepper() {
                 ease: 'power2.out',
                 pointerEvents: 'auto',
               })
+              .set(focusables[i], { attr: { tabindex: 0 } }, '<')
               .addLabel(STEPS[i].id);
           }
 
@@ -324,16 +335,15 @@ export function OnboardingStepper() {
                   undersells itself next to "Get an invite" below - it's an
                   optional detour, not the ask. */}
               {isFirst && (
-                <a
+                <GhostButton
+                  as="a"
+                  accent="body"
+                  borderLine="1"
                   href="#capture"
-                  className="inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
+                  className="ownix-shimmer inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-1 border-b-ink bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                 >
-                  More ways to add
-                  <ArrowDown
-                    aria-hidden="true"
-                    className="h-3.5 w-3.5"
-                  />
-                </a>
+                  More ways to collect
+                </GhostButton>
               )}
 
               {/* The pinned section is the most engaged a visitor gets, and
@@ -356,12 +366,15 @@ export function OnboardingStepper() {
                   ref={cta}
                   className="mt-5"
                 >
-                  <a
+                  <GhostButton
+                    as="a"
+                    accent="signal"
+                    borderLine="2"
                     href="#invite"
                     className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                   >
-                    Get an invite
-                  </a>
+                    Get started
+                  </GhostButton>
                 </div>
               )}
             </article>

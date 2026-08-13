@@ -8,7 +8,9 @@ a temp DB, with the intake idempotency/rate-limit stores reset per test.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -83,6 +85,101 @@ class TestPostIntakeMessage:
         _login(intake_client)
         resp = intake_client.post("/api/intake/message", json={})
         assert resp.status_code == 422
+
+    def test_invalid_intent_is_422(self, intake_client: TestClient) -> None:
+        _login(intake_client)
+        resp = intake_client.post(
+            "/api/intake/message",
+            json={"url": "https://example.com", "intent": "video"},
+        )
+        assert resp.status_code == 422
+
+    def test_document_validation_failure_returns_neutral_error_without_job(
+        self, intake_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        async def public_host(_host: str):
+            return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+        class InvalidDocumentResponse:
+            def raise_for_status(self) -> None:
+                return None
+
+            async def aiter_bytes(self):
+                yield b"not a document"
+
+        class FakeClient:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                return None
+
+            @asynccontextmanager
+            async def stream(self, _method, _url):
+                yield InvalidDocumentResponse()
+
+        monkeypatch.setattr("src.services.pdf_intake.resolve_public_host", public_host)
+        monkeypatch.setattr("src.services.pdf_intake.httpx.AsyncClient", FakeClient)
+        _login(intake_client)
+
+        resp = intake_client.post(
+            "/api/intake/message", json={"url": "https://example.com/file.pdf"}
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["kind"] == "error"
+        assert "unsupported file type" in resp.json()["text"].lower()
+        assert asyncio.run(database.find_recent_job_by_url(CHAT_ID, "https://example.com/file.pdf")) is None
+
+    def test_extensionless_document_failure_uses_the_same_neutral_contract(
+        self, intake_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.services.document_intake import DocumentIntakeError
+
+        async def invalid_document(*_args, **_kwargs):
+            raise DocumentIntakeError(
+                400, {"field": "file", "message": "Unsupported file type"}
+            )
+
+        monkeypatch.setattr(
+            "src.services.document_intake.create_remote_document_job", invalid_document
+        )
+        _login(intake_client)
+        resp = intake_client.post(
+            "/api/intake/message",
+            json={"url": "https://example.com/download", "intent": "document"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["kind"] == "error"
+        assert resp.json()["text"] == "Unsupported file type"
+
+    def test_document_url_success_and_dedup_return_the_same_job(
+        self, intake_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "src.services.document_intake.fetch_remote_document",
+            AsyncMock(return_value=(b"%PDF-1.4 small", "file.pdf", "pdf")),
+        )
+        monkeypatch.setattr("src.services.document_intake.storage.upload", AsyncMock())
+        _login(intake_client)
+
+        first = intake_client.post(
+            "/api/intake/message", json={"url": "https://example.com/file.pdf"}
+        )
+        second = intake_client.post(
+            "/api/intake/message", json={"url": "https://example.com/file.pdf"}
+        )
+
+        assert first.status_code == second.status_code == 200
+        assert first.json()["kind"] == "job_created"
+        assert second.json()["kind"] == "job_deduped"
+        assert second.json()["job_id"] == first.json()["job_id"]
 
     def test_idempotent_resubmit_returns_original_job(self, intake_client: TestClient) -> None:
         _login(intake_client)

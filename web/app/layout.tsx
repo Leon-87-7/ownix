@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   // Absolute URLs for og:image etc. Vercel falls back to the deployment URL
   // when this is unset; a custom domain should set NEXT_PUBLIC_SITE_URL.
   ...(siteUrl() ? { metadataBase: siteUrl() } : {}),
-  title: 'Ownix — Your internet. Own it',
+  title: 'Ownix - Your internet. Own it',
   description:
     'Collect what matters. Own your Index. Shape the Brain.',
 };

@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     chat_id                     INTEGER NOT NULL,
     message_id                  INTEGER,
     url                         TEXT NOT NULL,
+    source_url                  TEXT,
     content_type                TEXT NOT NULL,
     status                      TEXT NOT NULL DEFAULT 'pending',
     attempt                     INTEGER NOT NULL DEFAULT 1,
@@ -1349,6 +1350,13 @@ _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN checklists_generated_at TEXT",
 ])
 
+# v40 → v41: retain a remote Document's submitted URL as its URL-only dedup
+# identity while `jobs.url` continues to hold the content-addressed storage key.
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN source_url TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_jobs_source_url ON jobs(source_url)",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -1450,6 +1458,12 @@ async def init_db() -> None:
             await conn.commit()
         else:
             await _run_migrations(conn)
+        # Kept out of SCHEMA_SQL because CREATE TABLE IF NOT EXISTS does not add
+        # `source_url` to an older jobs table; creating the index before the
+        # migration would fail startup with "no such column".
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_source_url ON jobs(source_url)"
+        )
         await _approve_operator_user(conn)
         await conn.commit()
     log.info("db_initialized", path=settings.DB_PATH)
@@ -1647,6 +1661,7 @@ async def create_job(
     chat_id: int,
     url: str,
     content_type: str,
+    source_url: str | None = None,
     message_id: int | None = None,
     template: str | None = None,
     freestyle_prompt: str | None = None,
@@ -1657,10 +1672,16 @@ async def create_job(
     async with connection() as conn:
         await conn.execute(
             """
-            INSERT INTO jobs (id, chat_id, message_id, url, content_type, status, template, freestyle_prompt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO jobs (
+                id, chat_id, message_id, url, source_url, content_type,
+                status, template, freestyle_prompt
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, chat_id, message_id, url, content_type, status, template, freestyle_prompt),
+            (
+                job_id, chat_id, message_id, url, source_url, content_type,
+                status, template, freestyle_prompt,
+            ),
         )
         await conn.commit()
     log.info("job_created", job_id=job_id, chat_id=chat_id, content_type=content_type)
@@ -1985,9 +2006,10 @@ async def find_recent_job_by_url(chat_id: int, url: str) -> dict | None:
     """
     row = await _fetch_one(
         "SELECT id, title, drive_url, content_type, status, bot_message_id FROM jobs "
-        "WHERE chat_id = ? AND url = ? AND status NOT IN ('error', 'cancelled') "
+        "WHERE chat_id = ? AND (url = ? OR source_url = ?) "
+        "AND status NOT IN ('error', 'cancelled') "
         "ORDER BY created_at DESC, id DESC LIMIT 1",
-        (chat_id, url),
+        (chat_id, url, url),
     )
     return dict(row) if row else None
 
