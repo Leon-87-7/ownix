@@ -43,6 +43,16 @@ describe('GhostButton', () => {
     ).toHaveAttribute('href', '#capture');
   });
 
+  it('emits exactly one border width for each lower-edge variant', () => {
+    const { rerender } = render(<GhostButton borderLine="1">Thin edge</GhostButton>);
+    const button = screen.getByRole('button', { name: 'Thin edge' });
+    expect(button).toHaveClass('border-b');
+    expect(button).not.toHaveClass('border-b-2', 'border-b-1');
+
+    rerender(<GhostButton borderLine="2">Thick edge</GhostButton>);
+    expect(screen.getByRole('button', { name: 'Thick edge' })).toHaveClass('border-b-2');
+  });
+
   it('preserves an explicit submit type', () => {
     render(<GhostButton type="submit">Add links</GhostButton>);
 

@@ -2,7 +2,7 @@
 adr: "0050"
 title: Dashboard "Run Gemini" reuses the async enrichment queue, not a synchronous call
 status: accepted
-date: 2026-08-14
+date: 2026-08-13
 ---
 
 ## Context
@@ -21,11 +21,14 @@ HTTP request and returns the markdown directly — no queue, no Telegram involve
 
 The dashboard's "Run Gemini" trigger (`POST /api/jobs/{job_id}/enrich`) follows the
 Telegram/queue shape, not the Checklists/synchronous shape: it validates the chosen
-template (reusing `_resolve_job_template`, `src/api/jobs.py:173`), writes
-`jobs.template`, and enqueues the same `{"task": "enrichment", "job_id": ...}`
-envelope `_cb_template_pick` does (`src/telegram/webhook.py:281`). The HTTP request
-returns immediately; the worker's existing `enrichment.run()` does everything else,
-unmodified.
+template (reusing `_resolve_job_template`, `src/api/jobs.py:173`), atomically claims
+the job by changing `transcript_done` to `enriching`, and writes `jobs.template` plus
+`jobs.freestyle_prompt` when Freestyle is selected. A non-Freestyle selection clears
+any stale `freestyle_prompt`. Only a successful conditional claim may enqueue the same
+`{"task": "enrichment", "job_id": ...}` envelope `_cb_template_pick` does
+(`src/telegram/webhook.py:281`); an enqueue failure restores `transcript_done` so the
+user can retry. The HTTP request returns immediately; the worker's existing
+`enrichment.run()` does everything else, unmodified.
 
 Because the details page has no live push, it polls while in-flight — `GET
 /api/jobs/{id}` every 10s while `status === 'enriching'`, reusing `startPolling`
@@ -51,11 +54,11 @@ mechanism, not a parallel code path.
 - No new "silent" enrichment path exists — `enrichment.run()` keeps exactly one
   calling convention regardless of trigger surface.
 - The details page gains polling (`web/lib/fetch-utils.ts`'s `useFetchDetail` needs a
-  `reload()` it didn't have before); a stuck `enriching` job (an unhandled exception
-  inside `enrichment.run()` that never reaches its own `except
-  EnrichmentUnavailableError` → `status='error'` path) polls indefinitely, same
-  pre-existing exposure Feed's `useInFlightPolling` already accepts today.
-- The recipes panel mirrors Telegram's picker exactly — the same five built-ins plus
-  Freestyle, no custom templates, since custom templates (`is_builtin=false` rows
-  from `/api/templates`) aren't wired into `enrichment.py`'s template lookup at all
-  yet (a separate, unbuilt feature).
+  `reload()` it didn't have before). Dashboard-triggered jobs use the same persisted
+  `enriching` status as every other enrichment, so `reap_stale_jobs()` covers this
+  flow: an orphan older than 10 minutes is reset to `error` and the user is notified.
+  Details-page polling then stops when it observes that terminal status.
+- The dashboard recipes panel mirrors Telegram's picker — the same five built-ins
+  plus Freestyle — and does not list custom templates (`is_builtin=false` rows from
+  `/api/templates`). This is a dashboard-selection limitation; the existing explicit
+  `-name <url>` Telegram flow for user templates remains supported and unchanged.

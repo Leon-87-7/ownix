@@ -26,7 +26,14 @@ vi.stubGlobal('chrome', {
     onClicked: { addListener: vi.fn() },
     onClosed: { addListener: vi.fn() },
   },
-  storage: { local: { get: vi.fn(async () => ({})), set: vi.fn(async () => {}) } },
+  storage: {
+    local: { get: vi.fn(async () => ({})), set: vi.fn(async () => {}) },
+    session: {
+      get: vi.fn(async () => ({})),
+      set: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+    },
+  },
 });
 
 let payloadForContextMenuClick: typeof import('../src/background.ts').payloadForContextMenuClick;
@@ -57,7 +64,10 @@ const savedResponse: IntakeResponseShape = {
   retryable: false,
 };
 
-function captureDeps(overrides: Partial<CaptureDeps> = {}) {
+function captureDeps(
+  overrides: Partial<CaptureDeps> = {},
+  notificationStore = new Map<string, string>(),
+) {
   const notifications: Array<{ id: string; title: string; message: string }> = [];
   const scheduled: Array<() => void> = [];
   const openedTabs: string[] = [];
@@ -73,6 +83,13 @@ function captureDeps(overrides: Partial<CaptureDeps> = {}) {
     openOptionsPage: vi.fn(async () => undefined),
     openTab: vi.fn((url) => { openedTabs.push(url); }),
     clearNotification: vi.fn(async () => undefined),
+    saveNotificationJob: vi.fn(async (id, url) => { notificationStore.set(id, url); }),
+    takeNotificationJob: vi.fn(async (id) => {
+      const url = notificationStore.get(id);
+      notificationStore.delete(id);
+      return url;
+    }),
+    removeNotificationJob: vi.fn(async (id) => { notificationStore.delete(id); }),
     schedule: vi.fn((callback) => { scheduled.push(callback); }),
     notificationId: () => `notification-${notifications.length + 1}`,
     ...overrides,
@@ -187,6 +204,18 @@ describe('capture commands', () => {
 
     expect(openedTabs).toEqual(['https://app.leondev.xyz/jobs/job-1']);
     expect(deps.clearNotification).toHaveBeenCalledOnce();
+  });
+
+  it('opens a job notification after the worker restarts', async () => {
+    const notificationStore = new Map<string, string>();
+    const firstWorker = captureDeps({}, notificationStore);
+    await captureCommand('capture-link', firstWorker.deps);
+
+    const restartedWorker = captureDeps({}, notificationStore);
+    await handleNotificationClick(firstWorker.notifications[0].id, restartedWorker.deps);
+
+    expect(restartedWorker.openedTabs).toEqual(['https://app.leondev.xyz/jobs/job-1']);
+    expect(restartedWorker.deps.clearNotification).toHaveBeenCalledOnce();
   });
 
   it('suppresses an identical in-flight command without a second toast', async () => {

@@ -19,7 +19,7 @@ type GhostButtonProps<T extends ElementType = 'button'> = {
 >;
 
 const baseClasses =
-  'inline-flex items-center justify-center rounded-md border border-line border-b-2 transition-ui hover:bg-raised active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:active:scale-100';
+  'inline-flex items-center justify-center rounded-md border border-line transition-ui hover:bg-raised active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:active:scale-100';
 
 const accentClasses: Record<GhostButtonAccent, string> = {
   signal: 'border-b-signal',
@@ -28,7 +28,7 @@ const accentClasses: Record<GhostButtonAccent, string> = {
 };
 
 const borderLineClasses: Record<GhostButtonBorderLine, string> = {
-  '1': 'border-b-1',
+  '1': 'border-b',
   '2': 'border-b-2',
 };
 

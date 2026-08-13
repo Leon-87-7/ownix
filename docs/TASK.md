@@ -26,9 +26,9 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - make all detail job pages titles editable
 
-- custom recipes ("Your recipes" on the Prompts page) aren't wired into template selection anywhere — `enrichment.py` and `_resolve_job_template` (`src/api/jobs.py:173`) only check the hardcoded `PROMPT_TEMPLATES` dict, so a custom recipe can be created and edited but never actually run (discovered while grilling task 35)
+- custom recipes ("Your recipes" on the Prompts page) are not offered by the dashboard's Run Gemini picker; explicit `-name <url>` Telegram shortcuts remain supported (discovered while grilling task 35)
 
-- ***
+---
 
 ## Briefs
 
@@ -545,8 +545,8 @@ message_id=...)` (`webhook.py:762`). No new processor, no `Pipeline` extension n
 > contract once.
 >
 > **Endpoint contract settled 2026-07-27 in task 33's grill** — `DELETE
-/api/jobs/{job_id}` → 204, hard delete (job row + cascades + `links`
-> de-index), cloud artifacts purged asynchronously via a `job_purge` envelope,
+> /api/jobs/{job_id}` → 204, hard delete (job row + cascades; preserve `links`
+> unless `?with_links=1` explicitly requests de-indexing), cloud artifacts purged asynchronously via a `job_purge` envelope,
 > allowed from any status. See ADR-0042. Two carry-overs for this task: the
 > reusable `web/components/ui/confirm-dialog.tsx` it introduces (reuse it for
 > swipe/cards rather than forking), and the note that the five-table cascade
@@ -1066,8 +1066,9 @@ tier) and leaves the page.
 - Ownership via `get_owned_job`; `204` matches the existing
   `@spaces_router.delete(..., status_code=204)` precedent (`src/api/spaces.py:129`).
 - Synchronous half: capture the job's artifact refs, then `DELETE FROM jobs
-WHERE id = ?` (five tables cascade) **plus** `DELETE FROM links WHERE
-source_job = ?` to de-index the Brain.
+  WHERE id = ?` (five tables cascade). Preserve Brain `links` by default; only
+  run `DELETE FROM links WHERE source_job = ?` when the request includes the
+  explicit `?with_links=1` opt-in.
 - Asynchronous half: enqueue a `job_purge` task envelope **carrying those refs**
   (the row is gone by the time the worker runs) and delete the Drive documents,
   GCS objects and Sheets row from the worker — retryable, never fails the click.
@@ -1388,11 +1389,11 @@ makes — worth its own Inbox entry.
 
 ## 35. Long-pipeline transcript segment + dashboard "Run Gemini" recipe picker
 
-> **Grilled 2026-08-14** — all open questions resolved below. Written up as
+> **Grilled 2026-08-13** — all open questions resolved below. Written up as
 > **ADR-0050**; `CONTEXT.md`'s **Template picker keyboard** entry updated to
 > cross-reference the dashboard mirror.
 
-> **Grounded:** 2026-08-14
+> **Grounded:** 2026-08-13
 
 `ENRICHMENT_FIELDS` (`web/lib/job-detail-utils.ts:14`, the field list rendered for
 `long`/`article`/`repo` job details) has no transcript row, even though
@@ -1421,19 +1422,23 @@ and enqueues enrichment on the existing job.
 - New `POST /api/jobs/{job_id}/enrich` (`src/api/jobs.py`) — **reuse, don't fork**:
   ownership via `get_owned_job`, gate on `content_type == 'long'` and
   `status == 'transcript_done'`, validate `{template, freestyle_prompt}` via the
-  existing `_resolve_job_template` (`jobs.py:173`, already used by `POST /api/jobs`),
-  write `jobs.template` via `database.update_job_fields`, then
+  existing `_resolve_job_template` (`jobs.py:173`, already used by `POST /api/jobs`).
+  Atomically claim the job with a conditional `transcript_done → enriching` update;
+  concurrent or stale requests that fail the claim return 409 and do not enqueue.
+  The same update persists `jobs.template` and, for Freestyle, `jobs.freestyle_prompt`;
+  selecting any other template explicitly clears a stale prompt. Then call
   `queue.enqueue({"task": "enrichment", "job_id": job_id})` — the exact envelope
-  `_cb_template_pick` already uses (`webhook.py:281`). No changes to `enrichment.py`
-  itself. See **ADR-0050** for why this is queued rather than called synchronously
-  the way `POST /api/jobs/{id}/checklists` calls `run_checklists()`.
+  `_cb_template_pick` already uses (`webhook.py:281`). If enqueueing fails, restore
+  `transcript_done` so the user can retry. No changes to `enrichment.py` itself. See
+  **ADR-0050** for why this is queued rather than called synchronously the way `POST
+  /api/jobs/{id}/checklists` calls `run_checklists()`.
 - Recipe options: the same 5 built-ins + Freestyle Telegram offers (`_cb_gemini_yes`,
   `webhook.py:219-260`) — **not** the full `/api/templates` list. Confirmed in grill:
-  custom recipes ("Your recipes" on the Prompts page, `is_builtin=false`) are pure CRUD
-  today — nothing in `enrichment.py` or `_resolve_job_template` ever looks a job's
-  `template` up against the DB `templates` table; both only check the hardcoded
-  `PROMPT_TEMPLATES` dict and silently fall back to `summary` for anything else.
-  Showing custom recipes here would be misleading — flagged as its own Inbox idea.
+  custom recipes ("Your recipes" on the Prompts page, `is_builtin=false`) are not a
+  dashboard recipe-selection option in this slice. This limitation does not remove
+  explicit user-template support: the existing `-name <url>` Telegram shortcut keeps
+  resolving the user's stored template. Adding those rows to this dashboard picker is
+  flagged as its own Inbox idea.
 - `useJobDetail`/`useFetchDetail` (`web/lib/fetch-utils.ts:129`) gains a `reload()` —
   it currently only refetches on `jobId` change. Small, reusable addition beyond this
   feature.

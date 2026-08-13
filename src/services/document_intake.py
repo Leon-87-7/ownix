@@ -11,7 +11,11 @@ from fastapi import HTTPException
 from src import database
 from src.services import parse, storage
 from src.services.jobs import create_and_enqueue_job
-from src.services.pdf_intake import fetch_remote_document, validate_document
+from src.services.pdf_intake import (
+    fetch_remote_document,
+    validate_document,
+    validate_remote_document_url,
+)
 
 
 class DocumentIntakeError(Exception):
@@ -65,6 +69,15 @@ async def create_remote_document_job(
     chat_id: int, url: str, *, require_document_path: bool = True
 ) -> dict:
     try:
+        url = validate_remote_document_url(url, require_document_path=require_document_path)
+        existing = await database.find_recent_job_by_url(chat_id, url)
+        if existing:
+            return {
+                "job_id": existing["id"],
+                "status": existing.get("status", "pending"),
+                "content_type": existing.get("content_type", "document"),
+                "_deduped": True,
+            }
         data, filename, ext = await fetch_remote_document(
             url, require_document_path=require_document_path
         )

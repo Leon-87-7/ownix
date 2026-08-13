@@ -90,12 +90,14 @@ export default async function LandingPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
-            >
-              Sign in
-            </Link>
+            {!signedIn && (
+              <Link
+                href="/login"
+                className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
+              >
+                Sign in
+              </Link>
+            )}
             {signedIn && (
               <GhostButton
                 as={Link}
@@ -155,7 +157,7 @@ export default async function LandingPage() {
                     href="#invite"
                     className={`${btnSignal} w-full`}
                   >
-                    Get an invit
+                    Get an invite
                   </a>
                 </div>
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">

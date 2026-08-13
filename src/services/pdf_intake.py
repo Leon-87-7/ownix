@@ -47,6 +47,17 @@ def validate_document(data: bytes, name: str = "document") -> str:
     return ext
 
 
+def validate_remote_document_url(url: str, *, require_document_path: bool = True) -> str:
+    """Normalize and validate the URL shape without resolving or fetching it."""
+    normalized = url.strip()
+    parsed = urlparse(normalized)
+    if parsed.scheme != "https" or (
+        require_document_path and _ext_from_name(parsed.path) not in SUPPORTED_EXTS
+    ):
+        raise HTTPException(status_code=400, detail={"field": "url", "message": _UNSUPPORTED_URL_MSG})
+    return normalized
+
+
 async def assert_public_host(host: str | None) -> None:
     # SSRF guard: refuse hosts that resolve to non-public addresses (loopback,
     # private, link-local cloud metadata at 169.254.169.254, etc.).
@@ -66,10 +77,8 @@ async def fetch_remote_document(url: str, *, require_document_path: bool = True)
     links look like documents*; the returned ext comes from content sniffing the
     fetched bytes, so a mislabeled URL still stores under its true format.
     """
-    url = url.strip()
+    url = validate_remote_document_url(url, require_document_path=require_document_path)
     parsed = urlparse(url)
-    if parsed.scheme != "https" or (require_document_path and _ext_from_name(parsed.path) not in SUPPORTED_EXTS):
-        raise HTTPException(status_code=400, detail={"field": "url", "message": _UNSUPPORTED_URL_MSG})
     await assert_public_host(parsed.hostname)
     try:
         # follow_redirects=False: a redirect could bounce to an internal host

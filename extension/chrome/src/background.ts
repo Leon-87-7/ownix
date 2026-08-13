@@ -19,8 +19,9 @@ export const COMMAND_INTENTS: Readonly<Record<string, ProcessingIntent>> = {
 };
 
 const pending = new Set<string>();
-const notificationJobs = new Map<string, string>();
 let badgeGeneration = 0;
+
+const notificationJobKey = (notificationId: string) => `notification-job:${notificationId}`;
 
 interface CaptureNotification {
   type: 'basic';
@@ -39,6 +40,9 @@ export interface CaptureDeps {
   openOptionsPage: () => Promise<void>;
   openTab: (url: string) => void;
   clearNotification: (id: string) => Promise<void>;
+  saveNotificationJob: (id: string, url: string) => Promise<void>;
+  takeNotificationJob: (id: string) => Promise<string | undefined>;
+  removeNotificationJob: (id: string) => Promise<void>;
   schedule: (callback: () => void, delayMs: number) => void;
   notificationId: () => string;
 }
@@ -59,6 +63,18 @@ const defaultCaptureDeps: CaptureDeps = {
   openTab: (url) => { void chrome.tabs.create({ url }); },
   clearNotification: async (id) => {
     await chrome.notifications.clear(id);
+  },
+  saveNotificationJob: async (id, url) => {
+    await chrome.storage.session.set({ [notificationJobKey(id)]: url });
+  },
+  takeNotificationJob: async (id) => {
+    const key = notificationJobKey(id);
+    const stored = await chrome.storage.session.get(key);
+    await chrome.storage.session.remove(key);
+    return typeof stored[key] === 'string' ? stored[key] : undefined;
+  },
+  removeNotificationJob: async (id) => {
+    await chrome.storage.session.remove(notificationJobKey(id));
   },
   schedule: (callback, delayMs) => { setTimeout(callback, delayMs); },
   notificationId: () => `ownix-${crypto.randomUUID()}`,
@@ -101,10 +117,15 @@ async function notify(
   jobUrl?: string,
 ): Promise<void> {
   const id = deps.notificationId();
-  await deps.createNotification(id, {
-    type: 'basic', iconUrl: 'icons/icon48.png', title, message,
-  });
-  if (jobUrl) notificationJobs.set(id, jobUrl);
+  if (jobUrl) await deps.saveNotificationJob(id, jobUrl);
+  try {
+    await deps.createNotification(id, {
+      type: 'basic', iconUrl: 'icons/icon48.png', title, message,
+    });
+  } catch (error) {
+    if (jobUrl) await deps.removeNotificationJob(id);
+    throw error;
+  }
 }
 
 async function setBadge(deps: CaptureDeps, text: string, color = '#d99a45'): Promise<void> {
@@ -180,9 +201,8 @@ export async function handleNotificationClick(
   notificationId: string,
   deps: CaptureDeps = defaultCaptureDeps,
 ): Promise<void> {
-  const url = notificationJobs.get(notificationId);
+  const url = await deps.takeNotificationJob(notificationId);
   if (!url) return;
-  notificationJobs.delete(notificationId);
   deps.openTab(url);
   await deps.clearNotification(notificationId);
 }
@@ -192,7 +212,7 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 });
 
 chrome.notifications.onClosed?.addListener((notificationId) => {
-  notificationJobs.delete(notificationId);
+  void defaultCaptureDeps.removeNotificationJob(notificationId);
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
