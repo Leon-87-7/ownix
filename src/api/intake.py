@@ -17,7 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.formparsers import MultiPartException
 
 from src.intake import commands, idempotency, mime_sniff, quota, rate_limit, state
-from src.intake.models import IntakeAction, IntakeActor, IntakeFile, IntakeMessage
+from src.intake.models import IntakeAction, IntakeActor, IntakeFile, IntakeMessage, ProcessingIntent
 from src.intake.router import handle as handle_intake_message
 
 intake_router = APIRouter(prefix="/api/intake", tags=["intake"])
@@ -30,6 +30,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 class IntakeMessageRequest(BaseModel):
     text: str | None = Field(default=None, max_length=4_000)
     url: str | None = Field(default=None, max_length=2_048)
+    intent: ProcessingIntent = "automatic"
 
 
 def _dashboard_actor(chat_id: int) -> IntakeActor:
@@ -76,6 +77,7 @@ async def post_intake_message(
         actor=_dashboard_actor(chat_id),
         text=text,
         url=url,
+        intent=body.intent,
         received_at=time.time(),
     )
     response = await handle_intake_message(msg)

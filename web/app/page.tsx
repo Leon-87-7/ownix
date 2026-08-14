@@ -15,15 +15,20 @@ import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
 import { ChromeIcon } from '@/components/svg/chrome-icon';
+import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { PuzzlePieceIcon } from '@/components/svg/puzzle-piece';
 import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
 import { DesktopIcon } from '@/components/svg/desktop';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
+import { GhostButton } from '@/components/ui/ghost-button';
+import PreviewMotif from '@/components/ui/preview-motif';
 
-import { Brain, ChevronsRight, Inbox, Share } from 'lucide-react';
+import { Brain, ChevronsRight, Inbox, ListChecks, Share } from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
+const chromeExtensionUrl =
+  'https://chromewebstore.google.com/detail/nofmlngkebkapkpjjiieppamfoodkfid?utm_source=item-share-cb';
 
 export const metadata: Metadata = {
   title: 'Ownix - Your internet. Own it',
@@ -45,17 +50,9 @@ export const metadata: Metadata = {
 // pointer-device buttons the design system specifies.
 const touchTarget =
   '[@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5';
-const btnGhost = `inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised ${touchTarget}`;
 const btnSignal = `inline-flex h-8 items-center justify-center rounded-md bg-signal px-3.5 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep ${touchTarget}`;
 const linkClasses =
   'inline-block transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface [@media(pointer:coarse)]:py-3';
-
-const indexBadges = [
-  ['SHORT ◉ REELS ◉ TIKTOK', 'text-type-short'],
-  ['LONG VIDEO', 'text-type-long'],
-  ['ARTICLE ◉ PDF', 'text-type-article'],
-  ['REPO', 'text-type-repo'],
-];
 
 const tiles: [string, number][] = [
   ['Items indexed', 318],
@@ -65,13 +62,10 @@ const tiles: [string, number][] = [
 ];
 
 export default async function LandingPage() {
-  // Session-aware CTA: logged-in visitors see "Open feed", anonymous ones
-  // "Look inside". vig_session is httpOnly, so this has to be a server read —
-  // which opts the landing page into dynamic rendering. /restricted handles
-  // the actual routing (approved -> feed, else -> preview) either way.
   const signedIn = Boolean(
     (await cookies()).get('vig_session')?.value,
   );
+
   return (
     <>
       <nav
@@ -79,7 +73,7 @@ export default async function LandingPage() {
         aria-label="Main"
         className="border-b border-line bg-canvas"
       >
-        <div className="mx-auto flex max-w-[960px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
           <Link
             href="/"
             aria-label="Ownix home"
@@ -96,12 +90,24 @@ export default async function LandingPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/login"
-              className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
-            >
-              Sign in
-            </Link>
+            {!signedIn && (
+              <Link
+                href="/login"
+                className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal hover:text-onsignal ${touchTarget}`}
+              >
+                Sign in
+              </Link>
+            )}
+            {signedIn && (
+              <GhostButton
+                as={Link}
+                accent="contrasignal"
+                href="/logout"
+                className={`h-8 bg-transparent px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
+              >
+                Logout
+              </GhostButton>
+            )}
           </div>
         </div>
       </nav>
@@ -121,43 +127,80 @@ export default async function LandingPage() {
             aria-hidden="true"
             className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(13,14,16,0.75)_0%,rgba(13,14,16,0)_100%)] lg:bg-[linear-gradient(100deg,rgba(13,14,16,0.96)_0%,rgba(13,14,16,0.88)_55%,rgba(13,14,16,0.45)_80%,rgba(13,14,16,0.12)_100%)]"
           />
-          <div className="mx-auto max-w-[960px] px-6">
-            {/* Golden-ratio hero. The paragraph below is 1rem, so the floor is
+          <div className="mx-auto grid max-w-[1200px] gap-8 px-6 lg:grid-cols-[minmax(0,1fr)_500px] lg:items-center">
+            <div>
+              {/* Golden-ratio hero. The paragraph below is 1rem, so the floor is
                 exactly φ × body (1.618rem) and the ceiling is φ² (2.618rem) —
                 both ends derived from the body size rather than picked by eye.
                 Replaces an arbitrary 30→52px clamp. */}
-            <h1 className="hero-rise mb-6 max-w-[16ch] text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
-              You watched it. You liked it.{' '}
-              <span className="text-muted">You lost it.</span>
-            </h1>
-            <p className="text-pretty hero-rise mb-8 max-w-[56ch] text-base leading-relaxed text-body [animation-delay:180ms]">
-              <span className="font-medium text-ink">
-                Ownix remembers. <br />
-              </span>{' '}
-              Three taps to share from&ensp;
-              <AppSlot />
-              &ensp;and a minute later it&apos;s transcribed,
-              summarized, searchable - even when all you remember is a
-              glimpse. <br />
-              Paste it straight into your AI.
-            </p>
-            <div className="hero-rise flex flex-wrap items-center gap-3 [animation-delay:270ms]">
-              <a
-                href="#invite"
-                className={btnSignal}
-              >
-                Get an invite
-              </a>
-              <Link
-                href="/restricted"
-                className={btnGhost}
-              >
-                {signedIn ? 'Open feed' : 'Look inside'}
-              </Link>
-              <span className="ml-2 font-mono text-xs text-muted">
-                invite-only for now
-              </span>
+              <h1 className="text-balance hero-rise mb-6 max-w-[22ch] text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
+                You watched it. You liked it.{' '}
+                <span className="text-muted">You lost it.</span>
+              </h1>
+              <p className="text-pretty hero-rise mb-8 sm:my-20 sm:leading-loose max-w-[56ch] text-base leading-relaxed text-body [animation-delay:180ms]">
+                <span className="font-medium text-ink">
+                  Ownix remembers. <br />
+                </span>{' '}
+                Three taps to share from&ensp;
+                <AppSlot />
+                &ensp;and a minute later it&apos;s transcribed,
+                summarized, searchable - even when all you remember is
+                a glimpse. <br />
+                Paste it straight into your AI.
+              </p>
+              <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
+                <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
+                  <span className="font-mono text-xs text-muted">
+                    Join Ownix
+                  </span>
+                  <a
+                    href="#invite"
+                    className={`${btnSignal} w-full`}
+                  >
+                    Get an invite
+                  </a>
+                </div>
+                <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
+                  <span className="font-mono text-xs text-muted">
+                    Capture this tab
+                  </span>
+                  <GhostButton
+                    as="a"
+                    accent="signal"
+                    href={chromeExtensionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`h-8 w-full gap-2 bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
+                  >
+                    <ChromeIcon
+                      aria-hidden="true"
+                      className="h-4 w-4"
+                    />
+                    Install for Chrome
+                  </GhostButton>
+                </div>
+                <div className="flex flex-col items-start gap-3 p-4">
+                  <span className="font-mono text-xs text-muted">
+                    See the product
+                  </span>
+                  <GhostButton
+                    as={Link}
+                    accent="contrasignal"
+                    href="/restricted"
+                    className={`h-8 w-full bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
+                  >
+                    {signedIn ? 'Open feed' : 'Look inside'}
+                  </GhostButton>
+                </div>
+              </div>
             </div>
+            <PreviewMotif
+              label="COLLECT OWN RECALL"
+              ariaLabel="Ownix collect, own, and recall motif"
+              size="fill"
+              treatment="hero"
+              className="mx-auto hidden h-[500px] w-[500px] lg:flex"
+            />
           </div>
         </header>
 
@@ -217,17 +260,14 @@ export default async function LandingPage() {
               Doomscroll in, engineering standards out.
             </h2>
 
-            <div className="mb-8 max-w-[68ch] text-prose leading-relaxed">
+            <div className="mb-8 max-w-[62ch] text-prose leading-relaxed">
+              <h3 className="mb-2 text-title font-semibold text-ink">
+                How I use Ownix
+              </h3>
               <p className="text-pretty mb-4">
-                &quot;&ensp;An Instagram reel about post-launch
-                support was about to fly past me, like everything
-                does. I shared it to Ownix, got the full transcript
-                back, and pasted it into Codex - which turned it into
-                the support-playbook rules for another project
-                I&apos;m building.&ensp;&quot;
-              </p>
-              <p className="text-pretty mb-4 ml-2 border-l-2 border-line pl-4 text-prose leading-relaxed text-muted">
-                A reel became rules in a production codebase.
+                A reel about post-launch support became production
+                rules for another project. I shared it to Ownix, then
+                pasted the transcript into Codex.
               </p>
               <p className="flex items-center gap-2 font-mono text-xs text-muted">
                 <Image
@@ -236,7 +276,7 @@ export default async function LandingPage() {
                   sizes="40px"
                   className="h-10 w-10 rounded-full object-cover"
                 />
-                Leon (me), building Ownix
+                A real workflow from Leon, building Ownix
               </p>
             </div>
 
@@ -339,6 +379,137 @@ export default async function LandingPage() {
         </section>
 
         <section
+          aria-labelledby="showcase-checklists"
+          className="border-t border-line py-16"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="showcase-checklists"
+              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              Every video becomes a checklist you can run.
+            </h2>
+
+            <div className="mb-8 max-w-[62ch] text-prose leading-relaxed">
+              <h3 className="mb-2 text-title font-semibold text-ink">
+                The Checklists button
+              </h3>
+              <p className="text-pretty mb-4">
+                A reel about migrating an AI-built database schema.
+                I hit Run Checklists on the job page, and the
+                transcript turned into three checks - zero-downtime
+                migrations, a rollback plan, a staging mirror - to
+                run against my own project before I touched a live
+                table.
+              </p>
+              <p className="flex items-center gap-2 font-mono text-xs text-muted">
+                <Image
+                  src={leonAvatar}
+                  alt=""
+                  sizes="40px"
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+                A real workflow from Leon, building Ownix
+              </p>
+            </div>
+
+            <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+              <div
+                role="group"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
+                aria-label="The job page, ready to run checklists"
+              >
+                <InstagramIcon
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 h-9 w-9 rounded-full border border-line bg-canvas p-1.5 shadow-md"
+                />
+
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
+                    instagram.com/reel/DbyDJomAkQv
+                  </span>
+                  <span className="rounded-sm bg-status-done-tint px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-[0.4px] text-status-done">
+                    DONE
+                  </span>
+                </div>
+                <div className="max-h-[280px] overflow-hidden p-4 [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                  <h4 className="mb-2 text-sm font-semibold leading-snug text-ink">
+                    Database Migrations for AI-Generated Schemas
+                  </h4>
+                  <p className="mb-4 text-xs leading-relaxed text-body">
+                    Your AI built your database, but it never
+                    planned for the day you have to change it
+                    completely - add a field, rename a column,
+                    restructure how two tables relate.
+                  </p>
+                  <span
+                    aria-hidden="true"
+                    className={btnSignal}
+                  >
+                    Run Checklists
+                  </span>
+                </div>
+              </div>
+
+              <ChevronsRight
+                aria-hidden="true"
+                className="mx-auto rotate-90 text-muted md:rotate-0"
+              />
+
+              <div
+                role="group"
+                className="relative overflow-hidden rounded-lg border border-line bg-surface"
+                aria-label="The checklist Ownix generated from the transcript"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border border-line bg-canvas shadow-md"
+                >
+                  <ListChecks className="h-5 w-5 text-signal" />
+                </span>
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
+                  <span className="min-w-0 truncate font-mono text-mono-label tracking-[0.4px] text-muted">
+                    checklist_db-migrations.md
+                  </span>
+                </div>
+                <pre className="max-h-[280px] overflow-hidden whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-body [-webkit-mask-image:linear-gradient(to_bottom,black_70%,transparent)] [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+                  <span className="text-muted">
+                    ## Zero-downtime database migrations
+                  </span>
+                  {'\n\n'}
+                  check whether the current project already has
+                  {'\n'}
+                  zero-downtime migration scripts that add new{'\n'}
+                  structures before removing old ones, copy data,
+                  {'\n'}
+                  switch application usage, and drop old structures
+                  {'\n'}
+                  only after confirmation, present a report...
+                  {'\n\n'}
+                  <span className="text-muted">
+                    ## Database migration rollback plans
+                  </span>
+                  {'\n\n'}
+                  check whether the current project has a defined
+                  {'\n'}
+                  rollback plan or script prepared for every{'\n'}
+                  migration before it starts, present a report...
+                </pre>
+              </div>
+            </div>
+
+            <p className="text-pretty mt-6 max-w-[58ch] text-prose leading-relaxed">
+              This one became six real GitHub issues in this exact
+              codebase - a pre-migration snapshot, a restore script, a
+              startup guard, a CI dry-run against a sanitized prod
+              copy. Each checklist item is phrased as an instruction,
+              not a reminder - paste it into your agent and it audits
+              the actual codebase, not just your memory of the video.
+            </p>
+          </div>
+        </section>
+
+        <section
           aria-labelledby="features"
           className="border-t border-line py-16"
         >
@@ -352,7 +523,7 @@ export default async function LandingPage() {
                   id="features"
                   className="text-pretty mb-3 max-w-[16ch] text-[clamp(1.5rem,4vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
                 >
-                  Reverse the feed, Own it.
+                  Never lose it again.
                 </h2>
                 <p className="text-pretty max-w-[52ch] text-prose leading-relaxed text-body">
                   Reels, long videos, articles, repos, screenshots -
@@ -411,8 +582,11 @@ export default async function LandingPage() {
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Collections for when &quot;search later&quot;
-                    stops working. Recipes for when you keep
-                    re-running the same freestyle prompt.
+                    stops working and you need a space to group
+                    content in.
+                    <br />
+                    Prompt templates are stored in Recipes for when
+                    you keep re-running the same freestyle prompt.
                   </p>
                 </div>
               </div>
@@ -436,7 +610,41 @@ export default async function LandingPage() {
               there&apos;s a one-tap way in.
             </p>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-5 sm:col-span-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:gap-8">
+                <PuzzlePieceIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-8 -right-5 h-40 w-40 -rotate-[28deg] text-line"
+                />
+                <div className="relative max-w-[58ch]">
+                  <ChromeIcon
+                    aria-hidden="true"
+                    className="mb-3 h-7 w-7 text-muted"
+                  />
+                  <h3 className="mb-2 text-title font-semibold leading-snug text-ink">
+                    Capture the tab while it matters
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Use a shortcut or right-click any page, link, or
+                    selection. Ownix sends it without breaking your
+                    flow.
+                  </p>
+                </div>
+                <GhostButton
+                  as="a"
+                  accent="signal"
+                  href={chromeExtensionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`relative mt-5 h-8 shrink-0 gap-2 bg-canvas px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-surface sm:mt-0 ${touchTarget}`}
+                >
+                  <ChromeIcon
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  />
+                  Install for Chrome
+                </GhostButton>
+              </div>
               <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-4">
                 <MobileDeviceIcon
                   aria-hidden="true"
@@ -464,28 +672,11 @@ export default async function LandingPage() {
                   className="relative mb-3 h-6 w-6 text-muted"
                 />
                 <h3 className="relative mb-1 text-title font-semibold leading-snug text-ink">
-                  Intake
+                  Dashboard intake
                 </h3>
                 <p className="relative text-pretty text-copy leading-relaxed text-body">
                   Paste a link, run a command, or drop a file straight
                   into the dashboard.
-                </p>
-              </div>
-              <div className="relative overflow-hidden rounded-lg border border-line bg-surface p-4">
-                <PuzzlePieceIcon
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 -rotate-[35deg] text-line"
-                />
-                <ChromeIcon
-                  aria-hidden="true"
-                  className="relative mb-3 h-6 w-6 text-muted"
-                />
-                <h3 className="relative flex gap-2 mb-1 text-title font-semibold leading-snug text-ink">
-                  Chrome extension
-                </h3>
-                <p className="relative text-pretty text-copy leading-relaxed text-body">
-                  Right-click any page, link, or selection - send it
-                  without leaving the tab.
                 </p>
               </div>
             </div>

@@ -5,7 +5,7 @@ import { ImageResponse } from 'next/og';
 // triad, one amber mark). Satori ships one regular-weight default font, so
 // hierarchy comes from size and color, never fontWeight.
 export const runtime = 'edge';
-export const alt = 'Ownix — your internet. own it';
+export const alt = 'Ownix - your internet. own it';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -131,7 +131,7 @@ export default function OpengraphImage() {
               color: '#c6c1b8',
             }}
           >
-            your internet. own it — transcripts, summaries, links,
+            your internet. own it - transcripts, summaries, links,
             repos
           </div>
         </div>

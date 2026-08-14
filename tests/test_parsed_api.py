@@ -136,6 +136,27 @@ async def test_create_document_job_rejects_unsupported(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_upload_url_translates_shared_document_error(monkeypatch):
+    from src.api import parsed
+    from src.services.document_intake import DocumentIntakeError
+
+    monkeypatch.setattr(
+        parsed,
+        "create_remote_document_job",
+        AsyncMock(side_effect=DocumentIntakeError(
+            422, {"field": "url", "message": "URL host is not allowed"}
+        )),
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user={"id": 7}))
+
+    with pytest.raises(HTTPException) as exc:
+        await parsed.upload_url(parsed.UrlIn(url="https://internal.example/doc.pdf"), request)
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail == {"field": "url", "message": "URL host is not allowed"}
+
+
+@pytest.mark.asyncio
 async def test_upload_image_forks_to_photo_ocr(monkeypatch):
     """The /upload image branch returns an OCR links payload, not a document job."""
     from src.api import parsed

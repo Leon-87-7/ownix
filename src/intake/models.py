@@ -18,11 +18,12 @@ Contract stability rules (do not violate silently):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = 1
+ProcessingIntent = Literal["automatic", "article", "link", "document"]
 
 
 class IntakeActor(BaseModel):
@@ -65,6 +66,7 @@ class IntakeMessage(BaseModel):
     actor: IntakeActor
     text: str | None = None
     url: str | None = None
+    intent: ProcessingIntent = "automatic"
     files: list[IntakeFile] = Field(default_factory=list)
     action: IntakeAction | None = None
     source_message_id: str | int | None = None

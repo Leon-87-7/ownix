@@ -24,10 +24,9 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 <!-- - e.g. the feed should have a saved-filters dropdown -->
 
-- Browser extension / share-target for one-click capture (see task 34 for the sibling idea from the same Youwee comparison) — Youwee's biggest UX win over raw yt-dlp is "right-click → send to app" instead of copy-pasting URLs. Ownix's ingestion is currently Telegram-only; a tiny extension (or even a bookmarklet hitting `POST /api/jobs`) that fires the existing `create_and_enqueue_job()` would remove real friction and fits the "drive the pipeline from the web" direction already in PRODUCT.md.
-- Vimeo support needs an authenticated session — deferred out of task 34 after exhaustive probing (2026-08-01). Every anonymous route is closed: default `macos` client 401s because Vimeo revoked the app credential yt-dlp impersonates (`{"developer_message": "The request includes an unauthorized client.", "error_code": 8001}`), `player.vimeo.com` embed URLs hit the same 401, `client=android`/`client=ios` are cache-only ("unable to fetch new OAuth tokens"), and `client=web` reports "only works when logged-in". Doing it means: own a Vimeo account, add its cookies to the sidecar credential checkout (the Instagram mechanism at `transcript_server.py:124` already exists), **and extend `_with_cookies` to `/metadata`** — today it only wraps `_download_audio_b64` (`:192`), so the unsized resolver runs cookie-less. That last part is the reusable half: any future auth-gated host needs it too.
-- ~~Pin `yt-dlp`~~ → **resolved 2026-08-02: expose, don't pin.** Pinning yt-dlp freezes site *breakage* rather than behaviour — extractors rot as sites change and yt-dlp ships fixes within days, so newest-is-correct. The real bug was invisibility plus an accidental freeze: `--no-cache-dir` is pip's cache, not Docker's, so the single `pip install` layer was reused forever and yt-dlp never actually updated — pinned in practice, to an unknown version. Shipped: `GET /health` returns the `yt_dlp` version (`transcript_server.py`), and `Dockerfile.transcript` installs yt-dlp in its own layer behind an `ARG YTDLP_REFRESH` cache-buster so it refreshes without rebuilding the ffmpeg/apt layers. Deliberately not automated: a rebuild cadence (cron/CI) — add one only if manual rebuilds get tedious. Surfaced by task 34's host probe.
-- Tag-filtered feed view (`?tag=<name>`) — you have a curated tag vocabulary with `meaning`, icons and colors, and **no way to browse by one**. `web/app/(dashboard)/feed/page.tsx` reads only two URL params (`params.set` appears exactly twice: `type` at `:262`, `view` at `:283`) — no search or tag param exists, so a tag is un-linkable. Wanted from two directions: clicking a tag pill (`web/components/feed/job-card-tags.tsx`, `web/components/ui/tag-picker.tsx`) should filter the feed to it, and the [[Intake console]]'s unknown-[[Tag token]] path wants to deep-link "show me everything tagged X" instead of telling the user to type it into a search box. Note the split the filter has to answer: `job_tags` and `link_tags` are separate vocabularies over the same `tags` table (CONTEXT.md **Link tag**: "coexists … no reconciliation"), so `?tag=GoTo` on a job tab and on the Links tab mean different sets. Surfaced 2026-08-06 by the intake-makeover grill, which took the lazy path (a plain warning, no link) rather than block on this.
+- make all detail job pages titles editable
+
+- custom recipes ("Your recipes" on the Prompts page) are not offered by the dashboard's Run Gemini picker; explicit `-name <url>` Telegram shortcuts remain supported (discovered while grilling task 35)
 
 ---
 
@@ -89,7 +88,7 @@ and `/freestyle`).
 
 ## 5. Reconcile the export-isolation PRs (#207, #208) before building on them ✅ DONE
 
-## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423 - ✅DONE
+## 6. Make the web app an installable PWA ✅ ISSUED TO GITHUB #421 #422 #423
 
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306 - ✅DONE
 
@@ -205,11 +204,11 @@ table`, there is no separate `dispatch.py`/`callbacks.py`).
 > 4. **`get_link_preview` IDOR** — `src/api/brain.py:57` takes no viewer, so any
 >    tenant can read any link by id.
 > 5. **`idx_links_url_unique` already exists** (migration v31). The soft dedup
->    was hardened on the *wrong* key; migration must DROP it, not merely add one.
+>    was hardened on the _wrong_ key; migration must DROP it, not merely add one.
 >
 > Also: the scoping note at `src/api/brain.py:5-8` ("intentionally... the single
 > shared Second Brain... see PRD §5") is **stale and wrong** — it contradicts
-> this task's session-1 resolution, and PRD §5 is *Deployment & Operations*. The
+> this task's session-1 resolution, and PRD §5 is _Deployment & Operations_. The
 > Brain spec is §13, which assumes a single user rather than deciding anything.
 > ARCHITECTURE D7 ("single-user portfolio tool — harden when: tool goes
 > multi-user") and D8 ("switch when per-user partitioning is needed") both point
@@ -224,7 +223,7 @@ table`, there is no separate `dispatch.py`/`callbacks.py`).
 >   re-point off `links.id`, contradicting session 1's join-key decision.
 > - ~~Cost of duplicate rows?~~ → **Duplicate the row, never the work.** Before
 >   fetching or embedding, `SELECT title, description, og_image_url, embedding
->   FROM links WHERE url = ? AND embedding IS NOT NULL LIMIT 1` and reuse it. No
+FROM links WHERE url = ? AND embedding IS NOT NULL LIMIT 1` and reuse it. No
 >   refetch, no second Gemini call. Residual cost is ~3 KB of blob per duplicate
 >   row; revisit at ~100k rows (`ponytail:` the ceiling in code).
 > - ~~First scrape vs re-scrape on a second tenant's ingest?~~ → **First scrape
@@ -254,7 +253,7 @@ table`, there is no separate `dispatch.py`/`callbacks.py`).
 >
 > 1. `ALTER TABLE links ADD COLUMN chat_id INTEGER` → backfill
 >    `COALESCE((SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
->    <operator>)` → `DROP INDEX idx_links_url_unique` →
+<operator>)` → `DROP INDEX idx_links_url_unique` →
 >    `CREATE UNIQUE INDEX idx_links_chat_url ON links(chat_id, url)`.
 >    (`chat_id NOT NULL` needs a table rebuild in SQLite — acceptable at 449 rows;
 >    decide rebuild-vs-leave-nullable at implementation time.)
@@ -343,8 +342,8 @@ stay defined in `CONTEXT.md`; nothing about them is being built here. Their open
 
 - **Timer semantics:** fixed window with silent expiry (recommended — one
   `sharer_until` timestamp, checked at ingest, no background jobs), fixed window
-  + Telegram expiry notice (needs a scheduled check), or activity-extended
-  sliding TTL? Is 8–12h fixed or user-chosen?
+  - Telegram expiry notice (needs a scheduled check), or activity-extended
+    sliding TTL? Is 8–12h fixed or user-chosen?
 - Confirm: tags never appear in the Community tab (private-only), correct?
 - Where does the opt-in/sharer toggle live in the UI (Brain page header,
   Community tab itself, controls page)?
@@ -507,13 +506,13 @@ enrichment job.
 
 - **Reuse, don't fork:** new branch in `_route_url` (`webhook.py:1564`) that routes would-be-rejected
   URLs through the exact call `/addlink` makes — `create_and_enqueue_job(chat_id, url, "link",
-  message_id=...)` (`webhook.py:762`). No new processor, no `Pipeline` extension needed;
+message_id=...)` (`webhook.py:762`). No new processor, no `Pipeline` extension needed;
   `create_and_enqueue_job` already owns dedup (ADR-0033 — a URL already captured under any
   content_type returns the existing job).
 - Native preview reply via `send_message` (`src/telegram/sender.py:130`) with the raw URL as the
   message text — no caller sets `disable_web_page_preview`, so Telegram's default preview card is
   the off-the-shelf behavior.
-- ~~topic/source_job_id for a jobless link~~ — answered by shipped code: the link *job* anchors
+- ~~topic/source_job_id for a jobless link~~ — answered by shipped code: the link _job_ anchors
   `source_job_id`, and `ingest_links` (`src/brain.py:542`) takes the flattened OG collection as
   `topic` (see `link.py:37-41`).
 
@@ -546,8 +545,8 @@ enrichment job.
 > contract once.
 >
 > **Endpoint contract settled 2026-07-27 in task 33's grill** — `DELETE
-> /api/jobs/{job_id}` → 204, hard delete (job row + cascades + `links`
-> de-index), cloud artifacts purged asynchronously via a `job_purge` envelope,
+> /api/jobs/{job_id}` → 204, hard delete (job row + cascades; preserve `links`
+> unless `?with_links=1` explicitly requests de-indexing), cloud artifacts purged asynchronously via a `job_purge` envelope,
 > allowed from any status. See ADR-0042. Two carry-overs for this task: the
 > reusable `web/components/ui/confirm-dialog.tsx` it introduces (reuse it for
 > swipe/cards rather than forking), and the note that the five-table cascade
@@ -966,7 +965,7 @@ as web interactions.
 - Real-time parity: does the web flow need live status push (the bot edits its
   message as the job progresses), or is Feed's existing polling enough?
 
-## 29. Streamline new-user signup — pending is a preview, not a wall ✅ ISSUED TO GITHUB #449 #450 #451 #452 - ✅DONE
+## 29. Streamline new-user signup — pending is a preview, not a wall ✅ ISSUED TO GITHUB #449 #450 #451 #452
 
 ## 30. Link-level tags in the Links table + mobile color-badge redesign ✅ ISSUED TO GITHUB #382 #383 #386 #387 - ✅DONE
 
@@ -1051,7 +1050,7 @@ grounding): `job_thumbnails`, `job_annotations`, `job_tags`, `space_urls`,
 > leaves the job in `/find` and the Brain graph. Cloud artifacts are likewise
 > untouched — Drive docs, the GCS objects behind `document_outputs.gcs_key`
 > (`database.py:282`), and the Sheets row — and **no delete primitive exists**
-> in `storage.py` / `drive.py` / `sheets.py` today. Job thumbnails are *not*
+> in `storage.py` / `drive.py` / `sheets.py` today. Job thumbnails are _not_
 > cloud artifacts: `job_thumbnails.bytes` is a SQLite BLOB (`database.py:101`),
 > so the cascade already disposes of them.
 
@@ -1067,8 +1066,9 @@ tier) and leaves the page.
 - Ownership via `get_owned_job`; `204` matches the existing
   `@spaces_router.delete(..., status_code=204)` precedent (`src/api/spaces.py:129`).
 - Synchronous half: capture the job's artifact refs, then `DELETE FROM jobs
-  WHERE id = ?` (five tables cascade) **plus** `DELETE FROM links WHERE
-  source_job = ?` to de-index the Brain.
+  WHERE id = ?` (five tables cascade). Preserve Brain `links` by default; only
+  run `DELETE FROM links WHERE source_job = ?` when the request includes the
+  explicit `?with_links=1` opt-in.
 - Asynchronous half: enqueue a `job_purge` task envelope **carrying those refs**
   (the row is gone by the time the worker runs) and delete the Drive documents,
   GCS objects and Sheets row from the worker — retryable, never fails the click.
@@ -1106,7 +1106,7 @@ tier) and leaves the page.
 - Failure: mirror the spaces pattern — a small `text-status-error` line under
   the button, no toast.
 - Post-delete: `router.back()`, guarded — `if (window.history.length > 1)
-  router.back(); else router.push('/feed')`, so a deep link, bookmark or hard
+router.back(); else router.push('/feed')`, so a deep link, bookmark or hard
   refresh doesn't strand the user on a dead page or bounce them out of the app.
 
 ## 34. Widen video source coverage — an `unsized` content_type resolved by duration ✅ ISSUED TO GITHUB #466 #467 #468 #469
@@ -1156,14 +1156,14 @@ Verified 2026-08-01:
   call there would put yt-dlp latency and failure modes on the intake path.
   More decisive: **yt-dlp cannot answer "is this supported?" reliably.** Its
   own FAQ (context7 `/yt-dlp/yt-dlp`, 2026-08-01) states detection is only
-  possible by *attempting* extraction, because the **generic extractor**
+  possible by _attempting_ extraction, because the **generic extractor**
   matches almost any URL as a fallback (scraping embedded video / OG tags), and
   disabling it (`--ies default,-generic`) is discouraged. An offline
   `InfoExtractor.suitable(url)` scan over `gen_extractor_classes()` does exist
   and is network-free, but inherits the same generic-extractor false-positive
   problem — it would classify ordinary article pages with an embedded video as
   `short`/`long`. This matches the precedent already recorded in CONTEXT.md
-  invariant 10: the article pipeline has an allowlist *because* "is this an
+  invariant 10: the article pipeline has an allowlist _because_ "is this an
   article?" is fuzzy across thousands of hosts; the repo pipeline has none
   because `github.com` has no fuzziness. Video-host detection has the article
   pipeline's fuzziness, so it gets the article pipeline's answer.
@@ -1188,7 +1188,7 @@ Verified 2026-08-01:
   X/Twitter and Facebook Watch — deferred in the earlier draft for lack of a
   path signal — come back in scope for free, since nothing now depends on one.
 - ~~What is the length-unknown content_type called?~~ → **`unsized`.** Not
-  `"video"`: the queue envelope's *task discriminator* is already `"video"`
+  `"video"`: the queue envelope's _task discriminator_ is already `"video"`
   (`worker.py:210`), so `{"task": "video"}` carrying `content_type="video"`
   reads as a tautology in logs and in the CONTEXT.md glossary. `unsized` names
   the actual property (length not yet known) rather than the medium.
@@ -1256,7 +1256,7 @@ duration, which is only knowable after a network call — so it cannot live in
 - **The boundary already exists and is not a new invention.** `/frames`
   (`transcript_server.py:440-446`) hard-rejects `duration > 180` with
   `"Video duration {duration}s exceeds 180s limit"`. The short pipeline
-  therefore *already* cannot process anything over 3 minutes — 180s is the
+  therefore _already_ cannot process anything over 3 minutes — 180s is the
   system's de facto short/long line, and the resolver must reuse that constant
   rather than pick a second one.
 - **Where the branch goes:** `_handle_video` (`src/worker.py:79-87`) already
@@ -1288,7 +1288,7 @@ duration, which is only knowable after a network call — so it cannot live in
 **Open questions** (continue grill)
 
 - **`/metadata` failure mode** — see the design note above; nothing resolved yet.
-**Probe results — 2026-08-01 (run before shipping, per the gate below)**
+  **Probe results — 2026-08-01 (run before shipping, per the gate below)**
 
 Decision: **hosts are gated on a live cookie-less reachability probe; only
 hosts returning a real `duration` ship.** Rationale — `_with_cookies`
@@ -1314,13 +1314,13 @@ nonexistent id (`x.com/i/status/1`): a "does not exist"/"no video found" reply
 proves the request reached the content API, a 401/login-required proves it did
 not.
 
-| Host | Verdict | Detail |
-|---|---|---|
-| YouTube (control) | **PASS** | `extractor=Youtube duration=213s -> long` — confirms network + harness sound |
-| Vimeo | **FAIL (terminal)** | `Failed to fetch macos OAuth token: HTTP Error 401` on **three** different URLs, on both yt-dlp 2026.03.17 and 2026.07.04. Direct query of the token endpoint returns `{"developer_message": "The request includes an unauthorized client.", "error_code": 8001}` — Vimeo rejecting the credentials themselves, not a rate limit/IP/geo block. Fires before any video is looked at, so **no Vimeo URL can work**. |
-| **Facebook** | **PASS** | real URL (`/share/v/1ESoxBa1H2`) → `extractor=Facebook duration=19.201s -> short` |
-| **X / Twitter** | **PASS** | real URL (`x.com/tailwindcss/status/…`) → `extractor=Twitter duration=30.583s -> short` |
-| Twitch | **dropped** | auth layer passed (`Video 1 does not exist`), but deemed not relevant to Ownix's content 2026-08-01 |
+| Host              | Verdict             | Detail                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| YouTube (control) | **PASS**            | `extractor=Youtube duration=213s -> long` — confirms network + harness sound                                                                                                                                                                                                                                                                                                                                      |
+| Vimeo             | **FAIL (terminal)** | `Failed to fetch macos OAuth token: HTTP Error 401` on **three** different URLs, on both yt-dlp 2026.03.17 and 2026.07.04. Direct query of the token endpoint returns `{"developer_message": "The request includes an unauthorized client.", "error_code": 8001}` — Vimeo rejecting the credentials themselves, not a rate limit/IP/geo block. Fires before any video is looked at, so **no Vimeo URL can work**. |
+| **Facebook**      | **PASS**            | real URL (`/share/v/1ESoxBa1H2`) → `extractor=Facebook duration=19.201s -> short`                                                                                                                                                                                                                                                                                                                                 |
+| **X / Twitter**   | **PASS**            | real URL (`x.com/tailwindcss/status/…`) → `extractor=Twitter duration=30.583s -> short`                                                                                                                                                                                                                                                                                                                           |
+| Twitch            | **dropped**         | auth layer passed (`Video 1 does not exist`), but deemed not relevant to Ownix's content 2026-08-01                                                                                                                                                                                                                                                                                                               |
 
 Auth-layer screening used deliberately **nonexistent IDs**
 (`twitch.tv/videos/1`, `x.com/i/status/1`, `facebook.com/reel/1`) to test
@@ -1386,3 +1386,92 @@ makes — worth its own Inbox entry.
 - Does `GENERIC_ROOTS` (`validators.py:226`) need the new hosts? It filters
   social links out of YouTube descriptions — `twitch.tv`/`vimeo.com` appearing
   there is plausible.
+
+## 35. Long-pipeline transcript segment + dashboard "Run Gemini" recipe picker
+
+> **Grilled 2026-08-13** — all open questions resolved below. Written up as
+> **ADR-0050**; `CONTEXT.md`'s **Template picker keyboard** entry updated to
+> cross-reference the dashboard mirror.
+
+> **Grounded:** 2026-08-13
+
+`ENRICHMENT_FIELDS` (`web/lib/job-detail-utils.ts:14`, the field list rendered for
+`long`/`article`/`repo` job details) has no transcript row, even though
+`long_video.py` populates `jobs.transcript` exactly like the short pipeline does
+(`database.update_job_status(job_id, "transcript_done", transcript=transcript, ...)`,
+`long_video.py:121-124`) — only `SHORT_FIELDS` renders it. Telegram's "✨ Run Gemini"
+gate (ADR-0012's enrichment confirmation gate + template picker keyboard) has no
+dashboard equivalent: `POST /api/jobs` only creates new jobs, and nothing triggers
+enrichment on an *existing* job from the web. The gate is structurally long-pipeline-only
+already — `short_video.py` never sets `status='transcript_done'` (it jumps
+`processing → done`, auto-enriching inline), so short/article/repo jobs never reach the
+state Run Gemini requires.
+
+**Wanted:** long-pipeline job detail pages show their transcript the way short-pipeline
+pages already do, and gain a dashboard-native "Run Gemini" trigger — mirroring
+Telegram's flow — that reveals a recipe picker (the five built-in templates + Freestyle)
+and enqueues enrichment on the existing job.
+
+**Backend**
+
+- Add `transcript` to `ENRICHMENT_FIELDS` (`web/lib/job-detail-utils.ts:14`), positioned
+  first (mirrors short's "primary content first" convention). Safe as a shared list:
+  neither `article.py` nor `github.py` ever write `jobs.transcript`, so `presentFields`'
+  empty-value filter means it silently never renders for those content types — only
+  `long` jobs populate it.
+- New `POST /api/jobs/{job_id}/enrich` (`src/api/jobs.py`) — **reuse, don't fork**:
+  ownership via `get_owned_job`, gate on `content_type == 'long'` and
+  `status == 'transcript_done'`, validate `{template, freestyle_prompt}` via the
+  existing `_resolve_job_template` (`jobs.py:173`, already used by `POST /api/jobs`).
+  Atomically claim the job with a conditional `transcript_done → enriching` update;
+  concurrent or stale requests that fail the claim return 409 and do not enqueue.
+  The same update persists `jobs.template` and, for Freestyle, `jobs.freestyle_prompt`;
+  selecting any other template explicitly clears a stale prompt. Then call
+  `queue.enqueue({"task": "enrichment", "job_id": job_id})` — the exact envelope
+  `_cb_template_pick` already uses (`webhook.py:281`). If enqueueing fails, restore
+  `transcript_done` so the user can retry. No changes to `enrichment.py` itself. See
+  **ADR-0050** for why this is queued rather than called synchronously the way `POST
+  /api/jobs/{id}/checklists` calls `run_checklists()`.
+- Recipe options: the same 5 built-ins + Freestyle Telegram offers (`_cb_gemini_yes`,
+  `webhook.py:219-260`) — **not** the full `/api/templates` list. Confirmed in grill:
+  custom recipes ("Your recipes" on the Prompts page, `is_builtin=false`) are not a
+  dashboard recipe-selection option in this slice. This limitation does not remove
+  explicit user-template support: the existing `-name <url>` Telegram shortcut keeps
+  resolving the user's stored template. Adding those rows to this dashboard picker is
+  flagged as its own Inbox idea.
+- `useJobDetail`/`useFetchDetail` (`web/lib/fetch-utils.ts:129`) gains a `reload()` —
+  it currently only refetches on `jobId` change. Small, reusable addition beyond this
+  feature.
+
+**UI**
+
+- "Run Gemini" button renders above `ChecklistsSection` (`page.tsx`), gated identically
+  to the new endpoint (`content_type === 'long' && status === 'transcript_done'`) — a
+  **one-time gate** matching Telegram exactly, not a repeatable "regenerate" control
+  like Checklists. Plain-text label ("Run Gemini"), no emoji — matches Checklists' own
+  button copy, not Telegram's emoji-laden keyboard.
+- Recipe picker ("recipes panel"): **responsive split**.
+  - Mobile: inline accordion reveal directly under the button, in the page flow
+    (`max-h-0` → `max-h-[Npx]` + opacity transition, `motion-reduce:transition-none`) —
+    pushes Checklists down when open.
+  - Desktop: off-canvas panel sliding in from the viewport edge, mirroring
+    `sidebar.tsx`'s only existing slide-in precedent (`translate-x-full` →
+    `translate-x-0`), showing each recipe's description (`GET /api/templates`, reuse
+    `useTemplateList`, filtered to `is_builtin === true`) so the user has enough context
+    to choose — the info Telegram's flat keyboard never shows.
+  - Five recipes are one-tap-commit (mirrors Telegram); Freestyle reveals a textarea +
+    separate submit (reuses `SubmitUrlForm`'s existing `freestylePrompt` pattern,
+    `web/components/feed/submit-job.tsx`), since Telegram itself treats Freestyle
+    differently (arms `awaiting_freestyle` rather than immediate-enqueue).
+  - On successful POST, optimistically `setData({ ...job, status: 'enriching' })` (via
+    `useFetchDetail`'s existing `setData`) — this immediately hides the button/panel
+    (gated on `status === 'transcript_done'`) and, for free, satisfies the polling
+    condition below. Prevents double-submit without a separate disabled/loading flag.
+  - Poll while `status === 'enriching'`: reuse `startPolling` (`web/lib/polling.ts`)
+    exactly as Feed's `useInFlightPolling` does, calling the new `reload()`. Once a poll
+    lands with `status !== 'enriching'`, the real enrichment fields render via the
+    existing `presentFields` list — no separate "result" UI needed.
+  - Whole feature gated behind `!restricted`, matching every other mutating action
+    already on this page (Checklists, delete).
+
+**Open questions:** none — fully resolved in grill.

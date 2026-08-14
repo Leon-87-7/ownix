@@ -21,6 +21,7 @@ import { useLinksTable } from '@/lib/hooks/useLinksTable';
 import { JobCard } from '@/components/feed/job-card';
 import { StatsOverview } from '@/components/feed/stats-overview';
 import { FilterBar, type FilterTab } from '@/components/ui/filter-bar';
+import { GhostButton } from '@/components/ui/ghost-button';
 import {
   SkeletonGrid,
   SkeletonList,
@@ -110,23 +111,24 @@ function RestrictedIntroModal() {
           repos, and links. Actions are locked until you get access.
         </DialogDescription>
         <div className="mt-5 flex flex-wrap gap-3">
-          <button
+          <GhostButton
             type="button"
+            accent="signal"
             onClick={() => {
               dismiss();
               router.push('/login?from=restricted');
             }}
-            className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-signal bg-canvas px-3 text-sm font-medium text-signal hover:bg-raised"
+            className="h-9 bg-canvas px-3 text-sm font-medium text-signal"
           >
             Get access
-          </button>
-          <button
+          </GhostButton>
+          <GhostButton
             type="button"
             onClick={dismiss}
-            className="inline-flex h-9 items-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-canvas px-3 text-sm font-medium text-body hover:bg-raised"
+            className="h-9 bg-canvas px-3 text-sm font-medium text-body"
           >
             Keep looking
-          </button>
+          </GhostButton>
         </div>
       </DialogContent>
     </Dialog>
@@ -520,18 +522,19 @@ function FeedPageContent() {
             {/* Mobile-only (<sm): one non-floating intake launcher occupies the
              two-row footprint formerly used by Submit + Docs. The content tabs
              continue flowing into columns 2-4. */}
-            <button
+            <GhostButton
               type="button"
+              accent="signal"
               onClick={openIntake}
               aria-label="Add to your Index"
               aria-haspopup="dialog"
-              className="col-start-1 row-start-1 row-span-2 inline-flex min-h-9 items-center justify-center rounded-md border border-line border-b-2 border-b-signal bg-surface px-1.5 text-body transition-ui hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:active:scale-100 sm:hidden"
+              className="col-start-1 row-start-1 row-span-2 min-h-9 bg-surface px-1.5 text-body hover:text-ink sm:hidden"
             >
               <OwnixAddIcon
                 aria-hidden="true"
                 className="h-10 w-10"
               />
-            </button>
+            </GhostButton>
             {restricted && (
               <span
                 aria-hidden="true"

@@ -4,6 +4,8 @@ import { Fragment, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { STEPS } from './onboarding-stepper';
 import { WordmarkMarquee } from './wordmark-marquee';
+import { GhostButton } from '@/components/ui/ghost-button';
+import Link from 'next/link';
 
 /**
  * Tappable onboarding stepper for the mobile breakpoint (`sm:hidden`).
@@ -138,16 +140,15 @@ export function MobileOnboardingStepper() {
                     {item.meta}
                   </p>
                   {index === 0 && (
-                    <a
+                    <GhostButton
+                      as="a"
+                      accent="body"
+                      borderLine="1"
                       href="#capture"
-                      className="mt-3 inline-flex items-center gap-1 text-sm text-muted transition-ui hover:text-body hover:underline"
+                      className="ownix-shimmer inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-1 border-b-ink bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                     >
-                      More ways to add
-                      <ArrowDown
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5"
-                      />
-                    </a>
+                      More ways to collect
+                    </GhostButton>
                   )}
                 </article>
               );
@@ -191,12 +192,14 @@ export function MobileOnboardingStepper() {
             </button>
           </div>
 
-          <a
+          <GhostButton
+            as={Link}
+            accent="contrasignal"
             href="#invite"
             className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-canvas"
           >
             Get an invite
-          </a>
+          </GhostButton>
           <div className="mt-6 min-w-0 flex-1">
             <WordmarkMarquee />
           </div>

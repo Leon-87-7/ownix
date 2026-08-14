@@ -7,6 +7,7 @@ export interface PopupDeps {
   sendToOwnix: typeof sendToOwnix;
   getOwnixHost: typeof getOwnixHost;
   openTab: (url: string) => void;
+  getCommands: () => Promise<Array<{ name?: string; shortcut?: string }>>;
 }
 
 const defaultDeps: PopupDeps = {
@@ -19,13 +20,43 @@ const defaultDeps: PopupDeps = {
   openTab: (url: string) => {
     chrome.tabs.create({ url });
   },
+  getCommands: () => chrome.commands.getAll(),
 };
+
+const COMMANDS = [
+  ['capture-automatic', 'Automatic'],
+  ['capture-article', 'Article'],
+  ['capture-link', 'Link'],
+  ['capture-document', 'Document'],
+] as const;
 
 /** Wires the popup DOM to `deps`. Exported (not auto-run) so tests can pass a jsdom document + fakes. */
 export async function initPopup(doc: Document, deps: PopupDeps = defaultDeps): Promise<void> {
   const tabInfo = doc.getElementById('tab-info') as HTMLParagraphElement;
   const sendBtn = doc.getElementById('send-btn') as HTMLButtonElement;
   const status = doc.getElementById('status') as HTMLDivElement;
+  const shortcuts = doc.getElementById('shortcuts');
+  if (shortcuts) {
+    const runtime = await deps.getCommands();
+    const bindings = new Map(runtime.map((command) => [command.name, command.shortcut ?? '']));
+    for (const [name, label] of COMMANDS) {
+      const row = doc.createElement('li');
+      const binding = bindings.get(name) || 'Unbound';
+      const commandLabel = doc.createElement('span');
+      commandLabel.textContent = label;
+      const commandBinding = doc.createElement('kbd');
+      commandBinding.textContent = binding;
+      row.append(commandLabel, commandBinding);
+      shortcuts.append(row);
+    }
+    const help = doc.getElementById('shortcut-help');
+    if (help) {
+      const unbound = COMMANDS.some(([name]) => !bindings.get(name));
+      help.textContent = unbound
+        ? 'Unbound commands are inactive. Set or change bindings at chrome://extensions/shortcuts.'
+        : 'Chrome controls these bindings. Windows may suggest defaults; other platforms may show Unbound.';
+    }
+  }
 
   const tab = await deps.getActiveTab();
   if (!tab?.url) {
