@@ -105,6 +105,10 @@ Ordered by unblocked-first, then dependency chain.
 | [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | #523 |
 | [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | #524 |
 | [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | #525 |
+| [#528](https://github.com/Leon-87-7/ownix/issues/528) | Long-pipeline job pages show their transcript | — | — |
+| [#529](https://github.com/Leon-87-7/ownix/issues/529) | Backend: POST /api/jobs/{job_id}/enrich enqueues enrichment for an existing job | — | — |
+| [#530](https://github.com/Leon-87-7/ownix/issues/530) | Dashboard: Run Gemini button + inline recipe picker with poll-to-completion | — | #529 |
+| [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | #530 |
 
 ---
 
@@ -641,6 +645,6 @@ Critical path: #523 → #524 → #525 → #526
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
 | [#510](https://github.com/Leon-87-7/ownix/pull/510) | feat(telegram): show checklist generation feedback | codex/checklists-telegram-feedback→main | — | ✅ Merged |
-| [#509](https://github.com/Leon-87-7/ownix/pull/509) | feat(checklists): /checklists command delivery (Telegram, dashboard, job detail) | worktree-checklists-command→main | #505–#508 | ✅ Merged |
 | [#521](https://github.com/Leon-87-7/ownix/pull/521) | feat(tags): canonical tag tokens and Telegram tagged intake (#511-514) | fix/tag-token-routing-511-514→main | — | ✅ Merged |
 | [#522](https://github.com/Leon-87-7/ownix/pull/522) | feat(ui): CSS clip-path segmented tabs, prototype skill docs, formatting | feat/segmented-tabs-clip-path-and-prototype-docs→main | — | ✅ Merged |
+| [#527](https://github.com/Leon-87-7/ownix/pull/527) | Add extension capture commands and refresh landing | agent/extension-capture-and-landing→main | — | ✅ Merged |

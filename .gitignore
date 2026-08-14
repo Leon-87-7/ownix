@@ -46,6 +46,7 @@ Thumbs.db
 
 docs/images/*
 docs/features/*
+docs/brand/*
 web/node_modules/
 web/.next/
 

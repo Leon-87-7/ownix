@@ -458,4 +458,5 @@
 | [#471](https://github.com/Leon-87-7/ownix/pull/471) | feat(video): route Facebook + X as `unsized`, resolve short/long by duration (#466, #467) | feat/466-467-unsized-video-duration→fix/317-md-mojibake-bom-dash | #466–#467 | ✅ Merged |
 | [#470](https://github.com/Leon-87-7/ownix/pull/470) | fix(telegram): .md documents preview as mojibake — UTF-8 BOM + strip Gemini em-dashes | fix/317-md-mojibake-bom-dash→main | #317 | ✅ Merged |
 | [#504](https://github.com/Leon-87-7/ownix/pull/504) | feat(web): rework landing page capture section and copy | claude/landing-page-copy-and-icons→main | — | ✅ Merged |
+| [#509](https://github.com/Leon-87-7/ownix/pull/509) | feat(checklists): /checklists command delivery (Telegram, dashboard, job detail) | worktree-checklists-command→main | #505–#508 | ✅ Merged |
 | [#503](https://github.com/Leon-87-7/ownix/pull/503) | spike: route non-PDF documents through anydoc, keep PDF on liteparse | claude/anydoc-docs-parser-eval-jii4ro→main | — | ✅ Merged |

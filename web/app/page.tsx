@@ -23,7 +23,13 @@ import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 import { GhostButton } from '@/components/ui/ghost-button';
 import PreviewMotif from '@/components/ui/preview-motif';
 
-import { Brain, ChevronsRight, Inbox, ListChecks, Share } from 'lucide-react';
+import {
+  Brain,
+  ChevronsRight,
+  Inbox,
+  ListChecks,
+  Share,
+} from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -146,7 +152,7 @@ export default async function LandingPage() {
                 &ensp;and a minute later it&apos;s transcribed,
                 summarized, searchable - even when all you remember is
                 a glimpse. <br />
-                Paste it straight into your AI.
+                It&apos;s yours - paste it straight into your AI.
               </p>
               <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
@@ -230,21 +236,6 @@ export default async function LandingPage() {
             <div className="mt-6 min-w-0 flex-1 hidden sm:block">
               <WordmarkMarquee />
             </div>
-
-            {/* <div
-              role="group"
-              className="mt-6 flex flex-wrap gap-2"
-              aria-label="What Ownix indexes"
-            >
-              {indexBadges.map(([label, color]) => (
-                <span
-                  key={label}
-                  className={`rounded-sm border border-line px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-[0.4px] ${color}`}
-                >
-                  {label}
-                </span>
-              ))}
-            </div> */}
           </div>
         </section>
 
@@ -265,9 +256,12 @@ export default async function LandingPage() {
                 How I use Ownix
               </h3>
               <p className="text-pretty mb-4">
-                A reel about post-launch support became production
-                rules for another project. I shared it to Ownix, then
-                pasted the transcript into Codex.
+                An Instagram reel about post-launch support was about
+                to scroll past and vanish, like everything does. I
+                shared it to Ownix, got the full transcript back, and
+                pasted it into Codex - which turned it into the
+                support-playbook rules for another project I&apos;m
+                building.
               </p>
               <p className="flex items-center gap-2 font-mono text-xs text-muted">
                 <Image
@@ -373,7 +367,8 @@ export default async function LandingPage() {
               <code className="rounded-sm border border-line bg-surface px-[5px] py-px font-mono text-xs text-ink">
                 .md
               </code>{' '}
-              file. Claude, Cursor, Codex - they all eat markdown.
+              file - yours to keep, not stuck behind a login. Claude,
+              Cursor, Codex - they all eat markdown.
             </p>
           </div>
         </section>
@@ -395,12 +390,11 @@ export default async function LandingPage() {
                 The Checklists button
               </h3>
               <p className="text-pretty mb-4">
-                A reel about migrating an AI-built database schema.
-                I hit Run Checklists on the job page, and the
-                transcript turned into three checks - zero-downtime
-                migrations, a rollback plan, a staging mirror - to
-                run against my own project before I touched a live
-                table.
+                A reel about migrating an AI-built database schema. I
+                hit Run Checklists on the job page, and the transcript
+                turned into three checks - zero-downtime migrations, a
+                rollback plan, a staging mirror - to run against my
+                own project before I touched a live table.
               </p>
               <p className="flex items-center gap-2 font-mono text-xs text-muted">
                 <Image
@@ -437,10 +431,10 @@ export default async function LandingPage() {
                     Database Migrations for AI-Generated Schemas
                   </h4>
                   <p className="mb-4 text-xs leading-relaxed text-body">
-                    Your AI built your database, but it never
-                    planned for the day you have to change it
-                    completely - add a field, rename a column,
-                    restructure how two tables relate.
+                    Your AI built your database, but it never planned
+                    for the day you have to change it completely - add
+                    a field, rename a column, restructure how two
+                    tables relate.
                   </p>
                   <span
                     aria-hidden="true"
@@ -505,6 +499,7 @@ export default async function LandingPage() {
               copy. Each checklist item is phrased as an instruction,
               not a reminder - paste it into your agent and it audits
               the actual codebase, not just your memory of the video.
+              Ownix automated the ask; you still did the checking.
             </p>
           </div>
         </section>
@@ -581,12 +576,11 @@ export default async function LandingPage() {
                     When search stops being enough
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
-                    Collections for when &quot;search later&quot;
-                    stops working and you need a space to group
-                    content in.
+                    Collections group content into a space when
+                    &quot;search later&quot; stops working.
                     <br />
-                    Prompt templates are stored in Recipes for when
-                    you keep re-running the same freestyle prompt.
+                    Recipes save the freestyle prompt you keep
+                    re-running, ready to fire again.
                   </p>
                 </div>
               </div>
