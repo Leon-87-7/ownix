@@ -15,6 +15,7 @@ from src.services.pdf_intake import (
     fetch_remote_document,
     read_capped_body,
     validate_document,
+    validate_remote_document_url,
 )
 
 
@@ -83,6 +84,13 @@ def test_validate_document_rejects_oversize():
 async def test_fetch_remote_document_rejects_non_https():
     with pytest.raises(HTTPException) as exc:
         await fetch_remote_document("http://example.com/doc.pdf")
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.parametrize("url", ["https:report.pdf", "https:///report.pdf"])
+def test_validate_remote_document_url_rejects_missing_hostname(url):
+    with pytest.raises(HTTPException) as exc:
+        validate_remote_document_url(url)
     assert exc.value.status_code == 400
 
 

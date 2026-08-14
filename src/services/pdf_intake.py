@@ -51,7 +51,7 @@ def validate_remote_document_url(url: str, *, require_document_path: bool = True
     """Normalize and validate the URL shape without resolving or fetching it."""
     normalized = url.strip()
     parsed = urlparse(normalized)
-    if parsed.scheme != "https" or (
+    if parsed.scheme != "https" or not parsed.hostname or (
         require_document_path and _ext_from_name(parsed.path) not in SUPPORTED_EXTS
     ):
         raise HTTPException(status_code=400, detail={"field": "url", "message": _UNSUPPORTED_URL_MSG})

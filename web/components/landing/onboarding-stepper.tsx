@@ -11,11 +11,12 @@ gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 export function moveFocusBeforeStepTransition(
   outgoingStep: HTMLElement,
+  incomingStep: HTMLElement,
   incomingFocusables: HTMLElement[],
 ): void {
   const active = document.activeElement;
   if (active instanceof HTMLElement && outgoingStep.contains(active)) {
-    incomingFocusables[0]?.focus();
+    (incomingFocusables[0] ?? incomingStep).focus({ preventScroll: true });
   }
 }
 
@@ -198,6 +199,7 @@ export function OnboardingStepper() {
             tl.to(steps[i - 1], {
               onStart: () => moveFocusBeforeStepTransition(
                 steps[i - 1],
+                steps[i],
                 focusables[i],
               ),
               opacity: 0,
@@ -215,6 +217,15 @@ export function OnboardingStepper() {
                 '<',
               )
               .to(steps[i], {
+                onUpdate: () => {
+                  if (tl.scrollTrigger?.direction === -1) {
+                    moveFocusBeforeStepTransition(
+                      steps[i],
+                      steps[i - 1],
+                      focusables[i - 1],
+                    );
+                  }
+                },
                 opacity: 1,
                 y: 0,
                 duration: 0.35,
@@ -289,6 +300,7 @@ export function OnboardingStepper() {
             <article
               key={step.id}
               data-step
+              tabIndex={-1}
               className="rounded-lg border border-line bg-surface p-5 sm:p-6"
             >
               <div className="mb-3 flex items-center gap-3">
