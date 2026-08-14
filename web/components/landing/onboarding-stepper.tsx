@@ -311,6 +311,19 @@ export function OnboardingStepper() {
                 <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
                   {step.surface}
                 </span>
+                {/* Wayfinding, not a second CTA: rides the surface label's row
+                    as a plain text link (no ghost plate) pointing at #capture,
+                    which already covers share sheet / dashboard intake /
+                    extension in full. Deliberately undersells itself next to
+                    "Get an invite" below — an optional detour, not the ask. */}
+                {isFirst && (
+                  <a
+                    href="#capture"
+                    className="ownix-shimmer ml-auto inline-flex items-center text-button font-medium leading-none text-ink transition-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2"
+                  >
+                    More ways to collect
+                  </a>
+                )}
               </div>
               {/* balance, not pretty: `pretty` only fixes orphans, which is a
                   prose problem. A 2-3 line heading wants even line lengths.
@@ -349,24 +362,6 @@ export function OnboardingStepper() {
               <p className="mt-4 font-mono text-xs text-muted">
                 {step.meta}
               </p>
-
-              {/* Wayfinding, not a second CTA: points at #capture, the
-                  section that already covers share sheet / dashboard intake /
-                  extension in full, rather than duplicating those three
-                  channels inside this card. Plain text link deliberately
-                  undersells itself next to "Get an invite" below - it's an
-                  optional detour, not the ask. */}
-              {isFirst && (
-                <GhostButton
-                  as="a"
-                  accent="body"
-                  borderLine="1"
-                  href="#capture"
-                  className="ownix-shimmer inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-1 border-b-ink bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
-                >
-                  More ways to collect
-                </GhostButton>
-              )}
 
               {/* The pinned section is the most engaged a visitor gets, and
                   without an exit it dead-ends into #showcase with the hero CTA
