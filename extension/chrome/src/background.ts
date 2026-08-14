@@ -120,7 +120,7 @@ async function notify(
   if (jobUrl) await deps.saveNotificationJob(id, jobUrl);
   try {
     await deps.createNotification(id, {
-      type: 'basic', iconUrl: 'icons/icon48.png', title, message,
+      type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon48.png'), title, message,
     });
   } catch (error) {
     if (jobUrl) await deps.removeNotificationJob(id);
