@@ -7,6 +7,7 @@ const config: Config = {
     extend: {
       colors: {
         canvas: '#0d0e10',
+        canvasb: '#0d0e17',
         surface: '#16181c',
         raised: '#202329',
         // A fourth rung on the plate ladder, one step above `raised`, reserved
@@ -66,6 +67,9 @@ const config: Config = {
           'SFMono-Regular',
           'monospace',
         ],
+        // Landing-only voices, see DESIGN.md two-voice system for the dashboard.
+        title: ['var(--font-montserrat)', 'system-ui', 'sans-serif'],
+        subtitle: ['var(--font-merienda)', 'Georgia', 'serif'],
       },
       // Type scale in rem, so text honours the reader's browser font-size
       // setting — `px` font sizes silently ignore it. Named by the role

@@ -139,13 +139,13 @@ export default async function LandingPage() {
                 exactly φ × body (1.618rem) and the ceiling is φ² (2.618rem) —
                 both ends derived from the body size rather than picked by eye.
                 Replaces an arbitrary 30→52px clamp. */}
-              <h1 className="text-balance hero-rise mb-6 max-w-[22ch] text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
+              <h1 className="text-balance hero-rise mb-6 max-w-[22ch] font-title text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
                 You watched it. You liked it.{' '}
                 <span className="text-muted">You lost it.</span>
               </h1>
               <p className="text-pretty hero-rise mb-8 sm:my-20 sm:leading-loose max-w-[56ch] text-base leading-relaxed text-body [animation-delay:180ms]">
-                <span className="font-medium text-ink">
-                  Ownix remembers. <br />
+                <span className="font-medium font-subtitle text-ink">
+                  &emsp;Ownix remembers. <br />
                 </span>{' '}
                 Three taps to share from&ensp;
                 <AppSlot />
@@ -218,7 +218,7 @@ export default async function LandingPage() {
             <div className="hidden sm:block">
               <h2
                 id="onboarding"
-                className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+                className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
               >
                 Three taps. Nothing new to learn.
               </h2>
@@ -241,19 +241,19 @@ export default async function LandingPage() {
 
         <section
           aria-labelledby="showcase"
-          className="border-t border-line py-16"
+          className="border-t border-line bg-canvas-gradient py-16 sm:bg-canvas"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="showcase"
-              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Doomscroll in, engineering standards out.
             </h2>
 
             <div className="mb-8 max-w-[62ch] text-prose leading-relaxed">
-              <h3 className="mb-2 text-title font-semibold text-ink">
-                How I use Ownix
+              <h3 className="font-subtitle mb-2 text-title font-semibold font-subtitle text-ink">
+                &emsp;How I use Ownix
               </h3>
               <p className="text-pretty mb-4">
                 An Instagram reel about post-launch support was about
@@ -380,14 +380,14 @@ export default async function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="showcase-checklists"
-              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               Every video becomes a checklist you can run.
             </h2>
 
             <div className="mb-8 max-w-[62ch] text-prose leading-relaxed">
-              <h3 className="mb-2 text-title font-semibold text-ink">
-                The Checklists button
+              <h3 className="font-subtitle mb-2 text-title font-semibold font-subtitle text-ink">
+                &emsp;The Checklists button
               </h3>
               <p className="text-pretty mb-4">
                 A reel about migrating an AI-built database schema. I
@@ -506,7 +506,7 @@ export default async function LandingPage() {
 
         <section
           aria-labelledby="features"
-          className="border-t border-line py-16"
+          className="border-t border-line bg-canvas-gradient py-16 sm:bg-canvas"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
@@ -516,7 +516,7 @@ export default async function LandingPage() {
                 </span> */}
                 <h2
                   id="features"
-                  className="text-pretty mb-3 max-w-[16ch] text-[clamp(1.5rem,4vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
+                  className="text-pretty mb-3 max-w-[16ch] font-title text-[clamp(1.5rem,4vw,2.25rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink"
                 >
                   Never lose it again.
                 </h2>
@@ -531,8 +531,8 @@ export default async function LandingPage() {
                 </p>
 
                 <div className="border-t border-line pt-4 md:pt-5">
-                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
-                    Your personal search-engine
+                  <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
+                    &emsp;Your personal search-engine
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Every item lands in your Feed and Brain. Filter by
@@ -548,8 +548,8 @@ export default async function LandingPage() {
                   {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     DOCS
                   </span> */}
-                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
-                    That PDF you saved and never reopened?
+                  <h3 className="font-subtitle mt-4 mb-1 text-title font-semibold leading-snug text-ink">
+                    &emsp;That PDF you saved and never reopened?
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Upload it - or paste the link - and the Docs page
@@ -562,8 +562,8 @@ export default async function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <h3 className="mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
-                    Drop a GitHub repo link, skip the clone
+                  <h3 className="font-subtitle mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    &emsp;Drop a GitHub repo link, skip the clone
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Paste a GitHub URL and Ownix reads the README and
@@ -572,8 +572,8 @@ export default async function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <h3 className="mb-1 text-title font-semibold leading-snug text-ink">
-                    When search stops being enough
+                  <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
+                    &emsp;When search stops being enough
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Collections group content into a space when
@@ -595,7 +595,7 @@ export default async function LandingPage() {
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="capture"
-              className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               One Index, however it gets there.
             </h2>
@@ -615,7 +615,7 @@ export default async function LandingPage() {
                     aria-hidden="true"
                     className="mb-3 h-7 w-7 text-muted"
                   />
-                  <h3 className="mb-2 text-title font-semibold leading-snug text-ink">
+                  <h3 className="font-subtitle mb-2 text-title font-semibold leading-snug text-ink">
                     Capture the tab while it matters
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
@@ -648,7 +648,7 @@ export default async function LandingPage() {
                   aria-hidden="true"
                   className="relative mb-3 h-6 w-6 text-muted"
                 />
-                <h3 className="relative mb-1 text-title font-semibold leading-snug text-ink">
+                <h3 className="font-subtitle relative mb-1 text-title font-semibold leading-snug text-ink">
                   Share sheet
                 </h3>
                 <p className="relative text-pretty text-copy leading-relaxed text-body">
@@ -665,7 +665,7 @@ export default async function LandingPage() {
                   aria-hidden="true"
                   className="relative mb-3 h-6 w-6 text-muted"
                 />
-                <h3 className="relative mb-1 text-title font-semibold leading-snug text-ink">
+                <h3 className="font-subtitle relative mb-1 text-title font-semibold leading-snug text-ink">
                   Dashboard intake
                 </h3>
                 <p className="relative text-pretty text-copy leading-relaxed text-body">
@@ -674,6 +674,29 @@ export default async function LandingPage() {
                 </p>
               </div>
             </div>
+
+            <div className="mt-4 overflow-hidden rounded-lg border border-line bg-surface">
+              <DemoVideo
+                src="/demo-capture.mp4"
+                poster="/demo-poster.jpg"
+                className="block aspect-video w-full border-b border-line bg-canvas"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
+                <span className="font-mono text-xs text-body">
+                  11:32 shared ◉{' '}
+                  <b className="font-medium text-status-done">
+                    11:32 reel analysis ready
+                  </b>{' '}
+                  ◉ 11:33 landed in Dashboard
+                </span>
+              </div>
+            </div>
+            <p className="text-pretty text-copy mt-4 leading-relaxed text-body">
+              See how it works in action.{' '}
+              <span className="font-mono text-muted">
+                Telegram share sheet flow.
+              </span>
+            </p>
           </div>
         </section>
 
@@ -696,12 +719,12 @@ export default async function LandingPage() {
 
         <section
           aria-labelledby="stats"
-          className="border-t border-line py-12"
+          className="border-t border-line bg-canvas-gradient py-12 sm:bg-canvas"
         >
           <div className="mx-auto max-w-[960px] px-6">
             <h2
               id="stats"
-              className="mb-4 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+              className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
               It compounds - and it&apos;s yours.
             </h2>
@@ -742,33 +765,9 @@ export default async function LandingPage() {
             <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
               Don&apos;t remember the title either? Search by tag,
               thumbnail, or whatever you do remember, and pull up
-              every link a video ever mentioned - long after it
-              scrolled away.
+              every link a video ever mentioned - long after the video
+              itself scrolled off your feed.
             </p>
-
-            {/* Recording flow: YouTube share sheet -> Telegram bot reply -> item
-              in the Ownix feed. Sits after the recall paragraphs rather than
-              between the tiles and them: the tiles claim volume, the paragraphs
-              say why volume matters, and the clip is the "here it is actually
-              happening" payoff. Capped to the section's 58ch column so it lines
-              up with the prose instead of spanning the full 960px and snapping
-              the reader's eye back out to full width. */}
-            <div className="mb-6 mx-auto max-w-[58ch] overflow-hidden rounded-lg border border-line bg-surface">
-              <DemoVideo
-                src="/demo-capture.mp4"
-                poster="/demo-poster.jpg"
-                className="block aspect-video w-full border-b border-line bg-canvas"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
-                <span className="font-mono text-xs text-body">
-                  11:32 shared ◉{' '}
-                  <b className="font-medium text-status-done">
-                    11:32 reel analysis ready
-                  </b>{' '}
-                  ◉ 11:33 landed in Dashboard
-                </span>
-              </div>
-            </div>
 
             <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
               <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
@@ -776,9 +775,11 @@ export default async function LandingPage() {
                 Everything also lands in your Google Drive as
                 markdown.
                 <br />
-                <b className="font-medium text-ink">
-                  Your files, your account - leave anytime and lose
-                  nothing.
+                <b className="font-subtitle font-medium text-ink">
+                  Your files, your account{' '}
+                  <span className="font-title font-normal">
+                    - leave anytime and lose nothing.
+                  </span>
                 </b>
               </p>
             </div>
@@ -801,7 +802,7 @@ export default async function LandingPage() {
                 <div>
                   <h2
                     id="h-invite"
-                    className="mb-3 text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+                    className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
                   >
                     Invite-only for now.
                   </h2>

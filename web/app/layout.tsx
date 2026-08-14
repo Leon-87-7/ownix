@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Montserrat, Merienda } from 'next/font/google';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
@@ -32,6 +32,22 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+// Landing-only third and fourth voices (title / subtitle) — the dashboard
+// keeps DESIGN.md's two-voice system untouched.
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  weight: ['600'],
+  variable: '--font-montserrat',
+  display: 'swap',
+});
+
+const merienda = Merienda({
+  subsets: ['latin'],
+  weight: ['500'],
+  variable: '--font-merienda',
+  display: 'swap',
+});
+
 // new URL() throws on a malformed value (missing protocol, stray whitespace);
 // fall back to Vercel's deployment URL rather than crashing metadata resolution.
 function siteUrl(): URL | undefined {
@@ -60,7 +76,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${montserrat.variable} ${merienda.variable}`}
     >
       <body className="bg-canvas font-sans text-ink antialiased">
         {/* SITE_URL is env/deploy-controlled, not user input, but escape
