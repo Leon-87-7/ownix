@@ -12,6 +12,7 @@ vi.stubGlobal('chrome', {
   runtime: {
     onInstalled: { addListener: (fn: () => void) => onInstalledListeners.push(fn) },
     openOptionsPage: vi.fn(),
+    getURL: (path: string) => `chrome-extension://test-id/${path}`,
   },
   commands: { onCommand: { addListener: (fn: (command: string) => void) => onCommandListeners.push(fn) } },
   tabs: { query: vi.fn(async () => []), create: vi.fn() },
