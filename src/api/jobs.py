@@ -519,8 +519,7 @@ _DETAIL_FIELDS_COMMON = (
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)
-_DETAIL_FIELDS_LONG = (
-    "transcript",
+_DETAIL_FIELDS_ENRICHMENT = (
     "ai_topic",
     "ai_objective",
     "ai_action_points",
@@ -545,7 +544,9 @@ def detail_fields_for(content_type: str) -> tuple[str, ...]:
     """Return the full set of detail field names for a given content_type."""
     if content_type == "short":
         return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
-    return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
+    if content_type == "long":
+        return _DETAIL_FIELDS_COMMON + ("transcript",) + _DETAIL_FIELDS_ENRICHMENT
+    return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_ENRICHMENT
 
 
 def thumbnail_response(
@@ -658,7 +659,9 @@ async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> d
             status_code=422, detail="Enrichment requires a transcript-complete long video"
         )
 
-    template = body.template.strip() if body.template else None
+    template = body.template.strip()
+    if not template:
+        raise HTTPException(status_code=422, detail="template is required")
     freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
     template, freestyle_prompt = _resolve_job_template("long", template, freestyle_prompt)
     claimed = await database.claim_job_enrichment(

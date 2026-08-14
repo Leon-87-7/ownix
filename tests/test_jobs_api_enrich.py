@@ -74,27 +74,43 @@ def test_successfully_claims_and_enqueues(client: TestClient, monkeypatch: pytes
 def test_persists_freestyle_prompt(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     seed_job()
     login(client)
-    async def enqueue(_payload: dict) -> None: pass
+
+    async def enqueue(_payload: dict) -> None:
+        pass
+
     monkeypatch.setattr("src.queue.enqueue", enqueue)
     response = client.post("/api/jobs/job_abcd/enrich", json={"template": "freestyle", "freestyle_prompt": "Compare the tradeoffs"})
     assert response.status_code == 202
     assert read_job()["freestyle_prompt"] == "Compare the tradeoffs"
 
 
-@pytest.mark.parametrize("body", [{"template": "unknown"}, {"template": "freestyle"}])
-def test_rejects_invalid_template(client: TestClient, body: dict) -> None:
-    seed_job(); login(client)
+@pytest.mark.parametrize(
+    "body", [{"template": "unknown"}, {"template": "freestyle"}, {"template": "   "}]
+)
+def test_rejects_invalid_template(
+    client: TestClient, body: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_job()
+    login(client)
+
+    async def should_not_enqueue(_payload: dict) -> None:
+        raise AssertionError("must not enqueue")
+
+    monkeypatch.setattr("src.queue.enqueue", should_not_enqueue)
     assert client.post("/api/jobs/job_abcd/enrich", json=body).status_code == 422
+    assert read_job()["status"] == "transcript_done"
 
 
 @pytest.mark.parametrize(("content_type", "status"), [("article", "transcript_done"), ("long", "done")])
 def test_rejects_ineligible_job(client: TestClient, content_type: str, status: str) -> None:
-    seed_job(content_type=content_type, status=status); login(client)
+    seed_job(content_type=content_type, status=status)
+    login(client)
     assert client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"}).status_code == 422
 
 
 def test_rejects_job_owned_by_another_chat(client: TestClient) -> None:
-    seed_job(chat_id=CHAT_ID + 1); login(client)
+    seed_job(chat_id=CHAT_ID + 1)
+    login(client)
     assert client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"}).status_code == 403
 
 
@@ -119,8 +135,12 @@ def test_second_claim_returns_conflict_without_enqueuing_again(
 
 
 def test_enqueue_failure_releases_claim(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    seed_job(); login(client)
-    async def fail(_payload: dict) -> None: raise RuntimeError("redis unavailable")
+    seed_job()
+    login(client)
+
+    async def fail(_payload: dict) -> None:
+        raise RuntimeError("redis unavailable")
+
     monkeypatch.setattr("src.queue.enqueue", fail)
     response = client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"})
     assert response.status_code == 503

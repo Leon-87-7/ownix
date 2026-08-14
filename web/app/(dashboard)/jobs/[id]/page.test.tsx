@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { useState } from 'react';
@@ -344,11 +345,27 @@ describe('JobDetailPage', () => {
     render(<JobDetailPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
     expect(await screen.findByTestId('gemini-slide-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('gemini-slide-panel')).not.toHaveAttribute('inert');
     for (const [, description] of builtins.map(({ name, description }) => [name, description])) {
       expect(await screen.findByText(description)).toBeInTheDocument();
     }
     expect(screen.queryByText('Hidden')).toBeNull();
     expect(screen.queryByTestId('gemini-accordion')).toBeNull();
+  });
+
+  it('removes the closed desktop panel from keyboard navigation', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } });
+    server.use(http.get('/api/templates', () => HttpResponse.json([])));
+    render(<JobDetailPage />);
+    const panel = await screen.findByTestId('gemini-slide-panel');
+    const runGemini = screen.getByRole('button', { name: 'Run Gemini' });
+    runGemini.focus();
+
+    expect(panel).toHaveAttribute('inert');
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Run Checklists' })).toHaveFocus();
   });
 
   it('keeps the inline accordion on narrow viewports', async () => {

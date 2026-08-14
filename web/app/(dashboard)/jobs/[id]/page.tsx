@@ -652,27 +652,27 @@ function useDesktopViewport() {
   return desktop;
 }
 
-function RecipeChoices({ onSubmit, descriptions = {} }: { onSubmit: (template: string, prompt?: string) => Promise<void>; descriptions?: Record<string, string> }) {
+function RecipeChoices({ onSubmit, descriptions = {}, disabled = false }: { onSubmit: (template: string, prompt?: string) => Promise<void>; descriptions?: Record<string, string>; disabled?: boolean }) {
   const [freestyle, setFreestyle] = useState(false);
   const [prompt, setPrompt] = useState('');
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {GEMINI_RECIPES.map((recipe) => (
-          <button key={recipe} type="button" onClick={() => void onSubmit(recipe)} className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}>
+          <button key={recipe} type="button" disabled={disabled} onClick={() => void onSubmit(recipe)} className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}>
             <span className="block">{recipe}</span>
             {descriptions[recipe] && <span className="mt-1 block text-sm font-normal normal-case text-body">{descriptions[recipe]}</span>}
           </button>
         ))}
-        <button type="button" onClick={() => setFreestyle(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+        <button type="button" disabled={disabled} onClick={() => setFreestyle(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
           Freestyle
         </button>
       </div>
       {freestyle && (
         <div className="space-y-2">
           <label htmlFor="gemini-freestyle" className="block text-label font-medium text-body">Freestyle instructions</label>
-          <textarea id="gemini-freestyle" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} rows={4} className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal" />
-          <button type="button" disabled={!prompt.trim()} onClick={() => void onSubmit('freestyle', prompt.trim())} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted">
+          <textarea id="gemini-freestyle" value={prompt} disabled={disabled} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} rows={4} className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal" />
+          <button type="button" disabled={disabled || !prompt.trim()} onClick={() => void onSubmit('freestyle', prompt.trim())} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted">
             Run Freestyle
           </button>
         </div>
@@ -708,9 +708,9 @@ function RunGeminiSection({ job, onClaim }: { job: JobDetail; onClaim: () => voi
         </div>
       )}
       {desktop && (
-        <aside data-testid="gemini-slide-panel" aria-label="Gemini recipes" aria-hidden={!open} className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}>
-          <div className="mb-5 flex items-center justify-between"><h2 className="text-title font-semibold text-ink">Choose a recipe</h2><button type="button" onClick={() => setOpen(false)} className="text-sm text-body hover:text-ink">Close</button></div>
-          <RecipeChoices onSubmit={submit} descriptions={Object.fromEntries(templates.filter((template) => template.is_builtin).map((template) => [template.name, template.description]))} />
+        <aside data-testid="gemini-slide-panel" aria-label="Gemini recipes" aria-hidden={!open} inert={!open} className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}>
+          <div className="mb-5 flex items-center justify-between"><h2 className="text-title font-semibold text-ink">Choose a recipe</h2><button type="button" disabled={!open} onClick={() => setOpen(false)} className="text-sm text-body hover:text-ink">Close</button></div>
+          <RecipeChoices disabled={!open} onSubmit={submit} descriptions={Object.fromEntries(templates.filter((template) => template.is_builtin).map((template) => [template.name, template.description]))} />
         </aside>
       )}
     </section>
