@@ -2,8 +2,10 @@
 import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { useState } from 'react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import JobDetailPage from './page';
+import type { JobDetail } from '@/lib/hooks/useJobDetail';
 
 const routerBack = vi.fn();
 const routerPush = vi.fn();
@@ -28,6 +30,7 @@ vi.mock('@/lib/hooks/useJobAnnotation', () => ({
 vi.mock('@/lib/hooks/useJobTags', () => ({
   useJobTags: vi.fn(),
 }));
+vi.mock('@/lib/polling', () => ({ startPolling: vi.fn(() => vi.fn()) }));
 vi.mock('@/lib/restricted/context', () => ({
   useRestrictedMode: vi.fn(() => ({ restricted: false, showRestrictedToast: vi.fn() })),
 }));
@@ -50,11 +53,13 @@ import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
 import { useJobTags } from '@/lib/hooks/useJobTags';
 import { useRestrictedMode } from '@/lib/restricted/context';
+import { startPolling } from '@/lib/polling';
 
 const mockUseJobDetail = vi.mocked(useJobDetail);
 const mockUseJobAnnotation = vi.mocked(useJobAnnotation);
 const mockUseJobTags = vi.mocked(useJobTags);
 const mockUseRestrictedMode = vi.mocked(useRestrictedMode);
+const mockStartPolling = vi.mocked(startPolling);
 
 const JOB = {
   id: 'j1',
@@ -93,6 +98,8 @@ function setupMocks(
   mockUseJobDetail.mockReturnValue({
     job: JOB,
     fetchState: 'ok',
+    setData: vi.fn(),
+    reload: vi.fn().mockResolvedValue(undefined),
     ...jobDetailOverrides,
   } as ReturnType<typeof useJobDetail>);
 
@@ -120,6 +127,8 @@ beforeEach(() => {
   routerBack.mockReset();
   routerPush.mockReset();
   vi.unstubAllGlobals();
+  mockStartPolling.mockReset();
+  mockStartPolling.mockReturnValue(vi.fn());
 });
 
 describe('JobDetailPage', () => {
@@ -259,6 +268,118 @@ describe('JobDetailPage', () => {
     render(<JobDetailPage />);
     expect(screen.getByText('Machine Learning')).toBeTruthy();
     expect(screen.getByText('Learn ML basics')).toBeTruthy();
+  });
+
+  it('renders a long transcript but omits empty article and repo transcripts', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
+    setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
+    rerender(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+    setupMocks({ job: { ...JOB, content_type: 'repo', transcript: null } });
+    rerender(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+  });
+
+  it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: 'Run Gemini' })).toBeInTheDocument();
+    setupMocks({ job: { ...JOB, status: 'done' } }); rerender(<JobDetailPage />);
+    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    setupMocks({ job: { ...JOB, content_type: 'article', status: 'transcript_done' } }); rerender(<JobDetailPage />);
+    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } }); rerender(<JobDetailPage />);
+    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+  });
+
+  it('submits a named recipe and optimistically marks the job enriching', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined);
+    mockUseJobDetail.mockImplementation(() => {
+      const [job, setData] = useState<JobDetail>({
+        ...JOB,
+        status: 'transcript_done',
+      } as JobDetail);
+      return { job, setData, fetchState: 'ok', reload };
+    });
+    let body: unknown;
+    server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', async ({ request }) => { body = await request.json(); return HttpResponse.json({ status: 'enriching' }, { status: 202 }); }));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'summary' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+      expect(screen.queryByTestId('gemini-accordion')).toBeNull();
+    });
+    expect(body).toEqual({ template: 'summary', freestyle_prompt: null });
+  });
+
+  it('requires Freestyle text and surfaces an API error inline', async () => {
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } });
+    server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', () => HttpResponse.json({ detail: 'Already claimed' }, { status: 409 })));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Freestyle' }));
+    const submit = screen.getByRole('button', { name: 'Run Freestyle' });
+    expect(submit).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Freestyle instructions'), { target: { value: 'Find risks' } });
+    fireEvent.click(submit);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Already claimed');
+  });
+
+  it('uses the desktop slide panel with built-in descriptions', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } });
+    const builtins = [
+      ['summary', 'A concise overview'],
+      ['method', 'A step-by-step method'],
+      ['technical', 'A technical deep dive'],
+      ['review', 'A critical review'],
+      ['narrative', 'A narrative retelling'],
+    ].map(([name, description], index) => ({ id: String(index), name, description, extra_instructions: '', is_builtin: true }));
+    server.use(http.get('/api/templates', () => HttpResponse.json([...builtins, { id: 'custom', name: 'custom', description: 'Hidden', extra_instructions: '', is_builtin: false }])));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    expect(await screen.findByTestId('gemini-slide-panel')).toBeInTheDocument();
+    for (const [, description] of builtins.map(({ name, description }) => [name, description])) {
+      expect(await screen.findByText(description)).toBeInTheDocument();
+    }
+    expect(screen.queryByText('Hidden')).toBeNull();
+    expect(screen.queryByTestId('gemini-accordion')).toBeNull();
+  });
+
+  it('keeps the inline accordion on narrow viewports', async () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    setupMocks({ job: { ...JOB, status: 'transcript_done' } });
+    server.use(http.get('/api/templates', () => HttpResponse.json([])));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    expect(await screen.findByTestId('gemini-accordion')).toBeInTheDocument();
+    expect(screen.queryByTestId('gemini-slide-panel')).toBeNull();
+  });
+
+  it('polls with reload only while enrichment is in flight and cancels afterward', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined);
+    const cancel = vi.fn();
+    mockStartPolling.mockReturnValue(cancel);
+    setupMocks({ job: { ...JOB, status: 'done' } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(mockStartPolling).not.toHaveBeenCalled();
+    setupMocks({ job: { ...JOB, status: 'enriching' }, reload });
+    rerender(<JobDetailPage />);
+    expect(mockStartPolling).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), 10_000);
+    const fetchJob = mockStartPolling.mock.calls[0][0];
+    const isIdle = mockStartPolling.mock.calls[0][1];
+    expect(isIdle()).toBe(false);
+    await fetchJob();
+    expect(reload).toHaveBeenCalledOnce();
+    setupMocks({ job: { ...JOB, status: 'done' } });
+    rerender(<JobDetailPage />);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(isIdle()).toBe(true);
   });
 
   it('shows error block when status is error', () => {

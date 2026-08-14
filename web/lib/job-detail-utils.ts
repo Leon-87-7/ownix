@@ -12,6 +12,7 @@ export function downloadMarkdownFile(filename: string, content: string): void {
 export type RenderType = 'text' | 'list' | 'json' | 'links' | 'code'
 
 export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: RenderType }> = [
+  { key: 'transcript', label: 'Transcript', render: 'text' },
   { key: 'ai_topic', label: 'Topic', render: 'text' },
   { key: 'ai_objective', label: 'Objective', render: 'text' },
   { key: 'ai_action_points', label: 'Action Points', render: 'list' },

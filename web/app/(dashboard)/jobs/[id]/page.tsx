@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type JSX,
   type ReactNode,
@@ -45,6 +47,9 @@ import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FolderTagForm } from '@/components/feed/folder-tag-form';
+import { apiPost } from '@/lib/fetch-utils';
+import { startPolling } from '@/lib/polling';
+import { useTemplateList } from '@/lib/hooks/useTemplateList';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -633,6 +638,85 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
   );
 }
 
+const GEMINI_RECIPES = ['summary', 'method', 'technical', 'review', 'narrative'] as const;
+
+function useDesktopViewport() {
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const update = () => setDesktop(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return desktop;
+}
+
+function RecipeChoices({ onSubmit, descriptions = {} }: { onSubmit: (template: string, prompt?: string) => Promise<void>; descriptions?: Record<string, string> }) {
+  const [freestyle, setFreestyle] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {GEMINI_RECIPES.map((recipe) => (
+          <button key={recipe} type="button" onClick={() => void onSubmit(recipe)} className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}>
+            <span className="block">{recipe}</span>
+            {descriptions[recipe] && <span className="mt-1 block text-sm font-normal normal-case text-body">{descriptions[recipe]}</span>}
+          </button>
+        ))}
+        <button type="button" onClick={() => setFreestyle(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+          Freestyle
+        </button>
+      </div>
+      {freestyle && (
+        <div className="space-y-2">
+          <label htmlFor="gemini-freestyle" className="block text-label font-medium text-body">Freestyle instructions</label>
+          <textarea id="gemini-freestyle" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} rows={4} className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal" />
+          <button type="button" disabled={!prompt.trim()} onClick={() => void onSubmit('freestyle', prompt.trim())} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted">
+            Run Freestyle
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RunGeminiSection({ job, onClaim }: { job: JobDetail; onClaim: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string>();
+  const desktop = useDesktopViewport();
+  const { templates } = useTemplateList();
+  const submit = async (template: string, freestylePrompt?: string) => {
+    setError(undefined);
+    const result = await apiPost<{ status: string }>(`/api/jobs/${job.id}/enrich`, {
+      template,
+      freestyle_prompt: template === 'freestyle' ? freestylePrompt : null,
+    }, 'Could not run Gemini');
+    if (!result.ok) { setError(result.detail); return; }
+    onClaim();
+  };
+
+  return (
+    <section className="space-y-3">
+      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+        Run Gemini
+      </button>
+      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+      {open && !desktop && (
+        <div data-testid="gemini-accordion" className="rounded-lg border border-line bg-surface p-4 motion-safe:animate-in motion-reduce:transition-none">
+          <RecipeChoices onSubmit={submit} />
+        </div>
+      )}
+      {desktop && (
+        <aside data-testid="gemini-slide-panel" aria-label="Gemini recipes" aria-hidden={!open} className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}>
+          <div className="mb-5 flex items-center justify-between"><h2 className="text-title font-semibold text-ink">Choose a recipe</h2><button type="button" onClick={() => setOpen(false)} className="text-sm text-body hover:text-ink">Close</button></div>
+          <RecipeChoices onSubmit={submit} descriptions={Object.fromEntries(templates.filter((template) => template.is_builtin).map((template) => [template.name, template.description]))} />
+        </aside>
+      )}
+    </section>
+  );
+}
+
 export default function JobDetailPage() {
   // Next 16 passes `params` as a Promise to page props; reading it as a plain
   // object yields `undefined`, which sent every detail fetch to
@@ -645,7 +729,16 @@ export default function JobDetailPage() {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [withLinks, setWithLinks] = useState(false);
   const [folderTagFormOpen, setFolderTagFormOpen] = useState(false);
-  const { job, fetchState } = useJobDetail(id, restricted);
+  const { job, setData, fetchState, reload } = useJobDetail(id, restricted);
+  const jobRef = useRef(job);
+  useEffect(() => {
+    jobRef.current = job;
+  }, [job]);
+  const reloadJob = useCallback(async () => { await reload(); }, [reload]);
+  useEffect(() => {
+    if (job?.status !== 'enriching') return;
+    return startPolling(reloadJob, () => jobRef.current?.status !== 'enriching', 10_000);
+  }, [job?.status, reloadJob]);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     id,
     fetchState,
@@ -765,6 +858,10 @@ export default function JobDetailPage() {
         job={job}
         hasFields={presentFields.length > 0}
       />
+
+      {!restricted && job.content_type === 'long' && job.status === 'transcript_done' && (
+        <RunGeminiSection job={job} onClaim={() => setData((current) => current ? { ...current, status: 'enriching' } : current)} />
+      )}
 
       {!restricted && <ChecklistsSection job={job} />}
 

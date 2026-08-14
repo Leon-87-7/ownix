@@ -1824,6 +1824,33 @@ async def backfill_og_image_url(job_id: str, og_image_url: str) -> bool:
     return rowcount > 0
 
 
+async def claim_job_enrichment(
+    job_id: str, template: str | None, freestyle_prompt: str | None
+) -> bool:
+    """Atomically claim a transcript-complete job for queued enrichment."""
+    rowcount = await _execute_rowcount(
+        """
+        UPDATE jobs
+        SET status = 'enriching', template = ?, freestyle_prompt = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'transcript_done'
+        """,
+        (template, freestyle_prompt, job_id),
+    )
+    return rowcount > 0
+
+
+async def release_job_enrichment_claim(job_id: str) -> bool:
+    """Best-effort release when enqueueing a freshly claimed job fails."""
+    return await _execute_rowcount(
+        """
+        UPDATE jobs SET status = 'transcript_done', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'enriching'
+        """,
+        (job_id,),
+    ) > 0
+
+
 # Image MIME types we are willing to persist and later serve to browsers.
 # Anything else (e.g. a stray ``text/html`` from the vision model) is coerced
 # to ``image/jpeg`` so stored bytes can never be interpreted as active content.
