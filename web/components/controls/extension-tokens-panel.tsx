@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   createPairingCode,
   listExtensionTokens,
@@ -96,12 +97,15 @@ export function ExtensionTokensPanel() {
           {pairing ? 'Generating…' : 'Generate pairing code'}
         </button>
         {pairingCode && (
-          <p className="mt-2 flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-sm text-ink">
-            <span>{pairingCode}</span>
-            <span className="shrink-0 font-sans text-label text-muted">
-              Expires in {pairingExpiresIn}s
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-sm text-ink">
+            <span className="break-all">{pairingCode}</span>
+            <span className="flex shrink-0 items-center gap-3">
+              <span className="font-sans text-label text-muted">
+                Expires in {pairingExpiresIn}s
+              </span>
+              <CopyButton value={pairingCode} ariaLabel="Copy pairing code" />
             </span>
-          </p>
+          </div>
         )}
       </div>
 
