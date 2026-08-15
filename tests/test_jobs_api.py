@@ -556,7 +556,11 @@ def test_job_detail_exposes_transcript_only_for_long_jobs(
     response = jobs_client.get(f"/api/jobs/detail-{content_type}")
 
     assert response.status_code == 200
-    assert ("transcript" in response.json()) is includes_transcript
+    payload = response.json()
+    if includes_transcript:
+        assert payload["transcript"] == "populated transcript"
+    else:
+        assert "transcript" not in payload
 
 
 def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(

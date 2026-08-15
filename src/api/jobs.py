@@ -545,7 +545,7 @@ def detail_fields_for(content_type: str) -> tuple[str, ...]:
     if content_type == "short":
         return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
     if content_type == "long":
-        return _DETAIL_FIELDS_COMMON + ("transcript",) + _DETAIL_FIELDS_ENRICHMENT
+        return (*_DETAIL_FIELDS_COMMON, "transcript", *_DETAIL_FIELDS_ENRICHMENT)
     return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_ENRICHMENT
 
 
@@ -670,9 +670,9 @@ async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> d
     if not claimed:
         raise HTTPException(status_code=409, detail="Job enrichment was already claimed")
 
-    from src import queue
-
     try:
+        from src import queue
+
         await queue.enqueue({"task": "enrichment", "job_id": job_id})
     except Exception as exc:
         await database.release_job_enrichment_claim(job_id)
