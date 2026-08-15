@@ -37,6 +37,8 @@ def test_non_pdf_article_url_unaffected() -> None:
         "https://youtube.com/shorts/abc123?si=xyz",
         "https://instagram.com/reel/DVNolBNE6vV/",
         "https://www.instagram.com/reel/DVNolBNE6vV/?igsh=a2ZodGgxOXN4Ynp3",
+        "https://www.instagram.com/reels/DZ2dx-qp1w0/",
+        "https://www.instagram.com/reel/DZ2dx-qp1w0/?igsi=MTY4Y3pzY2xtQTQ0dA==",
         "https://tiktok.com/@implementationai/video/7234567890123456789",
         "https://www.tiktok.com/@some.user/video/1234567890",
         "https://vt.tiktok.com/ZS2vJqL2Y/",

@@ -98,7 +98,7 @@ def detect_pipeline(
 
     Short pipeline:
         - youtube.com/shorts/{id}
-        - instagram.com/reel/{id}
+        - instagram.com/reel/{id} or /reels/{id}
         - tiktok.com/@{user}/video/{id}
         - vt.tiktok.com/{code} (TikTok's short-link redirect domain)
 
@@ -169,7 +169,9 @@ def _match_short(host: str, path: str) -> bool:
         and len(path) > len("/shorts/")
     ):
         return True
-    if _host_matches(host, "instagram.com") and path.startswith("/reel/"):
+    # Instagram serves both /reel/ (web UI, redirect target) and /reels/
+    # (native share sheet) for the same content.
+    if _host_matches(host, "instagram.com") and (path.startswith("/reel/") or path.startswith("/reels/")):
         return True
     if _host_matches(host, "tiktok.com") and _TIKTOK_VIDEO_PATH.match(path):
         return True
