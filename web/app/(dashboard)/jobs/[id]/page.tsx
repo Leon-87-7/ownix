@@ -16,7 +16,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Check, Copy, Download, ListChecks } from 'lucide-react';
+import { Check, Copy, Download, ScrollText } from 'lucide-react';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
@@ -551,7 +551,7 @@ function JobActionsBar({
 
 // Transcript preview card — mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), but flags itself
-// with the checklist glyph instead of the AI sparkle.
+// with the scroll/transcript glyph instead of the AI sparkle.
 function TranscriptCard({ job }: { job: JobDetail }) {
   const [copied, setCopied] = useState(false);
 
@@ -574,7 +574,7 @@ function TranscriptCard({ job }: { job: JobDetail }) {
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-2 flex items-center gap-2">
-        <ListChecks className="h-4 w-4 text-signal" />
+        <ScrollText className="h-4 w-4 text-signal" />
         <h2 className="flex-1 text-sm font-semibold text-ink">
           Transcript
         </h2>
