@@ -1,3 +1,11 @@
+/* @ds
+name: PlatformGlyph / PlatformBadge
+purpose: Identify the source platform of a link — PlatformGlyph is the bare icon (brand SVG, favicon, or generic file fallback), PlatformBadge wraps it in a bordered chip with a tooltip.
+when-not: Not a content-type indicator — content type is TypeBadge. This is specifically about *where the link came from*.
+notes: Falls back through three tiers: known-brand SVG → fetched favicon → generic FileText icon.
+status: inferred
+*/
+
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { YouTubeIcon } from '@/components/svg/youtube-icon';

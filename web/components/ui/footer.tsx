@@ -1,3 +1,11 @@
+/* @ds
+name: Footer
+purpose: The global footer for auth/public/landing pages — animated wordmark, Privacy/Terms links.
+when-not: Not used inside the authenticated dashboard shell (that's PageShell/Sidebar territory); this is public-surface chrome only.
+notes: Brings its own TooltipProvider since it can render outside the dashboard's — nesting providers is intentional, not a bug.
+status: inferred
+*/
+
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
 import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';

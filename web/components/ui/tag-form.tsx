@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: TagForm
+purpose: The standalone tag create/edit form — name, meaning, color, icon — used inline on the Controls page and in the Intake console's inline tag offer.
+when-not: For the compact attach/detach dropdown with its own inline create step, use TagMenu (tag-picker.tsx) instead.
+notes: Shares PRESET_COLORS + IconPicker with tag-picker.tsx but is a separate form implementation from TagMenu's CreateTagModal — a known duplication, not unified here (DRIFT-BACKLOG.md).
+status: inferred
+*/
+
 /**
  * The tag editor. Lifted out of the Controls page (issue #489) so the Intake
  * console can render the same form inline in a card when a `#tag` token names

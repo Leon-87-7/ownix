@@ -1,5 +1,13 @@
 "use client";
 
+/* @ds
+name: DateTime
+purpose: Renders an ISO timestamp as UTC on first paint (SSR-safe), then reformats to the viewer's locale/timezone after hydration.
+when-not: Not for durations or relative time ("2h ago") — it only formats a fixed instant.
+notes: The two-pass render is deliberate, not a bug — it avoids a hydration mismatch (see the file's own comment).
+status: inferred
+*/
+
 import { useEffect, useState } from "react";
 
 // ponytail: no IP geolocation — Intl already uses the browser's locale + timezone.

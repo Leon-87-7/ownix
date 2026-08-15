@@ -1,3 +1,11 @@
+/* @ds
+name: NoPreviewRing
+purpose: The empty-thumbnail stamp for a preview card with no image — a static logo-in-a-ring, seeded per job so its position/size/rotation stay stable across renders.
+when-not: For a loading or in-progress state use PreviewMotif (its animated sibling), not this. This is specifically "there will never be a thumbnail here."
+notes: Placement math is deliberately approximate (see the file's own comments) — good enough that the ring text never fully escapes the card.
+status: inferred
+*/
+
 import { useId } from "react";
 import OwnixLogo from "@/app/ownix-logo.svg";
 

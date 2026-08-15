@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T16:26:41.566Z",
-  "sha": "24ce7ed",
+  "builtAt": "2026-08-15T16:50:21.233Z",
+  "sha": "4d10592",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,7 +106,7 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 8,
+  "componentsWithDs": 21,
   "components": [
     {
       "file": "web/components/ui/badges.tsx",
@@ -114,9 +114,24 @@
       "ds": "name: TypeBadge / StatusBadge\r\npurpose: Read-only labels that name a thing — TypeBadge names a link's content type, StatusBadge names a job's pipeline state.\r\nvariants:\r\n  TypeBadge: outlined (transparent + hairline + hue text) — short, long, article, repo.\r\n  StatusBadge: filled (tint background + hue text) — pending, processing, enriching, done, error, cancelled.\r\nwhen-not: Never for actions (badges don't click — use GhostButton) or for removable attached tags (use TagChips).\r\nnotes: Color always rides alongside the text label, never the only channel (DESIGN.md Badges rule).\r\nstatus: inferred"
     },
     {
+      "file": "web/components/ui/confirm-dialog.tsx",
+      "hash": "f89b66655765",
+      "ds": "name: ConfirmDialog\r\npurpose: A destructive-action confirmation composed on Dialog — trigger, title/description, and a Cancel/Confirm pair with a pending state.\r\nwhen-not: For a non-destructive modal task use Dialog directly. Confirm always fills status-error; don't reuse it for a non-destructive confirmation.\r\nnotes: hideClose + focus moved to Cancel on open, so the safe choice is what Enter/Tab reach first.\r\nstatus: inferred"
+    },
+    {
       "file": "web/components/ui/copy-button.tsx",
       "hash": "24dce71904d7",
       "ds": "name: CopyButton\r\npurpose: Copy a machine value (ID, URL, path) to the clipboard with inline confirmation.\r\nwhen-not: Only for copyable literals — not a general-purpose action button (use GhostButton).\r\nnotes: Swaps to a check + \"Copied!\" for 1.5s after copy; pair with a mono value.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/date-time.tsx",
+      "hash": "e4f78f3d8d6c",
+      "ds": "name: DateTime\r\npurpose: Renders an ISO timestamp as UTC on first paint (SSR-safe), then reformats to the viewer's locale/timezone after hydration.\r\nwhen-not: Not for durations or relative time (\"2h ago\") — it only formats a fixed instant.\r\nnotes: The two-pass render is deliberate, not a bug — it avoids a hydration mismatch (see the file's own comment).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/dev-persona-switch.tsx",
+      "hash": "81cc67a1231e",
+      "ds": "name: DevPersonaSwitch\r\npurpose: A dev/mock-build-only floating draggable toggle between the mock-user and unauthenticated-visitor (Restricted mode) personas.\r\nwhen-not: Never renders outside NODE_ENV !== production && NEXT_PUBLIC_API_MOCK === '1' — do not reuse this pattern for a production affordance.\r\nnotes: A plain <a>, not a client-routed Link, because the persona switch needs a full navigation to set/clear an httpOnly cookie.\r\nstatus: inferred"
     },
     {
       "file": "web/components/ui/dialog.tsx",
@@ -124,14 +139,54 @@
       "ds": "name: Dialog\r\npurpose: Centered modal for a focused task or confirmation that must interrupt the current surface (Radix: focus trap, Escape, outside-click).\r\nvariants:\r\n  hideClose: drop the X when the flow must be resolved by an explicit choice inside.\r\nwhen-not: For a thumb-reachable mobile action use Sheet; for a plain destructive confirm use ConfirmDialog (composed on top of this).\r\nnotes: Enters/exits on the tooltip-fade tokens; the overlay shadow lives only on overlays like this.\r\nstatus: inferred"
     },
     {
+      "file": "web/components/ui/export-modal.tsx",
+      "hash": "44735948df45",
+      "ds": "name: ExportModal\r\npurpose: A Space's export picker — markdown/text/PDF are generated client-side; Google Doc export goes through a server round-trip with its own loading/error states.\r\nwhen-not: Feature-specific to Spaces; not a general-purpose modal. For a plain confirm use ConfirmDialog, for a generic task use Dialog.\r\nnotes: The Google Doc option's error branches (drive_not_configured vs other) render differently — check both when touching this file.\r\nstatus: inferred"
+    },
+    {
       "file": "web/components/ui/filter-bar.tsx",
       "hash": "f91f391f21ad",
       "ds": "name: FilterBar / SegmentedTabs / FilterButton\r\npurpose: The search-and-filter row above a collection — SegmentedTabs pick one content-type view, FilterButton toggles a status facet, with a search that collapses on mobile.\r\nvariants:\r\n  SegmentedTabs: active option flips to an amber fill + near-black text (selection is the action); inactive is hairline + hover underline.\r\n  FilterButton: a secondary status toggle beside the tabs.\r\nwhen-not: For switching peer views that aren't filters use TabBar; never put two amber winners on one row.\r\nnotes: FilterButton currently fills contrasignal-deep rather than amber — a known drift (DRIFT-BACKLOG.md), documented as-is, not corrected here.\r\nstatus: inferred"
     },
     {
+      "file": "web/components/ui/footer.tsx",
+      "hash": "f53321f2f684",
+      "ds": "name: Footer\r\npurpose: The global footer for auth/public/landing pages — animated wordmark, Privacy/Terms links.\r\nwhen-not: Not used inside the authenticated dashboard shell (that's PageShell/Sidebar territory); this is public-surface chrome only.\r\nnotes: Brings its own TooltipProvider since it can render outside the dashboard's — nesting providers is intentional, not a bug.\r\nstatus: inferred"
+    },
+    {
       "file": "web/components/ui/ghost-button.tsx",
       "hash": "b2446c106133",
       "ds": "name: GhostButton\r\npurpose: The shared recessed action button; its 2px lower edge carries the accent while the caller owns size, surface, and text color.\r\nvariants:\r\n  signal: action-forward controls — submit, the command launcher, anything that commits.\r\n  contrasignal (default): quiet navigation, dismissal, or secondary access paths.\r\n  body: a neutral, low-emphasis action with no accent pull.\r\n  borderLine 1|2: hairline weight of the lower edge.\r\nwhen-not: Not the primary amber CTA (that is a bg-signal fill, not a ghost), and not for pure navigation — a link that only routes should be an <a>.\r\nnotes: Polymorphic via `as`; focus ring and disabled treatment are built in.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/markdown-editor.tsx",
+      "hash": "56f499e625e2",
+      "ds": "name: MarkdownEditor\r\npurpose: WYSIWYG markdown editor (Milkdown Crepe) for freeform notes, autosaving 800ms after the last keystroke.\r\nwhen-not: Has zero current consumers in the app (design-system/_inventory/usage.md) — kept and documented per the Phase 1 gate decision, not deleted.\r\nnotes: Mounts once and ignores prop changes to initialMarkdown by design (see the effect's exhaustive-deps comment) — don't remount it to load new content.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/no-preview-ring.tsx",
+      "hash": "674122d30d5a",
+      "ds": "name: NoPreviewRing\r\npurpose: The empty-thumbnail stamp for a preview card with no image — a static logo-in-a-ring, seeded per job so its position/size/rotation stay stable across renders.\r\nwhen-not: For a loading or in-progress state use PreviewMotif (its animated sibling), not this. This is specifically \"there will never be a thumbnail here.\"\r\nnotes: Placement math is deliberately approximate (see the file's own comments) — good enough that the ring text never fully escapes the card.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/platform-icon.tsx",
+      "hash": "5b1c6a97dfad",
+      "ds": "name: PlatformGlyph / PlatformBadge\r\npurpose: Identify the source platform of a link — PlatformGlyph is the bare icon (brand SVG, favicon, or generic file fallback), PlatformBadge wraps it in a bordered chip with a tooltip.\r\nwhen-not: Not a content-type indicator — content type is TypeBadge. This is specifically about *where the link came from*.\r\nnotes: Falls back through three tiers: known-brand SVG → fetched favicon → generic FileText icon.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/preview-motif.tsx",
+      "hash": "89bad8a4f5e8",
+      "ds": "name: PreviewMotif\r\npurpose: The animated logo-in-a-ring loading/placeholder motif used across feature loading states.\r\nvariants:\r\n  size default|fill: fixed 44x44 vs stretch to fill the parent.\r\n  treatment default|hero: 7s vs 35s cycle speed — hero also gradient-fills the ring text (the Brain gradient budget).\r\nwhen-not: For a permanently-empty thumbnail (not loading) use NoPreviewRing instead — this motif implies something is still coming.\r\nnotes: hero's gradient stops are the one place outside the Brain surface DESIGN.md explicitly allows the violet-to-cyan gradient budget to spend.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/public-header.tsx",
+      "hash": "2417a0b07ba0",
+      "ds": "name: PublicHeader\r\npurpose: Header for standalone public pages (privacy, terms) — wordmark + nav + Sign in.\r\nwhen-not: Has zero current consumers (design-system/_inventory/usage.md) — PublicShell renders its own header inline instead. Kept and documented per the Phase 1 gate decision, not deleted.\r\nnotes: If reactivated, note the nav items are hard-coded (Privacy/Terms/Sign in), unlike PublicShell's active-page-aware nav.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/reorder-buttons.tsx",
+      "hash": "07d63479ebe5",
+      "ds": "name: ReorderButtons\r\npurpose: A stacked up/down button pair for manually reordering a list item.\r\nwhen-not: Not for pagination or navigation — only for changing an item's position within its own list.\r\nnotes: Caller supplies disableUp/disableDown at the list boundaries; this component has no boundary awareness of its own.\r\nstatus: inferred"
     },
     {
       "file": "web/components/ui/sheet.tsx",
@@ -142,6 +197,16 @@
       "file": "web/components/ui/tab-bar.tsx",
       "hash": "25f84e9cb009",
       "ds": "name: TabBar\r\npurpose: Underline-active switcher between peer views of the same data; generic and type-safe over the tab value.\r\nwhen-not: For a filter whose active option fills amber use SegmentedTabs (filter-bar); for moving between routes use nav, not tabs.\r\nnotes: Active tab is a signal underline + ink text (a light amber touch marking \"here\"); the heavy amber fill is reserved for filter selection.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/tag-form.tsx",
+      "hash": "2a931f83970d",
+      "ds": "name: TagForm\r\npurpose: The standalone tag create/edit form — name, meaning, color, icon — used inline on the Controls page and in the Intake console's inline tag offer.\r\nwhen-not: For the compact attach/detach dropdown with its own inline create step, use TagMenu (tag-picker.tsx) instead.\r\nnotes: Shares PRESET_COLORS + IconPicker with tag-picker.tsx but is a separate form implementation from TagMenu's CreateTagModal — a known duplication, not unified here (DRIFT-BACKLOG.md).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/tag-picker.tsx",
+      "hash": "94fd3508399d",
+      "ds": "name: TagMenu / TagMark / IconPicker / TagChips\r\npurpose: The full tag-attachment surface for a job — TagMenu is the attach/detach dropdown (with inline create), TagMark is a tag's icon-or-dot glyph, IconPicker picks that glyph, TagChips renders attached tags as removable pills.\r\nvariants:\r\n  TagChips compact: clamps the name to 3 characters below sm, full name at sm+.\r\nwhen-not: TagMark/TagChips are read-only-plus-remove; they never toggle attachment (that's TagMenu). IconPicker's preset palette lives outside the design-system token set — see DRIFT-BACKLOG.md.\r\nnotes: TagMenu's create step opens CreateTagModal, an inline Dialog that overlaps TagForm's domain (both create/edit a tag) — see the near-duplicate note in _inventory/components.md.\r\nstatus: inferred"
     },
     {
       "file": "web/components/ui/tooltip.tsx",

@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: DevPersonaSwitch
+purpose: A dev/mock-build-only floating draggable toggle between the mock-user and unauthenticated-visitor (Restricted mode) personas.
+when-not: Never renders outside NODE_ENV !== production && NEXT_PUBLIC_API_MOCK === '1' — do not reuse this pattern for a production affordance.
+notes: A plain <a>, not a client-routed Link, because the persona switch needs a full navigation to set/clear an httpOnly cookie.
+status: inferred
+*/
+
 import { useRef, useState } from 'react';
 import { Bot, BotOff } from 'lucide-react';
 import { PulsingBorder } from '@paper-design/shaders-react';

@@ -1,5 +1,15 @@
 'use client';
 
+/* @ds
+name: TagMenu / TagMark / IconPicker / TagChips
+purpose: The full tag-attachment surface for a job — TagMenu is the attach/detach dropdown (with inline create), TagMark is a tag's icon-or-dot glyph, IconPicker picks that glyph, TagChips renders attached tags as removable pills.
+variants:
+  TagChips compact: clamps the name to 3 characters below sm, full name at sm+.
+when-not: TagMark/TagChips are read-only-plus-remove; they never toggle attachment (that's TagMenu). IconPicker's preset palette lives outside the design-system token set — see DRIFT-BACKLOG.md.
+notes: TagMenu's create step opens CreateTagModal, an inline Dialog that overlaps TagForm's domain (both create/edit a tag) — see the near-duplicate note in _inventory/components.md.
+status: inferred
+*/
+
 import { useState, type ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {

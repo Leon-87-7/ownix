@@ -1,5 +1,13 @@
 'use client'
 
+/* @ds
+name: MarkdownEditor
+purpose: WYSIWYG markdown editor (Milkdown Crepe) for freeform notes, autosaving 800ms after the last keystroke.
+when-not: Has zero current consumers in the app (design-system/_inventory/usage.md) — kept and documented per the Phase 1 gate decision, not deleted.
+notes: Mounts once and ignores prop changes to initialMarkdown by design (see the effect's exhaustive-deps comment) — don't remount it to load new content.
+status: inferred
+*/
+
 import { useEffect, useRef } from 'react'
 
 // Crepe ships its editor chrome (toolbar, slash-menu, placeholder, list/table

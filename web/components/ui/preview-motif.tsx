@@ -1,3 +1,14 @@
+/* @ds
+name: PreviewMotif
+purpose: The animated logo-in-a-ring loading/placeholder motif used across feature loading states.
+variants:
+  size default|fill: fixed 44x44 vs stretch to fill the parent.
+  treatment default|hero: 7s vs 35s cycle speed — hero also gradient-fills the ring text (the Brain gradient budget).
+when-not: For a permanently-empty thumbnail (not loading) use NoPreviewRing instead — this motif implies something is still coming.
+notes: hero's gradient stops are the one place outside the Brain surface DESIGN.md explicitly allows the violet-to-cyan gradient budget to spend.
+status: inferred
+*/
+
 import { useId } from 'react';
 import OwnixLogo from '@/app/ownix-logo.svg';
 

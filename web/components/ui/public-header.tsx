@@ -1,3 +1,11 @@
+/* @ds
+name: PublicHeader
+purpose: Header for standalone public pages (privacy, terms) — wordmark + nav + Sign in.
+when-not: Has zero current consumers (design-system/_inventory/usage.md) — PublicShell renders its own header inline instead. Kept and documented per the Phase 1 gate decision, not deleted.
+notes: If reactivated, note the nav items are hard-coded (Privacy/Terms/Sign in), unlike PublicShell's active-page-aware nav.
+status: inferred
+*/
+
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
 

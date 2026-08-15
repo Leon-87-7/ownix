@@ -1,5 +1,13 @@
 "use client";
 
+/* @ds
+name: ExportModal
+purpose: A Space's export picker — markdown/text/PDF are generated client-side; Google Doc export goes through a server round-trip with its own loading/error states.
+when-not: Feature-specific to Spaces; not a general-purpose modal. For a plain confirm use ConfirmDialog, for a generic task use Dialog.
+notes: The Google Doc option's error branches (drive_not_configured vs other) render differently — check both when touching this file.
+status: inferred
+*/
+
 import { useEffect, useState } from "react";
 import { useGdocExport } from "@/lib/hooks/useGdocExport";
 import { SkeletonBlock } from "@/components/feed/feed-states";

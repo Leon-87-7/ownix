@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: ConfirmDialog
+purpose: A destructive-action confirmation composed on Dialog — trigger, title/description, and a Cancel/Confirm pair with a pending state.
+when-not: For a non-destructive modal task use Dialog directly. Confirm always fills status-error; don't reuse it for a non-destructive confirmation.
+notes: hideClose + focus moved to Cancel on open, so the safe choice is what Enter/Tab reach first.
+status: inferred
+*/
+
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Dialog,
