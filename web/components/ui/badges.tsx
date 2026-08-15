@@ -1,3 +1,14 @@
+/* @ds
+name: TypeBadge / StatusBadge
+purpose: Read-only labels that name a thing — TypeBadge names a link's content type, StatusBadge names a job's pipeline state.
+variants:
+  TypeBadge: outlined (transparent + hairline + hue text) — short, long, article, repo.
+  StatusBadge: filled (tint background + hue text) — pending, processing, enriching, done, error, cancelled.
+when-not: Never for actions (badges don't click — use GhostButton) or for removable attached tags (use TagChips).
+notes: Color always rides alongside the text label, never the only channel (DESIGN.md Badges rule).
+status: inferred
+*/
+
 // The Two-Dialect Badge Rule (DESIGN.md): content types are OUTLINED
 // (transparent + hairline + hue text), statuses are FILLED (tint + hue text).
 // Single source of truth — import these everywhere a badge renders.

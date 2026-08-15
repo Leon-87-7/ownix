@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: Sheet
+purpose: Bottom-anchored modal that slides up from the edge — the thumb-reachable counterpart to Dialog on narrow viewports.
+when-not: For centered desktop-focus tasks use Dialog. Honors safe-area inset, so don't hand-pad the bottom.
+notes: Enters/exits on the slide-up tokens.
+status: inferred
+*/
+
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';

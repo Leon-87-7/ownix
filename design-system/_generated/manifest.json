@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T13:12:45.063Z",
-  "sha": "d4f5602",
+  "builtAt": "2026-08-15T16:26:41.566Z",
+  "sha": "24ce7ed",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,6 +106,47 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 0,
-  "components": []
+  "componentsWithDs": 8,
+  "components": [
+    {
+      "file": "web/components/ui/badges.tsx",
+      "hash": "88c86fd815d0",
+      "ds": "name: TypeBadge / StatusBadge\r\npurpose: Read-only labels that name a thing — TypeBadge names a link's content type, StatusBadge names a job's pipeline state.\r\nvariants:\r\n  TypeBadge: outlined (transparent + hairline + hue text) — short, long, article, repo.\r\n  StatusBadge: filled (tint background + hue text) — pending, processing, enriching, done, error, cancelled.\r\nwhen-not: Never for actions (badges don't click — use GhostButton) or for removable attached tags (use TagChips).\r\nnotes: Color always rides alongside the text label, never the only channel (DESIGN.md Badges rule).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/copy-button.tsx",
+      "hash": "24dce71904d7",
+      "ds": "name: CopyButton\r\npurpose: Copy a machine value (ID, URL, path) to the clipboard with inline confirmation.\r\nwhen-not: Only for copyable literals — not a general-purpose action button (use GhostButton).\r\nnotes: Swaps to a check + \"Copied!\" for 1.5s after copy; pair with a mono value.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/dialog.tsx",
+      "hash": "4de89389f1eb",
+      "ds": "name: Dialog\r\npurpose: Centered modal for a focused task or confirmation that must interrupt the current surface (Radix: focus trap, Escape, outside-click).\r\nvariants:\r\n  hideClose: drop the X when the flow must be resolved by an explicit choice inside.\r\nwhen-not: For a thumb-reachable mobile action use Sheet; for a plain destructive confirm use ConfirmDialog (composed on top of this).\r\nnotes: Enters/exits on the tooltip-fade tokens; the overlay shadow lives only on overlays like this.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/filter-bar.tsx",
+      "hash": "f91f391f21ad",
+      "ds": "name: FilterBar / SegmentedTabs / FilterButton\r\npurpose: The search-and-filter row above a collection — SegmentedTabs pick one content-type view, FilterButton toggles a status facet, with a search that collapses on mobile.\r\nvariants:\r\n  SegmentedTabs: active option flips to an amber fill + near-black text (selection is the action); inactive is hairline + hover underline.\r\n  FilterButton: a secondary status toggle beside the tabs.\r\nwhen-not: For switching peer views that aren't filters use TabBar; never put two amber winners on one row.\r\nnotes: FilterButton currently fills contrasignal-deep rather than amber — a known drift (DRIFT-BACKLOG.md), documented as-is, not corrected here.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/ghost-button.tsx",
+      "hash": "b2446c106133",
+      "ds": "name: GhostButton\r\npurpose: The shared recessed action button; its 2px lower edge carries the accent while the caller owns size, surface, and text color.\r\nvariants:\r\n  signal: action-forward controls — submit, the command launcher, anything that commits.\r\n  contrasignal (default): quiet navigation, dismissal, or secondary access paths.\r\n  body: a neutral, low-emphasis action with no accent pull.\r\n  borderLine 1|2: hairline weight of the lower edge.\r\nwhen-not: Not the primary amber CTA (that is a bg-signal fill, not a ghost), and not for pure navigation — a link that only routes should be an <a>.\r\nnotes: Polymorphic via `as`; focus ring and disabled treatment are built in.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/sheet.tsx",
+      "hash": "7a2a6ea521ef",
+      "ds": "name: Sheet\r\npurpose: Bottom-anchored modal that slides up from the edge — the thumb-reachable counterpart to Dialog on narrow viewports.\r\nwhen-not: For centered desktop-focus tasks use Dialog. Honors safe-area inset, so don't hand-pad the bottom.\r\nnotes: Enters/exits on the slide-up tokens.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/tab-bar.tsx",
+      "hash": "25f84e9cb009",
+      "ds": "name: TabBar\r\npurpose: Underline-active switcher between peer views of the same data; generic and type-safe over the tab value.\r\nwhen-not: For a filter whose active option fills amber use SegmentedTabs (filter-bar); for moving between routes use nav, not tabs.\r\nnotes: Active tab is a signal underline + ink text (a light amber touch marking \"here\"); the heavy amber fill is reserved for filter selection.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/ui/tooltip.tsx",
+      "hash": "1c85211370e2",
+      "ds": "name: Tooltip\r\npurpose: Hover/focus reveal for a supplemental label or machine fact that would clutter the resting UI.\r\nvariants:\r\n  side top|bottom|left|right: placement relative to the trigger.\r\n  align start|center|end: alignment along that side.\r\n  mono: monospace body for machine facts (IDs, counts, timestamps).\r\nwhen-not: Not for information a user must read to act (put that in the UI), and not on non-focusable triggers — keyboard users can't reach it.\r\nnotes: Renders nothing when content is empty; supports controlled open.\r\nstatus: inferred"
+    }
+  ]
 }

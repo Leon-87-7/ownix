@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: CopyButton
+purpose: Copy a machine value (ID, URL, path) to the clipboard with inline confirmation.
+when-not: Only for copyable literals — not a general-purpose action button (use GhostButton).
+notes: Swaps to a check + "Copied!" for 1.5s after copy; pair with a mono value.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';

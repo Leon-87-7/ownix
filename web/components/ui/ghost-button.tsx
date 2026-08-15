@@ -1,3 +1,16 @@
+/* @ds
+name: GhostButton
+purpose: The shared recessed action button; its 2px lower edge carries the accent while the caller owns size, surface, and text color.
+variants:
+  signal: action-forward controls — submit, the command launcher, anything that commits.
+  contrasignal (default): quiet navigation, dismissal, or secondary access paths.
+  body: a neutral, low-emphasis action with no accent pull.
+  borderLine 1|2: hairline weight of the lower edge.
+when-not: Not the primary amber CTA (that is a bg-signal fill, not a ghost), and not for pure navigation — a link that only routes should be an <a>.
+notes: Polymorphic via `as`; focus ring and disabled treatment are built in.
+status: inferred
+*/
+
 import type {
   ComponentPropsWithoutRef,
   ElementType,

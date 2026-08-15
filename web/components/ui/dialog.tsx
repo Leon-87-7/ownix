@@ -1,5 +1,15 @@
 'use client';
 
+/* @ds
+name: Dialog
+purpose: Centered modal for a focused task or confirmation that must interrupt the current surface (Radix: focus trap, Escape, outside-click).
+variants:
+  hideClose: drop the X when the flow must be resolved by an explicit choice inside.
+when-not: For a thumb-reachable mobile action use Sheet; for a plain destructive confirm use ConfirmDialog (composed on top of this).
+notes: Enters/exits on the tooltip-fade tokens; the overlay shadow lives only on overlays like this.
+status: inferred
+*/
+
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';

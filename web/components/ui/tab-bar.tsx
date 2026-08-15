@@ -1,3 +1,11 @@
+/* @ds
+name: TabBar
+purpose: Underline-active switcher between peer views of the same data; generic and type-safe over the tab value.
+when-not: For a filter whose active option fills amber use SegmentedTabs (filter-bar); for moving between routes use nav, not tabs.
+notes: Active tab is a signal underline + ink text (a light amber touch marking "here"); the heavy amber fill is reserved for filter selection.
+status: inferred
+*/
+
 // Small shared product primitive (DESIGN.md).
 
 interface TabBarProps<T extends string> {

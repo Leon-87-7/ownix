@@ -1,5 +1,16 @@
 'use client';
 
+/* @ds
+name: FilterBar / SegmentedTabs / FilterButton
+purpose: The search-and-filter row above a collection — SegmentedTabs pick one content-type view, FilterButton toggles a status facet, with a search that collapses on mobile.
+variants:
+  SegmentedTabs: active option flips to an amber fill + near-black text (selection is the action); inactive is hairline + hover underline.
+  FilterButton: a secondary status toggle beside the tabs.
+when-not: For switching peer views that aren't filters use TabBar; never put two amber winners on one row.
+notes: FilterButton currently fills contrasignal-deep rather than amber — a known drift (DRIFT-BACKLOG.md), documented as-is, not corrected here.
+status: inferred
+*/
+
 import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type React from 'react';

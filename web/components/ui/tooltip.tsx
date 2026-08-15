@@ -1,5 +1,17 @@
 'use client';
 
+/* @ds
+name: Tooltip
+purpose: Hover/focus reveal for a supplemental label or machine fact that would clutter the resting UI.
+variants:
+  side top|bottom|left|right: placement relative to the trigger.
+  align start|center|end: alignment along that side.
+  mono: monospace body for machine facts (IDs, counts, timestamps).
+when-not: Not for information a user must read to act (put that in the UI), and not on non-focusable triggers — keyboard users can't reach it.
+notes: Renders nothing when content is empty; supports controlled open.
+status: inferred
+*/
+
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { cloneElement } from 'react';
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from 'react';

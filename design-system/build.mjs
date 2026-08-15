@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import * as cfgMod from '../web/tailwind.config.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -66,7 +66,9 @@ const components = [];
 for (const f of componentFiles) {
   const src = readFileSync(f, 'utf8');
   const ds = parseDs(src);
-  const rel = relative(REPO, f);
+  // Normalize to forward slashes: this repo is worked on from both POSIX and
+  // Windows sessions, and manifest paths should be stable across both.
+  const rel = relative(REPO, f).split(sep).join('/');
   const hash = createHash('sha256').update(src).digest('hex').slice(0, 12);
   if (ds) components.push({ file: rel, hash, ds });
 }
@@ -222,13 +224,15 @@ writeFileSync(join(HERE, 'index.html'), html);
 
 // ---- compile the app's real CSS (scans the index.html we just wrote) ---------
 console.log('Compiling app CSS via tailwind CLI…');
+// npx is a .cmd shim on Windows, so it needs shell:true there; execFileSync
+// on POSIX runs the binary directly and shell:true is harmless either way.
 execFileSync('npx', [
   '--yes', 'tailwindcss@3',
   '-c', join(HERE, 'tailwind.gallery.config.ts'),
   '-i', join(REPO, 'web', 'app', 'globals.css'),
   '-o', join(GEN, 'app.css'),
   '--minify',
-], { cwd: HERE, stdio: 'inherit' });
+], { cwd: HERE, stdio: 'inherit', shell: process.platform === 'win32' });
 
 console.log(`\nDone. ${colorTokens.length} colors, ${fontSizeTokens.length} sizes, ` +
   `${componentFiles.length} components (${components.length} with @ds).`);
