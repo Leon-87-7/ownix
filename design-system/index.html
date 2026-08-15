@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en" class="bg-canvas">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ownix Design System</title>
+<link rel="stylesheet" href="./_generated/app.css" />
+</head>
+<body class="bg-canvas text-body font-sans">
+<div class="mx-auto max-w-6xl px-6 py-10">
+  <header class="mb-10">
+    <h1 class="text-display text-ink font-sans">Ownix Design System</h1>
+    <p class="text-copy text-body mt-2 max-w-2xl">Every value on this page is read live from the app's compiled Tailwind CSS. The label is the token name; the value beside it is whatever the app currently ships. Nothing here is hand-typed — re-run <code class="font-mono text-mono-label text-signal">npx tsx design-system/build.mjs</code> after a token change and the page updates.</p>
+    <div class="font-mono text-mono-label text-muted mt-3">build d4f5602 · 2026-08-15T13:12:45.063Z · source: DESIGN.md → tailwind.config.ts</div>
+  </header>
+
+  <nav class="font-mono text-mono-label flex flex-wrap gap-x-4 gap-y-1 border-y border-line py-3 mb-10">
+    <a class="text-signal hover:text-signal-bright" href="#colors">colors</a>
+    <a class="text-signal hover:text-signal-bright" href="#type">type scale</a>
+    <a class="text-signal hover:text-signal-bright" href="#fonts">fonts</a>
+    <a class="text-signal hover:text-signal-bright" href="#radii">radii</a>
+    <a class="text-signal hover:text-signal-bright" href="#shadow">shadow</a>
+    <a class="text-muted" href="#components">components (pending)</a>
+  </nav>
+
+  <section id="colors" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Colors <span class="font-mono text-mono-label text-muted">36 tokens</span></h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-canvas" data-token="canvas" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">canvas</div>
+      <div class="font-mono text-micro text-muted" data-value-for="canvas">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-canvasb" data-token="canvasb" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">canvasb</div>
+      <div class="font-mono text-micro text-muted" data-value-for="canvasb">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-surface" data-token="surface" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">surface</div>
+      <div class="font-mono text-micro text-muted" data-value-for="surface">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-raised" data-token="raised" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">raised</div>
+      <div class="font-mono text-micro text-muted" data-value-for="raised">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-selected" data-token="selected" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">selected</div>
+      <div class="font-mono text-micro text-muted" data-value-for="selected">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-line" data-token="line" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">line</div>
+      <div class="font-mono text-micro text-muted" data-value-for="line">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-line-strong" data-token="line-strong" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">line-strong</div>
+      <div class="font-mono text-micro text-muted" data-value-for="line-strong">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-ink" data-token="ink" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">ink</div>
+      <div class="font-mono text-micro text-muted" data-value-for="ink">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-body" data-token="body" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">body</div>
+      <div class="font-mono text-micro text-muted" data-value-for="body">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-muted" data-token="muted" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">muted</div>
+      <div class="font-mono text-micro text-muted" data-value-for="muted">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-signal" data-token="signal" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">signal</div>
+      <div class="font-mono text-micro text-muted" data-value-for="signal">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-signal-bright" data-token="signal-bright" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">signal-bright</div>
+      <div class="font-mono text-micro text-muted" data-value-for="signal-bright">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-signal-deep" data-token="signal-deep" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">signal-deep</div>
+      <div class="font-mono text-micro text-muted" data-value-for="signal-deep">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-contrasignal" data-token="contrasignal" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">contrasignal</div>
+      <div class="font-mono text-micro text-muted" data-value-for="contrasignal">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-contrasignal-bright" data-token="contrasignal-bright" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">contrasignal-bright</div>
+      <div class="font-mono text-micro text-muted" data-value-for="contrasignal-bright">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-contrasignal-deep" data-token="contrasignal-deep" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">contrasignal-deep</div>
+      <div class="font-mono text-micro text-muted" data-value-for="contrasignal-deep">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-onsignal" data-token="onsignal" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">onsignal</div>
+      <div class="font-mono text-micro text-muted" data-value-for="onsignal">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-done" data-token="status-done" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-done</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-done">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-done-tint" data-token="status-done-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-done-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-done-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-pending" data-token="status-pending" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-pending</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-pending">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-pending-tint" data-token="status-pending-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-pending-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-pending-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-processing" data-token="status-processing" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-processing</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-processing">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-processing-tint" data-token="status-processing-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-processing-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-processing-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-enriching" data-token="status-enriching" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-enriching</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-enriching">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-enriching-tint" data-token="status-enriching-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-enriching-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-enriching-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-error" data-token="status-error" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-error</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-error">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-error-tint" data-token="status-error-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-error-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-error-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-cancelled" data-token="status-cancelled" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-cancelled</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-cancelled">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-status-cancelled-tint" data-token="status-cancelled-tint" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">status-cancelled-tint</div>
+      <div class="font-mono text-micro text-muted" data-value-for="status-cancelled-tint">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-type-short" data-token="type-short" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">type-short</div>
+      <div class="font-mono text-micro text-muted" data-value-for="type-short">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-type-long" data-token="type-long" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">type-long</div>
+      <div class="font-mono text-micro text-muted" data-value-for="type-long">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-type-article" data-token="type-article" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">type-article</div>
+      <div class="font-mono text-micro text-muted" data-value-for="type-article">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-type-repo" data-token="type-repo" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">type-repo</div>
+      <div class="font-mono text-micro text-muted" data-value-for="type-repo">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-telegram-blue" data-token="telegram-blue" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">telegram-blue</div>
+      <div class="font-mono text-micro text-muted" data-value-for="telegram-blue">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-telegram-ring" data-token="telegram-ring" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">telegram-ring</div>
+      <div class="font-mono text-micro text-muted" data-value-for="telegram-ring">…</div>
+    </div>
+  </div>
+  <div class="rounded-md overflow-hidden border border-line bg-surface">
+    <div class="h-16 bg-google" data-token="google" data-prop="backgroundColor"></div>
+    <div class="px-3 py-2">
+      <div class="font-mono text-mono-label text-ink">google</div>
+      <div class="font-mono text-micro text-muted" data-value-for="google">…</div>
+    </div>
+  </div></div>
+  </section>
+
+  <section id="type" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Type scale <span class="font-mono text-mono-label text-muted">11 sizes</span></h2>
+    <div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-micro text-ink truncate" data-token="micro" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-micro</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="micro">…</span> · 0.625rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-mono-label text-ink truncate" data-token="mono-label" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-mono-label</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="mono-label">…</span> · 0.6875rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-label text-ink truncate" data-token="label" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-label</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="label">…</span> · 0.75rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-button text-ink truncate" data-token="button" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-button</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="button">…</span> · 0.8125rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-copy text-ink truncate" data-token="copy" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-copy</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="copy">…</span> · 0.875rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-prose text-ink truncate" data-token="prose" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-prose</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="prose">…</span> · 0.9375rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-title text-ink truncate" data-token="title" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-title</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="title">…</span> · 1rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-lead text-ink truncate" data-token="lead" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-lead</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="lead">…</span> · 1.0625rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-headline text-ink truncate" data-token="headline" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-headline</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="headline">…</span> · 1.25rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-stat text-ink truncate" data-token="stat" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-stat</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="stat">…</span> · 1.75rem</div>
+    </div>
+  </div>
+  <div class="flex items-baseline gap-4 border-b border-line py-3">
+    <div class="text-display text-ink truncate" data-token="display" data-prop="fontSize">Second Brain</div>
+    <div class="ml-auto text-right shrink-0">
+      <div class="font-mono text-mono-label text-body">text-display</div>
+      <div class="font-mono text-micro text-muted"><span data-value-for="display">…</span> · 1.5rem</div>
+    </div>
+  </div></div>
+  </section>
+
+  <section id="fonts" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Font families</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+  <div class="border border-line rounded-md p-4 bg-surface">
+    <div class="font-sans text-headline text-ink">Aa Bb Cc 0123</div>
+    <div class="font-mono text-mono-label text-muted mt-2">font-sans</div>
+  </div>
+  <div class="border border-line rounded-md p-4 bg-surface">
+    <div class="font-mono text-headline text-ink">Aa Bb Cc 0123</div>
+    <div class="font-mono text-mono-label text-muted mt-2">font-mono</div>
+  </div>
+  <div class="border border-line rounded-md p-4 bg-surface">
+    <div class="font-title text-headline text-ink">Aa Bb Cc 0123</div>
+    <div class="font-mono text-mono-label text-muted mt-2">font-title</div>
+  </div>
+  <div class="border border-line rounded-md p-4 bg-surface">
+    <div class="font-subtitle text-headline text-ink">Aa Bb Cc 0123</div>
+    <div class="font-mono text-mono-label text-muted mt-2">font-subtitle</div>
+  </div></div>
+  </section>
+
+  <section id="radii" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Radii</h2>
+    <div class="flex flex-wrap gap-6">
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-none" data-token="rounded-none" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-none</div>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-sm" data-token="rounded-sm" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-sm</div>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-md" data-token="rounded-md" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-md</div>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-lg" data-token="rounded-lg" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-lg</div>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-xl" data-token="rounded-xl" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-xl</div>
+  </div>
+  <div class="flex flex-col items-center gap-2">
+    <div class="w-16 h-16 bg-raised border border-line rounded-full" data-token="rounded-full" data-prop="borderRadius"></div>
+    <div class="font-mono text-micro text-muted">rounded-full</div>
+  </div></div>
+  </section>
+
+  <section id="shadow" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Shadow <span class="font-mono text-mono-label text-muted">overlays only</span></h2>
+    <div class="w-48 h-24 bg-raised rounded-lg shadow-overlay grid place-items-center font-mono text-mono-label text-body">shadow-overlay</div>
+  </section>
+
+  <section id="components" class="mb-14">
+    <h2 class="text-headline text-ink mb-4">Components</h2>
+    <div class="border border-line rounded-md p-5 bg-surface">
+      <div class="font-mono text-mono-label text-signal mb-2">pending an architecture decision</div>
+      <p class="text-copy text-body max-w-2xl">The Tokens layer above is fully live. The component gallery needs a rendering strategy that shows the <em>real</em> React components without copying their markup (handoff §0). That decision is open — see <code class="font-mono text-mono-label text-ink">design-system/README.md</code>.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+  // Live-read: replace each token's placeholder with its shipped computed value.
+  function toHex(rgb) {
+    const m = rgb && rgb.match(/rgba?\(([^)]+)\)/);
+    if (!m) return rgb || '';
+    const [r,g,b] = m[1].split(',').map(n => parseInt(n,10));
+    if ([r,g,b].some(Number.isNaN)) return rgb;
+    return '#' + [r,g,b].map(n => n.toString(16).padStart(2,'0')).join('');
+  }
+  document.querySelectorAll('[data-token][data-prop]').forEach(el => {
+    const name = el.getAttribute('data-token');
+    const prop = el.getAttribute('data-prop');
+    const cs = getComputedStyle(el);
+    let val = cs[prop];
+    if (prop === 'backgroundColor') val = toHex(val);
+    if (prop === 'fontSize') val = val; // px
+    const target = document.querySelector('[data-value-for="' + CSS.escape(name) + '"]');
+    if (target) target.textContent = val;
+    if (prop === 'borderRadius') {
+      // radii show value inline under the chip label already; annotate title
+      el.title = name + ' = ' + val;
+    }
+  });
+  // Build metadata is injected server-side (above) so this page works from
+  // file:// — fetch() of a local file is blocked by the file:// origin.
+</script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+{
+  "builtAt": "2026-08-15T13:12:45.063Z",
+  "sha": "d4f5602",
+  "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
+  "tokens": {
+    "colors": [
+      "canvas",
+      "canvasb",
+      "surface",
+      "raised",
+      "selected",
+      "line",
+      "line-strong",
+      "ink",
+      "body",
+      "muted",
+      "signal",
+      "signal-bright",
+      "signal-deep",
+      "contrasignal",
+      "contrasignal-bright",
+      "contrasignal-deep",
+      "onsignal",
+      "status-done",
+      "status-done-tint",
+      "status-pending",
+      "status-pending-tint",
+      "status-processing",
+      "status-processing-tint",
+      "status-enriching",
+      "status-enriching-tint",
+      "status-error",
+      "status-error-tint",
+      "status-cancelled",
+      "status-cancelled-tint",
+      "type-short",
+      "type-long",
+      "type-article",
+      "type-repo",
+      "telegram-blue",
+      "telegram-ring",
+      "google"
+    ],
+    "fontSize": [
+      {
+        "name": "micro",
+        "rem": "0.625rem"
+      },
+      {
+        "name": "mono-label",
+        "rem": "0.6875rem"
+      },
+      {
+        "name": "label",
+        "rem": "0.75rem"
+      },
+      {
+        "name": "button",
+        "rem": "0.8125rem"
+      },
+      {
+        "name": "copy",
+        "rem": "0.875rem"
+      },
+      {
+        "name": "prose",
+        "rem": "0.9375rem"
+      },
+      {
+        "name": "title",
+        "rem": "1rem"
+      },
+      {
+        "name": "lead",
+        "rem": "1.0625rem"
+      },
+      {
+        "name": "headline",
+        "rem": "1.25rem"
+      },
+      {
+        "name": "stat",
+        "rem": "1.75rem"
+      },
+      {
+        "name": "display",
+        "rem": "1.5rem"
+      }
+    ],
+    "fontFamily": [
+      "sans",
+      "mono",
+      "title",
+      "subtitle"
+    ],
+    "boxShadow": [
+      "overlay"
+    ],
+    "radius": [
+      "none",
+      "sm",
+      "md",
+      "lg",
+      "xl",
+      "full"
+    ]
+  },
+  "componentCount": 89,
+  "componentsWithDs": 0,
+  "components": []
+}
