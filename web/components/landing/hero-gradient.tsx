@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: HeroGradient
+purpose: The animated grain-gradient background behind the landing hero — a WebGL shader, not a CSS gradient.
+when-not: One instance behind the hero; not a reusable background primitive for other sections.
+notes: Colors are landing-only, outside the dashboard token set — a deliberate brand-register difference, not drift. Render budget is capped (minPixelRatio/maxPixelCount) so grain hides resolution loss instead of an uncapped retina canvas wedging software-WebGL machines.
+status: inferred
+*/
+
 import { GrainGradient } from '@paper-design/shaders-react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 

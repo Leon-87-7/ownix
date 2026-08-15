@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: AppSlot
+purpose: An inline 22px icon slot inside the landing hero's copy that cross-fades through the apps you can share from (YouTube, Instagram, PDF, TikTok, Shorts, GitHub).
+when-not: Sits inside the hero's LCP paragraph — deliberately mounts only the active icon before hydration so first paint isn't paying for six stacked icons; don't reuse this pattern outside a similarly performance-sensitive spot.
+notes: Freezes on the first icon under reduced motion rather than cycling.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { YouTubeIcon } from '@/components/svg/youtube-icon';

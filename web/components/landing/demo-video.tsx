@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: DemoVideo
+purpose: A landing-page product demo video that plays when scrolled into view, pauses out of view, and loops while visible — muted + playsInline to satisfy autoplay policy, controls always available.
+when-not: Server-renders a plain non-autoplaying <video> — reduced-motion and no-JS visitors just get a normal player, never a broken autoplay attempt.
+notes: The IntersectionObserver's first callback (which can fire "intersecting" before any real scroll, e.g. on a short viewport or in Lighthouse) is deliberately ignored — playback only starts on a later, genuine visibility change.
+status: inferred
+*/
+
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 

@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: CountUp
+purpose: Animates a landing-page stat from 0 to its real value the first time it scrolls into view, via IntersectionObserver + requestAnimationFrame.
+when-not: Landing-only decoration; never the sole way a number is conveyed — the server-rendered final value is what no-JS, reduced-motion, and headless visitors see, so nothing depends on the animation running.
+notes: A live reduced-motion preference change mid-animation snaps straight to the final value rather than leaving an eased intermediate number stuck in the DOM.
+status: inferred
+*/
+
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 

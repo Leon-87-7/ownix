@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T17:01:20.281Z",
-  "sha": "631e155",
+  "builtAt": "2026-08-15T17:03:48.652Z",
+  "sha": "da04c2c",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,7 +106,7 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 61,
+  "componentsWithDs": 68,
   "components": [
     {
       "file": "web/components/brain/brain-graph.tsx",
@@ -242,6 +242,41 @@
       "file": "web/components/intake/intake-upload-dropzone.tsx",
       "hash": "422278be5428",
       "ds": "name: IntakeUploadDropzone\r\npurpose: A button-triggered (not drag-and-drop despite the name) file picker for document/image intake — hidden native input, styled trigger button.\r\nwhen-not: Intake-console-specific. For the richer drag-drop + URL-fetch surface use DocUploadPanel instead.\r\nnotes: The accept attribute is only a picker hint — the server content-sniffs the actual bytes, so don't rely on it for validation.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/app-slot.tsx",
+      "hash": "d274b7c50c19",
+      "ds": "name: AppSlot\r\npurpose: An inline 22px icon slot inside the landing hero's copy that cross-fades through the apps you can share from (YouTube, Instagram, PDF, TikTok, Shorts, GitHub).\r\nwhen-not: Sits inside the hero's LCP paragraph — deliberately mounts only the active icon before hydration so first paint isn't paying for six stacked icons; don't reuse this pattern outside a similarly performance-sensitive spot.\r\nnotes: Freezes on the first icon under reduced motion rather than cycling.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/count-up.tsx",
+      "hash": "52dc50177029",
+      "ds": "name: CountUp\r\npurpose: Animates a landing-page stat from 0 to its real value the first time it scrolls into view, via IntersectionObserver + requestAnimationFrame.\r\nwhen-not: Landing-only decoration; never the sole way a number is conveyed — the server-rendered final value is what no-JS, reduced-motion, and headless visitors see, so nothing depends on the animation running.\r\nnotes: A live reduced-motion preference change mid-animation snaps straight to the final value rather than leaving an eased intermediate number stuck in the DOM.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/demo-video.tsx",
+      "hash": "05dfff1cde1e",
+      "ds": "name: DemoVideo\r\npurpose: A landing-page product demo video that plays when scrolled into view, pauses out of view, and loops while visible — muted + playsInline to satisfy autoplay policy, controls always available.\r\nwhen-not: Server-renders a plain non-autoplaying <video> — reduced-motion and no-JS visitors just get a normal player, never a broken autoplay attempt.\r\nnotes: The IntersectionObserver's first callback (which can fire \"intersecting\" before any real scroll, e.g. on a short viewport or in Lighthouse) is deliberately ignored — playback only starts on a later, genuine visibility change.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/hero-gradient.tsx",
+      "hash": "6d6f93e096d1",
+      "ds": "name: HeroGradient\r\npurpose: The animated grain-gradient background behind the landing hero — a WebGL shader, not a CSS gradient.\r\nwhen-not: One instance behind the hero; not a reusable background primitive for other sections.\r\nnotes: Colors are landing-only, outside the dashboard token set — a deliberate brand-register difference, not drift. Render budget is capped (minPixelRatio/maxPixelCount) so grain hides resolution loss instead of an uncapped retina canvas wedging software-WebGL machines.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/mobile-onboarding-stepper.tsx",
+      "hash": "74c9d7760a69",
+      "ds": "name: MobileOnboardingStepper\r\npurpose: The tap-advance mobile counterpart (sm:hidden) to OnboardingStepper's desktop scroll-pinned GSAP timeline — same STEPS content, entirely different interaction (sticky positioning, no ScrollTrigger).\r\nwhen-not: Selection uses bg-selected + ink underline, NOT bg-signal — this is the DESIGN.md stepper carve-out (§5 Chips): the actual action is \"Next,\" so an amber selection chip would spend signal on \"you are here\" and leave two controls sharing one color.\r\nnotes: Copy comes from OnboardingStepper's exported STEPS so the two breakpoints can never drift — a real candidate for merging into one responsive component (design-system/_inventory/components.md, DRIFT-BACKLOG.md), not done here.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/onboarding-stepper.tsx",
+      "hash": "c9ce2e6d8b41",
+      "ds": "name: OnboardingStepper / STEPS\r\npurpose: The desktop scroll-driven, GSAP-pinned \"Collect / Own / Recall\" onboarding narrative on the landing page — three steps overlapped and scrubbed via ScrollTrigger, snapping to labels.\r\nwhen-not: Desktop + no-preference-motion only (gsap.matchMedia gate at min-width:640px). Below that, or under reduced motion, or with no JS, all three steps render stacked in normal flow — this is progressive enhancement, not a JS-only widget.\r\nnotes: STEPS is exported specifically so MobileOnboardingStepper can share the same copy without drifting. The progress rail uses signal because it marks *current position* on a single-control screen — the stepper carve-out (§5 Chips) applies to MobileOnboardingStepper's chip selection, not to this rail.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/landing/wordmark-marquee.tsx",
+      "hash": "9724cdc8ff8e",
+      "ds": "name: WordmarkMarquee\npurpose: The looping brand-wordmark strip above #invite, reinforcing \"share from any app\" — purely decorative and aria-hidden; the caller owns the one real accessible description.\nwhen-not: Not a functional link list — every item here is decorative; don't wire click handlers onto it.\nnotes: Renders two identical item groups (not one array duplicated with a shared gap) so each group's width matches exactly and translateX(-50%) lands precisely on the seam. Freezes under reduced motion via the global animation-duration override in globals.css.\nstatus: inferred"
     },
     {
       "file": "web/components/shell/app-header.tsx",

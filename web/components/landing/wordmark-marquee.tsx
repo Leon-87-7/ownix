@@ -1,3 +1,11 @@
+/* @ds
+name: WordmarkMarquee
+purpose: The looping brand-wordmark strip above #invite, reinforcing "share from any app" — purely decorative and aria-hidden; the caller owns the one real accessible description.
+when-not: Not a functional link list — every item here is decorative; don't wire click handlers onto it.
+notes: Renders two identical item groups (not one array duplicated with a shared gap) so each group's width matches exactly and translateX(-50%) lands precisely on the seam. Freezes under reduced motion via the global animation-duration override in globals.css.
+status: inferred
+*/
+
 import { Newspaper } from 'lucide-react';
 import { PDFIcon } from '@/components/svg/pdf-icon';
 import { GitHubIcon } from '../svg/github-icon';

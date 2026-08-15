@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: OnboardingStepper / STEPS
+purpose: The desktop scroll-driven, GSAP-pinned "Collect / Own / Recall" onboarding narrative on the landing page — three steps overlapped and scrubbed via ScrollTrigger, snapping to labels.
+when-not: Desktop + no-preference-motion only (gsap.matchMedia gate at min-width:640px). Below that, or under reduced motion, or with no JS, all three steps render stacked in normal flow — this is progressive enhancement, not a JS-only widget.
+notes: STEPS is exported specifically so MobileOnboardingStepper can share the same copy without drifting. The progress rail uses signal because it marks *current position* on a single-control screen — the stepper carve-out (§5 Chips) applies to MobileOnboardingStepper's chip selection, not to this rail.
+status: inferred
+*/
+
 import { Fragment, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';

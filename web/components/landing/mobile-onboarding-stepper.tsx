@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: MobileOnboardingStepper
+purpose: The tap-advance mobile counterpart (sm:hidden) to OnboardingStepper's desktop scroll-pinned GSAP timeline — same STEPS content, entirely different interaction (sticky positioning, no ScrollTrigger).
+when-not: Selection uses bg-selected + ink underline, NOT bg-signal — this is the DESIGN.md stepper carve-out (§5 Chips): the actual action is "Next," so an amber selection chip would spend signal on "you are here" and leave two controls sharing one color.
+notes: Copy comes from OnboardingStepper's exported STEPS so the two breakpoints can never drift — a real candidate for merging into one responsive component (design-system/_inventory/components.md, DRIFT-BACKLOG.md), not done here.
+status: inferred
+*/
+
 import { Fragment, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 import { STEPS } from './onboarding-stepper';

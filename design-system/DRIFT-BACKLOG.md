@@ -36,6 +36,17 @@ decision reverses this, promote them to named tokens (`topic-*`, `tag-*`) in
 - Tag preset colors (8 off-token of 12) — `web/components/ui/tag-picker.tsx:40-51`
 - Bespoke subtle-line `rgba()` shadows — `web/components/feed/links-table.tsx:651,654`
 
+## Found during Phase 2 (@ds authoring) — needs a decision, not filed elsewhere
+
+- [ ] **`web/components/landing/onboarding-textblock.tsx` is a 0-byte empty
+  file**, not just an unused component like `markdown-editor.tsx` /
+  `public-header.tsx` (the two real zero-usage components from the Phase 1
+  gate). `git log` shows it was added in commit 9c89d3f ("...add onboarding
+  text block") but the file body never landed. No `@ds` block was written for
+  it — there's no implementation to document. Needs one of: restore the
+  intended content, or delete the stray file. Flagging for a decision rather
+  than guessing which.
+
 ## Optional refactors (not drift — no behavior change)
 
 - [ ] Merge `onboarding-stepper` + `mobile-onboarding-stepper` into one responsive
