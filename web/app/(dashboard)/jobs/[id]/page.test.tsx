@@ -152,7 +152,7 @@ describe('JobDetailPage', () => {
     await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Download .md' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download checklist' })).toBeInTheDocument();
   });
   it('shows loading skeleton when fetchState is loading', () => {
     setupMocks({ fetchState: 'loading', job: null });

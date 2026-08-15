@@ -549,10 +549,18 @@ function JobActionsBar({
   );
 }
 
-// Transcript preview card — mirrors the doc-parser detail page's output cards
-// (rounded surface, capped scroll region, header actions), minus the leading
-// glyph so the title anchors the row on its own.
-function TranscriptCard({ job }: { job: JobDetail }) {
+// Borderless icon buttons shared by the transcript and checklist preview cards
+// so both carry the same copy/download affordances.
+const CARD_ACTION_BUTTON =
+  'inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]';
+
+function CardCopyButton({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -561,15 +569,58 @@ function TranscriptCard({ job }: { job: JobDetail }) {
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const transcript = job.transcript;
-  if (!transcript || !transcript.trim()) return null;
-
-  const copyTranscript = async () => {
+  const copy = async () => {
     try {
-      await navigator.clipboard.writeText(transcript);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
     } catch {}
   };
+
+  return (
+    <Tooltip content={copied ? 'Copied' : label}>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={label}
+        className={CARD_ACTION_BUTTON}
+      >
+        {copied ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Copy className="h-4 w-4" />
+        )}
+      </button>
+    </Tooltip>
+  );
+}
+
+function CardDownloadButton({
+  onDownload,
+  label,
+}: {
+  onDownload: () => void;
+  label: string;
+}) {
+  return (
+    <Tooltip content={label}>
+      <button
+        type="button"
+        onClick={onDownload}
+        aria-label={label}
+        className={CARD_ACTION_BUTTON}
+      >
+        <Download className="h-4 w-4" />
+      </button>
+    </Tooltip>
+  );
+}
+
+// Transcript preview card — mirrors the doc-parser detail page's output cards
+// (rounded surface, capped scroll region, header actions), minus the leading
+// glyph so the title anchors the row on its own.
+function TranscriptCard({ job }: { job: JobDetail }) {
+  const transcript = job.transcript;
+  if (!transcript || !transcript.trim()) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
@@ -577,35 +628,19 @@ function TranscriptCard({ job }: { job: JobDetail }) {
         <h2 className="flex-1 text-sm font-semibold text-ink">
           Transcript
         </h2>
-        <Tooltip content={copied ? 'Copied' : 'Copy transcript'}>
-          <button
-            type="button"
-            onClick={copyTranscript}
-            aria-label="Copy transcript"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
-          >
-            {copied ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </button>
-        </Tooltip>
-        <Tooltip content="Download transcript">
-          <button
-            type="button"
-            onClick={() =>
-              downloadMarkdownFile(
-                `transcript_${job.id.slice(-4)}.md`,
-                transcript,
-              )
-            }
-            aria-label="Download transcript"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
-          >
-            <Download className="h-4 w-4" />
-          </button>
-        </Tooltip>
+        <CardCopyButton
+          value={transcript}
+          label="Copy transcript"
+        />
+        <CardDownloadButton
+          onDownload={() =>
+            downloadMarkdownFile(
+              `transcript_${job.id.slice(-4)}.md`,
+              transcript,
+            )
+          }
+          label="Download transcript"
+        />
       </div>
       <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">
         {transcript}
@@ -648,23 +683,42 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleRun}
-          disabled={generating}
-          className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
-        >
-          {generating ? (
-            // `.ownix-shimmer` only takes effect under
-            // `prefers-reduced-motion: no-preference` — otherwise it inherits
-            // the button's own `disabled:text-muted`.
-            <span className="ownix-shimmer">Generating…</span>
-          ) : markdown ? (
-            'Regenerate'
-          ) : (
-            'Run Checklists'
+        <div className="flex items-center gap-2">
+          {markdown && (
+            <>
+              <CardCopyButton
+                value={markdown}
+                label="Copy checklist"
+              />
+              <CardDownloadButton
+                onDownload={() =>
+                  downloadMarkdownFile(
+                    `checklist_${job.id.slice(-4)}.md`,
+                    markdown,
+                  )
+                }
+                label="Download checklist"
+              />
+            </>
           )}
-        </button>
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={generating}
+            className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+          >
+            {generating ? (
+              // `.ownix-shimmer` only takes effect under
+              // `prefers-reduced-motion: no-preference` — otherwise it inherits
+              // the button's own `disabled:text-muted`.
+              <span className="ownix-shimmer">Generating…</span>
+            ) : markdown ? (
+              'Regenerate'
+            ) : (
+              'Run Checklists'
+            )}
+          </button>
+        </div>
       </div>
       {error && (
         <p
@@ -675,30 +729,9 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
         </p>
       )}
       {markdown && (
-        <>
-          <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 font-mono text-xs text-body">
-            {markdown}
-          </pre>
-          <div className="flex flex-wrap gap-2">
-            <CopyButton
-              value={markdown}
-              ariaLabel="Copy checklist"
-              label="Copy"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                downloadMarkdownFile(
-                  `checklist_${job.id.slice(-4)}.md`,
-                  markdown,
-                )
-              }
-              className="inline-flex items-center rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink"
-            >
-              Download .md
-            </button>
-          </div>
-        </>
+        <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 font-mono text-xs text-body">
+          {markdown}
+        </pre>
       )}
     </section>
   );
