@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: BrainGraph
+purpose: The force-directed map of the Second Brain's semantic link graph — nodes colored by topic, search matches highlighted in Index amber, with zoom/fit/center controls and a topic-visibility filter.
+when-not: Desktop-only (hidden below md) — the graph doesn't have a mobile layout. Not a general-purpose graph component; tightly coupled to /api/brain/graph's shape.
+notes: The 7-color TOPIC_COLORS palette is deliberately outside the design-system token set (documented exception, DRIFT-BACKLOG.md) — amber (MATCH) is reserved for search matches so it never competes with the topic hues.
+status: inferred
+*/
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType, ReactNode, Ref } from 'react';
 import dynamic from 'next/dynamic';

@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: TelegramLoginWidget
+purpose: The real Telegram login widget (telegram-widget.js), shared by the landing page's invite section and /login — never a styled link that routes to /login just to show the same widget.
+when-not: Injects the actual third-party script; don't reimplement or fake this as a static button.
+notes: Also renders the dev-only localhost login and an env-gated reviewer email/code login when their respective flags are set — these are review/dev conveniences, not part of the normal flow.
+status: inferred
+*/
+
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { consumePostLoginRedirect } from '@/lib/intake-share-redirect';

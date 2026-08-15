@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: TelegramToggle
+purpose: A three-state (off/on/retroactive) toggle controlling whether a parsed document's result is delivered to Telegram — tap flips off/on, a 1.5s hold triggers retroactive delivery.
+when-not: Doc-parser-specific; not a generic toggle switch.
+notes: The hold gesture drives the .doc-telegram-hold conic-gradient sweep from globals.css — a deliberate Telegram-brand-blue progress cue, not the standard focus/hover treatment.
+status: inferred
+*/
+
 import { useEffect, useRef, useState } from 'react';
 
 type State = 'off' | 'on' | 'retroactive';

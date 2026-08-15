@@ -1,5 +1,15 @@
 'use client';
 
+/* @ds
+name: DocUploadPanel
+purpose: The doc-parser intake surface — URL fetch, drag-drop or click-to-browse file upload; an uploaded image forks into photo-OCR and shows extracted links instead of creating a job.
+variants:
+  flat: strips card chrome and the mobile collapse toggle, for use inside a Dialog (SubmitJobProvider's Ingest Docs modal).
+when-not: Not flat by default — the standalone doc-parser page uses the collapsible card treatment instead.
+notes: The result branches on API response shape (kind: "links" vs a job id), not on file type — don't assume "uploaded a file" always means "created a job."
+status: inferred
+*/
+
 import { useRef, useState } from 'react';
 import { ChevronDown, Upload } from 'lucide-react';
 import {

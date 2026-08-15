@@ -1,5 +1,13 @@
 "use client";
 
+/* @ds
+name: SpaceCard
+purpose: A Space (collection) tile — icon, name, a low-opacity color wash from the space's own color, and an inline delete-confirm affordance.
+when-not: Not a general-purpose card; specific to the Spaces grid.
+notes: Delete is always visible on mobile (no hover state to reveal it) but fades in on sm+ hover — inline confirm/cancel replaces the tile content rather than opening a separate dialog.
+status: inferred
+*/
+
 import Link from "next/link";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";

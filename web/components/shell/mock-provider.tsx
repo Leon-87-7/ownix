@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: MockProvider
+purpose: Starts the MSW mock-service-worker before rendering children, so demo/mock mode (NEXT_PUBLIC_API_MOCK=1) never races a first-paint fetch against an unready worker.
+when-not: A no-op passthrough outside mock mode — never used in production. Not a UI component; renders nothing itself.
+notes: Renders children even if the worker fails to start, rather than leaving the app blank.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 
 // Build-time constant: NEXT_PUBLIC_* is inlined, so when unset the worker code

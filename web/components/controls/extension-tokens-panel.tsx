@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: ExtensionTokensPanel
+purpose: The Controls-page section for pairing the Chrome extension — generates a one-time pairing code and lists/revokes already-connected devices.
+when-not: Controls-page-specific; not a reusable pairing-code component.
+notes: The pairing code self-expires client-side on a countdown so a stale, already-invalid code can't sit on screen inviting a failed copy.
+status: inferred
+*/
+
 import { useCallback, useEffect, useState } from 'react';
 
 import { CopyButton } from '@/components/ui/copy-button';

@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: DocumentSourceChip
+purpose: A compact mono chip identifying a parsed document's source — format, short ID, and a copy-full-ID button — for both content-addressed (SHA-256) uploads and URL-fetched documents.
+when-not: Doc-parser-specific; not a general file-identity chip.
+notes: copyValue differs by source kind — the full SHA-256 for uploads, the filename stem for URL-fetched files — so don't assume shortId and copyValue are always related the same way.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 import { Check, ClipboardCopy, FileDigit } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';

@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: ScrollToTop
+purpose: A floating amber button that scrolls the dashboard's scroll container back to the top, appearing after 200px of scroll.
+when-not: Scoped to the [data-dashboard-scroll] container specifically — not a page-level scroll-to-top for non-dashboard routes.
+notes: Uses bg-signal since it's a single clear action — one of the few non-button, non-badge places amber fill is warranted outside DESIGN.md's named component list.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 
 function dashboardScroller(): HTMLElement | null {
