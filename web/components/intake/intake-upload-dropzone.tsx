@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeUploadDropzone
+purpose: A button-triggered (not drag-and-drop despite the name) file picker for document/image intake — hidden native input, styled trigger button.
+when-not: Intake-console-specific. For the richer drag-drop + URL-fetch surface use DocUploadPanel instead.
+notes: The accept attribute is only a picker hint — the server content-sniffs the actual bytes, so don't rely on it for validation.
+status: inferred
+*/
+
 import { useRef, useState, type ChangeEvent } from 'react';
 import { FileUp } from 'lucide-react';
 import { DOCUMENT_UPLOAD_ACCEPT } from '@/lib/document-formats';

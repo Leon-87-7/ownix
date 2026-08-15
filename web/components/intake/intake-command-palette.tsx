@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeCommandPalette
+purpose: The slash-command autocomplete dropdown for IntakeComposer — arrow-key/Tab/Enter navigable listbox of matching commands.
+when-not: Only opens for a leading / with no whitespace yet typed (commandQuery) — never triggers on a / that appears inside a pasted URL.
+notes: The command list is server-fetched from /api/intake/commands (derived from SHARED_COMMANDS), not hardcoded — a fetch failure just means the palette doesn't open, typing the command still works.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 
 export interface IntakeCommand {

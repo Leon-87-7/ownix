@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T16:59:03.470Z",
-  "sha": "3707217",
+  "builtAt": "2026-08-15T17:01:20.281Z",
+  "sha": "631e155",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,7 +106,7 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 51,
+  "componentsWithDs": 61,
   "components": [
     {
       "file": "web/components/brain/brain-graph.tsx",
@@ -192,6 +192,56 @@
       "file": "web/components/feed/submit-url-form.tsx",
       "hash": "aa3c48351a91",
       "ds": "name: SubmitUrlForm\r\npurpose: The bare form (URL input, enrichment-template select, conditional freestyle-prompt field, submit button) rendered inside SubmitJobProvider's Submit URL dialog.\r\nwhen-not: Presentational only — no fetch/state of its own; all state and submission live in SubmitJobProvider. Not meant to be mounted standalone.\r\nnotes: The freestyle textarea only appears when template === \"freestyle\" — don't assume the form's field set is static.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-actions.tsx",
+      "hash": "1294a73b1f15",
+      "ds": "name: IntakeActions\r\npurpose: Renders an intake response's plain action buttons — the dashboard's equivalent of Telegram's inline keyboards.\r\nwhen-not: create_tag actions are filtered out before reaching this component and rendered as IntakeTagOffer instead — don't route them here.\r\nnotes: All buttons disable together while any one action_id is pending (single in-flight action per card, not per-button).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-command-palette.tsx",
+      "hash": "3fb0707194e3",
+      "ds": "name: IntakeCommandPalette\r\npurpose: The slash-command autocomplete dropdown for IntakeComposer — arrow-key/Tab/Enter navigable listbox of matching commands.\r\nwhen-not: Only opens for a leading / with no whitespace yet typed (commandQuery) — never triggers on a / that appears inside a pasted URL.\r\nnotes: The command list is server-fetched from /api/intake/commands (derived from SHARED_COMMANDS), not hardcoded — a fetch failure just means the palette doesn't open, typing the command still works.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-composer.tsx",
+      "hash": "b6ae2d2d49ec",
+      "ds": "name: IntakeComposer\r\npurpose: The one intake input — paste a URL, type a slash command, or write a note — fixed-height (no autogrow) so repeated submits never reflow the page.\r\nwhen-not: Not for the dashboard's Submit URL flow (that's SubmitJobProvider) — this is the Intake console's own free-text/command entry point.\r\nnotes: Only clears its input on a true return from onSubmit, so a failed send never loses what was typed. Typing / at the start opens the command palette (IntakeCommandPalette).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-links-list.tsx",
+      "hash": "dce5c9292186",
+      "ds": "name: IntakeLinksList\r\npurpose: Renders the links found in a photo/image intake as real, selectable, individually-openable URLs with a \"Copy all\" (plain one-per-line) action — replacing what would otherwise be just a count.\r\nwhen-not: Specific to image-intake link extraction; DocUploadPanel reuses it for the same \"image → links\" fork.\r\nnotes: Copy failures (blocked clipboard) are silent by design — the URLs stay selectable text either way, so manual copy always still works.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-response-card.tsx",
+      "hash": "ed1c2f35907a",
+      "ds": "name: IntakeResponseCard\r\npurpose: One turn of the intake console — echoes what was submitted, then renders the server's response: kind label, retry, extracted links, in-flight status or a finished PreviewCard, action buttons, and inline tag-creation offers.\r\nwhen-not: Session-thread specific (IntakeThread); not a general-purpose response/result card.\r\nnotes: create_tag actions render as IntakeTagOffer inline forms, split out from the plain IntakeActions button row — don't lump the two together.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-state-banner.tsx",
+      "hash": "2a0f721aa61d",
+      "ds": "name: IntakeStateBanner\r\npurpose: Shows and lets you cancel the one active pending intake flow (e.g. \"waiting for your freestyle prompt\") — polls every 20s since the state can resolve or expire server-side with no local event to react to.\r\nwhen-not: /intake-page-specific; one banner reflects the single last-write-wins pending flow across channels (Telegram or dashboard), not per-surface state.\r\nnotes: Renders nothing while unloaded or when there's no pending flow — a stable \"nothing to show\" is the common case, not an edge case.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-status-line.tsx",
+      "hash": "1bb6ec5784cb",
+      "ds": "name: IntakeStatusLine\r\npurpose: The in-flight line under an intake response — a shimmer label says \"alive,\" the adjacent StatusBadge says \"where\" (two independent channels, deliberately not one).\r\nwhen-not: No stepper, no percentage — the pipeline's stage count differs per content type, so a progress bar would render fiction as fact (see the file's own comment). Don't add one.\r\nnotes: The shimmer only activates under prefers-reduced-motion: no-preference; text-body is the static fallback, not a bug.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-tag-offer.tsx",
+      "hash": "22b922e3eb51",
+      "ds": "name: IntakeTagOffer\r\npurpose: The unknown-#tag follow-up inside an intake response — closed it's a \"Create #tag\" button, open it's TagForm rendered inline so the operator never leaves the thread.\r\nwhen-not: Intake-specific; the underlying create form is TagForm (ui/), reused here rather than reimplemented.\r\nnotes: State lives entirely in the action's payload, not a server-side pending row (deliberate, ADR-0047) — don't add persistence assumptions here.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-thread.tsx",
+      "hash": "f25badd7a36d",
+      "ds": "name: IntakeThread\r\npurpose: The scrolling list of IntakeResponseCards for the current browser session — a session scratchpad, not durable history (the Feed is the durable view).\r\nwhen-not: Backed by sessionStorage via useIntakeThread, deliberately with no /api/intake/history endpoint — don't add server persistence expectations here.\r\nnotes: aria-live=\"polite\" on the container so new responses are announced as they arrive.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/intake/intake-upload-dropzone.tsx",
+      "hash": "422278be5428",
+      "ds": "name: IntakeUploadDropzone\r\npurpose: A button-triggered (not drag-and-drop despite the name) file picker for document/image intake — hidden native input, styled trigger button.\r\nwhen-not: Intake-console-specific. For the richer drag-drop + URL-fetch surface use DocUploadPanel instead.\r\nnotes: The accept attribute is only a picker hint — the server content-sniffs the actual bytes, so don't rely on it for validation.\r\nstatus: inferred"
     },
     {
       "file": "web/components/shell/app-header.tsx",

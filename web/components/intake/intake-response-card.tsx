@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeResponseCard
+purpose: One turn of the intake console — echoes what was submitted, then renders the server's response: kind label, retry, extracted links, in-flight status or a finished PreviewCard, action buttons, and inline tag-creation offers.
+when-not: Session-thread specific (IntakeThread); not a general-purpose response/result card.
+notes: create_tag actions render as IntakeTagOffer inline forms, split out from the plain IntakeActions button row — don't lump the two together.
+status: inferred
+*/
+
 import Link from 'next/link';
 import { useState } from 'react';
 

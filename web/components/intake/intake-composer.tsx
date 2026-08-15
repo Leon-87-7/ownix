@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeComposer
+purpose: The one intake input — paste a URL, type a slash command, or write a note — fixed-height (no autogrow) so repeated submits never reflow the page.
+when-not: Not for the dashboard's Submit URL flow (that's SubmitJobProvider) — this is the Intake console's own free-text/command entry point.
+notes: Only clears its input on a true return from onSubmit, so a failed send never loses what was typed. Typing / at the start opens the command palette (IntakeCommandPalette).
+status: inferred
+*/
+
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import {

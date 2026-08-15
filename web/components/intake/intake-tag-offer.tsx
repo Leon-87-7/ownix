@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeTagOffer
+purpose: The unknown-#tag follow-up inside an intake response — closed it's a "Create #tag" button, open it's TagForm rendered inline so the operator never leaves the thread.
+when-not: Intake-specific; the underlying create form is TagForm (ui/), reused here rather than reimplemented.
+notes: State lives entirely in the action's payload, not a server-side pending row (deliberate, ADR-0047) — don't add persistence assumptions here.
+status: inferred
+*/
+
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
 import { PRESET_COLORS } from '@/components/ui/tag-picker';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';

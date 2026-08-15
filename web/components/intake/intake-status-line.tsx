@@ -1,3 +1,11 @@
+/* @ds
+name: IntakeStatusLine
+purpose: The in-flight line under an intake response — a shimmer label says "alive," the adjacent StatusBadge says "where" (two independent channels, deliberately not one).
+when-not: No stepper, no percentage — the pipeline's stage count differs per content type, so a progress bar would render fiction as fact (see the file's own comment). Don't add one.
+notes: The shimmer only activates under prefers-reduced-motion: no-preference; text-body is the static fallback, not a bug.
+status: inferred
+*/
+
 import { StatusBadge } from '@/components/ui/badges';
 
 /** Statuses that mean "still working" — mirrors `useIntakeThread`. */

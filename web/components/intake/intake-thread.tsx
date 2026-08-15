@@ -1,3 +1,11 @@
+/* @ds
+name: IntakeThread
+purpose: The scrolling list of IntakeResponseCards for the current browser session — a session scratchpad, not durable history (the Feed is the durable view).
+when-not: Backed by sessionStorage via useIntakeThread, deliberately with no /api/intake/history endpoint — don't add server persistence expectations here.
+notes: aria-live="polite" on the container so new responses are announced as they arrive.
+status: inferred
+*/
+
 import { IntakeResponseCard } from '@/components/intake/intake-response-card';
 import type { IntakeThreadItem } from '@/lib/hooks/useIntakeThread';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';

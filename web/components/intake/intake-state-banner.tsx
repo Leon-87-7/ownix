@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeStateBanner
+purpose: Shows and lets you cancel the one active pending intake flow (e.g. "waiting for your freestyle prompt") — polls every 20s since the state can resolve or expire server-side with no local event to react to.
+when-not: /intake-page-specific; one banner reflects the single last-write-wins pending flow across channels (Telegram or dashboard), not per-surface state.
+notes: Renders nothing while unloaded or when there's no pending flow — a stable "nothing to show" is the common case, not an edge case.
+status: inferred
+*/
+
 import { useCallback, useEffect, useState } from 'react';
 
 interface PendingState {

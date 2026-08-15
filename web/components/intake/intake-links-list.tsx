@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeLinksList
+purpose: Renders the links found in a photo/image intake as real, selectable, individually-openable URLs with a "Copy all" (plain one-per-line) action — replacing what would otherwise be just a count.
+when-not: Specific to image-intake link extraction; DocUploadPanel reuses it for the same "image → links" fork.
+notes: Copy failures (blocked clipboard) are silent by design — the URLs stay selectable text either way, so manual copy always still works.
+status: inferred
+*/
+
 import { useState } from 'react';
 import { Check, Copy, Link2 } from 'lucide-react';
 

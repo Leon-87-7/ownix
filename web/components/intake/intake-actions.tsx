@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: IntakeActions
+purpose: Renders an intake response's plain action buttons — the dashboard's equivalent of Telegram's inline keyboards.
+when-not: create_tag actions are filtered out before reaching this component and rendered as IntakeTagOffer instead — don't route them here.
+notes: All buttons disable together while any one action_id is pending (single in-flight action per card, not per-button).
+status: inferred
+*/
+
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';
 
 /** Real dashboard buttons standing in for Telegram inline keyboards (issue #475). */
