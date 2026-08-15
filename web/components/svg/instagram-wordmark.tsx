@@ -1,3 +1,9 @@
+/* @ds
+name: InstagramWordmark
+purpose: Instagram text wordmark.
+notes: fill="currentColor" — unlike InstagramIcon's fixed gradient, the wordmark tints with the surrounding text color.
+status: inferred
+*/
 export function InstagramWordmark(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

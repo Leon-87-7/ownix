@@ -1,3 +1,9 @@
+/* @ds
+name: YouTubeShortsIcon
+purpose: YouTube Shorts brand mark (the lightning-bolt play glyph).
+notes: fill="#FF0000" set on the root <svg>, not currentColor — practically fixed brand red unless the caller explicitly overrides the fill prop.
+status: inferred
+*/
 export function YouTubeShortsIcon(
   props: React.SVGProps<SVGSVGElement>,
 ) {

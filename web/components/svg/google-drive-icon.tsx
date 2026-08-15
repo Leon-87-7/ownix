@@ -1,3 +1,9 @@
+/* @ds
+name: GoogleDriveIcon
+purpose: Google Drive brand mark.
+notes: Fixed brand gradients — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function GoogleDriveIcon(
   props: React.SVGProps<SVGSVGElement>,
 ) {

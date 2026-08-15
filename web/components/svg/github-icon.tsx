@@ -1,3 +1,9 @@
+/* @ds
+name: GitHubIcon
+purpose: GitHub mark.
+notes: fill="currentColor" — tints with the surrounding text color.
+status: inferred
+*/
 export function GitHubIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

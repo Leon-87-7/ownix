@@ -1,3 +1,9 @@
+/* @ds
+name: GoogleIcon
+purpose: Google "G" mark (gradient variant) — distinct from shell/sidebar.tsx's inline flat-color Google G, which is a separate, simpler render for the sidebar's small connection-status glyph.
+notes: Fixed brand gradients — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

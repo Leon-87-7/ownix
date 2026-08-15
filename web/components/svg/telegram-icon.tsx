@@ -1,3 +1,9 @@
+/* @ds
+name: TelegramIcon
+purpose: Telegram brand mark (disc + paper-plane).
+notes: Fixed brand colors (#26a5e4, matching the telegram-blue token; white plane) — not tintable via currentColor. See also doc-parser/telegram-toggle.tsx for a hand-drawn inline variant that switches to status-cancelled when off.
+status: inferred
+*/
 export function TelegramIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

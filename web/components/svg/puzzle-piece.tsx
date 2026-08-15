@@ -1,3 +1,9 @@
+/* @ds
+name: PuzzlePieceIcon
+purpose: Generic puzzle-piece outline icon (not a brand mark) — used for extension/integration affordances.
+notes: stroke="currentColor" — tints with the surrounding text color.
+status: inferred
+*/
 export function PuzzlePieceIcon(
   props: React.SVGProps<SVGSVGElement>,
 ) {

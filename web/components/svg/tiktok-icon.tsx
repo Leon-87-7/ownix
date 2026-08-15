@@ -1,3 +1,9 @@
+/* @ds
+name: TikTokIcon
+purpose: TikTok brand mark.
+notes: Fixed brand colors (cyan/pink/white) — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function TikTokIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352.28 398.67" {...props}>

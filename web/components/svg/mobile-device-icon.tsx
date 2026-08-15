@@ -1,3 +1,9 @@
+/* @ds
+name: MobileDeviceIcon
+purpose: Generic mobile-device outline icon (not a brand mark).
+notes: stroke="currentColor" — tints with the surrounding text color.
+status: inferred
+*/
 export function MobileDeviceIcon(
   props: React.SVGProps<SVGSVGElement>,
 ) {

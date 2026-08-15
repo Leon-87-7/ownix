@@ -1,3 +1,9 @@
+/* @ds
+name: GitHubWordmark
+purpose: GitHub text wordmark.
+notes: fill="currentColor" — tints with the surrounding text color.
+status: inferred
+*/
 export function GitHubWordmark(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

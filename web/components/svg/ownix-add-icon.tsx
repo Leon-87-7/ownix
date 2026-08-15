@@ -1,3 +1,9 @@
+/* @ds
+name: OwnixAddIcon
+purpose: Ownix's own "add" glyph — a product icon, not a third-party brand mark.
+notes: fill="currentColor" with per-path opacity — tints with the surrounding text color.
+status: inferred
+*/
 export function OwnixAddIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

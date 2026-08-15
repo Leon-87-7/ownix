@@ -1,3 +1,9 @@
+/* @ds
+name: TikTokWordmark
+purpose: TikTok text wordmark.
+notes: Fixed brand colors (cyan/pink) plus white — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function TikTokWordmark(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

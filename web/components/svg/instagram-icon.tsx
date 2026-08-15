@@ -1,5 +1,11 @@
 import { useId } from 'react';
 
+/* @ds
+name: InstagramIcon
+purpose: Instagram brand mark (gradient glyph).
+notes: Fixed brand gradients (per-instance IDs via useId so multiple copies on one page don't collide) — not tintable via currentColor; don't recolor. For a currentColor Instagram mark use ownix's landing gradient-free pairing with InstagramWordmark instead.
+status: inferred
+*/
 export function InstagramIcon(props: React.SVGProps<SVGSVGElement>) {
   const id = useId();
   const grad = (name: string) => `${id}-${name}`;

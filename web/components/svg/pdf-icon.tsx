@@ -1,3 +1,9 @@
+/* @ds
+name: PDFIcon
+purpose: Generic PDF file-type mark (Adobe-style red document icon), used as a content-type/platform glyph for PDF sources.
+notes: Fixed brand colors (red/white/gray) — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function PDFIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

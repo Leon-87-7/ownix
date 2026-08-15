@@ -1,3 +1,9 @@
+/* @ds
+name: DesktopIcon
+purpose: Generic desktop-device outline icon (not a brand mark).
+notes: stroke="currentColor" — tints with the surrounding text color.
+status: inferred
+*/
 export function DesktopIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

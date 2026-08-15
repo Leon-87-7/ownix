@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T17:03:48.652Z",
-  "sha": "da04c2c",
+  "builtAt": "2026-08-15T17:07:24.043Z",
+  "sha": "7be41c0",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,7 +106,7 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 68,
+  "componentsWithDs": 88,
   "components": [
     {
       "file": "web/components/brain/brain-graph.tsx",
@@ -342,6 +342,106 @@
       "file": "web/components/spaces/space-card.tsx",
       "hash": "d46b11e924c0",
       "ds": "name: SpaceCard\r\npurpose: A Space (collection) tile — icon, name, a low-opacity color wash from the space's own color, and an inline delete-confirm affordance.\r\nwhen-not: Not a general-purpose card; specific to the Spaces grid.\r\nnotes: Delete is always visible on mobile (no hover state to reveal it) but fades in on sm+ hover — inline confirm/cancel replaces the tile content rather than opening a separate dialog.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/chrome-icon.tsx",
+      "hash": "2ccd3ca920ba",
+      "ds": "name: ChromeIcon\r\npurpose: Chrome browser brand mark.\r\nnotes: Fixed multi-color brand palette (fill hex per path) — not tintable via currentColor; don't recolor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/desktop.tsx",
+      "hash": "9a15234c7c47",
+      "ds": "name: DesktopIcon\r\npurpose: Generic desktop-device outline icon (not a brand mark).\r\nnotes: stroke=\"currentColor\" — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/github-icon.tsx",
+      "hash": "356f81f7396e",
+      "ds": "name: GitHubIcon\r\npurpose: GitHub mark.\r\nnotes: fill=\"currentColor\" — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/github-wordmark.tsx",
+      "hash": "4c63cb594988",
+      "ds": "name: GitHubWordmark\npurpose: GitHub text wordmark.\nnotes: fill=\"currentColor\" — tints with the surrounding text color.\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/google-drive-icon.tsx",
+      "hash": "ecd259aee9f5",
+      "ds": "name: GoogleDriveIcon\r\npurpose: Google Drive brand mark.\r\nnotes: Fixed brand gradients — not tintable via currentColor; don't recolor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/google-icon.tsx",
+      "hash": "a4a801131206",
+      "ds": "name: GoogleIcon\r\npurpose: Google \"G\" mark (gradient variant) — distinct from shell/sidebar.tsx's inline flat-color Google G, which is a separate, simpler render for the sidebar's small connection-status glyph.\r\nnotes: Fixed brand gradients — not tintable via currentColor; don't recolor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/instagram-icon.tsx",
+      "hash": "2c418b789bef",
+      "ds": "name: InstagramIcon\r\npurpose: Instagram brand mark (gradient glyph).\r\nnotes: Fixed brand gradients (per-instance IDs via useId so multiple copies on one page don't collide) — not tintable via currentColor; don't recolor. For a currentColor Instagram mark use ownix's landing gradient-free pairing with InstagramWordmark instead.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/instagram-wordmark.tsx",
+      "hash": "60aa9f70b02e",
+      "ds": "name: InstagramWordmark\npurpose: Instagram text wordmark.\nnotes: fill=\"currentColor\" — unlike InstagramIcon's fixed gradient, the wordmark tints with the surrounding text color.\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/mobile-device-icon.tsx",
+      "hash": "ee898582b3fe",
+      "ds": "name: MobileDeviceIcon\r\npurpose: Generic mobile-device outline icon (not a brand mark).\r\nnotes: stroke=\"currentColor\" — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/openai-icon.tsx",
+      "hash": "e2a5852b9318",
+      "ds": "name: OpenAIIcon\r\npurpose: OpenAI brand mark.\r\nnotes: Fixed white fill — designed for a dark plate; not tintable via currentColor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/ownix-add-icon.tsx",
+      "hash": "ecca61a6f9fc",
+      "ds": "name: OwnixAddIcon\r\npurpose: Ownix's own \"add\" glyph — a product icon, not a third-party brand mark.\r\nnotes: fill=\"currentColor\" with per-path opacity — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/ownix-share-icon.tsx",
+      "hash": "45381329297b",
+      "ds": "name: OwnixShareIcon\r\npurpose: Ownix's own \"share/open externally\" glyph — a product icon, not a third-party brand mark. Used on JobCard/PreviewCard/LinksTable's \"open in new tab\" affordance.\r\nnotes: fill=\"currentColor\" with per-path opacity — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/pdf-icon.tsx",
+      "hash": "9986a8ad82b4",
+      "ds": "name: PDFIcon\npurpose: Generic PDF file-type mark (Adobe-style red document icon), used as a content-type/platform glyph for PDF sources.\nnotes: Fixed brand colors (red/white/gray) — not tintable via currentColor; don't recolor.\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/puzzle-piece.tsx",
+      "hash": "f8f5ff3af50b",
+      "ds": "name: PuzzlePieceIcon\r\npurpose: Generic puzzle-piece outline icon (not a brand mark) — used for extension/integration affordances.\r\nnotes: stroke=\"currentColor\" — tints with the surrounding text color.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/telegram-icon.tsx",
+      "hash": "649bf3583a8e",
+      "ds": "name: TelegramIcon\r\npurpose: Telegram brand mark (disc + paper-plane).\r\nnotes: Fixed brand colors (#26a5e4, matching the telegram-blue token; white plane) — not tintable via currentColor. See also doc-parser/telegram-toggle.tsx for a hand-drawn inline variant that switches to status-cancelled when off.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/tiktok-icon.tsx",
+      "hash": "cd291236b4f8",
+      "ds": "name: TikTokIcon\r\npurpose: TikTok brand mark.\r\nnotes: Fixed brand colors (cyan/pink/white) — not tintable via currentColor; don't recolor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/tiktok-wordmark.tsx",
+      "hash": "36f0c26bf827",
+      "ds": "name: TikTokWordmark\npurpose: TikTok text wordmark.\nnotes: Fixed brand colors (cyan/pink) plus white — not tintable via currentColor; don't recolor.\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/youtube-icon.tsx",
+      "hash": "0e6d01971114",
+      "ds": "name: YouTubeIcon\r\npurpose: YouTube brand mark (rounded-rect play button).\r\nnotes: Fixed brand colors (red/white) — not tintable via currentColor; don't recolor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/youtube-shorts-icon.tsx",
+      "hash": "bc010456bd33",
+      "ds": "name: YouTubeShortsIcon\r\npurpose: YouTube Shorts brand mark (the lightning-bolt play glyph).\r\nnotes: fill=\"#FF0000\" set on the root <svg>, not currentColor — practically fixed brand red unless the caller explicitly overrides the fill prop.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/svg/youtube-wordmark.tsx",
+      "hash": "ca41cdc6c328",
+      "ds": "name: YouTubeWordmark\npurpose: YouTube text wordmark with its play-button mark.\nnotes: Mixed fill — the play-button paths are fixed red/white brand colors, the wordmark text paths use currentColor. Only the text half tints; the mark doesn't.\nstatus: inferred"
     },
     {
       "file": "web/components/ui/badges.tsx",

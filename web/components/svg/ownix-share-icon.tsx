@@ -1,3 +1,9 @@
+/* @ds
+name: OwnixShareIcon
+purpose: Ownix's own "share/open externally" glyph — a product icon, not a third-party brand mark. Used on JobCard/PreviewCard/LinksTable's "open in new tab" affordance.
+notes: fill="currentColor" with per-path opacity — tints with the surrounding text color.
+status: inferred
+*/
 export function OwnixShareIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

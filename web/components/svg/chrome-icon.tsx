@@ -1,3 +1,9 @@
+/* @ds
+name: ChromeIcon
+purpose: Chrome browser brand mark.
+notes: Fixed multi-color brand palette (fill hex per path) — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function ChromeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

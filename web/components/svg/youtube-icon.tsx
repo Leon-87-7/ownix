@@ -1,3 +1,9 @@
+/* @ds
+name: YouTubeIcon
+purpose: YouTube brand mark (rounded-rect play button).
+notes: Fixed brand colors (red/white) — not tintable via currentColor; don't recolor.
+status: inferred
+*/
 export function YouTubeIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

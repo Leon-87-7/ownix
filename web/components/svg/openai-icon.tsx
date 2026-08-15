@@ -1,3 +1,9 @@
+/* @ds
+name: OpenAIIcon
+purpose: OpenAI brand mark.
+notes: Fixed white fill — designed for a dark plate; not tintable via currentColor.
+status: inferred
+*/
 export function OpenAIIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg

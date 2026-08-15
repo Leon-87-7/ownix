@@ -1,3 +1,9 @@
+/* @ds
+name: YouTubeWordmark
+purpose: YouTube text wordmark with its play-button mark.
+notes: Mixed fill — the play-button paths are fixed red/white brand colors, the wordmark text paths use currentColor. Only the text half tints; the mark doesn't.
+status: inferred
+*/
 export function YouTubeWordmark(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
