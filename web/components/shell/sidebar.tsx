@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: Sidebar
+purpose: The one primary navigation for the dashboard — a slim icon rail on desktop that expands into a slide-in drawer with labels, Google account status, and sign-out.
+when-not: Single global instance per shell — not meant to be reused or duplicated per page. Below sm the rail hides entirely behind a pull-tab.
+notes: Active nav item earns bg-raised + text-signal (DESIGN.md Navigation: "current location as the active place to continue"). Focus is trapped and returned on open/close per the APG dialog pattern.
+status: inferred
+*/
+
 import Link from 'next/link';
 import { PulsingBorder } from '@paper-design/shaders-react';
 import { Tooltip } from '@/components/ui/tooltip';

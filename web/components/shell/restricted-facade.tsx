@@ -1,4 +1,12 @@
 'use client';
+/* @ds
+name: RestrictedFacade
+purpose: A page-shaped placeholder shown in Restricted mode in place of a feature the unauthenticated visitor can't use — explains what's gated and offers "Get access."
+when-not: Only for gating a whole page in restricted mode; for gating one control inline, don't reach for this.
+notes: Built on PageShell/PageHeader, so it inherits their width/rhythm rules automatically.
+status: inferred
+*/
+
 import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';

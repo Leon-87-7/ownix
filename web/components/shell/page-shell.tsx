@@ -1,3 +1,13 @@
+/* @ds
+name: PageShell / PageHeader
+purpose: The one page container and title row every dashboard page roots in — width, vertical rhythm, and header treatment decided once instead of re-typed per page.
+variants:
+  PageShell width default|narrow: max-w-5xl for list pages, max-w-3xl for a single-item detail/reading page.
+when-not: Not for public/auth pages (those use PublicShell/AuthShell) — this is authenticated-dashboard-only.
+notes: PageHeader's action wraps below the title on narrow phones instead of crowding it.
+status: inferred
+*/
+
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 

@@ -1,3 +1,11 @@
+/* @ds
+name: AuthShell
+purpose: The centered-card layout for auth pages (login) — animated wave background, wordmark, tagline, and the page's own form as children.
+when-not: For legal/public pages use PublicShell; for the authenticated dashboard use PageShell.
+notes: The entrance animation is base-visible with the animation as a progressive enhancement — content renders fully without JS or under reduced motion.
+status: inferred
+*/
+
 import type { ReactNode } from 'react';
 import Footer from '@/components/ui/footer';
 

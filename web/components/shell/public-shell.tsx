@@ -1,3 +1,11 @@
+/* @ds
+name: PublicShell / LegalLayout / LegalArticle / LegalTitle / LegalSection / LegalList / LegalLink
+purpose: The layout family for standalone legal pages (privacy, terms) — PublicShell is the page frame with its own header/nav, LegalLayout adds the sticky legal-doc sidebar, and the rest are typography helpers for legal prose.
+when-not: PublicShell renders its own header inline rather than using PublicHeader (ui/) — the two are not interchangeable; don't mix them on one page.
+notes: LegalLayout's sidebar only appears at lg+; below that, only the article content shows.
+status: inferred
+*/
+
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import OwnixLogo from '@/app/ownix-logo.svg';

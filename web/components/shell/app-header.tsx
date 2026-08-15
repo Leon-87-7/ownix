@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: AppHeader
+purpose: The global sticky brand bar above every dashboard page — wordmark, restricted-mode notice or tagline, and the command launcher trigger.
+when-not: One instance per dashboard layout — not a reusable pattern to compose elsewhere.
+notes: Below sm the Submit URL trigger disappears (mobile submits from the Feed's tabs row instead); the command-launcher GhostButton uses accent="signal" since opening it is action-forward.
+status: inferred
+*/
+
 import { ArrowBigUp, Command } from 'lucide-react';
 import { useSubmitJob } from '@/components/feed/submit-job';
 import { Tooltip } from '@/components/ui/tooltip';

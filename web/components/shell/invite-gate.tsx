@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: InviteGate
+purpose: Wraps the dashboard root — resolves session/access state (checking, blocked, pending-approval, needs-email, approved) before any authenticated content renders, and exposes the session user via context.
+when-not: One instance at the app root — not something a page renders itself. Restricted mode (unauthenticated sample view) short-circuits the gate entirely.
+notes: Polls /api/auth/me every 5s while a user is in the pending state, plus on focus/visibility-change, to auto-unlock without a manual refresh.
+status: inferred
+*/
+
 import { createContext, useContext, FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PreviewMotif from '../ui/preview-motif';

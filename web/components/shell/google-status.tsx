@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: GoogleStatusProvider
+purpose: Context provider for the app's single Google-connection status, so the sidebar affordance and any Feed nudge stay in sync without separate fetches.
+when-not: Not a UI component — no visual output. Consume via useGoogleStatus(); don't fetch /api/google/status directly elsewhere.
+notes: connected is a tri-state (null = not yet known); treat null as "unknown," not "disconnected."
+status: inferred
+*/
+
 import {
   createContext,
   useCallback,

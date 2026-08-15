@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T16:50:21.233Z",
-  "sha": "4d10592",
+  "builtAt": "2026-08-15T16:53:08.868Z",
+  "sha": "ee6ce8b",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,8 +106,48 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 21,
+  "componentsWithDs": 29,
   "components": [
+    {
+      "file": "web/components/shell/app-header.tsx",
+      "hash": "3fc5e6f8c0ee",
+      "ds": "name: AppHeader\r\npurpose: The global sticky brand bar above every dashboard page — wordmark, restricted-mode notice or tagline, and the command launcher trigger.\r\nwhen-not: One instance per dashboard layout — not a reusable pattern to compose elsewhere.\r\nnotes: Below sm the Submit URL trigger disappears (mobile submits from the Feed's tabs row instead); the command-launcher GhostButton uses accent=\"signal\" since opening it is action-forward.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/auth-shell.tsx",
+      "hash": "7396ae0ceced",
+      "ds": "name: AuthShell\r\npurpose: The centered-card layout for auth pages (login) — animated wave background, wordmark, tagline, and the page's own form as children.\r\nwhen-not: For legal/public pages use PublicShell; for the authenticated dashboard use PageShell.\r\nnotes: The entrance animation is base-visible with the animation as a progressive enhancement — content renders fully without JS or under reduced motion.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/google-status.tsx",
+      "hash": "ef1aa927aaf0",
+      "ds": "name: GoogleStatusProvider\r\npurpose: Context provider for the app's single Google-connection status, so the sidebar affordance and any Feed nudge stay in sync without separate fetches.\r\nwhen-not: Not a UI component — no visual output. Consume via useGoogleStatus(); don't fetch /api/google/status directly elsewhere.\r\nnotes: connected is a tri-state (null = not yet known); treat null as \"unknown,\" not \"disconnected.\"\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/invite-gate.tsx",
+      "hash": "031d842a0da4",
+      "ds": "name: InviteGate\r\npurpose: Wraps the dashboard root — resolves session/access state (checking, blocked, pending-approval, needs-email, approved) before any authenticated content renders, and exposes the session user via context.\r\nwhen-not: One instance at the app root — not something a page renders itself. Restricted mode (unauthenticated sample view) short-circuits the gate entirely.\r\nnotes: Polls /api/auth/me every 5s while a user is in the pending state, plus on focus/visibility-change, to auto-unlock without a manual refresh.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/page-shell.tsx",
+      "hash": "ec8a04bc54ee",
+      "ds": "name: PageShell / PageHeader\r\npurpose: The one page container and title row every dashboard page roots in — width, vertical rhythm, and header treatment decided once instead of re-typed per page.\r\nvariants:\r\n  PageShell width default|narrow: max-w-5xl for list pages, max-w-3xl for a single-item detail/reading page.\r\nwhen-not: Not for public/auth pages (those use PublicShell/AuthShell) — this is authenticated-dashboard-only.\r\nnotes: PageHeader's action wraps below the title on narrow phones instead of crowding it.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/public-shell.tsx",
+      "hash": "55dbbf51c3d8",
+      "ds": "name: PublicShell / LegalLayout / LegalArticle / LegalTitle / LegalSection / LegalList / LegalLink\r\npurpose: The layout family for standalone legal pages (privacy, terms) — PublicShell is the page frame with its own header/nav, LegalLayout adds the sticky legal-doc sidebar, and the rest are typography helpers for legal prose.\r\nwhen-not: PublicShell renders its own header inline rather than using PublicHeader (ui/) — the two are not interchangeable; don't mix them on one page.\r\nnotes: LegalLayout's sidebar only appears at lg+; below that, only the article content shows.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/restricted-facade.tsx",
+      "hash": "9d238e8d80b7",
+      "ds": "name: RestrictedFacade\r\npurpose: A page-shaped placeholder shown in Restricted mode in place of a feature the unauthenticated visitor can't use — explains what's gated and offers \"Get access.\"\r\nwhen-not: Only for gating a whole page in restricted mode; for gating one control inline, don't reach for this.\r\nnotes: Built on PageShell/PageHeader, so it inherits their width/rhythm rules automatically.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/shell/sidebar.tsx",
+      "hash": "790df840fa4e",
+      "ds": "name: Sidebar\r\npurpose: The one primary navigation for the dashboard — a slim icon rail on desktop that expands into a slide-in drawer with labels, Google account status, and sign-out.\r\nwhen-not: Single global instance per shell — not meant to be reused or duplicated per page. Below sm the rail hides entirely behind a pull-tab.\r\nnotes: Active nav item earns bg-raised + text-signal (DESIGN.md Navigation: \"current location as the active place to continue\"). Focus is trapped and returned on open/close per the APG dialog pattern.\r\nstatus: inferred"
+    },
     {
       "file": "web/components/ui/badges.tsx",
       "hash": "88c86fd815d0",
