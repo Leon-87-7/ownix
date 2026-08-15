@@ -16,6 +16,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { Check, Copy, Download, ListChecks } from 'lucide-react';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
@@ -548,6 +549,72 @@ function JobActionsBar({
   );
 }
 
+// Transcript preview card — mirrors the doc-parser detail page's output cards
+// (rounded surface, capped scroll region, header actions), but flags itself
+// with the checklist glyph instead of the AI sparkle.
+function TranscriptCard({ job }: { job: JobDetail }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const transcript = job.transcript;
+  if (!transcript || !transcript.trim()) return null;
+
+  const copyTranscript = async () => {
+    try {
+      await navigator.clipboard.writeText(transcript);
+      setCopied(true);
+    } catch {}
+  };
+
+  return (
+    <article className="rounded-lg border border-line bg-surface p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <ListChecks className="h-4 w-4 text-signal" />
+        <h2 className="flex-1 text-sm font-semibold text-ink">
+          Transcript
+        </h2>
+        <Tooltip content={copied ? 'Copied' : 'Copy transcript'}>
+          <button
+            type="button"
+            onClick={copyTranscript}
+            aria-label="Copy transcript"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </button>
+        </Tooltip>
+        <Tooltip content="Download transcript">
+          <button
+            type="button"
+            onClick={() =>
+              downloadMarkdownFile(
+                `transcript_${job.id.slice(-4)}.md`,
+                transcript,
+              )
+            }
+            aria-label="Download transcript"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink active:scale-[0.96]"
+          >
+            <Download className="h-4 w-4" />
+          </button>
+        </Tooltip>
+      </div>
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">
+        {transcript}
+      </pre>
+    </article>
+  );
+}
+
 function ChecklistsSection({ job }: { job: JobDetail }) {
   const { generating, error, run } = useChecklists(job.id);
   const [markdown, setMarkdown] = useState(job.checklists_md);
@@ -800,7 +867,10 @@ export default function JobDetailPage() {
 
   const fieldSet =
     job.content_type === 'short' ? SHORT_FIELDS : ENRICHMENT_FIELDS;
+  // Transcript renders as its own preview card (see TranscriptCard), so drop it
+  // from the generic field loop to avoid showing it twice.
   const presentFields = fieldSet.filter(({ key }) => {
+    if (key === 'transcript') return false;
     const value = job[key];
     return (
       value !== null &&
@@ -856,7 +926,7 @@ export default function JobDetailPage() {
 
       <JobActionsBar
         job={job}
-        hasFields={presentFields.length > 0}
+        hasFields={presentFields.length > 0 || !!job.transcript?.trim()}
       />
 
       {!restricted && job.content_type === 'long' && job.status === 'transcript_done' && (
@@ -864,6 +934,8 @@ export default function JobDetailPage() {
       )}
 
       {!restricted && <ChecklistsSection job={job} />}
+
+      <TranscriptCard job={job} />
 
       <div className="space-y-3">
         {presentFields.map(({ key, label, render }) => (
