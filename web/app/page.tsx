@@ -153,7 +153,7 @@ export default async function LandingPage() {
                     aria-hidden="true"
                     viewBox="0 0 120 12"
                     preserveAspectRatio="none"
-                    className="absolute -bottom-1 left-0 h-2 w-full text-signal"
+                    className="absolute -bottom-1 left-0 h-2 w-full text-contrasignal-bright"
                   >
                     <path
                       d="M2 8 C 20 2, 40 10, 60 6 S 100 2, 118 7"
@@ -560,8 +560,8 @@ export default async function LandingPage() {
                 </p>
 
                 <div className="border-t border-line pt-4 md:pt-5">
-                  <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
-                    &emsp;Your personal search-engine
+                  <h3 className="font-subtitle italic mb-1 text-title font-semibold leading-snug text-ink">
+                    &emsp;<span>All your content, in one place</span>
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Every item lands in your Feed and Brain. Filter by
@@ -577,8 +577,11 @@ export default async function LandingPage() {
                   {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     DOCS
                   </span> */}
-                  <h3 className="font-subtitle mt-4 mb-1 text-title font-semibold leading-snug text-ink">
-                    &emsp;That PDF you saved and never reopened?
+                  <h3 className="mt-4 font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    &emsp;
+                    <span>
+                      That PDF you saved and never reopened?
+                    </span>
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Upload it - or paste the link - and the Docs page
@@ -591,8 +594,11 @@ export default async function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <h3 className="font-subtitle mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
-                    &emsp;Drop a GitHub repo link, skip the clone
+                  <h3 className="font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    &emsp;
+                    <span>
+                      Drop a GitHub repo link, skip the clone
+                    </span>
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Paste a GitHub URL and Ownix reads the README and
@@ -601,8 +607,9 @@ export default async function LandingPage() {
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
-                  <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
-                    &emsp;When search stops being enough
+                  <h3 className="font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    &emsp;
+                    <span>When search stops being enough</span>
                   </h3>
                   <p className="text-pretty text-copy leading-relaxed text-body">
                     Collections group content into a space when
@@ -678,7 +685,7 @@ export default async function LandingPage() {
                   className="relative mb-3 h-6 w-6 text-muted"
                 />
                 <h3 className="font-subtitle relative mb-1 text-title font-semibold leading-snug text-ink">
-                  Share sheet
+                  Share sheet muscle memory
                 </h3>
                 <p className="relative text-pretty text-copy leading-relaxed text-body">
                   Hit share, tap Ownix. Same reflex as sending a
@@ -695,11 +702,12 @@ export default async function LandingPage() {
                   className="relative mb-3 h-6 w-6 text-muted"
                 />
                 <h3 className="font-subtitle relative mb-1 text-title font-semibold leading-snug text-ink">
-                  Dashboard intake
+                  In app intake
                 </h3>
                 <p className="relative text-pretty text-copy leading-relaxed text-body">
                   Paste a link, run a command, or drop a file straight
-                  into the dashboard.
+                  into the dashboard. Best for PWA users and
+                  desktop-first workflows.
                 </p>
               </div>
             </div>
@@ -720,9 +728,9 @@ export default async function LandingPage() {
                 </span>
               </div>
             </div>
-            <p className="text-pretty text-copy mt-4 leading-relaxed text-body">
+            <p className="text-pretty font-subtitle italic mt-4 leading-relaxed text-body">
               See how it works in action.{' '}
-              <span className="font-mono text-muted">
+              <span className="font-mono not-italic text-muted">
                 Telegram share sheet flow.
               </span>
             </p>
