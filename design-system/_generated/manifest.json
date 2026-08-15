@@ -1,6 +1,6 @@
 {
-  "builtAt": "2026-08-15T16:53:08.868Z",
-  "sha": "ee6ce8b",
+  "builtAt": "2026-08-15T16:55:38.342Z",
+  "sha": "aad4ceb",
   "tokenSource": "DESIGN.md frontmatter -> web/tailwind.config.ts",
   "tokens": {
     "colors": [
@@ -106,8 +106,68 @@
     ]
   },
   "componentCount": 89,
-  "componentsWithDs": 29,
+  "componentsWithDs": 41,
   "components": [
+    {
+      "file": "web/components/feed/feed-states.tsx",
+      "hash": "de549bbd47ce",
+      "ds": "name: SkeletonList / SkeletonGrid / SkeletonLine / SkeletonBlock / ErrorBanner / EmptyState\r\npurpose: The shared loading/error/empty vocabulary for feed-like views — skeleton placeholders shaped like JobCard/PreviewCard rows, plus a retryable error banner and a two-message empty state (filtered vs genuinely empty).\r\nwhen-not: SkeletonList/Grid are shaped specifically like job rows/cards — for a generic block placeholder elsewhere, SkeletonBlock is the primitive other features (e.g. ExportModal) reuse instead.\r\nnotes: EmptyState's copy branches on hasFilters — \"no matches, try clearing\" reads very differently from \"nothing here yet.\"\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/folder-tag-form.tsx",
+      "hash": "1afa5125f474",
+      "ds": "name: FolderTagForm\r\npurpose: A Dialog listing folders detected in a Bookmark import, letting the operator turn each into a link tag (with color/icon) applied across every link from that folder.\r\nwhen-not: Bookmark-import-specific — not a general tag-creation surface (use TagForm/TagMenu for that). Non-blocking: dismissing writes nothing, since the source folder names already persisted at import time.\r\nnotes: Reuses IconPicker/PRESET_COLORS from tag-picker.tsx rather than duplicating the swatch UI.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/job-card-tags.tsx",
+      "hash": "2d6f6a63ac68",
+      "ds": "name: JobCardTags\r\npurpose: Thin composition of TagChips + TagMenu (ui/tag-picker) scoped to one job's attached tags — the tag affordance embedded in JobCard and PreviewCard.\r\nvariants:\r\n  countOnly: drops the chips, showing only TagMenu's count badge — used inside PreviewCard where space is tight.\r\nwhen-not: Not a general-purpose tag control — it's wired to a specific jobId via useJobTags. For a standalone tag UI use TagMenu directly.\r\nnotes: Each instance fetches its own tags (N cards = N fetches) — a known scaling limit, not addressed here.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/job-card.tsx",
+      "hash": "2df8199545b7",
+      "ds": "name: JobCard\r\npurpose: A compact, text-focused list-row card for a job — full-card click target, status badge, platform badge, tags dropdown.\r\nwhen-not: For a thumbnail-driven grid card use PreviewCard instead; JobCard has no image slot at all.\r\nnotes: The whole card is a full-cover overlay <a>; interactive children (tag dropdown, external-link icon) opt back in with pointer-events-auto + relative z-10 and stopPropagation, since they can't legally nest inside the anchor.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/links-table.tsx",
+      "hash": "efcbee1e6dee",
+      "ds": "name: LinksTable / LinksSearchBar\r\npurpose: The Links view of the Feed — a sortable, paginated table of extracted links with a desktop preview panel and a mobile card-list fallback, tag editing, and per-link delete.\r\nwhen-not: A standalone feature surface, not a reusable table primitive — it's built around LinkRow/UseLinksTableResult specifically, not data-agnostic.\r\nnotes: hideSearchAndFilters/searchSlot on FilterBar exist specifically so this view can swap in LinksSearchBar instead of the default job filters (Links has no job-status lifecycle). The subtle rgba() row-divider shadows here are documented drift (DRIFT-BACKLOG.md), not tokenized.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/preview-card.tsx",
+      "hash": "7653b25a31dd",
+      "ds": "name: PreviewCard\r\npurpose: The thumbnail-driven grid card for a job, in three layouts — default (fixed aspect + full meta), bento (stretches to fill a spanned grid cell), compact (Short grid 5-up, no status badge).\r\nvariants:\r\n  default: uniform 3-up grid, fixed aspect thumbnail per thumbnail_kind.\r\n  bento: thumbnail fills the row-spanned cell; falls back to 16:9 below sm where spans are off.\r\n  compact: 9:16 forced regardless of thumbnail_kind, status badge dropped (status lives in filters/list/detail instead).\r\nwhen-not: For a list-row layout with no thumbnail use JobCard.\r\nnotes: Falls back to NoPreviewRing + PlatformGlyph when there's no thumbnail_url or the image fails to load.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/preview-grid.tsx",
+      "hash": "dc1ab5c7276f",
+      "ds": "name: PreviewGrid\r\npurpose: The grid container that lays out PreviewCards in one of three arrangements the Feed uses per view.\r\nvariants:\r\n  uniform: the plain 3-up grid every single-type tab uses.\r\n  bento: dense mixed-type grid (grid-flow-dense) where landscape/portrait cards span different row heights.\r\n  shorts: the Short tab's uncropped 9:16 ladder, 2 to 5 columns by breakpoint.\r\nwhen-not: Consumer-assembled — this component owns layout only, not data fetching or filtering.\r\nnotes: bento's dense fill can place a card ahead of strict newest-first order to backfill a hole — deliberate, not a bug (timestamps still carry true order).\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/recovery-panel.tsx",
+      "hash": "7ad1db4d1831",
+      "ds": "name: RecoveryPanel\r\npurpose: A collapsible \"N need attention\" affordance for stale-pending/error/stale-in-flight jobs in the current feed tab, with retry/clear actions.\r\nwhen-not: Suppressed via active=false on views with no job-status lifecycle (e.g. Links) — don't force-render it there.\r\nnotes: Mirrors its Clear Failed action into the global command launcher via registerFeedRecovery, so the two surfaces never drift out of sync on availability.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/stat-card.tsx",
+      "hash": "3cf570b5f21d",
+      "ds": "name: StatCard\r\npurpose: The Summary Tile primitive from DESIGN.md §5 — a mono-label caption over a large tabular-nums value, optionally tinted with a status hue.\r\nwhen-not: No trend arrows, sparklines, or gradient accents — DESIGN.md explicitly rules those out for this component.\r\nnotes: valueClass is the caller's way to tint the value with a semantic status color (e.g. text-status-done); default is plain text-ink.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/stats-overview.tsx",
+      "hash": "d5a7cb9ba5cf",
+      "ds": "name: StatsOverview\r\npurpose: The Feed's summary row — a StatCard grid at sm+ (Total/Done/Pending/Error/Processing), collapsing to a compact disclosure strip below sm with the same numbers plus a full status/type breakdown on tap.\r\nwhen-not: One instance per Feed page — not a general-purpose stats component.\r\nnotes: The mobile disclosure's chevron-trail affordance (chev-c1/c2/c3) is the one place this animation is used; it signals \"this strip is tappable,\" matching the DESIGN.md rule that signal is earned by an actionable element.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/submit-job.tsx",
+      "hash": "20dbc028cf8e",
+      "ds": "name: SubmitJobProvider\r\npurpose: The dashboard's single owner of every \"add something to the Index\" surface — Submit URL, Ingest Link (with batch paste), Ingest Docs, the mobile Intake sheet, and the command launcher — plus the global keyboard shortcuts that open them.\r\nwhen-not: One instance wraps the whole dashboard; a page never mounts its own. Consume via useSubmitJob() (or useSubmitJobOptional() when the component may render outside the provider, e.g. in isolated tests).\r\nnotes: In Restricted mode every open action redirects to a sign-in toast instead of opening — check restricted handling first if extending this file.\r\nstatus: inferred"
+    },
+    {
+      "file": "web/components/feed/submit-url-form.tsx",
+      "hash": "aa3c48351a91",
+      "ds": "name: SubmitUrlForm\r\npurpose: The bare form (URL input, enrichment-template select, conditional freestyle-prompt field, submit button) rendered inside SubmitJobProvider's Submit URL dialog.\r\nwhen-not: Presentational only — no fetch/state of its own; all state and submission live in SubmitJobProvider. Not meant to be mounted standalone.\r\nnotes: The freestyle textarea only appears when template === \"freestyle\" — don't assume the form's field set is static.\r\nstatus: inferred"
+    },
     {
       "file": "web/components/shell/app-header.tsx",
       "hash": "3fc5e6f8c0ee",

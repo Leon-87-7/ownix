@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: StatCard
+purpose: The Summary Tile primitive from DESIGN.md §5 — a mono-label caption over a large tabular-nums value, optionally tinted with a status hue.
+when-not: No trend arrows, sparklines, or gradient accents — DESIGN.md explicitly rules those out for this component.
+notes: valueClass is the caller's way to tint the value with a semantic status color (e.g. text-status-done); default is plain text-ink.
+status: inferred
+*/
+
 import { Tooltip } from '@/components/ui/tooltip';
 
 interface StatCardProps {

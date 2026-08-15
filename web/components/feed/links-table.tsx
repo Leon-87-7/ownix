@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: LinksTable / LinksSearchBar
+purpose: The Links view of the Feed — a sortable, paginated table of extracted links with a desktop preview panel and a mobile card-list fallback, tag editing, and per-link delete.
+when-not: A standalone feature surface, not a reusable table primitive — it's built around LinkRow/UseLinksTableResult specifically, not data-agnostic.
+notes: hideSearchAndFilters/searchSlot on FilterBar exist specifically so this view can swap in LinksSearchBar instead of the default job filters (Links has no job-status lifecycle). The subtle rgba() row-divider shadows here are documented drift (DRIFT-BACKLOG.md), not tokenized.
+status: inferred
+*/
+
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';

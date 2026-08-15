@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: StatsOverview
+purpose: The Feed's summary row — a StatCard grid at sm+ (Total/Done/Pending/Error/Processing), collapsing to a compact disclosure strip below sm with the same numbers plus a full status/type breakdown on tap.
+when-not: One instance per Feed page — not a general-purpose stats component.
+notes: The mobile disclosure's chevron-trail affordance (chev-c1/c2/c3) is the one place this animation is used; it signals "this strip is tappable," matching the DESIGN.md rule that signal is earned by an actionable element.
+status: inferred
+*/
+
 import { useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StatCard } from '@/components/feed/stat-card';

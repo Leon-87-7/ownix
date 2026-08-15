@@ -1,3 +1,15 @@
+/* @ds
+name: PreviewCard
+purpose: The thumbnail-driven grid card for a job, in three layouts — default (fixed aspect + full meta), bento (stretches to fill a spanned grid cell), compact (Short grid 5-up, no status badge).
+variants:
+  default: uniform 3-up grid, fixed aspect thumbnail per thumbnail_kind.
+  bento: thumbnail fills the row-spanned cell; falls back to 16:9 below sm where spans are off.
+  compact: 9:16 forced regardless of thumbnail_kind, status badge dropped (status lives in filters/list/detail instead).
+when-not: For a list-row layout with no thumbnail use JobCard.
+notes: Falls back to NoPreviewRing + PlatformGlyph when there's no thumbnail_url or the image fails to load.
+status: inferred
+*/
+
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/badges";

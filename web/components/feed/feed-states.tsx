@@ -1,3 +1,11 @@
+/* @ds
+name: SkeletonList / SkeletonGrid / SkeletonLine / SkeletonBlock / ErrorBanner / EmptyState
+purpose: The shared loading/error/empty vocabulary for feed-like views — skeleton placeholders shaped like JobCard/PreviewCard rows, plus a retryable error banner and a two-message empty state (filtered vs genuinely empty).
+when-not: SkeletonList/Grid are shaped specifically like job rows/cards — for a generic block placeholder elsewhere, SkeletonBlock is the primitive other features (e.g. ExportModal) reuse instead.
+notes: EmptyState's copy branches on hasFilters — "no matches, try clearing" reads very differently from "nothing here yet."
+status: inferred
+*/
+
 function SkeletonRow() {
   return (
     <div className="rounded-lg border border-line bg-surface px-4 py-3">

@@ -1,5 +1,15 @@
 'use client';
 
+/* @ds
+name: JobCardTags
+purpose: Thin composition of TagChips + TagMenu (ui/tag-picker) scoped to one job's attached tags — the tag affordance embedded in JobCard and PreviewCard.
+variants:
+  countOnly: drops the chips, showing only TagMenu's count badge — used inside PreviewCard where space is tight.
+when-not: Not a general-purpose tag control — it's wired to a specific jobId via useJobTags. For a standalone tag UI use TagMenu directly.
+notes: Each instance fetches its own tags (N cards = N fetches) — a known scaling limit, not addressed here.
+status: inferred
+*/
+
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { useJobTags } from '@/lib/hooks/useJobTags';
 

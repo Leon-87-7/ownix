@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: SubmitJobProvider
+purpose: The dashboard's single owner of every "add something to the Index" surface — Submit URL, Ingest Link (with batch paste), Ingest Docs, the mobile Intake sheet, and the command launcher — plus the global keyboard shortcuts that open them.
+when-not: One instance wraps the whole dashboard; a page never mounts its own. Consume via useSubmitJob() (or useSubmitJobOptional() when the component may render outside the provider, e.g. in isolated tests).
+notes: In Restricted mode every open action redirects to a sign-in toast instead of opening — check restricted handling first if extending this file.
+status: inferred
+*/
+
 import {
   createContext,
   useCallback,

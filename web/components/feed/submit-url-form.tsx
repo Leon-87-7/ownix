@@ -1,5 +1,13 @@
 "use client";
 
+/* @ds
+name: SubmitUrlForm
+purpose: The bare form (URL input, enrichment-template select, conditional freestyle-prompt field, submit button) rendered inside SubmitJobProvider's Submit URL dialog.
+when-not: Presentational only — no fetch/state of its own; all state and submission live in SubmitJobProvider. Not meant to be mounted standalone.
+notes: The freestyle textarea only appears when template === "freestyle" — don't assume the form's field set is static.
+status: inferred
+*/
+
 import type { FormEvent } from "react";
 
 const TEMPLATE_OPTIONS = [

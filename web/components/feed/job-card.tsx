@@ -1,3 +1,11 @@
+/* @ds
+name: JobCard
+purpose: A compact, text-focused list-row card for a job — full-card click target, status badge, platform badge, tags dropdown.
+when-not: For a thumbnail-driven grid card use PreviewCard instead; JobCard has no image slot at all.
+notes: The whole card is a full-cover overlay <a>; interactive children (tag dropdown, external-link icon) opt back in with pointer-events-auto + relative z-10 and stopPropagation, since they can't legally nest inside the anchor.
+status: inferred
+*/
+
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/badges";
 import { PlatformBadge } from "@/components/ui/platform-icon";

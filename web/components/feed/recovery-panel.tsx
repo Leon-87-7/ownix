@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: RecoveryPanel
+purpose: A collapsible "N need attention" affordance for stale-pending/error/stale-in-flight jobs in the current feed tab, with retry/clear actions.
+when-not: Suppressed via active=false on views with no job-status lifecycle (e.g. Links) — don't force-render it there.
+notes: Mirrors its Clear Failed action into the global command launcher via registerFeedRecovery, so the two surfaces never drift out of sync on availability.
+status: inferred
+*/
+
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
 

@@ -1,3 +1,15 @@
+/* @ds
+name: PreviewGrid
+purpose: The grid container that lays out PreviewCards in one of three arrangements the Feed uses per view.
+variants:
+  uniform: the plain 3-up grid every single-type tab uses.
+  bento: dense mixed-type grid (grid-flow-dense) where landscape/portrait cards span different row heights.
+  shorts: the Short tab's uncropped 9:16 ladder, 2 to 5 columns by breakpoint.
+when-not: Consumer-assembled — this component owns layout only, not data fetching or filtering.
+notes: bento's dense fill can place a card ahead of strict newest-first order to backfill a hole — deliberate, not a bug (timestamps still carry true order).
+status: inferred
+*/
+
 import { PreviewCard } from "@/components/feed/preview-card";
 import type { JobSummary } from "@/components/feed/job-card";
 

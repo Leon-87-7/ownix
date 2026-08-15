@@ -1,5 +1,13 @@
 'use client';
 
+/* @ds
+name: FolderTagForm
+purpose: A Dialog listing folders detected in a Bookmark import, letting the operator turn each into a link tag (with color/icon) applied across every link from that folder.
+when-not: Bookmark-import-specific — not a general tag-creation surface (use TagForm/TagMenu for that). Non-blocking: dismissing writes nothing, since the source folder names already persisted at import time.
+notes: Reuses IconPicker/PRESET_COLORS from tag-picker.tsx rather than duplicating the swatch UI.
+status: inferred
+*/
+
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { IconPicker, PRESET_COLORS, TagMark } from '@/components/ui/tag-picker';
