@@ -15,8 +15,13 @@ export function moveFocusBeforeStepTransition(
   incomingFocusables: HTMLElement[],
 ): void {
   const active = document.activeElement;
-  if (active instanceof HTMLElement && outgoingStep.contains(active)) {
-    (incomingFocusables[0] ?? incomingStep).focus({ preventScroll: true });
+  if (
+    active instanceof HTMLElement &&
+    outgoingStep.contains(active)
+  ) {
+    (incomingFocusables[0] ?? incomingStep).focus({
+      preventScroll: true,
+    });
   }
 }
 
@@ -197,11 +202,12 @@ export function OnboardingStepper() {
             // headlines on top of each other mid-scrub, which reads as a
             // rendering bug rather than a transition.
             tl.to(steps[i - 1], {
-              onStart: () => moveFocusBeforeStepTransition(
-                steps[i - 1],
-                steps[i],
-                focusables[i],
-              ),
+              onStart: () =>
+                moveFocusBeforeStepTransition(
+                  steps[i - 1],
+                  steps[i],
+                  focusables[i],
+                ),
               opacity: 0,
               y: -28,
               duration: 0.35,
@@ -349,7 +355,6 @@ export function OnboardingStepper() {
               <p className="mt-4 font-mono text-xs text-muted">
                 {step.meta}
               </p>
-
               {/* Wayfinding, not a second CTA: points at #capture, the
                   section that already covers share sheet / dashboard intake /
                   extension in full, rather than duplicating those three
@@ -367,7 +372,6 @@ export function OnboardingStepper() {
                   More ways to collect
                 </GhostButton>
               )}
-
               {/* The pinned section is the most engaged a visitor gets, and
                   without an exit it dead-ends into #showcase with the hero CTA
                   long since scrolled away. Ghost treatment, not signal — this
@@ -388,15 +392,12 @@ export function OnboardingStepper() {
                   ref={cta}
                   className="mt-5"
                 >
-                  <GhostButton
-                    as="a"
-                    accent="signal"
-                    borderLine="2"
+                  <a
                     href="#invite"
-                    className="inline-flex h-8 items-center justify-center rounded-md border border-line border-b-2 border-b-contrasignal-deep bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-line px-3.5 text-button font-medium leading-none transition-ui bg-signal hover:bg-signal-bright text-onsignal [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
                   >
                     Get an invite
-                  </GhostButton>
+                  </a>
                 </div>
               )}
             </article>

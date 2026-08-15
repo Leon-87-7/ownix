@@ -53,10 +53,10 @@ describe('SHORT_FIELDS', () => {
 })
 
 // ---------------------------------------------------------------------------
-// ENRICHMENT_FIELDS unchanged
+// ENRICHMENT_FIELDS long transcript support
 // ---------------------------------------------------------------------------
 
-describe('ENRICHMENT_FIELDS (long/article schema unchanged)', () => {
+describe('ENRICHMENT_FIELDS', () => {
   it('still has all long enrichment keys', () => {
     const keys = ENRICHMENT_FIELDS.map((f) => f.key)
     expect(keys).toContain('ai_topic')
@@ -68,10 +68,10 @@ describe('ENRICHMENT_FIELDS (long/article schema unchanged)', () => {
     expect(keys).toContain('template_analysis')
   })
 
-  it('does NOT contain short-specific keys', () => {
+  it('shares transcript but not the other short-specific keys', () => {
     const keys = ENRICHMENT_FIELDS.map((f) => f.key)
     expect(keys).not.toContain('summary')
-    expect(keys).not.toContain('transcript')
+    expect(keys[0]).toBe('transcript')
     expect(keys).not.toContain('key_phrases')
     expect(keys).not.toContain('links')
   })

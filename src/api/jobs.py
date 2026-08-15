@@ -138,6 +138,11 @@ class JobCreateRequest(BaseModel):
     content_type: Literal["link"] | None = None
 
 
+class JobEnrichRequest(BaseModel):
+    template: str
+    freestyle_prompt: str | None = Field(default=None, max_length=4_000)
+
+
 async def _create_link_job(chat_id: int, url: str) -> dict:
     # coerce_url, not is_fetchable_url: a bare domain gains https:// so
     # "land-book.com" works, while a whitespace-joined URL blob is rejected
@@ -514,7 +519,7 @@ _DETAIL_FIELDS_COMMON = (
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)
-_DETAIL_FIELDS_LONG = (
+_DETAIL_FIELDS_ENRICHMENT = (
     "ai_topic",
     "ai_objective",
     "ai_action_points",
@@ -539,7 +544,9 @@ def detail_fields_for(content_type: str) -> tuple[str, ...]:
     """Return the full set of detail field names for a given content_type."""
     if content_type == "short":
         return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
-    return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_LONG
+    if content_type == "long":
+        return (*_DETAIL_FIELDS_COMMON, "transcript", *_DETAIL_FIELDS_ENRICHMENT)
+    return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_ENRICHMENT
 
 
 def thumbnail_response(
@@ -635,6 +642,42 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
         checklists_generated_at=generated_at,
     )
     return {"checklists_md": markdown, "checklists_generated_at": generated_at}
+
+
+@jobs_router.post("/{job_id}/enrich", status_code=202)
+async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> dict:
+    """Atomically claim an owned long-video transcript and queue enrichment."""
+    job = await get_owned_job(job_id, request)
+    if job.get("content_type") != "long":
+        raise HTTPException(
+            status_code=422, detail="Enrichment requires a transcript-complete long video"
+        )
+    if job.get("status") == "enriching":
+        raise HTTPException(status_code=409, detail="Job enrichment was already claimed")
+    if job.get("status") != "transcript_done":
+        raise HTTPException(
+            status_code=422, detail="Enrichment requires a transcript-complete long video"
+        )
+
+    template = body.template.strip()
+    if not template:
+        raise HTTPException(status_code=422, detail="template is required")
+    freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
+    template, freestyle_prompt = _resolve_job_template("long", template, freestyle_prompt)
+    claimed = await database.claim_job_enrichment(
+        job_id, template, freestyle_prompt if template == "freestyle" else None
+    )
+    if not claimed:
+        raise HTTPException(status_code=409, detail="Job enrichment was already claimed")
+
+    try:
+        from src import queue
+
+        await queue.enqueue({"task": "enrichment", "job_id": job_id})
+    except Exception as exc:
+        await database.release_job_enrichment_claim(job_id)
+        raise HTTPException(status_code=503, detail="Could not queue enrichment") from exc
+    return {"job_id": job_id, "status": "enriching"}
 
 
 @jobs_router.get("/{job_id}/link-topics")

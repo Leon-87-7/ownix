@@ -37,6 +37,6 @@ export interface JobDetail {
 }
 
 export function useJobDetail(jobId: string, restricted = false) {
-  const { data: job, fetchState } = useFetchDetail<JobDetail>(`${restricted ? '/api/preview/jobs' : '/api/jobs'}/${jobId}`);
-  return { job, fetchState };
+  const { data: job, setData, fetchState, reload } = useFetchDetail<JobDetail>(`${restricted ? '/api/preview/jobs' : '/api/jobs'}/${jobId}`);
+  return { job, setData, fetchState, reload };
 }

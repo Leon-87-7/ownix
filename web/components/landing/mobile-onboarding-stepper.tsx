@@ -124,6 +124,19 @@ export function MobileOnboardingStepper() {
                     <span className="font-mono text-mono-label font-medium tracking-[0.06em] text-contrasignal">
                       {item.surface}
                     </span>
+                    {/* Wayfinding, not a second CTA: rides the surface label's
+                        row as a plain text link (no ghost plate) so it reads as
+                        an optional detour to #capture, not a control competing
+                        with Next / Get an invite. `-my-2 py-2` keeps a coarse
+                        tap target without growing the row. */}
+                    {index === 0 && (
+                      <a
+                        href="#capture"
+                        className="ownix-shimmer -my-2 ml-auto inline-flex items-center py-2 text-button font-medium leading-none text-ink transition-ui focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
+                      >
+                        More ways to collect
+                      </a>
+                    )}
                   </div>
                   <h3 className="text-balance mb-3 max-w-[24ch] text-[clamp(1.25rem,6vw,1.5rem)] font-semibold leading-tight tracking-[-0.25px] text-ink">
                     {item.title}
@@ -139,17 +152,6 @@ export function MobileOnboardingStepper() {
                   <p className="mt-4 font-mono text-xs text-muted">
                     {item.meta}
                   </p>
-                  {index === 0 && (
-                    <GhostButton
-                      as="a"
-                      accent="body"
-                      borderLine="1"
-                      href="#capture"
-                      className="ownix-shimmer inline-flex mt-4 h-8 items-center justify-center rounded-md border border-line border-b-1 border-b-ink bg-transparent px-3.5 text-button font-medium leading-none text-ink transition-ui hover:bg-raised [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-5"
-                    >
-                      More ways to collect
-                    </GhostButton>
-                  )}
                 </article>
               );
             })}

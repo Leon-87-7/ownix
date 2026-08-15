@@ -130,25 +130,33 @@ export function useFetchDetail<T>(url: string) {
   const [data, setData] = useState<T | null>(null);
   const [fetchState, setFetchState] = useState<FetchState>('loading');
 
+  const requestGeneration = useRef(0);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const generation = ++requestGeneration.current;
+    try {
+      const result = await fetchJson<T>(url, { signal });
+      if (generation !== requestGeneration.current) return;
+      if (!result.ok) { setFetchState(result.state); return; }
+      setData(result.data);
+      setFetchState('ok');
+    } catch (err) {
+      if (generation === requestGeneration.current && (err as Error).name !== 'AbortError') {
+        setFetchState('error');
+      }
+    }
+  }, [url]);
+
   useEffect(() => {
     // Reset on url change: without this, navigating /jobs/A → /jobs/B keeps
     // rendering A's data (and state derived from it) until B's fetch resolves.
     setData(null);
     setFetchState('loading');
     const controller = new AbortController();
-    fetchJson<T>(url, { signal: controller.signal })
-      .then((result) => {
-        if (!result.ok) { setFetchState(result.state); return; }
-        setData(result.data);
-        setFetchState('ok');
-      })
-      .catch((err) => {
-        if ((err as Error).name !== 'AbortError') setFetchState('error');
-      });
-    return () => controller.abort();
-  }, [url]);
+    void load(controller.signal);
+    return () => { requestGeneration.current += 1; controller.abort(); };
+  }, [load]);
 
-  return { data, setData, fetchState };
+  return { data, setData, fetchState, reload: load };
 }
 
 /** PUT JSON; resolve with the parsed row or throw the server's detail message. */

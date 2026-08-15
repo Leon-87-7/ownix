@@ -530,6 +530,39 @@ def _insert_thumbnail_job(job_id: str, chat_id: int) -> None:
     asyncio.run(run())
 
 
+@pytest.mark.parametrize(
+    ("content_type", "includes_transcript"),
+    [("long", True), ("article", False), ("repo", False)],
+)
+def test_job_detail_exposes_transcript_only_for_long_jobs(
+    jobs_client: TestClient, content_type: str, includes_transcript: bool
+) -> None:
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO jobs (id, chat_id, url, content_type, status, transcript)
+                VALUES (?, ?, ?, ?, 'done', 'populated transcript')
+                """,
+                (f"detail-{content_type}", USER_A["id"], "https://example.com/item", content_type),
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    response = jobs_client.get(f"/api/jobs/detail-{content_type}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    if includes_transcript:
+        assert payload["transcript"] == "populated transcript"
+    else:
+        assert "transcript" not in payload
+
+
 def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
     jobs_client: TestClient,
 ) -> None:

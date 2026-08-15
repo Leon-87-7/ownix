@@ -77,13 +77,13 @@ export default async function LandingPage() {
       <nav
         id="top"
         aria-label="Main"
-        className="border-b border-line bg-canvas"
+        className="border-b border-line bg-canvas lg:sticky lg:top-0 lg:z-40 lg:border-line/70 lg:bg-canvas/85 lg:backdrop-blur-md"
       >
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
           <Link
             href="/"
             aria-label="Ownix home"
-            className={`group flex items-center gap-2 rounded-md text-xl font-semibold tracking-tight text-ink`}
+            className="group flex items-center gap-2 rounded-md text-xl font-semibold tracking-tight text-ink"
           >
             <OwnixLogo
               aria-hidden="true"
@@ -120,7 +120,7 @@ export default async function LandingPage() {
 
       <main className="bg-canvas text-body">
         <header
-          className="relative isolate overflow-hidden py-12"
+          className="relative isolate overflow-hidden py-12 lg:flex lg:min-h-[calc(100svh-4.25rem)] lg:items-center lg:py-0"
           id="hero"
         >
           <HeroGradient />
@@ -133,17 +133,39 @@ export default async function LandingPage() {
             aria-hidden="true"
             className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(13,14,16,0.75)_0%,rgba(13,14,16,0)_100%)] lg:bg-[linear-gradient(100deg,rgba(13,14,16,0.96)_0%,rgba(13,14,16,0.88)_55%,rgba(13,14,16,0.45)_80%,rgba(13,14,16,0.12)_100%)]"
           />
-          <div className="mx-auto grid max-w-[1200px] gap-8 px-6 lg:grid-cols-[minmax(0,1fr)_500px] lg:items-center">
+          {/* Balanced 50/50 split (was 1fr/500px) sized to a fixed fold
+            height, so the two halves read as one weight instead of a text
+            block plus a decoration, and the onboarding lead-in below
+            always starts exactly at the fold instead of overlapping the
+            hero text while the stepper pins (prototype: agent-knowledge
+            /skills/prototype, branch prototype/landing-fold-variants). */}
+          <div className="mx-auto grid w-full max-w-[1200px] gap-8 px-6 lg:grid-cols-2 lg:items-center lg:gap-16">
             <div>
               {/* Golden-ratio hero. The paragraph below is 1rem, so the floor is
                 exactly φ × body (1.618rem) and the ceiling is φ² (2.618rem) —
                 both ends derived from the body size rather than picked by eye.
                 Replaces an arbitrary 30→52px clamp. */}
-              <h1 className="text-balance hero-rise mb-6 max-w-[22ch] font-title text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
+              <h1 className="text-balance hero-rise mb-6 max-w-[24ch] font-title text-[clamp(1.618rem,6vw,2.618rem)] font-semibold leading-[1.15] tracking-[-0.5px] text-ink [animation-delay:90ms]">
                 You watched it. You liked it.{' '}
-                <span className="text-muted">You lost it.</span>
+                <span className="relative inline-block font-subtitle italic text-signal-bright">
+                  You lost it.
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 120 12"
+                    preserveAspectRatio="none"
+                    className="absolute -bottom-1 left-0 h-2 w-full text-signal"
+                  >
+                    <path
+                      d="M2 8 C 20 2, 40 10, 60 6 S 100 2, 118 7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
               </h1>
-              <p className="text-pretty hero-rise mb-8 sm:my-20 sm:leading-loose max-w-[56ch] text-base leading-relaxed text-body [animation-delay:180ms]">
+              <p className="text-pretty hero-rise mb-8 max-w-[52ch] text-base leading-relaxed text-body [animation-delay:180ms]">
                 <span className="font-medium font-subtitle text-ink">
                   &emsp;Ownix remembers. <br />
                 </span>{' '}
@@ -154,7 +176,7 @@ export default async function LandingPage() {
                 a glimpse. <br />
                 It&apos;s yours - paste it straight into your AI.
               </p>
-              <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
+              <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/50 sm:bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
                   <span className="font-mono text-xs text-muted">
                     Join Ownix
@@ -166,7 +188,7 @@ export default async function LandingPage() {
                     Get an invite
                   </a>
                 </div>
-                <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
+                <div className="hidden flex-col items-start gap-3 border-b border-line p-4 sm:flex sm:border-b-0">
                   <span className="font-mono text-xs text-muted">
                     Capture this tab
                   </span>
@@ -176,11 +198,11 @@ export default async function LandingPage() {
                     href={chromeExtensionUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`h-8 w-full gap-2 bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
+                    className={`h-8 w-full gap-2 whitespace-nowrap bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
                   >
                     <ChromeIcon
                       aria-hidden="true"
-                      className="h-4 w-4"
+                      className="h-4 w-4 shrink-0"
                     />
                     Install for Chrome
                   </GhostButton>
@@ -205,7 +227,7 @@ export default async function LandingPage() {
               ariaLabel="Ownix collect, own, and recall motif"
               size="fill"
               treatment="hero"
-              className="mx-auto hidden h-[500px] w-[500px] lg:flex"
+              className="mx-auto hidden aspect-square h-full max-h-[440px] w-full max-w-[440px] lg:flex"
             />
           </div>
         </header>
@@ -215,7 +237,14 @@ export default async function LandingPage() {
           className="border-t border-line py-6"
         >
           <div className="mx-auto max-w-[960px] px-6">
-            <div className="hidden sm:block">
+            {/* border-t + NEXT eyebrow on lg: gives the fold a hard stop —
+              the onboarding lead-in starts exactly at the fixed-height
+              fold's bottom edge instead of visually overlapping the hero
+              text above it while the stepper pins. */}
+            <div className="hidden sm:block lg:border-t lg:border-line lg:pt-10">
+              <span className="mb-2 hidden font-mono text-mono-label font-medium tracking-[0.06em] text-muted lg:block">
+                NEXT
+              </span>
               <h2
                 id="onboarding"
                 className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"

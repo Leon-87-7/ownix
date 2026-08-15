@@ -58,6 +58,25 @@ describe('ExtensionTokensPanel', () => {
     await waitFor(() => expect(screen.getByText('ABC123')).toBeInTheDocument());
   });
 
+  it('copies the pairing code to the clipboard', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
+    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/api/extension/pair')) {
+        return jsonResponse({ code: 'ABC123', expires_in: 300 });
+      }
+      return jsonResponse([]);
+    });
+
+    render(<ExtensionTokensPanel />);
+    await user.click(screen.getByRole('button', { name: /generate pairing code/i }));
+    await screen.findByText('ABC123');
+
+    await user.click(screen.getByRole('button', { name: /copy pairing code/i }));
+    expect(writeText).toHaveBeenCalledWith('ABC123');
+  });
+
   it('revoking a token removes it from the list', async () => {
     const user = userEvent.setup();
     vi.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
