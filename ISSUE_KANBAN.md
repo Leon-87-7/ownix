@@ -9,7 +9,6 @@
 
 |                                                    # | Title                                                              | Area              | Notes                          |
 | ----------------------------------------------------: | ------------------------------------------------------------------- | ------------------ | ------------------------------- |
-| [#436](https://github.com/Leon-87-7/ownix/issues/436) | fix(api): cache job thumbnail responses (ETag + Cache-Control)      | API                | Merged; PR #437; closed on GH  |
 | [#441](https://github.com/Leon-87-7/ownix/issues/441) | feat(web): eager-load the first 10 feed preview cards               | Web / Feed         | Merged; PR #447; closed on GH  |
 | [#442](https://github.com/Leon-87-7/ownix/issues/442) | feat(web): thumbnail preload SSR head start for the Feed            | Web / Feed         | Merged; PR #447; closed on GH  |
 | [#443](https://github.com/Leon-87-7/ownix/issues/443) | fix(api): extend stored thumbnail cache to 30 days                  | API / Thumbnails   | Merged; PR #447; closed on GH  |
@@ -22,6 +21,10 @@
 | [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | closed on GH |
 | [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | closed on GH |
 | [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | closed on GH |
+| [#528](https://github.com/Leon-87-7/ownix/issues/528) | Long-pipeline job pages show their transcript | — | Merged; PR #532; closed on GH |
+| [#529](https://github.com/Leon-87-7/ownix/issues/529) | Backend: POST /api/jobs/{job_id}/enrich enqueues enrichment for an existing job | — | Merged; PR #532; closed on GH |
+| [#530](https://github.com/Leon-87-7/ownix/issues/530) | Dashboard: Run Gemini button + inline recipe picker with poll-to-completion | — | Merged; PR #532; closed on GH |
+| [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | Merged; PR #532; closed on GH |
 
 ---
 
@@ -105,10 +108,6 @@ Ordered by unblocked-first, then dependency chain.
 | [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | #523 |
 | [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | #524 |
 | [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | #525 |
-| [#528](https://github.com/Leon-87-7/ownix/issues/528) | Long-pipeline job pages show their transcript | — | — |
-| [#529](https://github.com/Leon-87-7/ownix/issues/529) | Backend: POST /api/jobs/{job_id}/enrich enqueues enrichment for an existing job | — | — |
-| [#530](https://github.com/Leon-87-7/ownix/issues/530) | Dashboard: Run Gemini button + inline recipe picker with poll-to-completion | — | #529 |
-| [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | #530 |
 
 ---
 
@@ -644,7 +643,7 @@ Critical path: #523 → #524 → #525 → #526
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
-| [#510](https://github.com/Leon-87-7/ownix/pull/510) | feat(telegram): show checklist generation feedback | codex/checklists-telegram-feedback→main | — | ✅ Merged |
 | [#521](https://github.com/Leon-87-7/ownix/pull/521) | feat(tags): canonical tag tokens and Telegram tagged intake (#511-514) | fix/tag-token-routing-511-514→main | — | ✅ Merged |
 | [#522](https://github.com/Leon-87-7/ownix/pull/522) | feat(ui): CSS clip-path segmented tabs, prototype skill docs, formatting | feat/segmented-tabs-clip-path-and-prototype-docs→main | — | ✅ Merged |
 | [#527](https://github.com/Leon-87-7/ownix/pull/527) | Add extension capture commands and refresh landing | agent/extension-capture-and-landing→main | — | ✅ Merged |
+| [#532](https://github.com/Leon-87-7/ownix/pull/532) | Add dashboard Run Gemini recipe picker | agent/run-gemini-recipe-picker→main | #528–#531 | ✅ Merged |

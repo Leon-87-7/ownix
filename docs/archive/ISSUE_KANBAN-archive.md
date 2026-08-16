@@ -286,6 +286,7 @@
 | [#422](https://github.com/Leon-87-7/ownix/issues/422) | feat(web): offline fallback — /offline page + hand-rolled sw.js | Web / PWA | Merged; PR #424; closed on GH |
 | [#423](https://github.com/Leon-87-7/ownix/issues/423) | feat(web): share-target intake — manifest share_target prefills the Submit URL dialog | Web / Feed | Merged; PR #424; closed on GH |
 | [#365](https://github.com/Leon-87-7/ownix/issues/365) | Next.js 16 core upgrade: deps + Turbopack SVGR config | Web / Next16 | Merged; PR #463 (#365-368); closed on GH |
+| [#436](https://github.com/Leon-87-7/ownix/issues/436) | fix(api): cache job thumbnail responses (ETag + Cache-Control) | API | Merged; PR #437; closed on GH |
 
 ---
 
@@ -293,6 +294,7 @@
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
+| [#510](https://github.com/Leon-87-7/ownix/pull/510) | feat(telegram): show checklist generation feedback | codex/checklists-telegram-feedback→main | — | ✅ Merged |
 | [#456](https://github.com/Leon-87-7/ownix/pull/456) | Tappable mobile onboarding stepper | feat/mobile-onboarding-stepper→main | — | ✅ Merged |
 | [#260](https://github.com/Leon-87-7/vig/pull/260) | Resolve council review findings on Brain graph | codex-252→main | — | ✅ Merged |
 | [#258](https://github.com/Leon-87-7/vig/pull/258) | docs(access): ADR-0031 invite-only gate + onboarding (epic #253) | docs/invite-gate-adr→main | — | ✅ Merged |

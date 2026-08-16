@@ -177,7 +177,29 @@ export default async function LandingPage() {
                 note. <br />
                 Even if all you remember is a glimpse.
               </p>
-              <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/50 sm:bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
+              {/* Mobile-only: variant B from the CTA sketches (prototype:
+                agent-knowledge/skills/prototype) — one dominant button, the
+                second action demoted to a plain link instead of a second
+                full-width button in a bordered card. Desktop keeps the
+                three-up card below untouched. */}
+              <div className="hero-rise flex flex-col items-center gap-3 sm:hidden [animation-delay:270ms]">
+                <a
+                  href="#invite"
+                  className={`${btnSignal} w-full`}
+                >
+                  Get an invite
+                </a>
+                <Link
+                  href="/restricted"
+                  className="font-subtitle inline-flex items-center gap-1 py-1 text-button font-medium text-body underline decoration-contrasignal-bright underline-offset-4 transition-ui  [@media(pointer:coarse)]:py-3"
+                >
+                  {signedIn
+                    ? 'Go to your Feed page'
+                    : 'Look inside the product'}{' '}
+                </Link>
+              </div>
+
+              <div className="hero-rise hidden overflow-hidden rounded-lg border border-line bg-surface/50 sm:grid sm:bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
                   <span className="font-mono text-xs text-muted">
                     Join Ownix
@@ -218,7 +240,7 @@ export default async function LandingPage() {
                     href="/restricted"
                     className={`h-8 w-full bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
                   >
-                    {signedIn ? 'Open feed' : 'Look inside'}
+                    {signedIn ? 'Open Feed' : 'Look inside'}
                   </GhostButton>
                 </div>
               </div>
@@ -803,23 +825,6 @@ export default async function LandingPage() {
               every link a video ever mentioned - long after the video
               itself scrolled off your feed.
             </p>
-
-            <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
-              <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
-              <p className="text-pretty text-sm leading-normal">
-                Everything also lands in your Google Drive as markdown
-                - plug in Claude&apos;s or ChatGPT&apos;s Drive
-                connector and your AI reads your whole Index directly.
-                No export, no copy-paste.
-                <br />
-                <b className="mt-4 block font-subtitle font-medium text-ink">
-                  Your files, your account{' '}
-                  <span className="font-title font-normal">
-                    - leave anytime and lose nothing.
-                  </span>
-                </b>
-              </p>
-            </div>
           </div>
         </section>
 
@@ -828,6 +833,38 @@ export default async function LandingPage() {
           aria-labelledby="h-invite"
           className="border-t border-line py-10 md:py-14"
         >
+          <div className="mx-auto mb-6 max-w-[960px] ">
+            <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
+              No lock-in storage
+            </h3>
+            <p className="text-pretty text-prose leading-relaxed">
+              If Ownix vanished tomorrow, your stuff wouldn&apos;t.
+              Everything also lands in your Google Drive as markdown -
+              plug in Claude&apos;s or ChatGPT&apos;s{' '}
+              <span className="underline-offset-2 underline decoration-dotted decoration-contrasignal">
+                Drive connector
+              </span>
+              &ensp;and your AI reads your whole Index directly. No
+              export, no copy-paste.
+            </p>
+            <p className="mt-2 font-mono text-xs text-muted">
+              Google Drive is where it lives today - more storage
+              endpoints are on the roadmap.
+            </p>
+          </div>
+
+          <div className="flex mb-6 mx-auto max-w-[58ch] items-center justify-center gap-3 rounded-lg border border-line bg-surface p-4">
+            <GoogleDriveIcon className="h-6 w-6 shrink-0" />
+            <div className="flex flex-col items-center">
+              <b className="font-subtitle font-medium text-ink">
+                Your files, your account, your storage{' '}
+              </b>
+              <span className="font-title font-normal">
+                leave anytime and lose nothing.
+              </span>
+            </div>
+          </div>
+
           <div className="mx-auto max-w-[960px] px-6">
             {/* The ask (copy) and the action (widget) sit side by side instead
               of stacked, so the column doesn't dead-end in empty space below
@@ -841,17 +878,29 @@ export default async function LandingPage() {
                     id="h-invite"
                     className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
                   >
-                    Invite-only for now.
+                    Invite-only for now{' '}
+                    <span className="font-subtitle italic text-pretty text-[clamp(1rem,3.4vw,1.3rem)]">
+                      here&apos;s exactly what happens.
+                    </span>
                   </h2>
-                  <p className="text-pretty max-w-[52ch] text-prose leading-relaxed">
-                    Sign in with Telegram and the Ownix bot asks for
-                    your email. I approve every member personally,
-                    usually within a few hours - and everything you
-                    save lands in your own Google Drive from day one,
-                    not just ours. Then you&apos;ll get a hello from
-                    me, and a question: want to help build what Ownix
-                    becomes?
-                  </p>
+                  <ol className="max-w-[52ch] list-decimal space-y-2 pl-5 text-pretty text-prose leading-relaxed">
+                    <li>
+                      Sign in with Telegram. The bot asks for your
+                      email.
+                    </li>
+                    <li>
+                      I approve every member myself, usually within a
+                      few hours.
+                    </li>
+                    <li>
+                      Your saves start landing in your own Google
+                      Drive that day - not just ours.
+                    </li>
+                    <li>
+                      You get a hello from me, and one question: want
+                      to help build what Ownix becomes?
+                    </li>
+                  </ol>
                 </div>
                 <div>
                   <TelegramLoginWidget align="start" />
