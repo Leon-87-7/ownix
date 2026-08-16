@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Montserrat, Merienda } from 'next/font/google';
+import { Inter, Montserrat, Merienda } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
@@ -25,9 +26,15 @@ const inter = Inter({
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
+// Self-hosted (fonts/, OFL-licensed) instead of next/font/google — Vercel's
+// Turbopack build cache can pin a stale fonts.gstatic.com URL that later
+// 404s (Google rotates hashed asset URLs), breaking builds with no code
+// change on our side.
+const jetbrainsMono = localFont({
+  src: [
+    { path: './fonts/JetBrainsMono-Regular.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/JetBrainsMono-Medium.woff2', weight: '500', style: 'normal' },
+  ],
   variable: '--font-jetbrains',
   display: 'swap',
 });
