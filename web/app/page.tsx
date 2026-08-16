@@ -81,8 +81,8 @@ export default async function LandingPage() {
       >
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
           <Link
-            href="/"
-            aria-label="Ownix home"
+            href="/restricted"
+            aria-label={signedIn ? 'Open feed' : 'Look inside'}
             className="group flex items-center gap-2 rounded-md text-xl font-semibold tracking-tight text-ink"
           >
             <OwnixLogo
@@ -243,9 +243,6 @@ export default async function LandingPage() {
               fold's bottom edge instead of visually overlapping the hero
               text above it while the stepper pins. */}
             <div className="hidden sm:block lg:border-t lg:border-line lg:pt-10">
-              <span className="mb-2 hidden font-mono text-mono-label font-medium tracking-[0.06em] text-muted lg:block">
-                NEXT
-              </span>
               <h2
                 id="onboarding"
                 className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
@@ -810,12 +807,12 @@ export default async function LandingPage() {
             <div className="flex mx-auto max-w-[58ch] items-start gap-3 rounded-lg border border-line bg-surface p-4">
               <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
               <p className="text-pretty text-sm leading-normal">
-                Everything also lands in your Google Drive as
-                markdown - plug in Claude&apos;s or ChatGPT&apos;s
-                Drive connector and your AI reads your whole Index
-                directly. No export, no copy-paste.
+                Everything also lands in your Google Drive as markdown
+                - plug in Claude&apos;s or ChatGPT&apos;s Drive
+                connector and your AI reads your whole Index directly.
+                No export, no copy-paste.
                 <br />
-                <b className="font-subtitle font-medium text-ink">
+                <b className="mt-4 font-subtitle font-medium text-ink">
                   Your files, your account{' '}
                   <span className="font-title font-normal">
                     - leave anytime and lose nothing.
