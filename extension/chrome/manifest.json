@@ -18,10 +18,10 @@
     "notifications"
   ],
   "commands": {
-    "capture-automatic": { "suggested_key": { "windows": "Ctrl+Shift+1" }, "description": "Capture automatically" },
-    "capture-article": { "suggested_key": { "windows": "Ctrl+Shift+2" }, "description": "Capture as article" },
-    "capture-link": { "suggested_key": { "windows": "Ctrl+Shift+3" }, "description": "Capture as link" },
-    "capture-document": { "suggested_key": { "windows": "Ctrl+Shift+4" }, "description": "Capture as document" }
+    "capture-automatic": { "suggested_key": { "default": "Ctrl+Shift+1" }, "description": "Capture automatically" },
+    "capture-article": { "suggested_key": { "default": "Ctrl+Shift+2" }, "description": "Capture as article" },
+    "capture-link": { "suggested_key": { "default": "Ctrl+Shift+3" }, "description": "Capture as link" },
+    "capture-document": { "suggested_key": { "default": "Ctrl+Shift+4" }, "description": "Capture as document" }
   },
   "host_permissions": [
     "https://app.leondev.xyz/*"
