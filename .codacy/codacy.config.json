@@ -6,8 +6,8 @@
     "organization": "Leon-87-7",
     "repositoryId": "889221",
     "repositoryName": "ownix",
-    "createdAt": "2026-08-14T10:10:44.042Z",
-    "updatedAt": "2026-08-14T10:10:44.042Z",
+    "createdAt": "2026-08-16T14:37:43.923Z",
+    "updatedAt": "2026-08-16T14:37:43.923Z",
     "languages": [
       "CSS",
       "Dockerfile",
@@ -5708,6 +5708,7 @@
     "tests/test_jina.py",
     "tests/test_job_recovery.py",
     "tests/test_jobs_api_checklists.py",
+    "tests/test_jobs_api_enrich.py",
     "tests/test_jobs_api.py",
     "tests/test_link_pipeline.py",
     "tests/test_long_video.py",

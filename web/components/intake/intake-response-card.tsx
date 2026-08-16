@@ -8,6 +8,7 @@ import { IntakeLinksList, extractLinks } from '@/components/intake/intake-links-
 import { IntakeStatusLine } from '@/components/intake/intake-status-line';
 import { IntakeTagOffer } from '@/components/intake/intake-tag-offer';
 import { PreviewCard } from '@/components/feed/preview-card';
+import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
 import type { IntakeThreadItem } from '@/lib/hooks/useIntakeThread';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -109,6 +110,12 @@ export function IntakeResponseCard({
         {job && job.status === 'done' && (
           <div className="mt-3 max-w-xs">
             <PreviewCard job={job} index={0} variant="compact" />
+          </div>
+        )}
+
+        {job && job.status === 'done' && (job.content_type === 'long' || job.content_type === 'short') && (
+          <div className="mt-3">
+            <RepoFollowupPanel jobId={job.id} />
           </div>
         )}
 

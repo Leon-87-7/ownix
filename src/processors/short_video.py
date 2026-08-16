@@ -15,6 +15,7 @@ from src.services import brave, frames, gemini, sheets
 from src.services import transcript as transcript_svc
 from src.services.drive import upload_file
 from src.services.github import enrich_github_links
+from src.services.repo_followup import offer_repo_followups
 from src.telegram.sender import edit_message_text, send_document, send_inline_keyboard, send_message, send_photo
 from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
@@ -315,6 +316,12 @@ async def run(job: dict) -> None:
         media_fields["code"] = code
         media_fields["code_lang"] = code_lang
     await database.update_job_status(job_id, "done", **media_fields)
+
+    if links:
+        try:
+            await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, links)
+        except Exception:
+            log.warning("repo_followup_offer_failed", job_id=job_id, exc_info=True)
 
     # 8. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job

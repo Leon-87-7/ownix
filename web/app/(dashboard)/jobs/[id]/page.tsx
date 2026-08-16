@@ -51,6 +51,7 @@ import { FolderTagForm } from '@/components/feed/folder-tag-form';
 import { apiPost } from '@/lib/fetch-utils';
 import { startPolling } from '@/lib/polling';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
+import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -979,6 +980,10 @@ export default function JobDetailPage() {
       )}
       {!restricted && job.content_type === 'long' && job.status === 'enriching' && (
         <EnrichmentStatusCard />
+      )}
+
+      {!restricted && job.status === 'done' && (job.content_type === 'long' || job.content_type === 'short') && (
+        <RepoFollowupPanel jobId={job.id} />
       )}
 
       {!restricted && <ChecklistsSection job={job} />}

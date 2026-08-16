@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Montserrat, Merienda } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
@@ -18,34 +18,46 @@ const softwareAppSchema = {
   operatingSystem: 'Web',
 };
 
-// Two voices (DESIGN.md): Inter for human language, JetBrains Mono for machine facts.
-const inter = Inter({
-  subsets: ['latin'],
+// All four self-hosted (fonts/, OFL-licensed, latin-subset) instead of
+// next/font/google — Vercel's Turbopack build cache can pin a stale
+// fonts.gstatic.com URL that later 404s (Google rotates hashed asset
+// URLs), breaking builds with no code change on our side.
+
+// Two voices (DESIGN.md): Inter for human language, JetBrains Mono for
+// machine facts. Inter stays a variable font (weights 400/500/600 all used).
+const inter = localFont({
+  src: './fonts/Inter-Variable.woff2',
   variable: '--font-inter',
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
+const jetbrainsMono = localFont({
+  src: [
+    { path: './fonts/JetBrainsMono-Regular.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/JetBrainsMono-Medium.woff2', weight: '500', style: 'normal' },
+  ],
   variable: '--font-jetbrains',
   display: 'swap',
 });
 
 // Landing-only third and fourth voices (title / subtitle) — the dashboard
-// keeps DESIGN.md's two-voice system untouched.
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  weight: ['600'],
+// keeps DESIGN.md's two-voice system untouched. Root layout means every
+// route's font manifest includes them, so preload:false keeps dashboard
+// routes (which never render these) from preloading unused font files.
+const montserrat = localFont({
+  src: './fonts/Montserrat-SemiBold.woff2',
+  weight: '600',
   variable: '--font-montserrat',
   display: 'swap',
+  preload: false,
 });
 
-const merienda = Merienda({
-  subsets: ['latin'],
-  weight: ['500'],
+const merienda = localFont({
+  src: './fonts/Merienda-Medium.woff2',
+  weight: '500',
   variable: '--font-merienda',
   display: 'swap',
+  preload: false,
 });
 
 // new URL() throws on a malformed value (missing protocol, stray whitespace);

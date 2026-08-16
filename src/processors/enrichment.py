@@ -61,7 +61,20 @@ def _build_prompt(
         else transcript
     )
     if freestyle_prompt:
-        extra = f"\n### FREESTYLE INSTRUCTIONS\n{freestyle_prompt}"
+        # STEP 5 below still mandates the fixed JSON schema, so a freeform ask
+        # (e.g. "say hello and add a poem") has no field to land in and gets
+        # silently dropped by the model. Route it through the same
+        # "template_analysis" side-channel the built-in templates already use
+        # for their own free-shaped extra output, instead of appending prose
+        # the schema has no room for.
+        extra = f"""
+### FREESTYLE INSTRUCTIONS
+Append a "template_analysis" key to your JSON with:
+{{
+  "freestyle_output": "your full response to the instruction below — this is the user's actual request, answer it completely regardless of the STEP 1-5 fields above"
+}}
+
+{freestyle_prompt}"""
     else:
         extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
     return f"""Analyze this YouTube transcript for a video titled: "{title}".
@@ -178,8 +191,18 @@ async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     return result, template_analysis, promise_gap
 
 
-def _build_audio_prompt(title: str, template: str) -> str:
-    extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
+def _build_audio_prompt(title: str, template: str, freestyle_prompt: str | None = None) -> str:
+    if freestyle_prompt:
+        extra = f"""
+### ADDITIONAL EXTRACTION — freestyle instructions
+Fill "template_analysis" with:
+{{
+  "freestyle_output": "your full response to the instruction below"
+}}
+
+Instruction: {freestyle_prompt}"""
+    else:
+        extra = PROMPT_TEMPLATES.get(template, PROMPT_TEMPLATES["summary"]).extra_instructions
     return f"""Analyze the audio content of this video titled: "{title}".
 
 Listen to the spoken content and produce:
@@ -229,7 +252,8 @@ async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> tuple[dict 
 
     template = job.get("template") or "summary"
     title = job.get("title", "") or "Untitled"
-    prompt = _build_audio_prompt(title, template)
+    freestyle_prompt = job.get("freestyle_prompt")
+    prompt = _build_audio_prompt(title, template, freestyle_prompt)
 
     try:
         raw = await _call_with_fallback(
@@ -346,11 +370,17 @@ def _format_narrative(analysis: dict) -> list[str]:
     return lines
 
 
+def _format_freestyle(analysis: dict) -> list[str]:
+    output = str(analysis.get("freestyle_output", "")).strip()
+    return [_escape_html(output)] if output else []
+
+
 _TEMPLATE_FORMATTERS = {
     "method": _format_method,
     "technical": _format_technical,
     "review": _format_review,
     "narrative": _format_narrative,
+    "freestyle": _format_freestyle,
 }
 
 
@@ -404,7 +434,7 @@ def _build_enrichment_message(
         "📐 Build Spec available — use the button below",
     ]
     if template_analysis:
-        template = job.get("template") or "summary"
+        template = "freestyle" if job.get("freestyle_prompt") else job.get("template") or "summary"
         parts.append(_format_template_analysis(template, template_analysis))
 
     parts += format_promise_gap_section(promise_gap)

@@ -14,6 +14,8 @@ from src.processors.enrichment import (
     _build_enrichment_message,
     _build_prompt,
     _extract_json,
+    _format_freestyle,
+    _format_template_analysis,
     _parse_enrichment,
     _split_message,
     enrich,
@@ -221,6 +223,52 @@ async def test_enrich_pops_and_returns_promise_gap(monkeypatch: pytest.MonkeyPat
     assert isinstance(result, Enrichment)
 
 
+_SAMPLE_FREESTYLE_JSON = json.dumps({
+    "category": "General Educational / News content",
+    "topic": "Cloudflare V-Next",
+    "objective": "Explain Cloudflare's V-Next re-implementation of Next.js.",
+    "action_points": ["V-Next targets platform-agnostic deployment"],
+    "tools": [],
+    "market_data": "",
+    "template_analysis": {
+        "freestyle_output": "Hello!\nA video about V-Next,\nDeploy anywhere, free at last.",
+    },
+})
+
+
+@pytest.mark.asyncio
+async def test_enrich_returns_freestyle_output_via_template_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A freestyle job's actual requested output (e.g. "say hello and add a
+    poem") must survive end to end as template_analysis["freestyle_output"],
+    still alongside real category/topic/tools fields for downstream
+    consumers (Sheets, Feed, Brain) — not silently dropped by the STEP 5
+    schema instruction the way it was before this fix."""
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
+
+    job = {
+        "id": "20260816_120000_ABCD",
+        "title": "Cloudflare just slop forked Next.js",
+        "transcript": "some transcript",
+        "template": "freestyle",
+        "freestyle_prompt": "Say Hello and add a short poem about the video you received",
+    }
+    with patch(
+        "src.services.gemini._call_sync", return_value=_make_response(_SAMPLE_FREESTYLE_JSON)
+    ):
+        result, template_analysis, _ = await enrich(job)
+
+    assert result.category == "General Educational / News content"
+    assert result.topic == "Cloudflare V-Next"
+    assert template_analysis["freestyle_output"].startswith("Hello!")
+
+    message = _build_enrichment_message(job, result, template_analysis)
+    assert "Hello!" in message
+    assert "A video about V-Next" in message
+
+
 # ---------------------------------------------------------------------------
 # Audio enrichment — issue #32 (caption-less Reels)
 # ---------------------------------------------------------------------------
@@ -396,6 +444,34 @@ def test_build_prompt_no_freestyle_uses_template_extra_instructions() -> None:
     prompt = _build_prompt("My Title", "transcript", template="method")
     assert "ADDITIONAL EXTRACTION — method template" in prompt
     assert "FREESTYLE INSTRUCTIONS" not in prompt
+
+
+def test_build_prompt_freestyle_routes_through_template_analysis_field() -> None:
+    """STEP 5 still mandates a fixed JSON schema with no slot for freeform
+    content, so freestyle answers must be requested inside "template_analysis"
+    (the same side-channel method/technical/review/narrative already use) —
+    not just appended as trailing prose the schema instruction would suppress."""
+    prompt = _build_prompt(
+        "My Title", "transcript", freestyle_prompt="Say Hello and add a short poem."
+    )
+    assert "template_analysis" in prompt
+    assert "freestyle_output" in prompt
+
+
+def test_format_freestyle_renders_output_text() -> None:
+    lines = _format_freestyle({"freestyle_output": "Hello!\nRoses are red."})
+    assert lines == ["Hello!\nRoses are red."]
+
+
+def test_format_freestyle_empty_output_renders_nothing() -> None:
+    assert _format_freestyle({}) == []
+    assert _format_freestyle({"freestyle_output": "  "}) == []
+
+
+def test_format_template_analysis_freestyle_includes_header_and_body() -> None:
+    section = _format_template_analysis("freestyle", {"freestyle_output": "Hello! A poem."})
+    assert "Freestyle Analysis" in section
+    assert "Hello! A poem." in section
 
 
 @pytest.mark.asyncio
