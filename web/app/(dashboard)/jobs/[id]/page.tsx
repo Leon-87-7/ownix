@@ -780,6 +780,19 @@ function RecipeChoices({ onSubmit, descriptions = {}, disabled = false }: { onSu
   );
 }
 
+/** Replaces the Run Gemini button while enrichment is in flight — the button
+ * disappearing with no feedback read as broken (see #528). Shimmer style
+ * matches the intake console's in-flight treatment (`.ownix-shimmer`). */
+function EnrichmentStatusCard() {
+  return (
+    <section className="rounded-lg border border-line bg-surface p-4">
+      <span className="ownix-shimmer font-mono text-sm text-body">
+        Gemini is enriching…
+      </span>
+    </section>
+  );
+}
+
 function RunGeminiSection({ job, onClaim }: { job: JobDetail; onClaim: () => void }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
@@ -963,6 +976,9 @@ export default function JobDetailPage() {
 
       {!restricted && job.content_type === 'long' && job.status === 'transcript_done' && (
         <RunGeminiSection job={job} onClaim={() => setData((current) => current ? { ...current, status: 'enriching' } : current)} />
+      )}
+      {!restricted && job.content_type === 'long' && job.status === 'enriching' && (
+        <EnrichmentStatusCard />
       )}
 
       {!restricted && <ChecklistsSection job={job} />}
