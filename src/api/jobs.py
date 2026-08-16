@@ -15,8 +15,8 @@ from src import database
 from src.api.deps import get_owned_job
 from src.services import drive, job_recovery
 from src.services.jobs import create_and_enqueue_job
-from src.utils.logger import get_logger
 from src.templates import PROMPT_TEMPLATES
+from src.utils.logger import get_logger
 from src.utils.validators import coerce_url, detect_pipeline, normalize_repo_url
 
 log = get_logger(__name__)
@@ -699,6 +699,8 @@ async def pick_repo_followup(job_id: str, idx: int, request: Request) -> dict:
     `repo_pick:{job_id}:{idx}` callback via the same channel-neutral
     `enqueue_repo_pick`)."""
     await get_owned_job(job_id, request)
+    if idx < 0:
+        raise HTTPException(status_code=404, detail="Repo candidate not found or expired")
     from src.services.repo_followup import enqueue_repo_pick
 
     job = await enqueue_repo_pick(job_id, str(idx))

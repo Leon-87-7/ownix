@@ -60,6 +60,7 @@ async def create_and_enqueue_job(
     template: str | None = None,
     message_id: int | None = None,
     freestyle_prompt: str | None = None,
+    template_detection_method: str | None = None,
     skip_cache: bool = False,
     task: str | None = None,
     task_payload: dict[str, Any] | None = None,
@@ -91,11 +92,11 @@ async def create_and_enqueue_job(
         template=template,
         freestyle_prompt=freestyle_prompt,
     )
-    if template:
+    if template or template_detection_method:
         await database.update_job_status(
             job_id,
             "pending",
-            template_detection_method="explicit_command",
+            template_detection_method=template_detection_method or "explicit_command",
         )
     envelope: dict[str, Any] = {
         "task": task or task_for_content_type(content_type, default=content_type),

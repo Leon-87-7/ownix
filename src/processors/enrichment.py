@@ -434,7 +434,7 @@ def _build_enrichment_message(
         "📐 Build Spec available — use the button below",
     ]
     if template_analysis:
-        template = job.get("template") or "summary"
+        template = "freestyle" if job.get("freestyle_prompt") else job.get("template") or "summary"
         parts.append(_format_template_analysis(template, template_analysis))
 
     parts += format_promise_gap_section(promise_gap)

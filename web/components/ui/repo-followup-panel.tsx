@@ -20,6 +20,7 @@ export function RepoFollowupPanel({ jobId }: { jobId: string }) {
     'repo follow-ups',
   );
   const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string>();
 
   // A same-origin `/api/jobs` mock/proxy that isn't specifically shaped for
   // this nested route can hand back a non-array body — never trust the
@@ -28,13 +29,27 @@ export function RepoFollowupPanel({ jobId }: { jobId: string }) {
   if (loading || candidates.length === 0) return null;
 
   const pick = async (idx: number) => {
+    setError(undefined);
     setPicked((prev) => new Set(prev).add(idx));
-    await apiPost(`/api/jobs/${jobId}/repo-followups/${idx}`, {});
+    const result = await apiPost(
+      `/api/jobs/${jobId}/repo-followups/${idx}`,
+      {},
+      'Could not queue repository analysis',
+    );
+    if (!result.ok) {
+      setPicked((prev) => {
+        const next = new Set(prev);
+        next.delete(idx);
+        return next;
+      });
+      setError(result.detail);
+    }
   };
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-4">
       <p className="text-sm font-medium text-ink">Found GitHub repos — analyze one next?</p>
+      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
       <div className="flex flex-wrap gap-2">
         {candidates.map((candidate, idx) => (
           <button

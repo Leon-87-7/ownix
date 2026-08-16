@@ -310,18 +310,13 @@ async def user_template_shortcut(
         message_id=message_id,
         template="freestyle" if extra_instructions else None,
         freestyle_prompt=extra_instructions or None,
+        template_detection_method=f"user_template:{tmpl_name}",
         # Even a blank saved template is an explicit request for a fresh run.
         skip_cache=True,
     )
     if job.get("_deduped"):
         return responses.job_created(job, deduped=True)
 
-    await database.update_job_status(
-        job["id"],
-        "pending",
-        freestyle_prompt=extra_instructions or None,
-        template_detection_method=f"user_template:{tmpl_name}",
-    )
     log.info(
         "user_template_shortcut.enqueued", chat_id=chat_id, job_id=job["id"], template=tmpl_name
     )

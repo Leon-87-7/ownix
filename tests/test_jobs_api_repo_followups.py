@@ -130,3 +130,23 @@ def test_pick_missing_candidate_is_404(client: TestClient, monkeypatch: pytest.M
 
     response = client.post("/api/jobs/job_repo1/repo-followups/0")
     assert response.status_code == 404
+
+
+def test_pick_negative_idx_is_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed_job()
+    login(client)
+    fake = FakeRedis()
+    candidates = [{"url": "https://github.com/octocat/hello-world", "name": "octocat/hello-world"}]
+    asyncio.run(fake.set("repo_pick:job_repo1", json.dumps(candidates)))
+    monkeypatch.setattr("src.queue._client", lambda: fake)
+
+    queued: list[dict] = []
+
+    async def enqueue(payload: dict) -> None:
+        queued.append(payload)
+
+    monkeypatch.setattr("src.services.jobs.queue.enqueue", enqueue)
+
+    response = client.post("/api/jobs/job_repo1/repo-followups/-1")
+    assert response.status_code == 404
+    assert not queued

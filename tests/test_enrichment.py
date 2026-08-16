@@ -248,22 +248,22 @@ async def test_enrich_returns_freestyle_output_via_template_analysis(
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
+    job = {
+        "id": "20260816_120000_ABCD",
+        "title": "Cloudflare just slop forked Next.js",
+        "transcript": "some transcript",
+        "template": "freestyle",
+        "freestyle_prompt": "Say Hello and add a short poem about the video you received",
+    }
     with patch(
         "src.services.gemini._call_sync", return_value=_make_response(_SAMPLE_FREESTYLE_JSON)
     ):
-        result, template_analysis, _ = await enrich(
-            {
-                "title": "Cloudflare just slop forked Next.js",
-                "transcript": "some transcript",
-                "freestyle_prompt": "Say Hello and add a short poem about the video you received",
-            }
-        )
+        result, template_analysis, _ = await enrich(job)
 
     assert result.category == "General Educational / News content"
     assert result.topic == "Cloudflare V-Next"
     assert template_analysis["freestyle_output"].startswith("Hello!")
 
-    job = {"id": "20260816_120000_ABCD", "title": "Cloudflare just slop forked Next.js", "template": "freestyle"}
     message = _build_enrichment_message(job, result, template_analysis)
     assert "Hello!" in message
     assert "A video about V-Next" in message

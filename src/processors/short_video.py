@@ -318,7 +318,10 @@ async def run(job: dict) -> None:
     await database.update_job_status(job_id, "done", **media_fields)
 
     if links:
-        await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, links)
+        try:
+            await offer_repo_followups({**job, "id": job_id, "chat_id": chat_id}, links)
+        except Exception:
+            log.warning("repo_followup_offer_failed", job_id=job_id, exc_info=True)
 
     # 8. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job
