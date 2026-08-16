@@ -167,14 +167,15 @@ export default async function LandingPage() {
               </h1>
               <p className="text-pretty hero-rise mb-8 max-w-[52ch] text-base leading-relaxed text-body [animation-delay:180ms]">
                 <span className="font-medium font-subtitle text-ink">
-                  &emsp;Ownix remembers. <br />
+                  &emsp;Ownix remembers - so you can use it. <br />
                 </span>{' '}
                 Three taps to share from&ensp;
                 <AppSlot />
-                &ensp;and a minute later it&apos;s transcribed,
-                summarized, searchable - even when all you remember is
-                a glimpse. <br />
-                It&apos;s yours - paste it straight into your AI.
+                &ensp;and a minute later you&apos;ve got the
+                transcript: ready to paste into your AI as spec and
+                context, or pull back up for a script, a citation, a
+                note. <br />
+                Even if all you remember is a glimpse.
               </p>
               <div className="hero-rise grid overflow-hidden rounded-lg border border-line bg-surface/50 sm:bg-surface/80 sm:grid-cols-3 sm:divide-x sm:divide-line [animation-delay:270ms]">
                 <div className="flex flex-col items-start gap-3 border-b border-line p-4 sm:border-b-0">
@@ -633,7 +634,7 @@ export default async function LandingPage() {
               id="capture"
               className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
             >
-              One Index, however it gets there.
+              However you spot it, it ends up in one place.
             </h2>
             <p className="text-pretty mb-8 max-w-[58ch] text-prose leading-relaxed">
               Wherever you spot it - phone, laptop, or a browser tab -
@@ -810,7 +811,9 @@ export default async function LandingPage() {
               <GoogleDriveIcon className="my-auto h-6 w-6 shrink-0" />
               <p className="text-pretty text-sm leading-normal">
                 Everything also lands in your Google Drive as
-                markdown.
+                markdown - plug in Claude&apos;s or ChatGPT&apos;s
+                Drive connector and your AI reads your whole Index
+                directly. No export, no copy-paste.
                 <br />
                 <b className="font-subtitle font-medium text-ink">
                   Your files, your account{' '}
@@ -846,9 +849,11 @@ export default async function LandingPage() {
                   <p className="text-pretty max-w-[52ch] text-prose leading-relaxed">
                     Sign in with Telegram and the Ownix bot asks for
                     your email. I approve every member personally,
-                    usually within a few hours. Then you&apos;ll get a
-                    hello from me - and a question: want to help build
-                    what Ownix becomes?
+                    usually within a few hours - and everything you
+                    save lands in your own Google Drive from day one,
+                    not just ours. Then you&apos;ll get a hello from
+                    me, and a question: want to help build what Ownix
+                    becomes?
                   </p>
                 </div>
                 <div>

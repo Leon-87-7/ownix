@@ -73,7 +73,7 @@ export const STEPS = [
     title: 'Find it again, even from a glimpse.',
     body: [
       'Search by title, tag, or just scan the feed and spot the thumbnail.',
-      'Copy one segment, or take the whole .md straight into your AI.',
+      'Copy one segment for a script or a citation, or take the whole .md straight into your AI.',
     ],
     meta: 'copy a segment ◉ copy all ◉ grab the .md',
   },
