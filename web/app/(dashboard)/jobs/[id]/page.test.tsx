@@ -10,7 +10,13 @@ import type { JobDetail } from '@/lib/hooks/useJobDetail';
 
 const routerBack = vi.fn();
 const routerPush = vi.fn();
-const server = setupServer();
+const server = setupServer(
+  // Default JOB fixture below is status 'done', content_type 'long', which
+  // mounts RepoFollowupPanel on nearly every test — an unhandled fetch here
+  // would error under onUnhandledRequest: 'error'. Tests exercising repo
+  // follow-ups themselves override this via server.use(...).
+  http.get('/api/jobs/:id/repo-followups', () => HttpResponse.json([])),
+);
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());

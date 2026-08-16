@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
@@ -678,6 +679,32 @@ async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> d
         await database.release_job_enrichment_claim(job_id)
         raise HTTPException(status_code=503, detail="Could not queue enrichment") from exc
     return {"job_id": job_id, "status": "enriching"}
+
+
+@jobs_router.get("/{job_id}/repo-followups")
+async def get_repo_followups(job_id: str, request: Request) -> list[dict]:
+    """Cached GitHub repo candidates offered after this job finished (long/short
+    pipelines) — the dashboard-facing read side of `offer_repo_followups`
+    (`src/services/repo_followup.py`), which until now only reached Telegram."""
+    await get_owned_job(job_id, request)
+    from src import queue
+
+    raw = await queue._client().get(f"repo_pick:{job_id}")
+    return json.loads(raw) if raw else []
+
+
+@jobs_router.post("/{job_id}/repo-followups/{idx}", status_code=202)
+async def pick_repo_followup(job_id: str, idx: int, request: Request) -> dict:
+    """Enqueue a cached repo candidate as a new job (mirrors Telegram's
+    `repo_pick:{job_id}:{idx}` callback via the same channel-neutral
+    `enqueue_repo_pick`)."""
+    await get_owned_job(job_id, request)
+    from src.services.repo_followup import enqueue_repo_pick
+
+    job = await enqueue_repo_pick(job_id, str(idx))
+    if job is None:
+        raise HTTPException(status_code=404, detail="Repo candidate not found or expired")
+    return {"job_id": job["id"], "status": job.get("status", "pending")}
 
 
 @jobs_router.get("/{job_id}/link-topics")

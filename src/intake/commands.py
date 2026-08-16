@@ -25,6 +25,7 @@ second list.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -258,6 +259,73 @@ async def freestyle_command(
     if pipeline == "long":
         await queue.enqueue({"task": "video", "job_id": job_id})
     return responses.job_created({"id": job_id, "content_type": pipeline})
+
+
+_TEMPLATE_SHORTCUT_RE = re.compile(r"^-[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+
+
+async def user_template_shortcut(
+    chat_id: int, text: str, *, message_id: int | None = None
+) -> IntakeResponse:
+    """`-name <url>` — run the caller's saved user template against a URL.
+
+    Migrated from Telegram's `_handle_user_template_shortcut`
+    (`webhook.py:1550`), which now delegates here instead of keeping its own
+    copy — this was Telegram-only, so `-name <url>` typed into the dashboard
+    composer fell through to plain URL detection and got rejected.
+
+    Repo jobs run the standard repo prompt — template inputs are cleared,
+    matching every other pipeline entry point.
+    """
+    from src import database
+    from src.services.jobs import create_and_enqueue_job
+    from src.utils.validators import detect_pipeline, normalize_repo_url
+
+    parts = text.split()
+    if not parts or not _TEMPLATE_SHORTCUT_RE.match(parts[0]):
+        return responses.unsupported(f"Not a template shortcut: {parts[0] if parts else text}")
+    tmpl_name = parts[0][1:].lower()
+    if len(parts) < 2:
+        return responses.command_result(f"Usage: -{tmpl_name} <url>")
+
+    tmpl_row = await database.get_user_template_by_name(chat_id, tmpl_name)
+    if tmpl_row is None:
+        return responses.error(f"Unknown template -{tmpl_name}. Create it at /prompts or check the name.")
+
+    url = parts[1]
+    extra_domains = await database.list_allowed_domains(chat_id)
+    pipeline = detect_pipeline(url, frozenset(extra_domains))
+    if pipeline == "rejected":
+        return responses.unsupported(
+            "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
+            "Facebook/X video, allowlisted article domains, and GitHub repos."
+        )
+
+    is_repo = pipeline == "repo"
+    extra_instructions = "" if is_repo else (tmpl_row.get("extra_instructions") or "").strip()
+    job = await create_and_enqueue_job(
+        chat_id,
+        normalize_repo_url(url) if is_repo else url,
+        pipeline,
+        message_id=message_id,
+        template="freestyle" if extra_instructions else None,
+        freestyle_prompt=extra_instructions or None,
+        # Even a blank saved template is an explicit request for a fresh run.
+        skip_cache=True,
+    )
+    if job.get("_deduped"):
+        return responses.job_created(job, deduped=True)
+
+    await database.update_job_status(
+        job["id"],
+        "pending",
+        freestyle_prompt=extra_instructions or None,
+        template_detection_method=f"user_template:{tmpl_name}",
+    )
+    log.info(
+        "user_template_shortcut.enqueued", chat_id=chat_id, job_id=job["id"], template=tmpl_name
+    )
+    return responses.job_created(job)
 
 
 _CHECKLISTS_CONTENT_TYPES = ("short", "long")

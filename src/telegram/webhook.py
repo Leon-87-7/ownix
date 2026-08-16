@@ -1550,63 +1550,23 @@ async def _invite_gate_allows(
 async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: int | None) -> bool:
     if not re.match(r"^-[a-zA-Z0-9][a-zA-Z0-9_-]*$", text.split()[0]):
         return False
-    parts = text.split()
-    tmpl_name = parts[0][1:].lower()  # strip leading '-'
-    if len(parts) < 2:
-        await send_message(chat_id, f"❌ Usage: `-{tmpl_name} <url>`")
-        return True
-    tmpl_row = await database.get_user_template_by_name(chat_id, tmpl_name)
-    if tmpl_row is None:
-        await send_message(
-            chat_id,
-            f"❌ Unknown template `-{tmpl_name}`. Create it at /prompts or check the name.",
-        )
-        return True
-    url = parts[1]
-    extra_domains = await database.list_allowed_domains(chat_id)
-    pipeline = detect_pipeline(url, frozenset(extra_domains))
-    if pipeline == "rejected":
-        await send_message(
-            chat_id,
-            "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-            "Instagram Reels, TikTok videos, Facebook videos, X/Twitter videos, "
-            "and allowlisted article domains.",
-        )
-        return True
-    # Repo jobs run the standard repo prompt — template inputs are cleared,
-    # matching the dashboard path.
-    is_repo = pipeline == "repo"
-    extra_instructions = "" if is_repo else (tmpl_row.get("extra_instructions") or "").strip()
-    job = await create_and_enqueue_job(
-        chat_id,
-        normalize_repo_url(url) if is_repo else url,
-        pipeline,
-        message_id=message_id,
-        template="freestyle" if extra_instructions else None,
-        freestyle_prompt=extra_instructions or None,
-        # Even a blank saved template is an explicit request for a fresh run.
-        skip_cache=True,
-    )
-    if job.get("_deduped"):
+    from src.intake import commands as intake_commands
+
+    result = await intake_commands.user_template_shortcut(chat_id, text, message_id=message_id)
+    if result.kind == "job_deduped":
+        job = await database.get_job(result.job_id)
         await _reply_cached_job(chat_id, job)
         return True
-    job_id = job["id"]
-    await database.update_job_status(
-        job_id,
-        "pending",
-        freestyle_prompt=extra_instructions or None,
-        template_detection_method=f"user_template:{tmpl_name}",
-    )
-    await send_message(
-        chat_id,
-        f"📥 Received\n✨ Kicking off analysis ({tmpl_name})\njob_{job_id[-4:]}",
-    )
-    log.info(
-        "user_template_shortcut.enqueued",
-        chat_id=chat_id,
-        job_id=job_id,
-        template=tmpl_name,
-    )
+    if result.kind == "job_created":
+        job_id = result.job_id
+        tmpl_name = text.split()[0][1:].lower()
+        await send_message(
+            chat_id,
+            f"📥 Received\n✨ Kicking off analysis ({tmpl_name})\njob_{job_id[-4:]}",
+        )
+        return True
+    # command_result (usage) / error / unsupported — all render as a ❌ notice.
+    await send_message(chat_id, f"❌ {result.text}")
     return True
 
 

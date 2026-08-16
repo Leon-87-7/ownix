@@ -303,6 +303,16 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
                 new_callable=AsyncMock,
                 return_value=set(),
             ),
+            "enrich_github_links": p(
+                "src.processors.short_video.enrich_github_links",
+                new_callable=AsyncMock,
+                side_effect=lambda links: links,
+            ),
+            "offer_repo_followups": p(
+                "src.processors.short_video.offer_repo_followups",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
         }
         resolved_job = job if job is not None else _TEMPLATE_JOB
         mocks["get_job"].return_value = resolved_job
@@ -364,6 +374,42 @@ async def test_short_video_sidecar_title_fallback_when_vision_title_missing() ->
 
     assert _final_update_kwargs(mocks)["title"] == "Test Reel"
     mocks["vision"].assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_short_video_offers_repo_followups_when_github_link_found() -> None:
+    """Repo follow-up ("Analyze X" candidates) was long-video/article-only —
+    short_video.run() never called offer_repo_followups (src/services/
+    repo_followup.py), so it never fired for Reels/TikTok/Shorts jobs."""
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["vision"].return_value = {
+            **_VISION,
+            "links": [
+                {
+                    "url": "https://github.com/octocat/hello-world",
+                    "label": "octocat/hello-world",
+                    "description": "",
+                }
+            ],
+        }
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["offer_repo_followups"].assert_awaited_once()
+    args = mocks["offer_repo_followups"].await_args.args
+    assert args[0]["id"] == "job1"
+    assert args[1][0]["url"] == "https://github.com/octocat/hello-world"
+
+
+@pytest.mark.asyncio
+async def test_short_video_no_links_skips_repo_followups() -> None:
+    transcript_resp = {"text": ""}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    mocks["offer_repo_followups"].assert_not_awaited()
 
 
 @pytest.mark.asyncio

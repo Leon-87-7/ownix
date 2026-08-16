@@ -75,6 +75,9 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
     if not url and text.startswith("/"):
         return await _dispatch_command(chat_id, text)
 
+    if not url and len(text) > 1 and text[0] == "-" and text[1].isalnum():
+        return await commands.user_template_shortcut(chat_id, text)
+
     # Strip `#tag` tokens before anything else looks at the text — the whole
     # string used to reach `detect_pipeline`, so trailing tokens made an
     # otherwise-valid URL unparseable (issue #482).
