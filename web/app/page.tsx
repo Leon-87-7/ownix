@@ -82,7 +82,7 @@ export default async function LandingPage() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-6 py-4">
           <Link
             href="/restricted"
-            aria-label={signedIn ? 'Open feed' : 'Look inside'}
+            aria-label="Open Ownix"
             className="group flex items-center gap-2 rounded-md text-xl font-semibold tracking-tight text-ink"
           >
             <OwnixLogo
@@ -812,7 +812,7 @@ export default async function LandingPage() {
                 connector and your AI reads your whole Index directly.
                 No export, no copy-paste.
                 <br />
-                <b className="mt-4 font-subtitle font-medium text-ink">
+                <b className="mt-4 block font-subtitle font-medium text-ink">
                   Your files, your account{' '}
                   <span className="font-title font-normal">
                     - leave anytime and lose nothing.

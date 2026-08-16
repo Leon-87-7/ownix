@@ -41,12 +41,15 @@ const jetbrainsMono = localFont({
 });
 
 // Landing-only third and fourth voices (title / subtitle) — the dashboard
-// keeps DESIGN.md's two-voice system untouched.
+// keeps DESIGN.md's two-voice system untouched. Root layout means every
+// route's font manifest includes them, so preload:false keeps dashboard
+// routes (which never render these) from preloading unused font files.
 const montserrat = localFont({
   src: './fonts/Montserrat-SemiBold.woff2',
   weight: '600',
   variable: '--font-montserrat',
   display: 'swap',
+  preload: false,
 });
 
 const merienda = localFont({
@@ -54,6 +57,7 @@ const merienda = localFont({
   weight: '500',
   variable: '--font-merienda',
   display: 'swap',
+  preload: false,
 });
 
 // new URL() throws on a malformed value (missing protocol, stray whitespace);
