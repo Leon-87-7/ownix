@@ -835,7 +835,7 @@ export default async function LandingPage() {
         >
           <div className="mx-auto mb-6 max-w-[960px] ">
             <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
-              No lock-in storage
+              &emsp;<span>No lock-in storage</span>
             </h3>
             <p className="text-pretty text-prose leading-relaxed">
               If Ownix vanished tomorrow, your stuff wouldn&apos;t.
