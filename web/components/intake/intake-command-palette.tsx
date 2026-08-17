@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { Template } from '@/lib/hooks/useTemplateList';
 
 export interface IntakeCommand {
   name: string;
@@ -52,6 +53,21 @@ export function matchCommands(commands: IntakeCommand[], query: string): IntakeC
   return commands.filter((c) => c.name.toLowerCase().startsWith(q));
 }
 
+/** Only a `-` that starts the composer opens custom recipe shortcuts. */
+export function recipeQuery(value: string): string | null {
+  if (!value.startsWith('-')) return null;
+  if (/\s/.test(value)) return null;
+  return value;
+}
+
+export function matchRecipes(templates: Template[], query: string): Template[] {
+  const q = query.toLowerCase();
+  return templates.filter(
+    (template) =>
+      !template.is_builtin && `-${template.name}`.toLowerCase().startsWith(q),
+  );
+}
+
 export function IntakeCommandPalette({
   commands,
   activeIndex,
@@ -95,6 +111,55 @@ export function IntakeCommandPalette({
                 <span className="font-mono text-label text-signal">{command.args}</span>
               )}
               <span className="ml-auto truncate text-label text-muted">{command.summary}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function IntakeRecipePalette({
+  recipes,
+  activeIndex,
+  onSelect,
+  listId,
+  activeOptionId,
+}: {
+  recipes: Template[];
+  activeIndex: number;
+  onSelect: (recipe: Template) => void;
+  listId: string;
+  activeOptionId: string;
+}) {
+  if (recipes.length === 0) return null;
+
+  return (
+    <ul
+      id={listId}
+      role="listbox"
+      aria-label="Recipes"
+      className="mb-2 overflow-hidden rounded-md border border-line bg-raised"
+    >
+      {recipes.map((recipe, i) => {
+        const active = i === activeIndex;
+        return (
+          <li key={recipe.id}>
+            <button
+              type="button"
+              id={active ? activeOptionId : undefined}
+              role="option"
+              aria-selected={active}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onSelect(recipe)}
+              className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left transition-ui ${
+                active ? 'bg-surface-selected' : 'hover:bg-surface'
+              }`}
+            >
+              <span className="font-mono text-sm text-ink">-{recipe.name}</span>
+              <span className="ml-auto truncate text-label text-muted">
+                {recipe.description || 'Custom recipe'}
+              </span>
             </button>
           </li>
         );
