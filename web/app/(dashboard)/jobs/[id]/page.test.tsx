@@ -210,12 +210,12 @@ describe('JobDetailPage', () => {
     });
   });
 
-  it('returns to the browser history entry for Back to feed', async () => {
+  it('returns to the browser history entry for Back', async () => {
     window.history.pushState({}, '', '/brain?q=video');
     window.history.pushState({}, '', '/jobs/j1');
     render(<JobDetailPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: /back to feed/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
 
     expect(routerBack).toHaveBeenCalledOnce();
     expect(routerPush).not.toHaveBeenCalled();
@@ -226,7 +226,7 @@ describe('JobDetailPage', () => {
     searchParams = new URLSearchParams('content_type=article&status=done');
     render(<JobDetailPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: /back to feed/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
 
     expect(routerBack).not.toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith('/feed?content_type=article&status=done');

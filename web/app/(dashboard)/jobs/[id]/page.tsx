@@ -423,7 +423,7 @@ function JobHeader({
         onClick={handleBackToFeed}
         className="mb-4 flex h-11 w-full items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink sm:inline-flex sm:h-auto sm:w-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:text-xs sm:font-normal sm:text-muted sm:hover:bg-transparent"
       >
-        <span aria-hidden="true">&#8592;</span> Back to feed
+        <span aria-hidden="true">&#8592;</span> Back
       </button>
       <div className="mb-4 flex flex-wrap gap-2">
         <AdjacentNavLink
