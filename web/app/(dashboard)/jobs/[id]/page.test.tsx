@@ -222,7 +222,7 @@ describe('JobDetailPage', () => {
   });
 
   it('falls back to the scoped feed URL when opened directly', () => {
-    vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
+    const historyLengthSpy = vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
     searchParams = new URLSearchParams('content_type=article&status=done');
     render(<JobDetailPage />);
 
@@ -230,6 +230,8 @@ describe('JobDetailPage', () => {
 
     expect(routerBack).not.toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith('/feed?content_type=article&status=done');
+
+    historyLengthSpy.mockRestore();
   });
 
   it('has no with-links checkbox when the job added no links', () => {
