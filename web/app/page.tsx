@@ -25,7 +25,6 @@ import PreviewMotif from '@/components/ui/preview-motif';
 
 import {
   Brain,
-  ChevronDown,
   ChevronsRight,
   Inbox,
   ListChecks,
@@ -67,6 +66,13 @@ const tiles: [string, number][] = [
   ['Videos transcribed', 259],
   ['Repos collected', 38],
 ];
+
+// Same arrow stroke as OwnixChevron (components/svg/ownix-chevron.tsx),
+// rebased to a local 0,0 origin so it works as a raw CSS clip-path() —
+// unrotated, since the 90deg turn is applied afterward via `transform`
+// (clip-path is computed in local space before transforms apply).
+const ownixChevronClipPath =
+  "path('M 2.250 1.634 C 1.563 2.330, 1.000 3.938, 1.000 5.207 L 1.000 7.513 17.750 26.343 C 43.777 55.601, 61.335 75.447, 78.149 94.611 L 93.600 112.222 94.800 116.227 C 96.485 121.852, 96.262 126.325, 94.054 131.189 C 93.009 133.492, 83.681 144.924, 73.326 156.593 C 62.972 168.262, 52.700 179.890, 50.500 182.434 C 48.300 184.977, 37.496 197.170, 26.490 209.529 C 15.485 221.888, 5.247 233.497, 3.740 235.327 C 0.445 239.327, 0.192 242.997, 3.104 244.556 L 5.208 245.682 28.854 245.262 L 52.500 244.843 58.500 242.642 C 61.800 241.432, 66.813 238.908, 69.641 237.034 L 74.781 233.625 119.017 184.812 C 144.304 156.909, 164.046 134.287, 165.104 132.000 C 167.320 127.213, 167.556 118.711, 165.597 114.218 C 164.195 111.000, 154.233 99.623, 112.000 53.004 C 99.625 39.343, 86.276 24.529, 82.336 20.083 C 74.747 11.521, 67.567 6.478, 58.127 3.082 L 52.500 1.058 28.000 0.712 L 3.500 0.367 2.250 1.634 Z')";
 
 export default async function LandingPage() {
   const signedIn = Boolean(
@@ -257,16 +263,25 @@ export default async function LandingPage() {
 
           {/* The fixed-height fold (see comment above) centers its content,
             leaving empty space below it on lg. Rather than leave that dead
-            air unexplained, it doubles as a real jump-to-next-section link. */}
+            air unexplained, it doubles as a real jump-to-next-section link.
+            `pointer-events-none` on the link plus `-auto` on the clipped
+            glyph is deliberate: clip-path clips hit-testing as well as
+            paint, so this makes only the chevron's own silhouette
+            clickable rather than its whole invisible bounding box. */}
           <a
             href="#onboarding"
             aria-label="Scroll to see how it works"
-            className="hero-scroll-cue absolute inset-x-0 bottom-8 hidden justify-center rounded-md p-1 text-muted transition-ui hover:text-signal-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas lg:flex"
+            className="hero-scroll-cue pointer-events-none absolute inset-x-0 bottom-8 hidden justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas lg:flex"
           >
-            <ChevronDown
-              aria-hidden="true"
-              className="h-5 w-5"
-            />
+            <span className="relative h-7 w-10">
+              <span
+                className="ownix-shimmer-bg pointer-events-auto absolute left-1/2 top-1/2 h-[246px] w-[168px] blur-[1px]"
+                style={{
+                  clipPath: ownixChevronClipPath,
+                  transform: 'translate(-50%, -50%) rotate(90deg) scale(0.1626)',
+                }}
+              />
+            </span>
           </a>
         </header>
 
@@ -279,7 +294,7 @@ export default async function LandingPage() {
               the onboarding lead-in starts exactly at the fixed-height
               fold's bottom edge instead of visually overlapping the hero
               text above it while the stepper pins. */}
-            <div className="hidden sm:block lg:border-t lg:border-line lg:pt-10">
+            <div className="hidden sm:block lg:pt-10">
               <h2
                 id="onboarding"
                 className="scroll-mt-[4.25rem] mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
@@ -844,15 +859,18 @@ export default async function LandingPage() {
         </section>
 
         <section
-          id="invite"
-          aria-labelledby="h-invite"
-          className="border-t border-line py-10 md:py-14"
+          aria-labelledby="No-lock-in-storage"
+          className="border-t border-line bg-canvas-gradient py-12 sm:bg-canvas"
         >
-          <div className="ml-4 mx-auto mb-6 max-w-[960px] ">
-            <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
-              &emsp;<span>No lock-in storage</span>
-            </h3>
-            <p className="text-pretty text-prose leading-relaxed">
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="No-lock-in-storage"
+              className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              {' '}
+              No lock-in storage
+            </h2>
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
               If Ownix vanished tomorrow, your stuff wouldn&apos;t.
               Everything also lands in your Google Drive as markdown -
               plug in Claude&apos;s or ChatGPT&apos;s{' '}
@@ -862,24 +880,31 @@ export default async function LandingPage() {
               &ensp;and your AI reads your whole Index directly. No
               export, no copy-paste.
             </p>
-            <p className="ml-4 mt-3 font-mono text-xs text-muted">
+
+            <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed ml-4 mt-3 font-mono text-xs text-muted">
               Google Drive is where it lives today - more storage
               endpoints are on the roadmap.
             </p>
-          </div>
 
-          <div className="flex mb-6 mx-auto max-w-[58ch] items-center justify-center gap-3 rounded-lg border border-line bg-surface p-4">
-            <GoogleDriveIcon className="h-6 w-6 shrink-0" />
-            <div className="flex flex-col items-center">
-              <b className="font-subtitle font-medium text-ink">
-                Your files, your account, your storage{' '}
-              </b>
-              <span className="font-title font-normal">
-                leave anytime and lose nothing.
-              </span>
+            <div className="flex mb-6 mx-auto max-w-[58ch] items-center justify-center gap-3 rounded-lg border border-line bg-surface p-4">
+              <GoogleDriveIcon className="h-6 w-6 shrink-0" />
+              <div className="flex flex-col items-center">
+                <b className="font-subtitle font-medium text-ink">
+                  Your files, your account, your storage{' '}
+                </b>
+                <span className="font-title font-normal">
+                  leave anytime and lose nothing.
+                </span>
+              </div>
             </div>
           </div>
+        </section>
 
+        <section
+          id="invite"
+          aria-labelledby="h-invite"
+          className="border-t border-line py-10 md:py-14"
+        >
           <div className="mx-auto max-w-[960px] px-6">
             {/* The ask (copy) and the action (widget) sit side by side instead
               of stacked, so the column doesn't dead-end in empty space below

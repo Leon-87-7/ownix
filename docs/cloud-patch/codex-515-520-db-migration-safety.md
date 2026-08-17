@@ -53,15 +53,15 @@ green and `ruff check src/` clean.
 
 ### #515 — auto-snapshot the DB before running migrations
 
-**Current state.** `init_db` (`src/database.py:1408`) opens the connection, sets
-`PRAGMA journal_mode=WAL` (`database.py:1413`), determines `is_fresh`
-(`database.py:1418`), and on the **non-fresh** path runs a destructive links-dedup
-`DELETE` (`database.py:1431-1445`) and `executescript(SCHEMA_SQL)` (`database.py:1446`)
-**before** calling `_run_migrations` (`database.py:1452`). `_run_migrations`
-(`database.py:1353`) reads `PRAGMA user_version`, then for each pending step applies
-it and commits a bumped `user_version` per step (`database.py:1367-1369`). Fresh
+**Current state.** `init_db` (`src/database.py:1416`) opens the connection, sets
+`PRAGMA journal_mode=WAL` (`database.py:1421`), determines `is_fresh`
+(`database.py:1426`), and on the **non-fresh** path runs a destructive links-dedup
+`DELETE` (`database.py:1439-1453`) and `executescript(SCHEMA_SQL)` (`database.py:1454`)
+**before** calling `_run_migrations` (`database.py:1460`). `_run_migrations`
+(`database.py:1361`) reads `PRAGMA user_version`, then for each pending step applies
+it and commits a bumped `user_version` per step (`database.py:1375-1377`). Fresh
 installs branch away entirely and stamp `user_version = len(_MIGRATIONS)`
-(`database.py:1449`). Nothing is ever backed up. The only backup guidance in the repo
+(`database.py:1457`). Nothing is ever backed up. The only backup guidance in the repo
 is a manual `cp data/jobs.db …` one-liner in `docs/seed/TECHSTACK.md`.
 
 **Fix.** Take a consistent snapshot of the DB on the non-fresh path, gated on pending
@@ -157,8 +157,8 @@ corrupt/missing backup aborts without clobbering the live file.
 
 ### #518 — startup guard: auto-restore and abort cleanly on failed migration
 
-**Current state.** If a step in `_run_migrations` (`database.py:1353`) raises, earlier
-steps have already committed their `user_version` bumps (`database.py:1367-1369`),
+**Current state.** If a step in `_run_migrations` (`database.py:1361`) raises, earlier
+steps have already committed their `user_version` bumps (`database.py:1375-1377`),
 leaving a **partially-migrated** file at an intermediate version, and the exception
 propagates out of `init_db`. There is no restore.
 
@@ -183,9 +183,10 @@ back at the pre-migration value.
 
 **Current state.** `_MIGRATIONS` is forward-only; several steps are irreversible
 without a file copy — the `jobs` rebuilds via `_rebuild_jobs_table`
-(`database.py:493`, which does `DROP TABLE jobs`) and the destructive dedup deletes
-at `database.py:948`, `database.py:1154`, and `database.py:1304`. There is no
-convention requiring a rollback note or a two-phase drop.
+(`database.py:494`, which does `DROP TABLE jobs` at `database.py:508`) and the
+destructive dedup deletes at `database.py:949`, `database.py:1155`, and
+`database.py:1305`. There is no convention requiring a rollback note or a
+two-phase drop.
 
 **Fix — documentation, not machinery.** 
 
