@@ -43,9 +43,10 @@ Note: `mypy` is NOT part of this repo's configured toolchain — no `[tool.mypy]
 
 1. Run both analyzers fresh (commands above).
 2. Triage every finding through the table.
-3. Diff against the previous run if a prior `.pyscn/reports/` JSON exists from this agent's last invocation — report only what's new or changed, not the full standing backlog every time.
-4. For genuinely new signal, cite `file:line` and the specific defect (not just the category).
+3. **pyscn only** gets true new-since-last-run diffing: compare against the previous run's `.pyscn/reports/` JSON if one exists from this agent's last invocation, and report only what's new or changed.
+4. **fallow has no persisted baseline** in this repo (`web/.fallowrc.json` doesn't define one, and standing one up is out of scope for this triager — see `code-health` skill if that becomes worth doing). Report fallow's signal findings in full every run; don't imply they're new when they may be standing backlog.
+5. For genuinely new (pyscn) or standing (fallow) signal, cite `file:line` and the specific defect (not just the category).
 
 ## Output
 
-If nothing new: one line, "No new code-health findings since last run." If there is new signal: a short list, most-impactful first, each with `file:line` + defect + suggested fix direction (score impact ÷ effort) — but do not apply the fix. Point the user at `/code-health` (or the `code-health` skill) for an interactive fix session, and at `docs/superpowers/plans/2026-06-11-static-analysis-green.md` for this repo's tested recipes.
+If pyscn has nothing new AND fallow is green: one line, "No new code-health findings since last run." Otherwise: a short list, most-impactful first, each with `file:line` + defect + suggested fix direction (score impact ÷ effort), labeled `[pyscn, new]` or `[fallow, standing]` so the reader knows which is fresh — but do not apply the fix. Point the user at `/code-health` (or the `code-health` skill) for an interactive fix session, and at `docs/superpowers/plans/2026-06-11-static-analysis-green.md` for this repo's tested recipes.
