@@ -4,17 +4,21 @@ import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import {
   IntakeCommandPalette,
+  IntakeRecipePalette,
   commandQuery,
+  matchRecipes,
   matchCommands,
+  recipeQuery,
   useIntakeCommands,
 } from '@/components/intake/intake-command-palette';
+import { useTemplateList } from '@/lib/hooks/useTemplateList';
 
 /**
  * The one intake input: paste a URL, type a command, or write a note. Fixed
  * height (no autogrow) so repeated submits don't reflow the page around the
  * composer — DESIGN.md's "stable composer height" requirement.
  *
- * Typing `/` at the start opens the command palette (issue #484).
+ * Typing `/` at the start opens commands; `-` opens custom recipes.
  */
 export function IntakeComposer({
   onSubmit,
@@ -32,12 +36,24 @@ export function IntakeComposer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [paletteDismissed, setPaletteDismissed] = useState(false);
   const commands = useIntakeCommands();
+  const { templates } = useTemplateList();
   const listId = useId();
   const activeOptionId = useId();
 
   const query = commandQuery(value);
   const matches = query === null ? [] : matchCommands(commands, query);
-  const paletteOpen = !paletteDismissed && matches.length > 0;
+  const recipeShortcutQuery = recipeQuery(value);
+  const recipeMatches =
+    recipeShortcutQuery === null ? [] : matchRecipes(templates, recipeShortcutQuery);
+  const activePalette =
+    !paletteDismissed && matches.length > 0
+      ? 'commands'
+      : !paletteDismissed && recipeMatches.length > 0
+        ? 'recipes'
+        : null;
+  const paletteOpen = activePalette !== null;
+  const activeMatches =
+    activePalette === 'recipes' ? recipeMatches : matches;
 
   const complete = (name: string) => {
     // Trailing space puts the cursor where the arguments go.
@@ -62,14 +78,18 @@ export function IntakeComposer({
     if (!paletteOpen) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => (i + 1) % matches.length);
+      setActiveIndex((i) => (i + 1) % activeMatches.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIndex((i) => (i - 1 + matches.length) % matches.length);
+      setActiveIndex((i) => (i - 1 + activeMatches.length) % activeMatches.length);
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       // Enter completes the command rather than submitting a half-typed one.
       e.preventDefault();
-      complete(matches[Math.min(activeIndex, matches.length - 1)].name);
+      if (activePalette === 'recipes') {
+        complete(`-${recipeMatches[Math.min(activeIndex, recipeMatches.length - 1)].name}`);
+      } else {
+        complete(matches[Math.min(activeIndex, matches.length - 1)].name);
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setPaletteDismissed(true);
@@ -83,11 +103,20 @@ export function IntakeComposer({
       onSubmit={handleSubmit}
       className="flex flex-col gap-3"
     >
-      {paletteOpen && (
+      {activePalette === 'commands' && (
         <IntakeCommandPalette
           commands={matches}
           activeIndex={Math.min(activeIndex, matches.length - 1)}
           onSelect={(c) => complete(c.name)}
+          listId={listId}
+          activeOptionId={activeOptionId}
+        />
+      )}
+      {activePalette === 'recipes' && (
+        <IntakeRecipePalette
+          recipes={recipeMatches}
+          activeIndex={Math.min(activeIndex, recipeMatches.length - 1)}
+          onSelect={(recipe) => complete(`-${recipe.name}`)}
           listId={listId}
           activeOptionId={activeOptionId}
         />
