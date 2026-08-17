@@ -1,0 +1,30 @@
+{
+  "enabledPlugins": {
+    "claude-code-setup@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | tr -d '\\r' | tr '\\134' '/' | { read -r f; case \"$f\" in */src/*.py|src/*.py) ruff check \"$f\" ;; esac; } 2>/dev/null || true",
+            "statusMessage": "Running ruff check..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | tr -d '\\r' | tr '\\134' '/' | { read -r f; case \"$f\" in *.env|*.env.*|*/credentials/*|credentials/*) echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: .env and credentials/ files must not be edited via Edit/Write\"}}' ;; esac; }"
+          }
+        ]
+      }
+    ]
+  }
+}
