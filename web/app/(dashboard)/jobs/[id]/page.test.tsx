@@ -10,6 +10,7 @@ import type { JobDetail } from '@/lib/hooks/useJobDetail';
 
 const routerBack = vi.fn();
 const routerPush = vi.fn();
+let searchParams = new URLSearchParams();
 const server = setupServer(
   // Default JOB fixture below is status 'done', content_type 'long', which
   // mounts RepoFollowupPanel on nearly every test — an unhandled fetch here
@@ -25,7 +26,7 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'j1' }),
   useRouter: () => ({ push: routerPush, replace: vi.fn(), back: routerBack }),
   usePathname: () => '/jobs/j1',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/hooks/useJobDetail', () => ({
@@ -133,6 +134,7 @@ beforeEach(() => {
   mockUseRestrictedMode.mockReturnValue({ restricted: false, showRestrictedToast: vi.fn() });
   routerBack.mockReset();
   routerPush.mockReset();
+  searchParams = new URLSearchParams();
   vi.unstubAllGlobals();
   mockStartPolling.mockReset();
   mockStartPolling.mockReturnValue(vi.fn());
@@ -206,6 +208,28 @@ describe('JobDetailPage', () => {
       expect(deletedPath).toBe('/api/jobs/j1');
       expect(routerBack).toHaveBeenCalledOnce();
     });
+  });
+
+  it('returns to the browser history entry for Back to feed', async () => {
+    window.history.pushState({}, '', '/brain?q=video');
+    window.history.pushState({}, '', '/jobs/j1');
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /back to feed/i }));
+
+    expect(routerBack).toHaveBeenCalledOnce();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the scoped feed URL when opened directly', () => {
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
+    searchParams = new URLSearchParams('content_type=article&status=done');
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /back to feed/i }));
+
+    expect(routerBack).not.toHaveBeenCalled();
+    expect(routerPush).toHaveBeenCalledWith('/feed?content_type=article&status=done');
   });
 
   it('has no with-links checkbox when the job added no links', () => {
