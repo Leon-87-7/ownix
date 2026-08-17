@@ -167,7 +167,7 @@ export default async function LandingPage() {
                 </span>
               </h1>
               <p className="text-pretty hero-rise mb-8 max-w-[52ch] text-base leading-relaxed text-body [animation-delay:180ms]">
-                <span className="font-medium font-subtitle text-ink">
+                <span className="mb-2 font-medium font-subtitle text-ink">
                   &emsp;Ownix remembers - so you can use it. <br />
                 </span>{' '}
                 Three taps to share from&ensp;
@@ -848,11 +848,11 @@ export default async function LandingPage() {
           aria-labelledby="h-invite"
           className="border-t border-line py-10 md:py-14"
         >
-          <div className="mx-auto mb-6 max-w-[960px] ">
+          <div className="ml-4 mx-auto mb-6 max-w-[960px] ">
             <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
               &emsp;<span>No lock-in storage</span>
             </h3>
-            <p className="ml-4 text-pretty text-prose leading-relaxed">
+            <p className="text-pretty text-prose leading-relaxed">
               If Ownix vanished tomorrow, your stuff wouldn&apos;t.
               Everything also lands in your Google Drive as markdown -
               plug in Claude&apos;s or ChatGPT&apos;s{' '}
