@@ -2,9 +2,45 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 
+import dns.exception
 import pytest
 
 from src.services import email as email_service
+
+
+class _MxRecord:
+    def __init__(self, exchange: str) -> None:
+        self.exchange = exchange
+
+
+def test_domain_accepts_mail_when_mx_records_exist(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_resolve(domain: str, record_type: str, lifetime: int) -> list[_MxRecord]:
+        assert domain == "realmail.example"
+        assert record_type == "MX"
+        assert lifetime == 5
+        return [_MxRecord("mail.realmail.example.")]
+
+    monkeypatch.setattr("src.services.email.dns.resolver.resolve", fake_resolve)
+
+    assert email_service._domain_accepts_mail_sync("realmail.example") is True
+
+
+def test_domain_rejects_rfc7505_null_mx(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.services.email.dns.resolver.resolve",
+        lambda domain, record_type, lifetime: [_MxRecord(".")],
+    )
+
+    assert email_service._domain_accepts_mail_sync("nomail.example") is False
+
+
+def test_domain_rejects_dns_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_resolve(domain: str, record_type: str, lifetime: int) -> list[_MxRecord]:
+        raise dns.exception.Timeout
+
+    monkeypatch.setattr("src.services.email.dns.resolver.resolve", fail_resolve)
+
+    assert email_service._domain_accepts_mail_sync("missing.example") is False
 
 
 async def test_welcome_email_skips_when_smtp_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -49,11 +85,13 @@ async def test_welcome_email_blocks_user_when_domain_has_no_mx(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     blocked: list[tuple[int, str]] = []
+    sent: list[EmailMessage] = []
 
     monkeypatch.setattr("src.services.email.settings.DASHBOARD_URL", "https://ownix.example/")
     monkeypatch.setattr("src.services.email.settings.SMTP_HOST", "smtp.example")
     monkeypatch.setattr("src.services.email.settings.SMTP_FROM_EMAIL", "hello@ownix.example")
     monkeypatch.setattr("src.services.email._domain_accepts_mail_sync", lambda domain: False)
+    monkeypatch.setattr("src.services.email._send_email_sync", sent.append)
 
     async def fake_set_user_status(tg_id: int, status: str) -> None:
         blocked.append((tg_id, status))
@@ -65,3 +103,4 @@ async def test_welcome_email_blocks_user_when_domain_has_no_mx(
     ) is False
 
     assert blocked == [(7, "blocked")]
+    assert sent == []

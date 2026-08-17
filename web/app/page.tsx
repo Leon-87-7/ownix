@@ -282,7 +282,7 @@ export default async function LandingPage() {
             <div className="hidden sm:block lg:border-t lg:border-line lg:pt-10">
               <h2
                 id="onboarding"
-                className="mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+                className="scroll-mt-[4.25rem] mb-4 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
               >
                 Three taps. Nothing new to learn.
               </h2>
