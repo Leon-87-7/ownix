@@ -19,17 +19,12 @@ import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { PuzzlePieceIcon } from '@/components/svg/puzzle-piece';
 import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
 import { DesktopIcon } from '@/components/svg/desktop';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 import { GhostButton } from '@/components/ui/ghost-button';
 import PreviewMotif from '@/components/ui/preview-motif';
 
-import {
-  Brain,
-  ChevronsRight,
-  Inbox,
-  ListChecks,
-  Share,
-} from 'lucide-react';
+import { Brain, Inbox, ListChecks, Share } from 'lucide-react';
 
 const pageDescription =
   'Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.';
@@ -67,7 +62,7 @@ const tiles: [string, number][] = [
   ['Repos collected', 38],
 ];
 
-// Same arrow stroke as OwnixChevron (components/svg/ownix-chevron.tsx),
+// Same arrow stroke as OwnixChevron (components/svg/ownix-chevron-down.tsx),
 // rebased to a local 0,0 origin so it works as a raw CSS clip-path() —
 // unrotated, since the 90deg turn is applied afterward via `transform`
 // (clip-path is computed in local space before transforms apply).
@@ -278,7 +273,8 @@ export default async function LandingPage() {
                 className="ownix-shimmer-bg pointer-events-auto absolute left-1/2 top-1/2 h-[246px] w-[168px] blur-[1px]"
                 style={{
                   clipPath: ownixChevronClipPath,
-                  transform: 'translate(-50%, -50%) rotate(90deg) scale(0.1626)',
+                  transform:
+                    'translate(-50%, -50%) rotate(90deg) scale(0.1626)',
                 }}
               />
             </span>
@@ -400,9 +396,9 @@ export default async function LandingPage() {
                 </pre>
               </div>
 
-              <ChevronsRight
+              <OwnixChevronRight
                 aria-hidden="true"
-                className="mx-auto rotate-90 text-muted md:rotate-0"
+                className="h-4 w-4 mx-auto rotate-90 text-muted md:rotate-0"
               />
 
               <div
@@ -524,9 +520,9 @@ export default async function LandingPage() {
                 </div>
               </div>
 
-              <ChevronsRight
+              <OwnixChevronRight
                 aria-hidden="true"
-                className="mx-auto rotate-90 text-muted md:rotate-0"
+                className="h-4 w-4 mx-auto rotate-90 text-muted md:rotate-0"
               />
 
               <div
@@ -918,9 +914,11 @@ export default async function LandingPage() {
                     id="h-invite"
                     className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
                   >
-                    Invite-only for now{' '}
-                    <span className="font-subtitle italic text-pretty text-[clamp(1rem,3.4vw,1.3rem)]">
-                      here&apos;s exactly what happens.
+                    <span className="block mb-2">
+                      Invite-only for now
+                    </span>
+                    <span className="block font-subtitle italic text-pretty text-[clamp(1rem,3.4vw,1.3rem)]">
+                      Here&apos;s exactly what happens next.
                     </span>
                   </h2>
                   <ol className="max-w-[52ch] list-decimal space-y-2 pl-5 text-pretty text-prose leading-relaxed">
@@ -961,13 +959,17 @@ export default async function LandingPage() {
                     <span className="block shrink-0 font-mono text-xs font-medium tracking-[0.4px] text-muted">
                       FROM
                     </span>
+                    <OwnixChevronRight
+                      aria-hidden="true"
+                      className="h-6 w-6 shrink-0 text-muted/60"
+                    />
                   </span>
                   <div className="min-w-0 flex-1">
                     <WordmarkMarquee />
                   </div>
-                  <ChevronsRight
+                  <OwnixChevronRight
                     aria-hidden="true"
-                    className="shrink-0 text-muted"
+                    className="h-6 w-6 shrink-0 text-muted/60"
                   />
                   <TelegramIcon
                     aria-hidden="true"
@@ -980,9 +982,10 @@ export default async function LandingPage() {
                   searchable in your Index.
                 </span>
                 <p className="mt-6 text-balance text-center text-lead font-medium leading-normal text-ink">
-                  Your internet. Own it. &ensp;Reuse it. Find it
-                  &ensp;
-                  <span className="italic">even from a glimpse.</span>
+                  Your internet.&emsp;Find it, use it, own it -
+                  <span className="italic font-subtitle">
+                    even from a glimpse.
+                  </span>
                 </p>
               </div>
             </div>

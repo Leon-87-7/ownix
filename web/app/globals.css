@@ -141,63 +141,6 @@
   }
 }
 
-/* Chevron-trail end-caps for the stats underscore: three solid chevrons per side
-   point toward the centre and light up progressively — 1 → 2 → 3 → 2 → 1 — on a
-   lazy 3s loop to flag the tappable strip. The outermost (c1) stays lit and the
-   count fills inward toward the line. Opacity-only steps (no scale/blur) keep each
-   chevron crisp and solid — scaling overlapped icons made them jump and smear.
-   Reduced motion (global block) freezes to a single chevron per side via the
-   c2/c3 base opacity. */
-@keyframes chev-step-2 {
-
-  0%,
-  20% {
-    opacity: 0;
-  }
-
-  28%,
-  72% {
-    opacity: 1;
-  }
-
-  80%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes chev-step-3 {
-
-  0%,
-  40% {
-    opacity: 0;
-  }
-
-  44%,
-  56% {
-    opacity: 1;
-  }
-
-  60%,
-  100% {
-    opacity: 0;
-  }
-}
-
-.chev-c1 {
-  opacity: 1;
-}
-
-.chev-c2 {
-  opacity: 0;
-  animation: chev-step-2 3s ease-in-out infinite;
-}
-
-.chev-c3 {
-  opacity: 0;
-  animation: chev-step-3 3s ease-in-out infinite;
-}
-
 /* Landing hero entrance — one rehearsed cascade on load (lead → h1 → sub →
    actions, staggered via [animation-delay:*] utilities). Base state is fully
    visible; the animation only exists under no-preference, so reduced-motion
@@ -446,6 +389,14 @@
         #a57534);
     background-size: 200% auto;
     animation: ownix-shimmer 3s linear infinite;
+  }
+
+  /* Slow back-and-forth variant: same gradient, but ping-pongs instead of
+     looping one direction — for a resting affordance rather than a
+     progress/activity cue. */
+  .ownix-shimmer-bg.ownix-shimmer-slow {
+    animation-duration: 6s;
+    animation-direction: alternate;
   }
 }
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { StatCard } from '@/components/feed/stat-card';
 import { Tooltip } from '@/components/ui/tooltip';
 import type { FeedStats } from '@/lib/hooks/useFeedData';
@@ -19,7 +18,8 @@ const METRIC_TOOLTIPS: Record<string, string> = {
   done: 'Jobs that completed successfully.',
   pending: 'Jobs queued but not started yet.',
   error: 'Jobs that failed and may need recovery.',
-  processing: 'Jobs currently processing, enriching, or waiting on transcripts.',
+  processing:
+    'Jobs currently processing, enriching, or waiting on transcripts.',
 };
 
 // Full-breakdown rows: every status / content type the API can report, with its
@@ -69,8 +69,16 @@ function BreakdownGroup({
   if (rows.length === 0) return null;
   return (
     <div>
-      <Tooltip content={title === 'Status' ? 'Counts grouped by processing status.' : 'Counts grouped by source content type.'}>
-        <p className="mb-1.5 w-fit text-xs font-medium text-muted">{title}</p>
+      <Tooltip
+        content={
+          title === 'Status'
+            ? 'Counts grouped by processing status.'
+            : 'Counts grouped by source content type.'
+        }
+      >
+        <p className="mb-1.5 w-fit text-xs font-medium text-muted">
+          {title}
+        </p>
       </Tooltip>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
         {rows.map((r) => (
@@ -168,33 +176,12 @@ export function StatsOverview({
                 </span>
               </span>
             </div>
-            {/* The affordance: a steady signal underscore flanked by inward-
-                pointing chevron trails. Collapsed, the chevrons count 1→2→3→2→1
-                toward the centre; open, each side becomes a single down-arrow and
-                the line brightens. Signal is earned: the strip acts. */}
-            <div className="-mx-2 mt-1.5 flex items-center gap-1">
-              {open ? (
-                <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-signal" />
-              ) : (
-                <span aria-hidden="true" className="flex shrink-0 items-center text-signal">
-                  <ChevronRight className="chev-c1 h-3 w-3" />
-                  <ChevronRight className="chev-c2 -ml-2 h-3 w-3" />
-                  <ChevronRight className="chev-c3 -ml-2 h-3 w-3" />
-                </span>
-              )}
-              <div
-                className={`h-px flex-1 ${open ? 'bg-signal/60' : 'bg-signal/40'}`}
-              />
-              {open ? (
-                <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-signal" />
-              ) : (
-                <span aria-hidden="true" className="flex shrink-0 items-center text-signal">
-                  <ChevronLeft className="chev-c3 h-3 w-3" />
-                  <ChevronLeft className="chev-c2 -ml-2 h-3 w-3" />
-                  <ChevronLeft className="chev-c1 -ml-2 h-3 w-3" />
-                </span>
-              )}
-            </div>
+            {/* The affordance: a shimmering bar drifting slowly left-right-left
+                to flag the tappable strip. */}
+            <div
+              aria-hidden="true"
+              className="ownix-shimmer-bg ownix-shimmer-slow mt-1.5 h-[2px] rounded-full"
+            />
           </div>
         </button>
 
@@ -204,7 +191,10 @@ export function StatsOverview({
             open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           }`}
         >
-          <div className="min-h-0 overflow-hidden" aria-hidden={!open}>
+          <div
+            className="min-h-0 overflow-hidden"
+            aria-hidden={!open}
+          >
             <div className="mt-3 space-y-3 rounded-lg border border-line bg-surface p-3">
               <BreakdownGroup
                 title="Status"
@@ -221,7 +211,10 @@ export function StatsOverview({
         </div>
       </div>
 
-      <div data-testid="stat-cards" className="hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
+      <div
+        data-testid="stat-cards"
+        className="hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5"
+      >
         <StatCard
           label={totalLabel}
           value={stats.total}
