@@ -2464,6 +2464,7 @@ async def test_ops_dev_invite_callback_allows_dev_chat_to_approve(client, monkey
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
     monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "")
     monkeypatch.setattr("src.config.settings.OPS_DEV_CHAT_IDS", "901")
+    monkeypatch.setattr("src.services.email._domain_accepts_mail_sync", lambda domain: True)
     await database.set_user_email(781, "dev-781@local.test")
 
     response = c.post(
@@ -2727,6 +2728,7 @@ async def test_ops_approve_pending_domain_commits_before_best_effort_notificatio
 ) -> None:
     from src.services import ops_bot
 
+    monkeypatch.setattr("src.services.email._domain_accepts_mail_sync", lambda domain: True)
     await database.set_user_email(786, "one@example.com")
     await database.set_user_status(786, "pending")
     await database.set_user_email(787, "two@example.com")
@@ -2747,6 +2749,7 @@ async def test_ops_approve_pending_callback_uses_previewed_user_cohort(client, m
     monkeypatch.setattr("src.config.settings.OPS_BOT_TOKEN", "ops-token")
     monkeypatch.setattr("src.config.settings.OPS_WEBHOOK_SECRET", "ops-secret")
     monkeypatch.setattr("src.config.settings.OPS_ADMIN_CHAT_IDS", "900")
+    monkeypatch.setattr("src.services.email._domain_accepts_mail_sync", lambda domain: True)
     await database.set_user_email(788, "first@example.com")
     await database.set_user_status(788, "pending")
 

@@ -7,6 +7,10 @@ import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 
+import dns.exception
+import dns.resolver
+
+from src import database
 from src.config import settings
 from src.utils.logger import get_logger
 
@@ -29,6 +33,15 @@ def _display_name(user: dict) -> str:
 
 def _smtp_configured() -> bool:
     return bool(settings.SMTP_HOST and settings.SMTP_FROM_EMAIL)
+
+
+def _domain_accepts_mail_sync(domain: str) -> bool:
+    """MX lookup; also rejects RFC 7505 Null MX (domain explicitly refuses mail)."""
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=5)
+    except dns.exception.DNSException:
+        return False
+    return not (len(answers) == 1 and str(answers[0].exchange) == ".")
 
 
 def _send_email_sync(message: EmailMessage) -> None:
@@ -54,6 +67,14 @@ async def send_welcome_email(user: dict) -> bool:
         return False
     if not _smtp_configured():
         log.info("welcome_email_smtp_unconfigured", tg_id=user.get("tg_id"))
+        return False
+
+    domain = email.rsplit("@", 1)[-1]
+    if not await asyncio.to_thread(_domain_accepts_mail_sync, domain):
+        log.warning("welcome_email_domain_unreachable", tg_id=user.get("tg_id"), domain=domain)
+        tg_id = user.get("tg_id")
+        if tg_id is not None:
+            await database.set_user_status(int(tg_id), "blocked")
         return False
 
     name = _display_name(user)

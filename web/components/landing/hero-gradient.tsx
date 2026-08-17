@@ -1,9 +1,28 @@
 'use client';
 
+import { Component, type ReactNode } from 'react';
 import { GrainGradient } from '@paper-design/shaders-react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
-export function HeroGradient() {
+// GrainGradient throws when WebGL is unavailable (test/setup.ts mocks it for
+// exactly this reason). Without a boundary, that throw has nothing to catch
+// it and React unmounts the whole page — so a WebGL-restricted device
+// (Safari Private Browsing, Low Power Mode, an old GPU) sees a blank canvas
+// instead of just a missing decoration. Fail silent: the scrim + canvas bg
+// underneath still reads fine without the shader.
+class ShaderBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+function GrainGradientShader() {
   const reduced = useReducedMotion();
 
   return (
@@ -25,5 +44,13 @@ export function HeroGradient() {
       speed={reduced ? 0 : 1}
       rotation={172}
     />
+  );
+}
+
+export function HeroGradient() {
+  return (
+    <ShaderBoundary>
+      <GrainGradientShader />
+    </ShaderBoundary>
   );
 }

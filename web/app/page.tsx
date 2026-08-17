@@ -25,6 +25,7 @@ import PreviewMotif from '@/components/ui/preview-motif';
 
 import {
   Brain,
+  ChevronDown,
   ChevronsRight,
   Inbox,
   ListChecks,
@@ -253,6 +254,20 @@ export default async function LandingPage() {
               className="mx-auto hidden aspect-square h-full max-h-[440px] w-full max-w-[440px] lg:flex"
             />
           </div>
+
+          {/* The fixed-height fold (see comment above) centers its content,
+            leaving empty space below it on lg. Rather than leave that dead
+            air unexplained, it doubles as a real jump-to-next-section link. */}
+          <a
+            href="#onboarding"
+            aria-label="Scroll to see how it works"
+            className="hero-scroll-cue absolute inset-x-0 bottom-8 hidden justify-center rounded-md p-1 text-muted transition-ui hover:text-signal-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-canvas lg:flex"
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className="h-5 w-5"
+            />
+          </a>
         </header>
 
         <section
@@ -609,7 +624,7 @@ export default async function LandingPage() {
                     briefing, a clean rewrite. All markdown, all ready
                     for your AI.
                   </p>
-                  <p className="mt-2 font-mono text-mono-label text-muted">
+                  <p className="mt-3 font-mono text-mono-label text-muted">
                     pdf / word / spreadsheet / presentation
                   </p>
                 </div>
@@ -835,9 +850,9 @@ export default async function LandingPage() {
         >
           <div className="mx-auto mb-6 max-w-[960px] ">
             <h3 className="font-subtitle mb-1 text-title font-semibold leading-snug text-ink">
-              No lock-in storage
+              &emsp;<span>No lock-in storage</span>
             </h3>
-            <p className="text-pretty text-prose leading-relaxed">
+            <p className="ml-4 text-pretty text-prose leading-relaxed">
               If Ownix vanished tomorrow, your stuff wouldn&apos;t.
               Everything also lands in your Google Drive as markdown -
               plug in Claude&apos;s or ChatGPT&apos;s{' '}
@@ -847,7 +862,7 @@ export default async function LandingPage() {
               &ensp;and your AI reads your whole Index directly. No
               export, no copy-paste.
             </p>
-            <p className="mt-2 font-mono text-xs text-muted">
+            <p className="ml-4 mt-3 font-mono text-xs text-muted">
               Google Drive is where it lives today - more storage
               endpoints are on the roadmap.
             </p>

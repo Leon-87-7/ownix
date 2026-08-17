@@ -15,5 +15,6 @@ firecrawl-anydoc==0.1.7  # DOCX/PPTX/XLSX/ODF/RTF/EPUB/CSV → GFM (ADR-0023)
 apscheduler>=3.10
 numpy>=1.26
 json-repair>=0.30
+dnspython>=2.6  # MX lookup before welcome emails (src/services/email.py)
 
 cryptography>=42.0
