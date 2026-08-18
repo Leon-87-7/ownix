@@ -23,7 +23,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = 1
-ProcessingIntent = Literal["automatic", "article", "link", "document"]
+ProcessingIntent = Literal["automatic", "article", "link", "document", "capture"]
 
 
 class IntakeActor(BaseModel):

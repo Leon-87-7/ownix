@@ -103,7 +103,13 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
         # Consent is deliberately durable even when job creation/enqueue fails.
         await database.add_allowed_domain(chat_id, hostname)
         pipeline = "article"
-    elif pipeline == "rejected" and msg.intent == "link":
+    elif pipeline == "rejected" and msg.intent in ("link", "capture"):
+        # "capture" (ADR-0051) is the Chrome extension's deliberate one-shot
+        # trigger (Ctrl+Shift+1 etc.) — same fallback as an explicit "link"
+        # intent, so nothing valid the user chose to send silently vanishes.
+        # Deliberately not gated on the contract's default "automatic" intent,
+        # which every plain Telegram/dashboard paste also carries — that would
+        # have widened this fallback to every channel, not just this trigger.
         parsed_candidate = urlparse(candidate)
         if (
             parsed_candidate.scheme not in {"http", "https"}
