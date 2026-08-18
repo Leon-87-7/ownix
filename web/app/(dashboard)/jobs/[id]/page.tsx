@@ -317,11 +317,11 @@ function AdjacentNavLink({
   children: ReactNode;
 }) {
   const base =
-    'inline-flex h-10 items-center rounded-md border border-line bg-surface px-3 text-sm font-medium';
+    'flex flex-1 items-center justify-center px-3 text-sm font-medium';
   return href ? (
     <Link
       href={href}
-      className={`${base} text-body transition-ui hover:bg-raised hover:text-ink active:scale-[0.96]`}
+      className={`${base} text-body transition-ui hover:bg-raised hover:text-ink`}
     >
       {children}
     </Link>
@@ -418,29 +418,35 @@ function JobHeader({
   }, [adjacent.previous_id, adjacent.next_id, router, scopeQuery]);
   return (
     <div>
-      {/* #192: full-width 44px touch target on mobile, compact text link on desktop. */}
-      <button
-        type="button"
-        onClick={handleBackToFeed}
-        className="mb-4 flex h-11 w-full items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink sm:inline-flex sm:h-auto sm:w-auto sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:text-xs sm:font-normal sm:text-muted sm:hover:bg-transparent"
-      >
-        <OwnixChevronRight
-          aria-hidden="true"
-          className="h-3.5 w-3.5 shrink-0 rotate-180"
-        />{' '}
-        Back
-      </button>
-      <div className="mb-4 flex flex-wrap gap-2">
-        <AdjacentNavLink
-          href={adjacent.previous_id && jobHref(adjacent.previous_id)}
+      {/* #192: 44px touch target, icon back + segmented Previous/Next in one row, capped to mobile's width on larger screens instead of stretching full-bleed. */}
+      <div className="mb-4 flex items-center gap-2 sm:max-w-xs">
+        <button
+          type="button"
+          onClick={handleBackToFeed}
+          aria-label="Back"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-body transition-ui hover:bg-raised hover:text-ink"
         >
-          ← Previous
-        </AdjacentNavLink>
-        <AdjacentNavLink
-          href={adjacent.next_id && jobHref(adjacent.next_id)}
-        >
-          Next →
-        </AdjacentNavLink>
+          <OwnixChevronRight
+            aria-hidden="true"
+            className="h-4 w-4 rotate-180"
+          />
+        </button>
+        <div className="flex h-11 flex-1 items-stretch overflow-hidden rounded-full border border-line bg-surface">
+          <AdjacentNavLink
+            href={adjacent.previous_id && jobHref(adjacent.previous_id)}
+          >
+            ← Previous
+          </AdjacentNavLink>
+          <span
+            aria-hidden="true"
+            className="w-px shrink-0 bg-line"
+          />
+          <AdjacentNavLink
+            href={adjacent.next_id && jobHref(adjacent.next_id)}
+          >
+            Next →
+          </AdjacentNavLink>
+        </div>
       </div>
       <div className="flex flex-wrap items-start gap-3">
         <h1 className="flex-1 break-all text-xl font-semibold leading-snug text-ink">
