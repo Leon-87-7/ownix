@@ -25,8 +25,8 @@ Checks a target against Ownix's brand principles and returns a verdict grounded 
    - **ICP automation line.** Kills friction, never cognition — the Second Law's test, applied to messaging and positioning specifically.
    - **ICP hoarding framing.** Does the target help transform accumulated content into something used, or just make the pile easier to add to?
 
-4. **Write the verdict.** For each Law/principle that applies, give: which one, the specific line or test it's citing, and a plain judgment — pass, fails, or tension — worded so it could go straight into an ADR. Close with one overall stance sentence.
+4. **Write the verdict.** For each Law/principle that applies, prefix its line 👍 (agree — the target upholds it) or 👎 (disagree — it violates or sits in real tension; tension counts as 👎, since it's flagging a real concern, not a clean pass), then give: which one, the specific line or test it's citing, and a plain judgment worded so it could go straight into an ADR. Close with one overall stance sentence, then a for/against score tallying those verdicts as `agree/disagree` (e.g. `4/1`).
 
 ## Completion criterion
 
-Every applicable Law/principle from step 3 has a verdict line citing its specific test — not a generic "seems on-brand."
+Every applicable Law/principle from step 3 has a 👍/👎-prefixed verdict line citing its specific test — not a generic "seems on-brand" — and the closing score's two numbers sum to that count.
