@@ -27,7 +27,7 @@ export interface IntakePayload {
   intent?: ProcessingIntent;
 }
 
-export type ProcessingIntent = 'automatic' | 'article' | 'link' | 'document';
+export type ProcessingIntent = 'automatic' | 'article' | 'link' | 'document' | 'capture';
 
 const HOST_STORAGE_KEY = 'ownixHost';
 

@@ -91,7 +91,7 @@ class TestUrlIntake:
         job = asyncio.run(db.get_job(resp.job_id))
         assert job["content_type"] == "long"
 
-    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document"])
+    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document", "capture"])
     @pytest.mark.parametrize(
         ("url", "expected_type", "allow_domain"),
         [
@@ -111,7 +111,7 @@ class TestUrlIntake:
 
         assert asyncio.run(db.get_job(resp.job_id))["content_type"] == expected_type
 
-    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document"])
+    @pytest.mark.parametrize("intent", ["automatic", "article", "link", "document", "capture"])
     def test_detected_document_precedes_every_fallback_intent(
         self, db, monkeypatch, intent
     ) -> None:
@@ -171,6 +171,30 @@ class TestUrlIntake:
     def test_link_fallback_rejects_url_without_hostname(self, db, monkeypatch) -> None:
         _enqueue_noop(monkeypatch)
         resp = asyncio.run(router.handle(_msg(url="https:missing-host", intent="link")))
+        assert resp.kind == "unsupported"
+        assert resp.job_id is None
+
+    def test_capture_fallback_creates_link_job(self, db, monkeypatch) -> None:
+        """ADR-0051: the extension's Ctrl+Shift+1 trigger (intent='capture')
+        gets the same link-pipeline fallback as an explicit 'link' intent, so
+        an ordinary bookmarked page doesn't silently vanish."""
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(url="https://example.com/item", intent="capture")))
+        assert asyncio.run(db.get_job(resp.job_id))["content_type"] == "link"
+
+    def test_capture_fallback_rejects_url_without_hostname(self, db, monkeypatch) -> None:
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(url="https:missing-host", intent="capture")))
+        assert resp.kind == "unsupported"
+        assert resp.job_id is None
+
+    def test_automatic_intent_does_not_get_the_capture_fallback(self, db, monkeypatch) -> None:
+        """ADR-0051: 'capture' is deliberately distinct from the contract's
+        default 'automatic' intent, which every plain Telegram/dashboard
+        paste also carries — this pins that the fallback stays scoped to the
+        extension's explicit trigger and doesn't leak into the default."""
+        _enqueue_noop(monkeypatch)
+        resp = asyncio.run(router.handle(_msg(url="https://example.com/item", intent="automatic")))
         assert resp.kind == "unsupported"
         assert resp.job_id is None
 

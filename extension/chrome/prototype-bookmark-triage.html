@@ -1,0 +1,513 @@
+<!--
+  PROTOTYPE — throwaway. Not part of the extension build, never referenced by
+  manifest.json. Answers one question, then gets captured to a throwaway
+  branch per agent-knowledge/skills/prototype/SKILL.md — delete or archive
+  once that's done.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmark triage fallback — prototype</title>
+<style>
+  :root {
+    --canvas: #0d0e10;
+    --surface: #16181c;
+    --raised: #202329;
+    --line: #30343d;
+    --ink: #e6e6e6;
+    --body: #b8b8b8;
+    --muted: #7d7a74;
+    --signal: #d99a45;
+    --signal-bright: #efb566;
+    --onsignal: #1b1309;
+    --ok: #4ade80;
+    --ok-tint: #122b1c;
+    --bad: #f87171;
+    --bad-tint: #2b1414;
+    --warn: #f6c945;
+    --warn-tint: #2b2410;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+
+  .intro { max-width: 44rem; margin-bottom: 2rem; }
+  .intro .kicker {
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; line-height: 1.25; }
+  .intro p { color: var(--body); margin: 0 0 0.6rem; font-size: 0.9375rem; }
+  .intro code, code {
+    font-family: ui-monospace, monospace;
+    background: var(--raised);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.85em;
+    color: var(--body);
+  }
+
+  .toggle-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.75rem;
+  }
+  .toggle-bar label { display: flex; align-items: center; gap: 0.6rem; font-weight: 600; cursor: pointer; }
+  .toggle-bar input[type=checkbox] { width: 1.15rem; height: 1.15rem; accent-color: var(--signal); cursor: pointer; }
+  .toggle-bar .desc { color: var(--muted); font-size: 0.825rem; }
+  .toggle-bar .state-pill {
+    margin-left: auto;
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+  }
+  .state-pill.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); background: var(--ok-tint); }
+  .state-pill.off { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); background: var(--bad-tint); }
+
+  .panels { display: grid; grid-template-columns: 1.1fr 1fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.25rem; }
+  .panel h2 { margin: 0 0 0.9rem; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+
+  .capture-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+  .capture-row input {
+    flex: 1;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    padding: 0.6rem 0.75rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.85rem;
+  }
+  button {
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--raised);
+    color: var(--body);
+    padding: 0.6rem 0.9rem;
+    cursor: pointer;
+  }
+  button:hover { background: var(--line); color: var(--ink); }
+  button.primary { background: var(--signal); border-color: var(--signal); color: var(--onsignal); }
+  button.primary:hover { background: var(--signal-bright); }
+  button.ghost { background: transparent; }
+  button.small { padding: 0.4rem 0.65rem; font-size: 0.78rem; }
+
+  .scenario-tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .scenario-tabs button.tab { background: transparent; color: var(--muted); }
+  .scenario-tabs button.tab.active { background: var(--raised); color: var(--ink); border-color: var(--line-strong, var(--line)); }
+
+  .scenario-body { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 1.25rem; }
+  .scenario-body p { margin: 0 0 0.75rem; color: var(--body); font-size: 0.875rem; }
+  .scenario-steps { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .scenario-steps button { font-size: 0.8rem; }
+  .scenario-steps button.done { opacity: 0.5; }
+
+  .field-grid { display: grid; grid-template-columns: 9rem 1fr; gap: 0.4rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; }
+  .field-grid dt { color: var(--muted); }
+  .field-grid dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-family: ui-monospace, monospace; font-size: 0.7rem; font-weight: 600;
+    padding: 0.15rem 0.5rem; border-radius: 5px; border: 1px solid var(--line);
+    text-transform: uppercase; letter-spacing: 0.02em;
+  }
+  .badge.match { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); background: var(--ok-tint); }
+  .badge.fallback { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--warn-tint); }
+  .badge.rejected { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); background: var(--bad-tint); }
+  .badge.invalid { color: var(--muted); }
+
+  .empty { color: var(--muted); font-size: 0.85rem; padding: 1rem 0; text-align: center; }
+
+  .job-list { display: flex; flex-direction: column; gap: 0.6rem; max-height: 30rem; overflow-y: auto; }
+  .job-card { border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem 0.8rem; background: var(--canvas); }
+  .job-card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.3rem; }
+  .job-card .url { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--body); word-break: break-all; }
+  .job-card .reason { font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
+
+  .clear-row { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="intro">
+    <p class="kicker">extension/chrome — bookmark auto-capture · triage prototype</p>
+    <h1>Should an unmatched bookmark fall back to a generic Link job instead of being rejected?</h1>
+    <p>
+      <code>detect_pipeline()</code> (<code>src/utils/validators.py</code>) already recognizes
+      short/long video, GitHub repos, documents, and allowlisted article domains. Anything else
+      today returns <code>"rejected"</code> — no job, silently dropped — unless the caller passed
+      an explicit fallback-capable <code>intent</code> of <code>link</code> or
+      <code>capture</code> (<code>src/intake/router.py</code>). The extension's
+      <code>Ctrl+Shift+1</code> command now sends <code>capture</code>; plain Telegram and
+      dashboard pastes still default to <code>automatic</code>, so they do not get this fallback.
+    </p>
+    <p>
+      The change on the table: when nothing matches, fall back to the generic <b>Link</b> pipeline
+      (already a first-class <code>content_type</code> — same <code>create_and_enqueue_job()</code>
+      call every other pipeline uses) instead of hard-rejecting. This page ports the real matcher
+      rules to JS 1:1 and lets you feel out whether that fallback is right — including the
+      uncomfortable edge case where the pipeline didn't just <i>fail to recognize</i> the URL, but
+      <i>deliberately excluded</i> it (a GitHub gist, an org-only URL, an Instagram photo carousel).
+      Should those get the same free pass into Link, or not?
+    </p>
+  </div>
+
+  <div class="toggle-bar">
+    <label>
+      <input type="checkbox" id="fallback-toggle" checked>
+      Fall back to generic Link pipeline when nothing matches
+    </label>
+    <span class="desc">Off = today's behavior (hard reject, no job)</span>
+    <span class="state-pill" id="toggle-state">ON</span>
+  </div>
+
+  <div class="scenario-tabs" id="scenario-tabs"></div>
+  <div class="scenario-body" id="scenario-body"></div>
+
+  <div class="panels">
+    <div class="panel">
+      <h2>Browser — bookmark a URL</h2>
+      <div class="capture-row">
+        <input id="url-input" placeholder="https://…" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ">
+        <button class="primary" id="bookmark-btn">🔖 Bookmark</button>
+      </div>
+
+      <h2 style="margin-top:1.5rem">Ownix extension — last capture</h2>
+      <dl class="field-grid" id="last-capture-fields">
+        <dt>—</dt><dd>Bookmark something to see triage run.</dd>
+      </dl>
+    </div>
+
+    <div class="panel">
+      <h2>Ownix backend — jobs created</h2>
+      <div class="job-list" id="job-list">
+        <div class="empty">No captures yet.</div>
+      </div>
+      <div class="clear-row">
+        <button class="ghost small" id="clear-btn">Clear all</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   PURE LOGIC MODULE — no DOM. Ported 1:1 from:
+     - src/utils/validators.py  (detect_pipeline + helpers)
+     - src/intake/router.py     (rejected -> pipeline fallback)
+   This prototype now mirrors the retained router contract: fallback is
+   available only to explicit link/capture intents, never to automatic.
+   ============================================================ */
+const OwnixTriage = (() => {
+  const ARTICLE_DEFAULT_DOMAINS = [
+    'substack.com', 'medium.com', 'dev.to', 'ghost.io', 'hashnode.com',
+    'freecodecamp.org', 'css-tricks.com', 'smashingmagazine.com',
+    'stackoverflow.blog', 'aws.amazon.com', 'blog.cloudflare.com',
+    'github.blog', 'netflixtechblog.com', 'engineering.fb.com',
+    'engineering.linkedin.com',
+  ];
+  const SUPPORTED_DOCUMENT_EXTS = [
+    'pdf', 'doc', 'docx', 'odt', 'rtf', 'epub', 'ppt', 'pptx', 'xlsx',
+    'ods', 'odp', 'csv', 'docm', 'xlsm', 'pptm',
+  ];
+  const GITHUB_RESERVED_PATHS = [
+    'features', 'pricing', 'marketplace', 'sponsors', 'topics', 'explore',
+    'settings', 'notifications', 'codespaces', 'login', 'signup', 'apps',
+    'orgs', 'about', 'security', 'trending', 'readme',
+  ];
+  const UNSIZED_VIDEO_HOSTS = ['facebook.com', 'x.com', 'twitter.com'];
+
+  const hostMatches = (host, target) => host === target || host.endsWith('.' + target);
+
+  function matchShort(host, path) {
+    if (hostMatches(host, 'youtube.com') && path.startsWith('/shorts/') && path.length > '/shorts/'.length) return true;
+    if (hostMatches(host, 'instagram.com') && (path.startsWith('/reel/') || path.startsWith('/reels/'))) return true;
+    if (hostMatches(host, 'tiktok.com') && /^\/@[^/]+\/video\/\d+/i.test(path)) return true;
+    if (hostMatches(host, 'vt.tiktok.com') && path.length > 1) return true;
+    return false;
+  }
+
+  function matchLong(host, path, searchParams) {
+    if (hostMatches(host, 'youtube.com') && path === '/watch') return Boolean(searchParams.get('v'));
+    return host === 'youtu.be' && path.length > 1;
+  }
+
+  /** 'repo' | 'explicit-reject' | null (not a github host at all) */
+  function matchGithub(host, path) {
+    if (host === 'gist.github.com') return 'explicit-reject';
+    if (host.startsWith('github.') && host !== 'github.com' && host !== 'github.blog') return 'explicit-reject';
+    if (host !== 'github.com') return null;
+    const segments = path.split('/').filter(Boolean);
+    if (!segments.length || GITHUB_RESERVED_PATHS.includes(segments[0].toLowerCase())) return 'explicit-reject';
+    if (segments.length < 2) return 'explicit-reject';
+    return 'repo';
+  }
+
+  function documentExt(path) {
+    const tail = (path.split('/').pop() || '').toLowerCase();
+    const ext = tail.includes('.') ? tail.split('.').pop() : '';
+    return SUPPORTED_DOCUMENT_EXTS.includes(ext) ? ext : '';
+  }
+
+  function matchArticle(host, extraDomains) {
+    return [...ARTICLE_DEFAULT_DOMAINS, ...extraDomains].some((d) => hostMatches(host, d));
+  }
+
+  /** Mirrors detect_pipeline(). Returns { pipeline, explicit, reason }. */
+  function detectPipeline(rawUrl, extraDomains = []) {
+    const trimmed = (rawUrl || '').trim();
+    if (!trimmed) return { pipeline: 'invalid', reason: 'Empty — nothing to bookmark.' };
+    if (/^https?:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) {
+      return { pipeline: 'invalid', reason: 'Malformed http(s) URL.' };
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return { pipeline: 'invalid', reason: 'Not a parseable URL.' };
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { pipeline: 'invalid', reason: `Scheme "${parsed.protocol}" isn't http(s).` };
+    }
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname || '';
+    if (!host) return { pipeline: 'invalid', reason: 'No hostname.' };
+
+    if (matchShort(host, path)) return { pipeline: 'short', reason: 'Shorts / Reels / TikTok video pattern.' };
+    if (matchLong(host, path, parsed.searchParams)) return { pipeline: 'long', reason: 'youtube.com/watch?v=… or youtu.be/….' };
+
+    const github = matchGithub(host, path);
+    if (github === 'repo') return { pipeline: 'repo', reason: 'github.com/<owner>/<repo>.' };
+    if (github === 'explicit-reject') {
+      return {
+        pipeline: 'rejected', explicit: true,
+        reason: 'GitHub host/path is deliberately excluded (gist, enterprise host, org-only page, or a reserved path).',
+      };
+    }
+
+    const ext = documentExt(path);
+    if (ext) return { pipeline: 'document', reason: `Path ends in .${ext}.` };
+
+    if (UNSIZED_VIDEO_HOSTS.some((h) => hostMatches(host, h))) {
+      return { pipeline: 'unsized', reason: 'facebook.com / x.com / twitter.com video link.' };
+    }
+    if (matchArticle(host, extraDomains)) return { pipeline: 'article', reason: 'Host is on the article allowlist.' };
+
+    return { pipeline: 'rejected', explicit: false, reason: 'No pipeline recognizes this host/path — just unmatched.' };
+  }
+
+  /**
+   * The retained router behavior: when detectPipeline() says "rejected",
+   * explicit link/capture callers may degrade to the generic 'link'
+   * pipeline instead of failing.
+   * 'invalid' never falls back — there's no URL to save as a link either way.
+   */
+  function triage(rawUrl, { intent = 'capture', useFallback = true, extraDomains = [] } = {}) {
+    const detected = detectPipeline(rawUrl, extraDomains);
+    if (detected.pipeline !== 'rejected') {
+      return { ...detected, intent, final: detected.pipeline, fellBack: false };
+    }
+    if (!useFallback || (intent !== 'link' && intent !== 'capture')) {
+      return { ...detected, intent, final: 'rejected', fellBack: false };
+    }
+    return { ...detected, intent, final: 'link', fellBack: true };
+  }
+
+  return { detectPipeline, triage };
+})();
+/* ======================== end pure module ======================== */
+
+
+/* ---------------------- throwaway page shell ---------------------- */
+const urlInput = document.getElementById('url-input');
+const bookmarkBtn = document.getElementById('bookmark-btn');
+const fallbackToggle = document.getElementById('fallback-toggle');
+const toggleState = document.getElementById('toggle-state');
+const lastCaptureFields = document.getElementById('last-capture-fields');
+const jobList = document.getElementById('job-list');
+const clearBtn = document.getElementById('clear-btn');
+const scenarioTabsEl = document.getElementById('scenario-tabs');
+const scenarioBodyEl = document.getElementById('scenario-body');
+
+let captures = [];
+
+function pipelineLabel(p) {
+  return { short: 'Short', long: 'Long', unsized: 'Unsized video', repo: 'Repo', document: 'Document', article: 'Article', link: 'Link', rejected: 'Rejected', invalid: 'Invalid' }[p] || p;
+}
+
+function renderToggleState() {
+  toggleState.textContent = fallbackToggle.checked ? 'ON' : 'OFF';
+  toggleState.className = 'state-pill ' + (fallbackToggle.checked ? 'on' : 'off');
+}
+
+function renderLastCapture(url, result) {
+  const rows = [
+    ['Bookmarked URL', url],
+    ['Wire intent', result.intent || 'capture'],
+    ['Specific match', result.pipeline === 'rejected' || result.pipeline === 'invalid' ? '— none —' : pipelineLabel(result.pipeline)],
+    ['Explicit exclusion?', result.explicit ? 'Yes — deliberately blocked' : 'No'],
+    ['Fallback used?', result.fellBack ? 'Yes → generic Link' : 'No'],
+    ['Final outcome', result.final === 'rejected' ? 'Rejected — no job' : result.final === 'invalid' ? 'Invalid — no job' : `Job created (${pipelineLabel(result.final)})`],
+    ['Reason', result.reason],
+  ];
+  lastCaptureFields.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('');
+}
+
+function badgeFor(result) {
+  if (result.final === 'invalid') return '<span class="badge invalid">Invalid</span>';
+  if (result.final === 'rejected') return '<span class="badge rejected">Rejected</span>';
+  if (result.fellBack) return '<span class="badge fallback">Fallback → Link</span>';
+  return `<span class="badge match">${pipelineLabel(result.final)}</span>`;
+}
+
+function renderJobList() {
+  if (!captures.length) {
+    jobList.innerHTML = '<div class="empty">No captures yet.</div>';
+    return;
+  }
+  jobList.innerHTML = captures
+    .slice()
+    .reverse()
+    .map(({ url, result }) => `
+      <div class="job-card">
+        <div class="top">${badgeFor(result)}${result.explicit ? '<span class="badge invalid" title="Pipeline deliberately excluded this, not just unmatched">explicit exclusion</span>' : ''}</div>
+        <div class="url">${escapeHtml(url)}</div>
+        <div class="reason">${escapeHtml(result.reason)}</div>
+      </div>
+    `)
+    .join('');
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function bookmark(url, intent = 'capture') {
+  const result = OwnixTriage.triage(url, { intent, useFallback: fallbackToggle.checked });
+  captures.push({ url, result });
+  renderLastCapture(url, result);
+  renderJobList();
+}
+
+bookmarkBtn.addEventListener('click', () => {
+  const url = urlInput.value.trim();
+  if (!url) return;
+  bookmark(url);
+});
+urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') bookmarkBtn.click(); });
+fallbackToggle.addEventListener('change', renderToggleState);
+clearBtn.addEventListener('click', () => { captures = []; renderJobList(); });
+
+/* ---------------------- guided walkthroughs ---------------------- */
+const SCENARIOS = [
+  {
+    label: 'Happy path',
+    description: 'These already have a specific pipeline today — the fallback never even gets asked. Confirms the change is additive, not a rewrite of the working cases.',
+    steps: [
+      ['YouTube long video', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+      ['TikTok short video', 'https://www.tiktok.com/@someuser/video/7123456789012345678'],
+      ['GitHub repo', 'https://github.com/anthropics/claude-code'],
+      ['A PDF link', 'https://example.com/files/report.pdf'],
+      ['Allowlisted article (Medium)', 'https://medium.com/@writer/some-post-slug'],
+    ],
+  },
+  {
+    label: 'The actual problem',
+    description: 'This is the case the whole request is about: an ordinary bookmark that will never match a specific pipeline. With the fallback ON and the capture intent, it becomes a generic Link job; with the automatic intent it still rejects, matching Telegram and dashboard pastes.',
+    steps: [
+      ['Turn fallback ON', null, () => { fallbackToggle.checked = true; renderToggleState(); }],
+      ['Bookmark a random personal blog', 'https://someones-personal-site.example/2024/thoughts-on-gardening'],
+      ['Default automatic paste of the same URL', 'https://someones-personal-site.example/2024/thoughts-on-gardening', null, 'automatic'],
+      ['Turn fallback OFF', null, () => { fallbackToggle.checked = false; renderToggleState(); }],
+      ['Bookmark the exact same URL again', 'https://someones-personal-site.example/2024/thoughts-on-gardening'],
+    ],
+  },
+  {
+    label: 'The edge case worth arguing about',
+    description: 'The first two are not merely unrecognized — detect_pipeline() structurally excludes them (gist host, org-only github.com path). With fallback ON and the capture intent, they get the same pass into a generic Link job as an ordinary unmatched URL. The third is a gotcha found while porting this: the docstring claims Instagram photo carousels (/p/...) are deliberately rejected too, but the real code never special-cases them — they fall through the same generic "unmatched" branch as anything else, so it will not carry the explicit-exclusion badge below.',
+    steps: [
+      ['GitHub gist (excluded in code)', 'https://gist.github.com/someuser/abc123def456'],
+      ['GitHub org page, no repo (excluded in code)', 'https://github.com/anthropics'],
+      ['Instagram photo carousel (excluded in docstring only)', 'https://www.instagram.com/p/Cabcdefghij/'],
+    ],
+  },
+  {
+    label: 'Still a hard no',
+    description: 'Structurally invalid — there is no URL here to save as a Link either way. Confirms the fallback only rescues "valid URL, unmatched pipeline," not "not a URL at all." The toggle should make no difference to these.',
+    steps: [
+      ['Empty bookmark', ''],
+      ['javascript: scheme', 'javascript:alert(1)'],
+      ['Malformed https URL', 'https:missing-host'],
+      ['Plain text, not a URL', 'just some notes I typed'],
+    ],
+  },
+];
+
+let activeScenario = 0;
+
+function renderScenarioTabs() {
+  scenarioTabsEl.innerHTML = SCENARIOS
+    .map((s, i) => `<button class="tab${i === activeScenario ? ' active' : ''}" data-idx="${i}">${escapeHtml(s.label)}</button>`)
+    .join('');
+  scenarioTabsEl.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeScenario = Number(btn.dataset.idx);
+      renderScenarioTabs();
+      renderScenarioBody();
+    });
+  });
+}
+
+function renderScenarioBody() {
+  const scenario = SCENARIOS[activeScenario];
+  const stepsHtml = scenario.steps
+    .map(([label], i) => `<button class="small" data-step="${i}">${i + 1}. ${escapeHtml(label)}</button>`)
+    .join('');
+  scenarioBodyEl.innerHTML = `<p>${escapeHtml(scenario.description)}</p><div class="scenario-steps">${stepsHtml}</div>`;
+  scenarioBodyEl.querySelectorAll('button[data-step]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const [, url, effect, intent] = scenario.steps[Number(btn.dataset.step)];
+      if (effect) { effect(); }
+      if (url !== null && url !== undefined) {
+        urlInput.value = url;
+        bookmark(url, intent || 'capture');
+      }
+      btn.classList.add('done');
+    });
+  });
+}
+
+renderToggleState();
+renderScenarioTabs();
+renderScenarioBody();
+renderJobList();
+</script>
+</body>
+</html>

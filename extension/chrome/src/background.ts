@@ -11,8 +11,14 @@ export const MENU_PAGE = 'ownix-send-page';
 export const MENU_LINK = 'ownix-send-link';
 export const MENU_SELECTION = 'ownix-send-selection';
 
+// 'capture' (not the contract's default 'automatic'): a keyboard/menu trigger
+// is always a deliberate one-shot "grab this" action, so the backend falls
+// back to a generic Link job instead of rejecting anything it can't classify
+// more specifically. Kept distinct from 'automatic' — every plain Telegram/
+// dashboard paste also carries that default — so this fallback stays scoped
+// to this trigger (docs/adr/0051-automatic-bookmark-capture-rejected.md).
 export const COMMAND_INTENTS: Readonly<Record<string, ProcessingIntent>> = {
-  'capture-automatic': 'automatic',
+  'capture-automatic': 'capture',
   'capture-article': 'article',
   'capture-link': 'link',
   'capture-document': 'document',
@@ -145,12 +151,17 @@ export async function captureCommand(
 ): Promise<void> {
   const intent = COMMAND_INTENTS[command];
   if (!intent) return;
+  // Display label independent of the wire `intent` — 'capture-automatic'
+  // sends intent 'capture' (see COMMAND_INTENTS above) but should still read
+  // "automatic" in notifications; deriving it from the command name keeps
+  // that stable regardless of what the wire intent value is.
+  const label = command.replace(/^capture-/, '');
   const tab = await deps.getActiveTab();
   const page = safePage(tab?.url);
   if (!page) {
     const generation = ++badgeGeneration;
     await setBadge(deps, '!', '#f87171');
-    await notify(deps, 'Ownix capture unavailable', `${intent}: protected tab — failed`);
+    await notify(deps, 'Ownix capture unavailable', `${label}: protected tab — failed`);
     scheduleBadgeClear(deps, generation);
     return;
   }
@@ -170,11 +181,10 @@ export async function captureCommand(
       await setBadge(deps, '✓', '#4ade80');
       const host = await deps.getOwnixHost();
       const jobUrl = new URL(`/jobs/${encodeURIComponent(response.job_id)}`, host).toString();
-      await notify(deps, 'Ownix capture complete', `${intent}: ${domain} — saved`, jobUrl);
+      await notify(deps, 'Ownix capture complete', `${label}: ${domain} — saved`, jobUrl);
     } else {
       await setBadge(deps, '!', '#eab308');
-      const hint = intent === 'automatic' ? ' Try Article, Link, or Document.' : '';
-      await notify(deps, 'Ownix capture not saved', `${intent}: ${domain} — unsupported.${hint}`);
+      await notify(deps, 'Ownix capture not saved', `${label}: ${domain} — unsupported.`);
     }
   } catch (err) {
     await setBadge(deps, '!', '#f87171');
@@ -184,10 +194,10 @@ export async function captureCommand(
       await notify(
         deps,
         'Ownix pairing required',
-        `${intent}: ${page.hostname.toLowerCase()} — pairing required`,
+        `${label}: ${page.hostname.toLowerCase()} — pairing required`,
       );
     } else {
-      await notify(deps, 'Ownix capture failed', `${intent}: ${page.hostname.toLowerCase()} — failed`);
+      await notify(deps, 'Ownix capture failed', `${label}: ${page.hostname.toLowerCase()} — failed`);
     }
   } finally {
     pending.delete(key);

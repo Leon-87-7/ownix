@@ -155,7 +155,7 @@ describe('capture commands', () => {
   });
 
   it.each([
-    ['capture-automatic', 'automatic'],
+    ['capture-automatic', 'capture'],
     ['capture-article', 'article'],
     ['capture-link', 'link'],
     ['capture-document', 'document'],
