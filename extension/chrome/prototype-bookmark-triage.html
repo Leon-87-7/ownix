@@ -161,10 +161,10 @@
       <code>detect_pipeline()</code> (<code>src/utils/validators.py</code>) already recognizes
       short/long video, GitHub repos, documents, and allowlisted article domains. Anything else
       today returns <code>"rejected"</code> — no job, silently dropped — unless the caller passed
-      an explicit <code>intent</code> of <code>article</code>/<code>link</code>/<code>document</code>
-      (<code>src/intake/router.py</code>). A bookmark auto-capture (see the extension proposal)
-      sends no such intent — most real bookmarks are ordinary pages that will never match a
-      specific pipeline, so today they'd vanish with nothing to show for it.
+      an explicit fallback-capable <code>intent</code> of <code>link</code> or
+      <code>capture</code> (<code>src/intake/router.py</code>). The extension's
+      <code>Ctrl+Shift+1</code> command now sends <code>capture</code>; plain Telegram and
+      dashboard pastes still default to <code>automatic</code>, so they do not get this fallback.
     </p>
     <p>
       The change on the table: when nothing matches, fall back to the generic <b>Link</b> pipeline
@@ -221,8 +221,8 @@
    PURE LOGIC MODULE — no DOM. Ported 1:1 from:
      - src/utils/validators.py  (detect_pipeline + helpers)
      - src/intake/router.py     (rejected -> pipeline fallback)
-   This is the part meant to survive the prototype. If the fallback
-   idea is validated, this is the shape that lifts into router.py.
+   This prototype now mirrors the retained router contract: fallback is
+   available only to explicit link/capture intents, never to automatic.
    ============================================================ */
 const OwnixTriage = (() => {
   const ARTICLE_DEFAULT_DOMAINS = [
@@ -283,6 +283,9 @@ const OwnixTriage = (() => {
   function detectPipeline(rawUrl, extraDomains = []) {
     const trimmed = (rawUrl || '').trim();
     if (!trimmed) return { pipeline: 'invalid', reason: 'Empty — nothing to bookmark.' };
+    if (/^https?:/i.test(trimmed) && !/^https?:\/\//i.test(trimmed)) {
+      return { pipeline: 'invalid', reason: 'Malformed http(s) URL.' };
+    }
 
     let parsed;
     try {
@@ -321,19 +324,20 @@ const OwnixTriage = (() => {
   }
 
   /**
-   * The behavior being prototyped: when detectPipeline() says "rejected",
-   * optionally degrade to the generic 'link' pipeline instead of failing.
+   * The retained router behavior: when detectPipeline() says "rejected",
+   * explicit link/capture callers may degrade to the generic 'link'
+   * pipeline instead of failing.
    * 'invalid' never falls back — there's no URL to save as a link either way.
    */
-  function triage(rawUrl, { useFallback = true, extraDomains = [] } = {}) {
+  function triage(rawUrl, { intent = 'capture', useFallback = true, extraDomains = [] } = {}) {
     const detected = detectPipeline(rawUrl, extraDomains);
     if (detected.pipeline !== 'rejected') {
-      return { ...detected, final: detected.pipeline, fellBack: false };
+      return { ...detected, intent, final: detected.pipeline, fellBack: false };
     }
-    if (!useFallback) {
-      return { ...detected, final: 'rejected', fellBack: false };
+    if (!useFallback || (intent !== 'link' && intent !== 'capture')) {
+      return { ...detected, intent, final: 'rejected', fellBack: false };
     }
-    return { ...detected, final: 'link', fellBack: true };
+    return { ...detected, intent, final: 'link', fellBack: true };
   }
 
   return { detectPipeline, triage };
@@ -366,6 +370,7 @@ function renderToggleState() {
 function renderLastCapture(url, result) {
   const rows = [
     ['Bookmarked URL', url],
+    ['Wire intent', result.intent || 'capture'],
     ['Specific match', result.pipeline === 'rejected' || result.pipeline === 'invalid' ? '— none —' : pipelineLabel(result.pipeline)],
     ['Explicit exclusion?', result.explicit ? 'Yes — deliberately blocked' : 'No'],
     ['Fallback used?', result.fellBack ? 'Yes → generic Link' : 'No'],
@@ -404,8 +409,8 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function bookmark(url) {
-  const result = OwnixTriage.triage(url, { useFallback: fallbackToggle.checked });
+function bookmark(url, intent = 'capture') {
+  const result = OwnixTriage.triage(url, { intent, useFallback: fallbackToggle.checked });
   captures.push({ url, result });
   renderLastCapture(url, result);
   renderJobList();
@@ -435,17 +440,18 @@ const SCENARIOS = [
   },
   {
     label: 'The actual problem',
-    description: 'This is the case the whole request is about: an ordinary bookmark that will never match a specific pipeline. With the fallback ON it becomes a generic Link job; toggle it OFF and bookmark the same URL again to see it vanish instead — that gap is what motivated this change.',
+    description: 'This is the case the whole request is about: an ordinary bookmark that will never match a specific pipeline. With the fallback ON and the capture intent, it becomes a generic Link job; with the automatic intent it still rejects, matching Telegram and dashboard pastes.',
     steps: [
       ['Turn fallback ON', null, () => { fallbackToggle.checked = true; renderToggleState(); }],
       ['Bookmark a random personal blog', 'https://someones-personal-site.example/2024/thoughts-on-gardening'],
+      ['Default automatic paste of the same URL', 'https://someones-personal-site.example/2024/thoughts-on-gardening', null, 'automatic'],
       ['Turn fallback OFF', null, () => { fallbackToggle.checked = false; renderToggleState(); }],
       ['Bookmark the exact same URL again', 'https://someones-personal-site.example/2024/thoughts-on-gardening'],
     ],
   },
   {
     label: 'The edge case worth arguing about',
-    description: 'The first two are not merely unrecognized — detect_pipeline() structurally excludes them (gist host, org-only github.com path). With the fallback ON, they currently get the exact same free pass into a generic Link job as an ordinary unmatched URL. Is that the right call, or should "explicitly excluded" stay blocked even with the fallback enabled? The third is a gotcha found while porting this: the docstring claims Instagram photo carousels (/p/…) are deliberately rejected too, but the real code never special-cases them — they fall through the same generic "unmatched" branch as anything else, so it won\'t even carry the explicit-exclusion badge below. Worth fixing the docstring, or the code?',
+    description: 'The first two are not merely unrecognized — detect_pipeline() structurally excludes them (gist host, org-only github.com path). With fallback ON and the capture intent, they get the same pass into a generic Link job as an ordinary unmatched URL. The third is a gotcha found while porting this: the docstring claims Instagram photo carousels (/p/...) are deliberately rejected too, but the real code never special-cases them — they fall through the same generic "unmatched" branch as anything else, so it will not carry the explicit-exclusion badge below.',
     steps: [
       ['GitHub gist (excluded in code)', 'https://gist.github.com/someuser/abc123def456'],
       ['GitHub org page, no repo (excluded in code)', 'https://github.com/anthropics'],
@@ -458,6 +464,7 @@ const SCENARIOS = [
     steps: [
       ['Empty bookmark', ''],
       ['javascript: scheme', 'javascript:alert(1)'],
+      ['Malformed https URL', 'https:missing-host'],
       ['Plain text, not a URL', 'just some notes I typed'],
     ],
   },
@@ -486,11 +493,11 @@ function renderScenarioBody() {
   scenarioBodyEl.innerHTML = `<p>${escapeHtml(scenario.description)}</p><div class="scenario-steps">${stepsHtml}</div>`;
   scenarioBodyEl.querySelectorAll('button[data-step]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const [, url, effect] = scenario.steps[Number(btn.dataset.step)];
+      const [, url, effect, intent] = scenario.steps[Number(btn.dataset.step)];
       if (effect) { effect(); }
       if (url !== null && url !== undefined) {
         urlInput.value = url;
-        bookmark(url);
+        bookmark(url, intent || 'capture');
       }
       btn.classList.add('done');
     });

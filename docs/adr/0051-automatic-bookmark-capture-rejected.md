@@ -127,10 +127,10 @@ context. Fixing its triage gap gets the practical win the bookmark proposal was 
   so `Ctrl+Shift+1` still reads "automatic" in notifications even though it now sends
   `intent: "capture"` on the wire — display text and routing intent were previously the
   same string by coincidence, not by design, and diverge here.
-- `extension/chrome/prototype-bookmark-triage.html` is the primary source for the
-  fallback logic validated above; it stays in the repo as a reference for the decision
-  rather than being folded into the extension build (it's a throwaway HTML file, not
-  wired into `manifest.json`).
+- `extension/chrome/prototype-bookmark-triage.html` is retained as historical context
+  for the fallback decision, updated to mirror the final `link`/`capture`-only router
+  contract rather than being folded into the extension build (it's a throwaway HTML file,
+  not wired into `manifest.json`).
 - If a genuine cross-device capture need shows up later (bookmark on phone, land in
   Ownix on desktop via sync) — the one benefit of the bookmark approach this ADR doesn't
   address — it should be re-opened as its own decision against this one's reasoning, not
