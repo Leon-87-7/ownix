@@ -26,7 +26,7 @@ from src.api.jobs import (
     detail_fields_for,
     _DETAIL_FIELDS_COMMON,
     _DETAIL_FIELDS_SHORT,
-    _DETAIL_FIELDS_LONG,
+    _DETAIL_FIELDS_ENRICHMENT,
 )
 
 
@@ -49,6 +49,8 @@ def test_detail_fields_short_excludes_long_enrichment() -> None:
 
 def test_detail_fields_long_includes_enrichment() -> None:
     fields = detail_fields_for("long")
+    assert "transcript" in fields
+    assert "links" in fields
     assert "ai_topic" in fields
     assert "ai_objective" in fields
     assert "promise_gap" in fields
@@ -58,13 +60,14 @@ def test_detail_fields_long_includes_enrichment() -> None:
 def test_detail_fields_long_excludes_short_fields() -> None:
     fields = detail_fields_for("long")
     assert "summary" not in fields
-    assert "transcript" not in fields
-    assert "links" not in fields
     assert "key_phrases" not in fields
 
 
-def test_detail_fields_article_matches_long() -> None:
-    assert detail_fields_for("article") == detail_fields_for("long")
+def test_detail_fields_article_uses_enrichment_without_long_transcript_payload() -> None:
+    fields = detail_fields_for("article")
+    assert fields == _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_ENRICHMENT
+    assert "transcript" not in fields
+    assert "links" not in fields
 
 
 def test_detail_fields_common_always_present() -> None:
@@ -119,6 +122,7 @@ async def test_get_job_short_returns_short_fields(monkeypatch) -> None:
         return job
 
     monkeypatch.setattr(jobs_module, "get_owned_job", _get_owned_job)
+    monkeypatch.setattr(jobs_module.database, "count_job_links", AsyncMock(return_value=0))
 
     response = await jobs_module.get_job(
         "job1",
@@ -145,6 +149,7 @@ async def test_get_job_long_returns_long_fields(monkeypatch) -> None:
         return job
 
     monkeypatch.setattr(jobs_module, "get_owned_job", _get_owned_job)
+    monkeypatch.setattr(jobs_module.database, "count_job_links", AsyncMock(return_value=0))
 
     response = await jobs_module.get_job(
         "job1",
@@ -153,9 +158,9 @@ async def test_get_job_long_returns_long_fields(monkeypatch) -> None:
 
     assert response["ai_topic"] == "topic"
     assert response["promise_gap"] == "pg"
+    assert response["transcript"] == "Hello world."
+    assert response["links"] == '[{"url":"https://python.org","label":"Python","description":"Official site"}]'
     assert "summary" not in response
-    assert "transcript" not in response
-    assert "links" not in response
     assert "key_phrases" not in response
 
 
@@ -195,6 +200,7 @@ def _patch_short_pipeline(transcript_resp: dict, *, job: dict | None = None):
         patch("src.processors.short_video.send_message", new_callable=AsyncMock, return_value={"message_id": 1}),
         patch("src.processors.short_video.send_photo", new_callable=AsyncMock, return_value={"message_id": 2}),
         patch("src.processors.short_video.send_document", new_callable=AsyncMock),
+        patch("src.processors.short_video.send_inline_keyboard", new_callable=AsyncMock),
         patch("src.processors.short_video.edit_message_text", new_callable=AsyncMock),
         patch("src.processors.short_video.frames.fetch_frames", new_callable=AsyncMock, return_value=_FRAME_RESP),
         patch("src.processors.short_video.gemini.call_gemini_vision", new_callable=AsyncMock, return_value=_VISION),

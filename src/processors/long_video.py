@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from src import database
 from src.config import settings
 from src.services.drive import upload_file
@@ -117,12 +118,14 @@ async def run(job: dict) -> None:
     file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG, chat_id=chat_id)
 
     # 5. Update job to transcript_done, caching title + transcript for Phase 2
-    await database.update_job_status(
-        job_id, "transcript_done",
-        drive_url=drive_url,
-        title=title,
-        transcript=transcript,
-    )
+    transcript_fields = {
+        "drive_url": drive_url,
+        "title": title,
+        "transcript": transcript,
+    }
+    if description_links:
+        transcript_fields["links"] = json.dumps(description_links)
+    await database.update_job_status(job_id, "transcript_done", **transcript_fields)
 
     # 6. Telegram delivery sequence
     doc_caption = f"{tag}\n📜 Transcript ready"

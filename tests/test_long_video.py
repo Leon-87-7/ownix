@@ -1,6 +1,7 @@
 """Tests for the long-video Phase 1 pipeline (issue #3)."""
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -63,7 +64,7 @@ async def test_append_long_row(monkeypatch) -> None:
 
     captured: list = []
 
-    def fake_append_sync(tab_name, values):
+    def fake_append_sync(tab_name, values, chat_id=None):
         captured.append((tab_name, values))
 
     with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
@@ -116,7 +117,7 @@ async def test_append_long_row_tab_qualified_range(monkeypatch) -> None:
     mock_values.append.assert_called_once()
     call_kwargs = mock_values.append.call_args.kwargs
     assert call_kwargs["spreadsheetId"] == "consolidated-sheet-id"
-    assert call_kwargs["range"] == "YouTube Transcript Index!A1"
+    assert call_kwargs["range"] == "'YouTube Transcript Index'!A1"
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,64 @@ async def test_description_link_failure_does_not_block() -> None:
         # Should NOT raise even though extract_description_links fails
         job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/watch?v=x"}
         await long_video.run(job)
+
+
+@pytest.mark.asyncio
+async def test_description_links_are_persisted_on_long_job(monkeypatch) -> None:
+    """Long-video description links should be available on the job detail page."""
+    from src.processors import long_video
+
+    links = [{"url": "https://example.com/resource", "label": "Resource"}]
+    update_status = AsyncMock()
+    monkeypatch.setattr(long_video.settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "")
+
+    with (
+        patch("src.processors.long_video.database.update_job_status", update_status),
+        patch(
+            "src.processors.long_video.database.get_job",
+            new_callable=AsyncMock,
+            return_value={"id": "job1", "url": "https://youtube.com/watch?v=x", "chat_id": 42},
+        ),
+        patch(
+            "src.processors.long_video.send_message",
+            new_callable=AsyncMock,
+            return_value={"message_id": 999},
+        ),
+        patch("src.processors.long_video.edit_message_text", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_document", new_callable=AsyncMock, return_value={}),
+        patch("src.processors.long_video.send_inline_keyboard", new_callable=AsyncMock),
+        patch(
+            "src.processors.long_video.transcript_svc.fetch_transcript",
+            new_callable=AsyncMock,
+            return_value={"videoId": "v1", "text": "transcript text"},
+        ),
+        patch(
+            "src.processors.long_video.transcript_svc.fetch_metadata",
+            new_callable=AsyncMock,
+            return_value={"title": "T", "channel": "C", "views": "100", "description": "desc"},
+        ),
+        patch(
+            "src.processors.long_video._collect_description_links",
+            new_callable=AsyncMock,
+            return_value=links,
+        ),
+        patch(
+            "src.processors.long_video.upload_file",
+            new_callable=AsyncMock,
+            return_value=("fid", "https://drive.google.com/x"),
+        ),
+        patch("src.processors.long_video.sheets.append_long_row", new_callable=AsyncMock),
+        patch("src.processors.long_video.offer_repo_followups", new_callable=AsyncMock),
+    ):
+        job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/watch?v=x"}
+        await long_video.run(job)
+
+    transcript_done_updates = [
+        call for call in update_status.await_args_list
+        if call.args[1] == "transcript_done" and "drive_url" in call.kwargs
+    ]
+    assert transcript_done_updates
+    assert json.loads(transcript_done_updates[0].kwargs["links"]) == links
 
 
 @pytest.mark.asyncio

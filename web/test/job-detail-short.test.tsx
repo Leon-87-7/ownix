@@ -68,12 +68,12 @@ describe('ENRICHMENT_FIELDS', () => {
     expect(keys).toContain('template_analysis')
   })
 
-  it('shares transcript but not the other short-specific keys', () => {
+  it('shares transcript and links but not the other short-specific keys', () => {
     const keys = ENRICHMENT_FIELDS.map((f) => f.key)
     expect(keys).not.toContain('summary')
     expect(keys[0]).toBe('transcript')
+    expect(keys[1]).toBe('links')
     expect(keys).not.toContain('key_phrases')
-    expect(keys).not.toContain('links')
   })
 })
 
@@ -136,15 +136,18 @@ describe('buildMarkdown', () => {
       ai_objective: 'Understand the topic',
       promise_gap: null,
       summary: null,
-      transcript: null,
-      links: null,
+      transcript: 'Long video transcript.',
+      links: '[{"url":"https://example.com/resource","label":"Resource"}]',
     }
     const md = buildMarkdown(longJob)
+    expect(md).toContain('## Transcript')
+    expect(md).toContain('Long video transcript.')
+    expect(md).toContain('## Links Found')
+    expect(md).toContain('[Resource](https://example.com/resource)')
     expect(md).toContain('## Topic')
     expect(md).toContain('Long video topic')
     expect(md).toContain('## Objective')
     expect(md).not.toContain('## Summary')
-    expect(md).not.toContain('## Transcript')
   })
 
   it('uses ENRICHMENT_FIELDS for article jobs', () => {

@@ -546,7 +546,7 @@ def detail_fields_for(content_type: str) -> tuple[str, ...]:
     if content_type == "short":
         return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_SHORT
     if content_type == "long":
-        return (*_DETAIL_FIELDS_COMMON, "transcript", *_DETAIL_FIELDS_ENRICHMENT)
+        return (*_DETAIL_FIELDS_COMMON, "transcript", "links", *_DETAIL_FIELDS_ENRICHMENT)
     return _DETAIL_FIELDS_COMMON + _DETAIL_FIELDS_ENRICHMENT
 
 
