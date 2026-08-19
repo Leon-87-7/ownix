@@ -402,7 +402,7 @@ async def _drain_background_tasks() -> None:
     import asyncio
     pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     if pending:
-        await asyncio.gather(*pending, return_exceptions=True)
+        await asyncio.gather(*pending)
 
 
 @pytest.mark.asyncio
@@ -431,9 +431,11 @@ async def test_sheets_and_brain_ingest_use_spawn_background(temp_db, monkeypatch
     monkeypatch.setattr(gc_module, "generate", AsyncMock(return_value=_GEMINI_RESPONSE))
 
     import src.brain as brain_module
-    monkeypatch.setattr(brain_module, "ingest_links", AsyncMock())
+    ingest_links = AsyncMock()
+    monkeypatch.setattr(brain_module, "ingest_links", ingest_links)
     from src.services import sheets
-    monkeypatch.setattr(sheets, "append_article_row", AsyncMock())
+    append_article_row = AsyncMock(return_value=None)
+    monkeypatch.setattr(sheets, "append_article_row", append_article_row)
 
     spy = MagicMock(wraps=background_tasks.spawn_background)
     monkeypatch.setattr(article, "spawn_background", spy)
@@ -442,3 +444,7 @@ async def test_sheets_and_brain_ingest_use_spawn_background(temp_db, monkeypatch
     await _drain_background_tasks()
 
     assert spy.call_count == 2  # sheets write + brain ingest
+    append_article_row.assert_awaited_once_with(job, domain="substack.com")
+    ingest_links.assert_awaited_once_with(
+        [{"url": url}], topic="async Python", source_job_id=job["id"]
+    )
