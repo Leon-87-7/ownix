@@ -117,10 +117,10 @@ ever).
   - Build command: `npm run build`
   - Output directory: `build/`
 - Initial deploy target is the Cloudflare Pages auto-generated
-  `*.pages.dev` subdomain. A custom domain (e.g. `docs.ownix.app`) is
-  attached via Cloudflare DNS once a domain is chosen/registered — domain
-  selection is a user decision outside this spec's scope, not a blocker
-  for standing up the site.
+  `*.pages.dev` subdomain. Custom domain: `docs.leondev.xyz`, matching the
+  existing `app.leondev.xyz` (dashboard) / `api.leondev.xyz` (API tunnel)
+  subdomain convention — attached via Cloudflare DNS once the Pages project
+  exists.
 - `onBrokenLinks: 'throw'` set in `docusaurus.config.ts` is the build-time
   safety net for broken internal links/anchors — no separate link-check CI
   job is needed for a site this size.
