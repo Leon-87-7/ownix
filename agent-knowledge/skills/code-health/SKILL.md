@@ -1,5 +1,6 @@
 ---
 name: code-health
+disable-model-invocation: true
 description: Use when running a periodic codebase health check, when pyscn or fallow report a failing gate (complexity, duplication, dead code, architecture, CRAP), or before merging a refactor that must keep static-analysis green. Covers this repo's Python source and the web/ Next.js dashboard.
 ---
 
@@ -11,6 +12,7 @@ Two analyzers gate this repo: **pyscn** (Python — `src/`, `transcript_server.p
 
 1. **Confirm baselines are green first**: `python -m pytest -q` and (`cd web && npx vitest run && npx tsc --noEmit`). A red baseline means stop and report — don't refactor on top of an already-broken build.
 2. **Run both analyzers fresh.** Never reuse a cached `.pyscn/reports/` file — it goes stale silently.
+
    ```bash
    # Python — from repo root, production paths ONLY (the config's exclude_patterns
    # are NOT honored by the CLI — passing "." silently re-includes tests/ and scripts/)
@@ -23,18 +25,20 @@ Two analyzers gate this repo: **pyscn** (Python — `src/`, `transcript_server.p
    rtk proxy npx fallow health --coverage coverage/coverage-final.json  # exact CRAP scores
    # (fallow ≥2.93: --coverage exists only on the `health` subcommand, not top-level)
    ```
+
    If a bare `npx`/`uvx` call errors with "Missing script" or "Unknown command", the rtk hook mangled it — wrap with `rtk proxy` as above.
+
 3. **Triage every finding** against this table before touching anything; list signal items with file:line, skip noise.
 
-   | Finding | Verdict | Action |
-   |---|---|---|
-   | pyscn "unknown layer" / strict_mode warnings | Config gap, not code | Edit `.pyscn.toml` `[[architecture.layers]]` (keyword package lists — there is no "entry" layer; `main` belongs to `presentation`) |
-   | pyscn clone groups in `tests/` | Excluded by config | If they reappear, fix `exclude_patterns` in `.pyscn.toml` — never hand-dedupe tests |
-   | fallow CRAP ≈ 30 with low CC | Missing coverage, not complexity | Add hook/component tests, re-run with `--coverage` |
-   | pyscn clones in `src/` ≥ 0.85 similarity | Real | Extract shared helper |
-   | Production functions CC ≥ 10 | Real | Stage-split into helpers (CC < 5 drops out of the score denominator) |
-   | fallow unused exports | Real (verify with `tsc --noEmit` after) | Strip `export` keyword; keep symbol |
-   | fallow unused deps that are peer-deps (e.g. `@milkdown/*`) | False positive | Ignore in fallow config, do not uninstall |
+   | Finding                                                    | Verdict                                 | Action                                                                                                                             |
+   | ---------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+   | pyscn "unknown layer" / strict_mode warnings               | Config gap, not code                    | Edit `.pyscn.toml` `[[architecture.layers]]` (keyword package lists — there is no "entry" layer; `main` belongs to `presentation`) |
+   | pyscn clone groups in `tests/`                             | Excluded by config                      | If they reappear, fix `exclude_patterns` in `.pyscn.toml` — never hand-dedupe tests                                                |
+   | fallow CRAP ≈ 30 with low CC                               | Missing coverage, not complexity        | Add hook/component tests, re-run with `--coverage`                                                                                 |
+   | pyscn clones in `src/` ≥ 0.85 similarity                   | Real                                    | Extract shared helper                                                                                                              |
+   | Production functions CC ≥ 10                               | Real                                    | Stage-split into helpers (CC < 5 drops out of the score denominator)                                                               |
+   | fallow unused exports                                      | Real (verify with `tsc --noEmit` after) | Strip `export` keyword; keep symbol                                                                                                |
+   | fallow unused deps that are peer-deps (e.g. `@milkdown/*`) | False positive                          | Ignore in fallow config, do not uninstall                                                                                          |
 
 4. **Before proposing any fix, read `docs/superpowers/plans/2026-06-11-static-analysis-green.md`** — it has tested recipes for this exact codebase (helper extractions, stage splits, the `.pyscn.toml` schema, characterization-test patterns). Reuse them; don't re-derive.
 5. **Fix signal in priority order** (score impact ÷ effort), one commit per fix, under the constraints below.
