@@ -38,7 +38,7 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 ## 3. Extracted-links table in the Brain page ✅ ISSUED TO GITHUB #238 - ✅DONE
 
-## 4. Dashboard URL submission — a second ingest surface
+## 4. Dashboard URL submission — a second ingest surface ✅ DONE
 
 > **Grilled together with task 9** on 2026-07-04. Both add a new caller of the
 > shared job-creation core: task 4 from the web surface, task 9 from the
@@ -92,7 +92,7 @@ and `/freestyle`).
 
 ## 7. Better navigation for the Brain "Links" table ✅ ISSUED TO GITHUB #306 - ✅DONE
 
-## 8. Controls UI on the Brain search graph
+## 8. Controls UI on the Brain search graph ✅DONE
 
 > **Grill:** `/grilling` — pure product/UX; the ForceGraph ref methods are
 > already pinned in the brief.
@@ -121,7 +121,7 @@ filtering).
 - Touch/mobile gestures alongside buttons?
 - Is a fullscreen/expand mode wanted?
 
-## 9. Offer extracted GitHub repos as a follow-up repo analysis
+## 9. Offer extracted GitHub repos as a follow-up repo analysis ✅DONE
 
 > **Grilled together with task 4** on 2026-07-04. This is a third caller of the
 > shared job-creation core (alongside the Telegram webhook and task 4's web
@@ -545,7 +545,7 @@ message_id=...)` (`webhook.py:762`). No new processor, no `Pipeline` extension n
 > contract once.
 >
 > **Endpoint contract settled 2026-07-27 in task 33's grill** — `DELETE
-> /api/jobs/{job_id}` → 204, hard delete (job row + cascades; preserve `links`
+/api/jobs/{job_id}` → 204, hard delete (job row + cascades; preserve `links`
 > unless `?with_links=1` explicitly requests de-indexing), cloud artifacts purged asynchronously via a `job_purge` envelope,
 > allowed from any status. See ADR-0042. Two carry-overs for this task: the
 > reusable `web/components/ui/confirm-dialog.tsx` it introduces (reuse it for
@@ -1066,7 +1066,7 @@ tier) and leaves the page.
 - Ownership via `get_owned_job`; `204` matches the existing
   `@spaces_router.delete(..., status_code=204)` precedent (`src/api/spaces.py:129`).
 - Synchronous half: capture the job's artifact refs, then `DELETE FROM jobs
-  WHERE id = ?` (five tables cascade). Preserve Brain `links` by default; only
+WHERE id = ?` (five tables cascade). Preserve Brain `links` by default; only
   run `DELETE FROM links WHERE source_job = ?` when the request includes the
   explicit `?with_links=1` opt-in.
 - Asynchronous half: enqueue a `job_purge` task envelope **carrying those refs**
@@ -1402,7 +1402,7 @@ makes — worth its own Inbox entry.
 `long_video.py:121-124`) — only `SHORT_FIELDS` renders it. Telegram's "✨ Run Gemini"
 gate (ADR-0012's enrichment confirmation gate + template picker keyboard) has no
 dashboard equivalent: `POST /api/jobs` only creates new jobs, and nothing triggers
-enrichment on an *existing* job from the web. The gate is structurally long-pipeline-only
+enrichment on an _existing_ job from the web. The gate is structurally long-pipeline-only
 already — `short_video.py` never sets `status='transcript_done'` (it jumps
 `processing → done`, auto-enriching inline), so short/article/repo jobs never reach the
 state Run Gemini requires.
@@ -1431,7 +1431,7 @@ and enqueues enrichment on the existing job.
   `_cb_template_pick` already uses (`webhook.py:281`). If enqueueing fails, restore
   `transcript_done` so the user can retry. No changes to `enrichment.py` itself. See
   **ADR-0050** for why this is queued rather than called synchronously the way `POST
-  /api/jobs/{id}/checklists` calls `run_checklists()`.
+/api/jobs/{id}/checklists` calls `run_checklists()`.
 - Recipe options: the same 5 built-ins + Freestyle Telegram offers (`_cb_gemini_yes`,
   `webhook.py:219-260`) — **not** the full `/api/templates` list. Confirmed in grill:
   custom recipes ("Your recipes" on the Prompts page, `is_builtin=false`) are not a
