@@ -648,7 +648,7 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           label="Download transcript"
         />
       </div>
-      <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
         {transcript}
       </pre>
     </article>

@@ -200,7 +200,7 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
       >
         {liveMessage}
       </span>
-      <pre className="max-h-44 overflow-auto whitespace-pre-wrap rounded bg-canvas p-3 font-mono text-xs text-body">
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
         {output.preview}
       </pre>
     </article>
