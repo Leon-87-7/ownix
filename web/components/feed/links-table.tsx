@@ -8,6 +8,8 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TagMark, TagMenu } from '@/components/ui/tag-picker';
 import PreviewMotif from '@/components/ui/preview-motif';
+import { SimpleErrorBanner } from '@/components/ui/simple-error-banner';
+import { safeUrl } from '@/lib/url-utils';
 import { useLinkTags } from '@/lib/hooks/useLinkTags';
 import {
   LINKS_PAGE_SIZES,
@@ -18,24 +20,6 @@ import {
   type UseLinksTableResult,
 } from '@/lib/hooks/useLinksTable';
 
-function LinksErrorBanner({ message }: { message: string }) {
-  return (
-    <p className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
-      {message}
-    </p>
-  );
-}
-
-function safeUrl(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      ? url
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
 /** Trimmed URL (CONTEXT.md): pathname + query, scheme and host dropped — the
  * favicon carries the domain. Root-domain links show the hostname and query,
  * since a favicon alone can't identify an unknown site. */
@@ -619,7 +603,7 @@ export function LinksTable({
         </p>
       </div>
 
-      {state === 'error' && <LinksErrorBanner message={message} />}
+      {state === 'error' && <SimpleErrorBanner message={message} />}
 
       {/* Same 639px breakpoint as the table's `hidden sm:flex` below — CSS gates both. */}
       <div className="space-y-2 sm:hidden">

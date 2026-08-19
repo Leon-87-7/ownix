@@ -16,6 +16,28 @@ const navItems: Array<{
   { href: '/terms', label: 'Terms', page: 'terms' },
 ];
 
+function PublicNavLink({
+  item,
+  current,
+}: {
+  item: { href: string; label: string };
+  current: boolean;
+}) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={current ? 'page' : undefined}
+      className={`rounded-md px-3 py-2 text-sm font-medium transition-ui ${focusRing} ${
+        current
+          ? 'bg-raised text-signal'
+          : 'text-body hover:bg-raised hover:text-ink'
+      }`}
+    >
+      {item.label}
+    </Link>
+  );
+}
+
 export function PublicShell({
   active,
   children,
@@ -46,23 +68,13 @@ export function PublicShell({
             className="flex items-center gap-1"
             aria-label="Public"
           >
-            {navItems.map((item) => {
-              const current = active === item.page;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={current ? 'page' : undefined}
-                  className={`rounded-md px-3 py-2 text-sm font-medium transition-ui ${focusRing} ${
-                    current
-                      ? 'bg-raised text-signal'
-                      : 'text-body hover:bg-raised hover:text-ink'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+            {navItems.map((item) => (
+              <PublicNavLink
+                key={item.href}
+                item={item}
+                current={active === item.page}
+              />
+            ))}
             <Link
               href="/login"
               className={`ml-1 inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui duration-200 hover:bg-signal-deep hover:text-onsignal ${focusRing}`}
@@ -98,23 +110,13 @@ export function LegalLayout({
           className="mt-3 flex flex-col gap-1"
           aria-label="Legal documents"
         >
-          {navItems.map((item) => {
-            const current = active === item.page;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={current ? 'page' : undefined}
-                className={`rounded-md px-3 py-2 text-sm font-medium transition-ui ${focusRing} ${
-                  current
-                    ? 'bg-raised text-signal'
-                    : 'text-body hover:bg-raised hover:text-ink'
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+          {navItems.map((item) => (
+            <PublicNavLink
+              key={item.href}
+              item={item}
+              current={active === item.page}
+            />
+          ))}
         </nav>
         <p className="mt-6 text-sm leading-6 text-muted">
           Public terms for Ownix, your personal Index, the shared
