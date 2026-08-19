@@ -66,7 +66,7 @@ export default function SpaceDetailPage() {
 
   if (fetchState === "loading") {
     return (
-      <PageShell width="narrow">
+      <PageShell>
         <div className="space-y-3">
           <SkeletonBlock className="h-8 w-32" />
           <SkeletonBlock className="h-40" />

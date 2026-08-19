@@ -42,7 +42,11 @@ function setupMocks(overrides: Partial<ReturnType<typeof useSpaceUrls>> = {}) {
   } as ReturnType<typeof useSpaceUrls>);
 }
 
-beforeEach(() => { setupMocks(); });
+beforeEach(() => {
+  // Restore first — restoring after setupMocks would wipe its mockReturnValues.
+  vi.restoreAllMocks();
+  setupMocks();
+});
 
 describe('UrlsTab', () => {
   it('shows loading skeleton when loading', () => {

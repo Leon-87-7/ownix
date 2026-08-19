@@ -43,11 +43,15 @@ export function useSpaceUrls(spaceId: string) {
   }, [fetchUrls, fetchAllJobs]);
 
   const addJob = useCallback(async (jobId: string) => {
-    await fetch(`/api/spaces/${spaceId}/urls`, {
+    const res = await fetch(`/api/spaces/${spaceId}/urls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_id: jobId }),
     });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(data.detail || 'Could not add this URL.');
+    }
     await fetchUrls();
   }, [spaceId, fetchUrls]);
 

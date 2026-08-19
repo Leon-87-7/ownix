@@ -13,7 +13,7 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
   const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } =
     useSpaceUrls(spaceId);
   const { query, setQuery, results } = useAddSearch(allJobs);
-  const [busyUrl, setBusyUrl] = useState<string | null>(null);
+  const [busyUrls, setBusyUrls] = useState<Set<string>>(new Set());
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const pinnedIds = new Set(spaceUrls.map((u) => u.id));
   const visibleResults = results.filter(
@@ -21,7 +21,7 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
   );
 
   const handleResult = async (result: AddSearchResult) => {
-    setBusyUrl(result.url);
+    setBusyUrls((current) => new Set(current).add(result.url));
     setRowErrors((current) => ({ ...current, [result.url]: "" }));
     try {
       let jobId = result.jobId;
@@ -48,7 +48,11 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
           error instanceof Error ? error.message : "Could not add this URL.",
       }));
     } finally {
-      setBusyUrl(null);
+      setBusyUrls((current) => {
+        const next = new Set(current);
+        next.delete(result.url);
+        return next;
+      });
     }
   };
 
@@ -124,10 +128,10 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
                   <button
                     type="button"
                     onClick={() => handleResult(result)}
-                    disabled={busyUrl === result.url}
+                    disabled={busyUrls.has(result.url)}
                     className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal disabled:bg-surface disabled:text-muted"
                   >
-                    {busyUrl === result.url
+                    {busyUrls.has(result.url)
                       ? "Adding…"
                       : result.jobId
                         ? "Add"

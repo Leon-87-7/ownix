@@ -6,6 +6,12 @@ import { Trash2 } from "lucide-react";
 import { spaceIcon } from "@/lib/space-icons";
 import { DateTime } from "@/components/ui/date-time";
 
+// SQLite's CURRENT_TIMESTAMP has no timezone marker; without one, Date parses it
+// as local time instead of UTC. Mark it explicitly so DateTime shows the right instant.
+function asUtcIso(raw: string): string {
+  return /[Zz]|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw.replace(" ", "T")}Z`;
+}
+
 export interface SpaceSummary {
   id: string;
   name: string;
@@ -113,7 +119,7 @@ export function SpaceCard({
               {space.first_note.truncated ? "…" : ""}
             </p>
             <span className="font-mono text-mono-label text-muted">
-              Updated <DateTime iso={space.first_note.updated_at} />
+              Updated <DateTime iso={asUtcIso(space.first_note.updated_at)} />
             </span>
           </>
         ) : (

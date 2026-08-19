@@ -18,4 +18,8 @@ describe('SpaceCard', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/spaces/s1');
     expect(screen.getByRole('button', { name: 'Delete Research' })).toBeInTheDocument();
   });
+  it('treats a timezone-less SQLite timestamp as UTC', () => {
+    const { container } = render(<SpaceCard space={{ ...base, first_note: { name: 'Brief', snippet: 'Preview', updated_at: '2024-01-01 00:00:00' } }} />);
+    expect(container.querySelector('time')).toHaveAttribute('dateTime', '2024-01-01T00:00:00Z');
+  });
 });

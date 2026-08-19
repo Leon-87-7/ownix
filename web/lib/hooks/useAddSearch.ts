@@ -39,6 +39,18 @@ export function mergeAddSearchResults(
   return [...merged.values()];
 }
 
+async function parseHits<T>(
+  result: PromiseSettledResult<Response>,
+  extract: (data: unknown) => T[],
+): Promise<T[]> {
+  if (result.status !== "fulfilled" || !result.value.ok) return [];
+  try {
+    return extract(await result.value.json());
+  } catch {
+    return [];
+  }
+}
+
 export function useAddSearch(jobs: JobSummary[]) {
   const { query, setQuery, displayedJobs } = useFuseSearch(jobs);
   const [links, setLinks] = useState<RemoteHit[]>([]);
@@ -58,13 +70,11 @@ export function useAddSearch(jobs: JobSummary[]) {
         fetch(`/api/brain/links?q=${encoded}`, { signal: controller.signal }),
         fetch(`/api/brain/search?q=${encoded}`, { signal: controller.signal }),
       ]);
-      if (linksResult.status === "fulfilled" && linksResult.value.ok) {
-        const data = (await linksResult.value.json()) as { items: RemoteHit[] };
-        setLinks(data.items);
-      } else setLinks([]);
-      if (brainResult.status === "fulfilled" && brainResult.value.ok) {
-        setBrain((await brainResult.value.json()) as RemoteHit[]);
-      } else setBrain([]);
+      const nextLinks = await parseHits(linksResult, (data) => (data as { items: RemoteHit[] }).items);
+      const nextBrain = await parseHits(brainResult, (data) => data as RemoteHit[]);
+      if (controller.signal.aborted) return;
+      setLinks(nextLinks);
+      setBrain(nextBrain);
     }, 250);
     return () => {
       clearTimeout(timer);
