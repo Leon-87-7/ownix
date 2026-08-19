@@ -6,8 +6,8 @@ import type { JobSummary } from "@/components/feed/job-card";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
 import { NoPreviewRing } from "@/components/ui/no-preview-ring";
-import { OwnixShareIcon } from "@/components/svg/ownix-share-icon";
-import { buildJobHref, isSafeHttpUrl } from "@/lib/job-detail-utils";
+import { ShareLinkButton } from "@/components/ui/share-link-button";
+import { buildJobHref } from "@/lib/job-detail-utils";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
 // - default: fixed aspect thumbnail (9:16 portrait / 16:9 landscape), full meta.
@@ -16,7 +16,7 @@ import { buildJobHref, isSafeHttpUrl } from "@/lib/job-detail-utils";
 //            the grid collapses to one column and spans are off.
 // - compact: Short grid at 5-up — uncropped 9:16, status badge dropped
 //            (status lives in the filter pills, list view, and detail page).
-export type PreviewCardVariant = "default" | "bento" | "compact";
+type PreviewCardVariant = "default" | "bento" | "compact";
 
 interface PreviewCardProps {
   job: JobSummary;
@@ -152,21 +152,7 @@ export function PreviewCard({
             >
               {titleText}
             </p>
-            {job.content_type === "link" && isSafeHttpUrl(job.url) && (
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(event) => event.stopPropagation()}
-                aria-label={`Open ${job.url} in a new tab`}
-                className="pointer-events-auto relative z-10 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted transition-ui hover:text-signal"
-              >
-                <OwnixShareIcon
-                  className="h-3.5 w-3.5"
-                  aria-hidden="true"
-                />
-              </a>
-            )}
+            {job.content_type === "link" && <ShareLinkButton url={job.url} />}
           </span>
           {!compact && (
             <span className="shrink-0">

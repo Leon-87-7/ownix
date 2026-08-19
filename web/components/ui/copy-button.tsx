@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
 
 export function CopyButton({
   value,
@@ -13,24 +13,11 @@ export function CopyButton({
   ariaLabel: string;
   label?: string;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {}
-  };
+  const { copied, copy } = useCopyFeedback(value);
   return (
     <Tooltip content={ariaLabel}>
       <button
-        onClick={handleCopy}
+        onClick={copy}
         aria-label={ariaLabel}
         className="inline-flex items-center gap-1.5 rounded border border-line px-2 py-1 text-xs font-medium text-muted transition-ui hover:border-line-strong hover:bg-raised hover:text-ink"
       >

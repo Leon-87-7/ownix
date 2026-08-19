@@ -26,7 +26,7 @@ export interface IntakeResponseShape {
 }
 
 /** Absolute http(s) URL only — anything else (a note, a slash command) goes as `text`. */
-export function looksLikeUrl(value: string): boolean {
+function looksLikeUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
@@ -35,7 +35,7 @@ export function looksLikeUrl(value: string): boolean {
   }
 }
 
-export async function submitIntakeMessage(
+async function submitIntakeMessage(
   body: { text?: string; url?: string },
   idempotencyKey: string = crypto.randomUUID(),
 ): Promise<IntakeResponseShape> {

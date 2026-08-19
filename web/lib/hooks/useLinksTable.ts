@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export type LinkTag = { id: string; name: string; color: string; meaning: string; icon?: string | null };
 
-export type LinkPreview = {
+type LinkPreview = {
   id: string;
   og_image_url?: string | null;
 };

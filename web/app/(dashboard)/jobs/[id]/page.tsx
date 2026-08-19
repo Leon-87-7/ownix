@@ -39,6 +39,7 @@ import {
   downloadMarkdownFile,
 } from '@/lib/job-detail-utils';
 import { useChecklists } from '@/lib/hooks/useChecklists';
+import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
 import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -579,20 +580,7 @@ function CardCopyButton({
   value: string;
   label: string;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-    } catch {}
-  };
+  const { copied, copy } = useCopyFeedback(value);
 
   return (
     <Tooltip content={copied ? 'Copied' : label}>

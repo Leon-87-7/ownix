@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { PRESET_COLORS, TAG_ICON_NAMES } from '@/components/ui/tag-picker';
 import { apiPost } from '@/lib/fetch-utils';
 
-export interface FolderAssignment {
+interface FolderAssignment {
   topic: string;
   linkIds: string[];
   count: number;

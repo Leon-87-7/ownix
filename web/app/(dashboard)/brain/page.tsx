@@ -6,6 +6,8 @@ import { BrainGraph } from "@/components/brain/brain-graph";
 import { useSemanticSearch } from "@/lib/hooks/useSemanticSearch";
 import type { BrainResult } from "@/lib/hooks/useSemanticSearch";
 import { PageShell, PageHeader } from "@/components/shell/page-shell";
+import { SimpleErrorBanner } from "@/components/ui/simple-error-banner";
+import { safeUrl } from "@/lib/url-utils";
 
 function IdleBanner() {
   return (
@@ -25,25 +27,6 @@ function EmptyBanner() {
       No results found. Try a different query or add more videos to your Brain.
     </p>
   );
-}
-
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <p className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
-      {message}
-    </p>
-  );
-}
-
-function safeUrl(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:"
-      ? url
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function ResultRow({ result }: { result: BrainResult }) {
@@ -154,7 +137,7 @@ export default function BrainPage() {
       <BrainGraph results={results} searchState={searchState} />
 
       {searchState === "idle" && <IdleBanner />}
-      {searchState === "error" && <ErrorBanner message={errorMessage} />}
+      {searchState === "error" && <SimpleErrorBanner message={errorMessage} />}
       {searchState === "empty" && <EmptyBanner />}
       {searchState === "results" && (
         <section>
