@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -293,6 +293,22 @@ async def test_freestyle_rerun_updates_sheet_row_not_append(patched):
     m["update_document_row"].assert_awaited_once()
     assert m["update_document_row"].call_args.args[0] == 42  # int(row_id)
     m["append_document_row"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sheets_task_uses_spawn_background(patched, monkeypatch):
+    """The Sheets write must go through spawn_background — a bare asyncio.create_task()
+    discards its reference and swallows failures silently (architecture review 2026-08-19)."""
+    document, _ = patched
+    from src.utils import background_tasks
+
+    spy = MagicMock(wraps=background_tasks.spawn_background)
+    monkeypatch.setattr(document, "spawn_background", spy)
+
+    await document.run(_job())
+    await _drain_background_tasks()
+
+    spy.assert_called_once()
 
 
 def test_document_row_columns_from_template_analysis():

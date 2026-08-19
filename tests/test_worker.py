@@ -100,6 +100,26 @@ async def test_dispatch_skips_envelope_when_job_is_gone(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_enrichment_failure_resets_status_to_error(monkeypatch) -> None:
+    """Regression: an unexpected (non-EnrichmentUnavailableError) failure must not
+    leave the job stuck in 'enriching' forever — _handle_enrichment used to hand-roll
+    its own except block and skip the status reset entirely (architecture review 2026-08-19)."""
+    job = {"id": "job-1", "chat_id": 1, "status": "enriching"}
+    monkeypatch.setattr(worker.database, "get_job", AsyncMock(return_value=job))
+    update = AsyncMock()
+    monkeypatch.setattr(worker.database, "update_job_status", update)
+    monkeypatch.setattr(worker, "_notify_failure", AsyncMock())
+
+    from src.processors import enrichment
+
+    monkeypatch.setattr(enrichment, "run", AsyncMock(side_effect=RuntimeError("boom")))
+
+    await worker._handle_enrichment({"job_id": "job-1"})
+
+    update.assert_awaited_once_with("job-1", "error")
+
+
+@pytest.mark.asyncio
 async def test_dispatch_does_not_skip_rowless_job_purge(monkeypatch) -> None:
     called = False
 

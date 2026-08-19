@@ -12,6 +12,7 @@ from src.utils.logger import get_logger
 from src.services.github import enrich_github_links
 from src.utils.markdown import build_enriched_links_message, build_transcript_markdown
 from src.utils import dashboard_button_row, job_tag
+from src.utils.background_tasks import spawn_background
 from src.utils.validators import extract_description_links, slugify
 from src.services.repo_followup import offer_repo_followups
 
@@ -164,7 +165,7 @@ async def run(job: dict) -> None:
 
     # 7. Sheets logging (fire-and-forget)
     refreshed = await database.get_job(job_id) or job
-    asyncio.create_task(
+    spawn_background(
         sheets.append_long_row(
             refreshed,
             video_id=video_id,
@@ -178,6 +179,6 @@ async def run(job: dict) -> None:
 
     if description_links and settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         from src import brain
-        asyncio.create_task(brain.ingest_links(description_links, topic=title, source_job_id=job_id))
+        spawn_background(brain.ingest_links(description_links, topic=title, source_job_id=job_id))
 
     log.info("long_video_phase1_complete", job_id=job_id)

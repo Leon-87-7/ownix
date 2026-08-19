@@ -49,20 +49,6 @@ async def _notify_failure(chat_id: int, job_id: str, text: str) -> None:
         pass
 
 
-async def _handle_enrichment(task: dict) -> None:
-    job_id = task["job_id"]
-    job = await _load_job_or_log(job_id)
-    if not job:
-        return
-    try:
-        from src.processors import enrichment
-
-        await enrichment.run(job_id)
-    except Exception:
-        log.exception("enrichment_processor_error", job_id=job_id)
-        await _notify_failure(job["chat_id"], job_id, "❌ Enrichment failed. Please try again.")
-
-
 async def _maybe_auto_enqueue_enrichment(job: dict, job_id: str) -> None:
     """After a long-video run with an explicit template, chain the enrichment task."""
     if job.get("template_detection_method") != "explicit_command":
@@ -135,13 +121,23 @@ _PROCESSOR_MODULES = {
     "repo": "src.processors.repo",
     "document": "src.processors.document",
     "link": "src.processors.link",
+    "enrichment": "src.processors.enrichment",
 }
 
 
 def _make_handler(
-    module_name: str, error_event: str, error_message: str, *, pass_skip_document: bool = False
+    module_name: str,
+    error_event: str,
+    error_message: str,
+    *,
+    pass_skip_document: bool = False,
+    pass_job_id: bool = False,
 ):
-    """Build a task handler: load job → processor.run(job) → error status + notify on failure."""
+    """Build a task handler: load job → processor.run(...) → error status + notify on failure.
+
+    processor.run's call shape is picked by exactly one of the flags below —
+    most processors take the job dict, enrichment.run takes just the job_id.
+    """
     dotted_path = _PROCESSOR_MODULES[module_name]
 
     async def handler(task: dict) -> None:
@@ -151,7 +147,9 @@ def _make_handler(
             return
         try:
             processor = importlib.import_module(dotted_path)
-            if pass_skip_document:
+            if pass_job_id:
+                await processor.run(job_id)
+            elif pass_skip_document:
                 await processor.run(job, skip_document=task.get("skip_document", False))
             else:
                 await processor.run(job)
@@ -180,6 +178,12 @@ _handle_document = _make_handler(
 )
 _handle_link = _make_handler(
     "link", "link_processor_error", "❌ Link pipeline failed. Please try again."
+)
+_handle_enrichment = _make_handler(
+    "enrichment",
+    "enrichment_processor_error",
+    "❌ Enrichment failed. Please try again.",
+    pass_job_id=True,
 )
 
 

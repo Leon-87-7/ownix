@@ -97,7 +97,7 @@ async def _validate_public_https_url(url: str) -> str | None:
 
 def _int_or_none(value: object) -> int | None:
     try:
-        return int(value)
+        return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
 
@@ -606,7 +606,7 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if pipeline_preview == "repo":
         await send_message(
             ctx.chat_id,
-            "ℹ️ `/freestyle` doesn't apply to repo URLs yet\nRuning standard analysis.",
+            "Info: `/freestyle` doesn't apply to repo URLs yet\nRunning standard analysis.",
         )
         repo_url = normalize_repo_url(url)
         cached = await database.find_recent_job_by_url(ctx.chat_id, repo_url)
@@ -624,11 +624,28 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
             "and allowlisted article domains.",
         )
     elif pipeline_preview == "repo":
+        if not resp.job_id:
+            log.error(
+                "freestyle.repo.missing_job_id",
+                chat_id=ctx.chat_id,
+                response_kind=resp.kind,
+            )
+            await send_message(ctx.chat_id, "❌ Could not create the repo job. Please try again.")
+            return
         await send_message(ctx.chat_id, f"📥 Received!\njob_{resp.job_id[-4:]}")
     else:
         # long/article/short/document/unsized — every pipeline that reaches
         # `freestyle_command`'s state-arming tail gets the same force-reply;
         # long and article additionally get a head-start message.
+        if not resp.job_id:
+            log.error(
+                "freestyle.url.missing_job_id",
+                chat_id=ctx.chat_id,
+                response_kind=resp.kind,
+                pipeline=pipeline_preview,
+            )
+            await send_message(ctx.chat_id, "❌ Could not create that job. Please try again.")
+            return
         if pipeline_preview == "long":
             await send_message(
                 ctx.chat_id,
@@ -1554,10 +1571,34 @@ async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: in
 
     result = await intake_commands.user_template_shortcut(chat_id, text, message_id=message_id)
     if result.kind == "job_deduped":
+        if not result.job_id:
+            log.error(
+                "user_template_shortcut.deduped_missing_job_id",
+                chat_id=chat_id,
+                response_kind=result.kind,
+            )
+            await send_message(chat_id, "❌ Could not find that saved job. Please try again.")
+            return True
         job = await database.get_job(result.job_id)
+        if job is None:
+            log.error(
+                "user_template_shortcut.deduped_job_missing",
+                chat_id=chat_id,
+                job_id=result.job_id,
+            )
+            await send_message(chat_id, "❌ Could not find that saved job. Please try again.")
+            return True
         await _reply_cached_job(chat_id, job)
         return True
     if result.kind == "job_created":
+        if not result.job_id:
+            log.error(
+                "user_template_shortcut.created_missing_job_id",
+                chat_id=chat_id,
+                response_kind=result.kind,
+            )
+            await send_message(chat_id, "❌ Could not create that job. Please try again.")
+            return True
         job_id = result.job_id
         tmpl_name = text.split()[0][1:].lower()
         await send_message(
@@ -1880,7 +1921,7 @@ async def _ops_cb_approve_pending(
 ) -> None:
     count = await ops_bot.approve_pending_batch(payload)
     await ops_bot.answer_ops_callback(cq_id, f"Approved {count}")
-    if message_id:
+    if message_id and chat_id:
         await ops_bot.edit_ops_reply_markup(
             int(chat_id),
             int(message_id),
@@ -1892,7 +1933,7 @@ async def _ops_cb_approve_pending_cancel(
     cq_id: str, chat_id: int | None, message_id: int | None
 ) -> None:
     await ops_bot.answer_ops_callback(cq_id, "Canceled")
-    if message_id:
+    if message_id and chat_id:
         await ops_bot.edit_ops_reply_markup(int(chat_id), int(message_id), [])
 
 
@@ -1954,7 +1995,7 @@ async def ops_webhook(
     chat_id = _int_or_none((message.get("chat") or {}).get("id"))
     sender_id = _int_or_none((message.get("from") or {}).get("id"))
     message_id = _int_or_none(message.get("message_id"))
-    text = (message.get("text") or "").strip()
+    text: str = (message.get("text") or "").strip()
     if chat_id and sender_id and text.startswith("/"):
         parts: list[str] = text.split()
         await ops_bot.handle_command(ops_bot.OpsCtx(chat_id, sender_id, parts, message_id))

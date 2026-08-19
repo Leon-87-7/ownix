@@ -1,6 +1,7 @@
 """Tests for the long-video Phase 1 pipeline (issue #3)."""
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -236,3 +237,47 @@ async def test_transcript_error_continues() -> None:
     ):
         job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/watch?v=x"}
         await long_video.run(job)  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_sheets_and_brain_ingest_use_spawn_background(monkeypatch) -> None:
+    """The Sheets log and Brain ingest must go through spawn_background — a bare
+    asyncio.create_task() discards its reference and swallows failures silently
+    (architecture review 2026-08-19)."""
+    from src.processors import long_video
+    from src.utils import background_tasks
+
+    links = [{"url": "https://example.com/resource", "label": "Resource"}]
+    monkeypatch.setattr(long_video.settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "brain-folder")
+
+    spy = MagicMock(wraps=background_tasks.spawn_background)
+    monkeypatch.setattr(long_video, "spawn_background", spy)
+
+    with (
+        patch("src.processors.long_video.database.update_job_status", new_callable=AsyncMock),
+        patch("src.processors.long_video.database.get_job", new_callable=AsyncMock,
+              return_value={"id": "job1", "url": "https://youtube.com/watch?v=x", "chat_id": 42}),
+        patch("src.processors.long_video.send_message", new_callable=AsyncMock,
+              return_value={"message_id": 999}),
+        patch("src.processors.long_video.edit_message_text", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_document", new_callable=AsyncMock, return_value={}),
+        patch("src.processors.long_video.send_inline_keyboard", new_callable=AsyncMock),
+        patch("src.processors.long_video.transcript_svc.fetch_transcript", new_callable=AsyncMock,
+              return_value={"videoId": "v1", "text": "transcript text"}),
+        patch("src.processors.long_video.transcript_svc.fetch_metadata", new_callable=AsyncMock,
+              return_value={"title": "T", "channel": "C", "views": "100", "description": "desc"}),
+        patch("src.processors.long_video._collect_description_links", new_callable=AsyncMock,
+              return_value=links),
+        patch("src.processors.long_video.upload_file", new_callable=AsyncMock,
+              return_value=("fid", "https://drive.google.com/x")),
+        patch("src.processors.long_video.sheets.append_long_row", new_callable=AsyncMock),
+        patch("src.brain.ingest_links", new_callable=AsyncMock),
+    ):
+        job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/watch?v=x"}
+        await long_video.run(job)
+
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    assert spy.call_count == 2  # sheets append + brain ingest

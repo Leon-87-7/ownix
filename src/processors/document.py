@@ -6,7 +6,6 @@ promise_gap ("documents don't pitch", same as repos).
 """
 from __future__ import annotations
 
-import asyncio
 import html
 import json
 from datetime import datetime, timezone
@@ -17,6 +16,7 @@ from src.services.parse import ParseError, parse_document
 from src.telegram.sender import send_document, send_inline_keyboard, send_message
 from src.services.gemini import extract_json
 from src.utils import dashboard_button_row, job_tag
+from src.utils.background_tasks import spawn_background
 from src.utils.logger import get_logger
 from src.utils.markdown import format_tool_line
 from src.utils.validators import sanitize_filename_chars
@@ -267,7 +267,7 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
                     )
                     await conn.commit()
 
-    asyncio.create_task(_sheets_task())
+    spawn_background(_sheets_task())
 
     if deliver:
         await _deliver(refreshed or job, text, tools, references)
