@@ -60,11 +60,11 @@ packages = ["api", "main", "transcript_server"]
 
 [[architecture.layers]]
 name = "application"
-packages = ["processors", "brain", "worker", "templates", "analysis"]
+packages = ["processors", "brain", "worker", "templates", "analysis", "intake"]
 
 [[architecture.layers]]
 name = "infrastructure"
-packages = ["telegram", "services", "database", "queue", "config", "utils", "auth"]
+packages = ["telegram", "services", "database", "queue", "config", "utils", "auth", "channels"]
 
 [[architecture.rules]]
 from = "presentation"
