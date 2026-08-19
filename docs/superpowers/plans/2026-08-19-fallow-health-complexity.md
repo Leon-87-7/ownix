@@ -10,13 +10,15 @@ without changing rendered markup/classes or observable behavior.
 
 **Status of the other two fallow gates (already green, don't re-touch without
 reason):** `dead-code` 0 issues, `dupes` 2 of 6 groups remaining (deliberately
-left — see "Deferred, not forgotten" below). pyscn (Python side) is green,
-Health 85/B, no action needed there.
+left — see "Deferred, not forgotten" below). pyscn (Python side) Health 85/B
+(threshold pass ≠ zero violations; e.g. `src/intake/uploads.py` →
+`src.api.parsed._create_document_job` is a known architecture violation,
+accepted as out-of-scope for this web-focused plan).
 
 **Baseline (2026-08-19, after the dead-code + dupes pass in
 `chore/code-health-pyscn-fallow-green`):**
 
-```
+```bash
 cd web && npm run test:coverage && npx fallow health --coverage coverage/coverage-final.json
 ```
 
@@ -42,6 +44,10 @@ cd web && npm run test:coverage && npx fallow health --coverage coverage/coverag
 ## Priority order (fallow's own `targets` ranking, highest score first)
 
 ### Tier 1 — critical severity (CRAP/cognitive far over threshold)
+
+Listed by severity/impact assessment (Sidebar has highest CRAP 90.2);
+SubmitJobProvider has highest fallow target score (29.2) despite being listed
+last.
 
 - [ ] **`components/shell/sidebar.tsx:229` `Sidebar`** — CRAP 90.2, cyclomatic
       35, cognitive 57, file is 645 LOC. Highest-impact single fix in this
@@ -99,7 +105,7 @@ cd web && npm run test:coverage && npx fallow health --coverage coverage/coverag
 ### Tier 3 — moderate severity (27 functions)
 
 Lower priority individually; several cluster in files also flagged as
-"high impact split" targets by fallow, so fixing the split likely clears
+"high-impact split" targets by fallow, so fixing the split likely clears
 multiple moderate findings in one pass:
 
 - `lib/job-detail-utils.ts` (180 LOC, 5 dependents, fallow target score 26.4
