@@ -606,7 +606,7 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
     if pipeline_preview == "repo":
         await send_message(
             ctx.chat_id,
-            "ℹ️ `/freestyle` doesn't apply to repo URLs yet\nRunning standard analysis.",
+            "Info: `/freestyle` doesn't apply to repo URLs yet\nRunning standard analysis.",
         )
         repo_url = normalize_repo_url(url)
         cached = await database.find_recent_job_by_url(ctx.chat_id, repo_url)

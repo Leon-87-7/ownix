@@ -432,6 +432,8 @@ async def test_sheets_and_brain_ingest_use_spawn_background(temp_db, monkeypatch
 
     import src.brain as brain_module
     monkeypatch.setattr(brain_module, "ingest_links", AsyncMock())
+    from src.services import sheets
+    monkeypatch.setattr(sheets, "append_article_row", AsyncMock())
 
     spy = MagicMock(wraps=background_tasks.spawn_background)
     monkeypatch.setattr(article, "spawn_background", spy)

@@ -299,7 +299,7 @@ async def test_freestyle_rerun_updates_sheet_row_not_append(patched):
 async def test_sheets_task_uses_spawn_background(patched, monkeypatch):
     """The Sheets write must go through spawn_background — a bare asyncio.create_task()
     discards its reference and swallows failures silently (architecture review 2026-08-19)."""
-    document, m = patched
+    document, _ = patched
     from src.utils import background_tasks
 
     spy = MagicMock(wraps=background_tasks.spawn_background)
