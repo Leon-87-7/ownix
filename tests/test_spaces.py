@@ -75,6 +75,8 @@ def spaces_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     from src import database
 
     asyncio.run(database.init_db())
+    asyncio.run(database.set_user_status(USER_A["id"], "approved"))
+    asyncio.run(database.set_user_status(USER_B["id"], "approved"))
 
     from src.api.spaces import spaces_router
     from src.auth.middleware import SessionMiddleware
@@ -311,3 +313,27 @@ def test_space_and_blob_inputs_reject_blank_names_and_large_values() -> None:
     with pytest.raises(ValidationError):
         ReorderIn(sort_order=10_001)
     assert ReorderIn(sort_order=10_000).sort_order == 10_000
+
+
+def test_list_spaces_includes_first_ordered_note(spaces_client: TestClient) -> None:
+    space_id = _make_space(spaces_client, AS_A, "Preview")
+    for name in ("Later", "First"):
+        response = spaces_client.post(
+            f"/api/spaces/{space_id}/blobs",
+            json={"name": name, "content": name * 100}, cookies=AS_A,
+        )
+        assert response.status_code == 201
+    blobs = spaces_client.get(f"/api/spaces/{space_id}/blobs", cookies=AS_A).json()
+    from src.database import reorder_context_blob
+
+    asyncio.run(reorder_context_blob(blob_id=blobs[1]['id'], new_sort_order=0))
+    listed = spaces_client.get('/api/spaces', cookies=AS_A).json()[0]
+    assert listed['first_note']['name'] == 'First'
+    assert len(listed['first_note']['snippet']) == 140
+    assert listed['first_note']['truncated'] is True
+
+
+def test_list_spaces_omits_first_note_without_blobs(spaces_client: TestClient) -> None:
+    _make_space(spaces_client, AS_A, "Empty")
+    listed = spaces_client.get('/api/spaces', cookies=AS_A).json()[0]
+    assert 'first_note' not in listed

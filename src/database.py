@@ -2536,8 +2536,16 @@ async def create_space(*, chat_id: int, name: str, color: str, icon: str = "fold
 async def list_spaces(chat_id: int) -> list[dict]:
     """Return all spaces for chat_id ordered newest-first."""
     return await _fetch_dicts(
-        "SELECT id, chat_id, name, color, icon, created_at, updated_at "
-        "FROM spaces WHERE chat_id = ? ORDER BY created_at DESC",
+        "SELECT s.id, s.chat_id, s.name, s.color, s.icon, s.created_at, s.updated_at, "
+        "(SELECT name FROM context_blobs WHERE space_id = s.id "
+        " ORDER BY sort_order ASC, id ASC LIMIT 1) AS note_name, "
+        "(SELECT SUBSTR(content, 1, 140) FROM context_blobs WHERE space_id = s.id "
+        " ORDER BY sort_order ASC, id ASC LIMIT 1) AS note_snippet, "
+        "(SELECT updated_at FROM context_blobs WHERE space_id = s.id "
+        " ORDER BY sort_order ASC, id ASC LIMIT 1) AS note_updated_at, "
+        "(SELECT LENGTH(content) > 140 FROM context_blobs WHERE space_id = s.id "
+        " ORDER BY sort_order ASC, id ASC LIMIT 1) AS note_truncated "
+        "FROM spaces s WHERE s.chat_id = ? ORDER BY s.created_at DESC",
         (chat_id,),
     )
 

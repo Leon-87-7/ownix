@@ -91,7 +91,20 @@ async def _get_owned_space(space_id: str, chat_id: int) -> dict:
 @spaces_router.get("")
 async def list_spaces(request: Request) -> list[dict]:
     chat_id: int = request.state.user["id"]
-    return await database.list_spaces(chat_id)
+    spaces = await database.list_spaces(chat_id)
+    for space in spaces:
+        note_name = space.pop("note_name")
+        note_snippet = space.pop("note_snippet")
+        note_updated_at = space.pop("note_updated_at")
+        note_truncated = space.pop("note_truncated")
+        if note_name is not None:
+            space["first_note"] = {
+                "name": note_name,
+                "snippet": note_snippet,
+                "updated_at": note_updated_at,
+                "truncated": bool(note_truncated),
+            }
+    return spaces
 
 
 @spaces_router.post("", status_code=201)

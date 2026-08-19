@@ -1,18 +1,25 @@
-'use client';
+"use client";
 
-import { useRestrictedMode } from '@/lib/restricted/context';
-import { RestrictedFacade } from '@/components/shell/restricted-facade';
-import { LayoutGrid } from 'lucide-react';
-import { SpaceCard } from '@/components/spaces/space-card';
-import { useSpaceList } from '@/lib/hooks/useSpaceList';
-import { useCreateSpace } from '@/lib/hooks/useCreateSpace';
-import { SkeletonBlock } from '@/components/feed/feed-states';
-import { SPACE_ICONS } from '@/lib/space-icons';
-import { PageShell, PageHeader } from '@/components/shell/page-shell';
+import { useRestrictedMode } from "@/lib/restricted/context";
+import { RestrictedFacade } from "@/components/shell/restricted-facade";
+import { LayoutGrid } from "lucide-react";
+import { SpaceCard } from "@/components/spaces/space-card";
+import { useSpaceList } from "@/lib/hooks/useSpaceList";
+import { useCreateSpace } from "@/lib/hooks/useCreateSpace";
+import { SkeletonBlock } from "@/components/feed/feed-states";
+import { IconPicker } from "@/components/spaces/icon-picker";
+import { PageShell, PageHeader } from "@/components/shell/page-shell";
 
 export default function SpacesPage() {
   const { restricted } = useRestrictedMode();
-  if (restricted) return <RestrictedFacade icon={LayoutGrid} title="Collections">Collections are visible in the full product for grouping saved jobs into durable research sets. Creating and editing collections is locked in this read-only preview.</RestrictedFacade>;
+  if (restricted)
+    return (
+      <RestrictedFacade icon={LayoutGrid} title="Collections">
+        Collections are visible in the full product for grouping saved jobs into
+        durable research sets. Creating and editing collections is locked in
+        this read-only preview.
+      </RestrictedFacade>
+    );
   return <SpacesWorkspace />;
 }
 
@@ -64,7 +71,7 @@ function SpacesWorkspace() {
             onClick={showForm ? resetForm : openForm}
             className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep"
           >
-            {showForm ? 'Cancel' : 'New Collection'}
+            {showForm ? "Cancel" : "New Collection"}
           </button>
         }
       />
@@ -74,41 +81,11 @@ function SpacesWorkspace() {
           onSubmit={handleCreate}
           className="space-y-4 rounded-lg border border-line bg-surface p-4"
         >
-          <h2 className="text-sm font-semibold text-ink">
-            Create Collection
-          </h2>
+          <h2 className="text-sm font-semibold text-ink">Create Collection</h2>
           {formError && (
             <p className="text-sm text-status-error">{formError}</p>
           )}
-          <div>
-            <span className="mb-1 block text-xs font-medium text-body">
-              Icon
-            </span>
-            <div className="flex flex-wrap gap-1">
-              {SPACE_ICONS.map(({ name, Icon }) => {
-                const active = newIcon === name;
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setNewIcon(name)}
-                    aria-label={name}
-                    aria-pressed={active}
-                    className={`flex h-8 w-8 items-center justify-center rounded-md transition-ui ${
-                      active
-                        ? 'bg-signal text-onsignal hover:bg-signal-bright'
-                        : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
-                    }`}
-                  >
-                    <Icon
-                      className="h-4 w-4"
-                      aria-hidden="true"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <IconPicker value={newIcon} onChange={setNewIcon} />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label
@@ -148,7 +125,7 @@ function SpacesWorkspace() {
                 disabled={submitting}
                 className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
               >
-                {submitting ? 'Creating…' : 'Create'}
+                {submitting ? "Creating…" : "Create"}
               </button>
               <button
                 type="button"
@@ -164,12 +141,10 @@ function SpacesWorkspace() {
 
       {spaces.length === 0 && !showForm && (
         <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
-          <p className="text-sm font-medium text-ink">
-            No collections yet
-          </p>
+          <p className="text-sm font-medium text-ink">No collections yet</p>
           <p className="mt-1 text-sm text-body">
-            Create one to group related saves, add context, and export
-            them together.
+            Create one to group related saves, add context, and export them
+            together.
           </p>
         </div>
       )}
@@ -177,11 +152,7 @@ function SpacesWorkspace() {
       {spaces.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {spaces.map((space) => (
-            <SpaceCard
-              key={space.id}
-              space={space}
-              onDeleted={reload}
-            />
+            <SpaceCard key={space.id} space={space} onDeleted={reload} />
           ))}
         </div>
       )}

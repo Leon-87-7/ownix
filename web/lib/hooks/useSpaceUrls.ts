@@ -30,7 +30,7 @@ export function useSpaceUrls(spaceId: string) {
   }, [spaceId]);
 
   const fetchAllJobs = useCallback(async () => {
-    const res = await fetch('/api/jobs?limit=50');
+    const res = await fetch('/api/jobs?limit=500');
     if (res.ok) {
       const data = (await res.json()) as { items: JobSummary[] };
       setAllJobs(data.items);

@@ -1,29 +1,54 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useSpaceUrls } from '@/lib/hooks/useSpaceUrls';
-import { TypeBadge } from '@/components/ui/badges';
-import { SkeletonLine } from '@/components/feed/feed-states';
-import { Tooltip } from '@/components/ui/tooltip';
-import { ReorderButtons } from '@/components/ui/reorder-buttons';
+import { useState } from "react";
+import Link from "next/link";
+import { useSpaceUrls } from "@/lib/hooks/useSpaceUrls";
+import { TypeBadge } from "@/components/ui/badges";
+import { SkeletonLine } from "@/components/feed/feed-states";
+import { Tooltip } from "@/components/ui/tooltip";
+import { ReorderButtons } from "@/components/ui/reorder-buttons";
+import { useAddSearch, type AddSearchResult } from "@/lib/hooks/useAddSearch";
 
 export function UrlsTab({ spaceId }: { spaceId: string }) {
-  const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } = useSpaceUrls(spaceId);
-  const [selectedJobId, setSelectedJobId] = useState('');
-  const [addingJob, setAddingJob] = useState(false);
-
+  const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } =
+    useSpaceUrls(spaceId);
+  const { query, setQuery, results } = useAddSearch(allJobs);
+  const [busyUrl, setBusyUrl] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const pinnedIds = new Set(spaceUrls.map((u) => u.id));
-  const availableJobs = allJobs.filter((j) => !pinnedIds.has(j.id));
+  const visibleResults = results.filter(
+    (result) => !result.jobId || !pinnedIds.has(result.jobId),
+  );
 
-  const handleAddJob = async () => {
-    if (!selectedJobId) return;
-    setAddingJob(true);
+  const handleResult = async (result: AddSearchResult) => {
+    setBusyUrl(result.url);
+    setRowErrors((current) => ({ ...current, [result.url]: "" }));
     try {
-      await addJob(selectedJobId);
-      setSelectedJobId('');
+      let jobId = result.jobId;
+      if (!jobId) {
+        const response = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: result.url }),
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          job_id?: string;
+          id?: string;
+          detail?: string;
+        };
+        jobId = data.job_id || data.id;
+        if (!response.ok || !jobId)
+          throw new Error(data.detail || "Could not save this URL.");
+      }
+      await addJob(jobId);
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [result.url]:
+          error instanceof Error ? error.message : "Could not add this URL.",
+      }));
     } finally {
-      setAddingJob(false);
+      setBusyUrl(null);
     }
   };
 
@@ -42,10 +67,13 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
           {spaceUrls.map((item, idx) => {
             const display = item.title?.trim() || item.url;
             return (
-              <li key={item.id} className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3"
+              >
                 <ReorderButtons
-                  onUp={() => reorderUrl(idx, 'up')}
-                  onDown={() => reorderUrl(idx, 'down')}
+                  onUp={() => reorderUrl(idx, "up")}
+                  onDown={() => reorderUrl(idx, "down")}
                   disableUp={idx === 0}
                   disableDown={idx === spaceUrls.length - 1}
                 />
@@ -70,26 +98,51 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
         </ul>
       )}
 
-      <div className="flex items-center gap-3 pt-2">
-        <select
-          value={selectedJobId}
-          onChange={(e) => setSelectedJobId(e.target.value)}
-          className="h-9 flex-1 rounded-md border border-line bg-canvas px-3 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
-        >
-          <option value="">Select a job to add…</option>
-          {availableJobs.map((j) => (
-            <option key={j.id} value={j.id}>
-              {j.title?.trim() || j.url} ({j.content_type})
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleAddJob}
-          disabled={!selectedJobId || addingJob}
-          className="h-9 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
-        >
-          {addingJob ? 'Adding…' : 'Add'}
-        </button>
+      <div className="space-y-2 pt-2">
+        <label htmlFor="add-search" className="sr-only">
+          Search content to add
+        </label>
+        <input
+          id="add-search"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search saved jobs, links, and Brain…"
+          className="h-9 w-full rounded-md border border-line bg-canvas px-3 text-sm text-ink placeholder:text-muted focus:border-signal focus:outline-none"
+        />
+        {visibleResults.length > 0 && (
+          <ul className="space-y-2">
+            {visibleResults.map((result) => (
+              <li
+                key={result.url}
+                className="rounded-md border border-line bg-surface p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                    {result.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleResult(result)}
+                    disabled={busyUrl === result.url}
+                    className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal disabled:bg-surface disabled:text-muted"
+                  >
+                    {busyUrl === result.url
+                      ? "Adding…"
+                      : result.jobId
+                        ? "Add"
+                        : "Save & Add"}
+                  </button>
+                </div>
+                {rowErrors[result.url] && (
+                  <p className="mt-2 text-xs text-status-error">
+                    {rowErrors[result.url]}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
