@@ -624,13 +624,28 @@ async def _cmd_freestyle(ctx: SlashCtx) -> None:
             "and allowlisted article domains.",
         )
     elif pipeline_preview == "repo":
-        assert resp.job_id
+        if not resp.job_id:
+            log.error(
+                "freestyle.repo.missing_job_id",
+                chat_id=ctx.chat_id,
+                response_kind=resp.kind,
+            )
+            await send_message(ctx.chat_id, "❌ Could not create the repo job. Please try again.")
+            return
         await send_message(ctx.chat_id, f"📥 Received!\njob_{resp.job_id[-4:]}")
     else:
         # long/article/short/document/unsized — every pipeline that reaches
         # `freestyle_command`'s state-arming tail gets the same force-reply;
         # long and article additionally get a head-start message.
-        assert resp.job_id
+        if not resp.job_id:
+            log.error(
+                "freestyle.url.missing_job_id",
+                chat_id=ctx.chat_id,
+                response_kind=resp.kind,
+                pipeline=pipeline_preview,
+            )
+            await send_message(ctx.chat_id, "❌ Could not create that job. Please try again.")
+            return
         if pipeline_preview == "long":
             await send_message(
                 ctx.chat_id,
@@ -1556,13 +1571,34 @@ async def _handle_user_template_shortcut(chat_id: int, text: str, message_id: in
 
     result = await intake_commands.user_template_shortcut(chat_id, text, message_id=message_id)
     if result.kind == "job_deduped":
-        assert result.job_id
+        if not result.job_id:
+            log.error(
+                "user_template_shortcut.deduped_missing_job_id",
+                chat_id=chat_id,
+                response_kind=result.kind,
+            )
+            await send_message(chat_id, "❌ Could not find that saved job. Please try again.")
+            return True
         job = await database.get_job(result.job_id)
-        assert job is not None
+        if job is None:
+            log.error(
+                "user_template_shortcut.deduped_job_missing",
+                chat_id=chat_id,
+                job_id=result.job_id,
+            )
+            await send_message(chat_id, "❌ Could not find that saved job. Please try again.")
+            return True
         await _reply_cached_job(chat_id, job)
         return True
     if result.kind == "job_created":
-        assert result.job_id
+        if not result.job_id:
+            log.error(
+                "user_template_shortcut.created_missing_job_id",
+                chat_id=chat_id,
+                response_kind=result.kind,
+            )
+            await send_message(chat_id, "❌ Could not create that job. Please try again.")
+            return True
         job_id = result.job_id
         tmpl_name = text.split()[0][1:].lower()
         await send_message(
