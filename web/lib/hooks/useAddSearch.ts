@@ -39,13 +39,14 @@ export function mergeAddSearchResults(
   return [...merged.values()];
 }
 
-async function parseHits<T>(
+export async function parseHits<T>(
   result: PromiseSettledResult<Response>,
   extract: (data: unknown) => T[],
 ): Promise<T[]> {
   if (result.status !== "fulfilled" || !result.value.ok) return [];
   try {
-    return extract(await result.value.json());
+    const hits = extract(await result.value.json());
+    return Array.isArray(hits) ? hits : [];
   } catch {
     return [];
   }

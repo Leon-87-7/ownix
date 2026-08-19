@@ -44,6 +44,8 @@ export function SpaceCard({
     try {
       const res = await fetch(`/api/spaces/${space.id}`, { method: "DELETE" });
       if (res.ok) {
+        setDeleting(false);
+        setConfirming(false);
         onDeleted?.();
         return;
       }
