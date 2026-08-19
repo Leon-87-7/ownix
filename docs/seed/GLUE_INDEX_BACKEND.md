@@ -134,8 +134,8 @@ auto-detect a template from title/description when the job has none explicit
 3) extract + enrich description links (never blocks the pipeline on failure)
 4) build transcript markdown, upload to Drive 5) mark job `transcript_done`
 6) send the transcript document, then (unless the job came from an explicit
-slash command) a "Run Gemini analysis?" keyboard 7) fire-and-forget Sheets
-logging + Brain ingest of description links.
+slash command) a "Run Gemini analysis?" keyboard 7) fire-and-forget (via
+`spawn_background`) Sheets logging + Brain ingest of description links.
 **Called from:** `_handle_video` in `src/worker.py` (dispatched for `content_type == "long"`).
 **Usage:** Enqueued as `{"task": "video", "job_id": ...}` for a long-pipeline job.
 
@@ -196,10 +196,11 @@ failure never pays for a discarded lookup) 3) heuristic paywall check (never
 aborts, just adds a warning) 4) send the raw article as a Telegram document
 (skippable via `skip_document`, used on freestyle re-runs) 5) build and send the
 Gemini prompt (freestyle-aware) 6) persist `done` with topic/objective/action
-points/tools 7) fire-and-forget Sheets write that **updates in place** on a
-freestyle re-run instead of appending a duplicate row 8) send the enrichment
-message + Freestyle button, then best-effort offer repo follow-ups 9)
-fire-and-forget Brain ingest of just the article URL (not body links).
+points/tools 7) fire-and-forget (via `spawn_background`) Sheets write that
+**updates in place** on a freestyle re-run instead of appending a duplicate
+row 8) send the enrichment message + Freestyle button, then best-effort offer
+repo follow-ups 9) fire-and-forget (via `spawn_background`) Brain ingest of
+just the article URL (not body links).
 **Called from:** `_handle_article` (`_make_handler("article", ..., pass_skip_document=True)`) in `src/worker.py`; also directly re-enqueued by `_cb_article_retry` in `webhook.py` with `skip_document=True`.
 **Usage:** Enqueued as `{"task": "article", "job_id": ..., "skip_document": bool}`.
 
@@ -217,8 +218,9 @@ across tenants — the parsed text isn't chat_id-owned even though the job row i
 2) Gemini structured-extraction call, plus a second Gemini call that produces a
 full markdown summary uploaded to GCS as a document output 3) persist `done`
 (no `promise_gap` — "documents don't pitch") 4) register both outputs
-(`raw_txt`, `summary`) in `document_outputs` 5) fire-and-forget Sheets
-index (update-in-place on freestyle re-run) 6) deliver via `_deliver`, unless
+(`raw_txt`, `summary`) in `document_outputs` 5) fire-and-forget (via
+`spawn_background`) Sheets index (update-in-place on freestyle re-run) 6)
+deliver via `_deliver`, unless
 the job's `telegram_delivery` is `"off"` (dashboard-originated uploads default
 to off; the user opts in per-job).
 **Called from:** `_handle_document` (`_make_handler("document", ..., pass_skip_document=True)`) in `src/worker.py`.
@@ -906,13 +908,24 @@ Unknown discriminators are logged and dropped, not raised — a malformed
 envelope can't crash the loop.
 **Called from:** `loop`.
 
-#### `_make_handler(module_name, error_event, error_message, *, pass_skip_document=False)` — `src/worker.py`
-**Does:** Factory that builds `_handle_article`/`_handle_repo`/`_handle_document`/`_handle_link`
+#### `_make_handler(module_name, error_event, error_message, *, pass_skip_document=False, pass_job_id=False)` — `src/worker.py`
+**Does:** Factory that builds `_handle_article`/`_handle_repo`/`_handle_document`/`_handle_link`/`_handle_enrichment`
 from one shared shape: load job → lazy-`importlib.import_module` the processor
 (from a **hardcoded whitelist** `_PROCESSOR_MODULES`, never a task-controlled
 string — worth noting as the deliberate guard against dynamic-import injection)
-→ call `.run(job)` → on any exception, mark the job `error` and best-effort-notify the chat.
-**Called from:** module-level assignment of the four handlers above.
+→ call `.run(job)` (or `.run(job_id)` when `pass_job_id=True` — `enrichment.run`
+takes just the id, unlike its four siblings) → on any exception, mark the job
+`error` and best-effort-notify the chat. Closes a gap where `_handle_enrichment`
+used to hand-roll its own except block and never reset the job's status, so an
+unexpected (non-`EnrichmentUnavailableError`) failure left it stuck in
+`enriching` with no retry path until the next worker restart (architecture
+review 2026-08-19). `_handle_video` and `_handle_bookmarks` still hand-roll
+their own except blocks too — both already reset status correctly, they just
+carry extra pre/post logic (content-type resolution, task chaining) that
+doesn't fit this factory's shape. `_handle_prd_auto`/`_handle_prd_intent` are
+deliberately excluded — a PRD failure resets only the PRD slot column, not the
+job's overall status (see `_reset_prd_slot_and_notify`).
+**Called from:** module-level assignment of the five handlers above.
 
 #### `_handle_video` — `src/worker.py`
 **Does:** The one task type that isn't a 1:1 processor mapping — branches on

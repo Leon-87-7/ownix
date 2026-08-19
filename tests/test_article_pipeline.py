@@ -391,3 +391,52 @@ def test_paywall_short_body() -> None:
 def test_paywall_long_clean_body() -> None:
     body = "This is a long open-access article. " * 20
     assert not _check_paywall(body)
+
+
+# ---------------------------------------------------------------------------
+# fire-and-forget tasks go through spawn_background (architecture review 2026-08-19)
+# ---------------------------------------------------------------------------
+
+
+async def _drain_background_tasks() -> None:
+    import asyncio
+    pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_sheets_and_brain_ingest_use_spawn_background(temp_db, monkeypatch) -> None:
+    """The Sheets write and Brain ingest must go through spawn_background — a bare
+    asyncio.create_task() discards its reference and swallows failures silently."""
+    from src import database as db
+    from src.processors import article
+    from src.utils import background_tasks
+
+    url = "https://substack.com/p/spawn-bg-check"
+    await db.insert_markdown_cache(url, "Spawn Check\n\nBody content here " * 50)
+    job = await db.get_job(
+        await db.create_job(chat_id=1, url=url, content_type="article")
+    )
+
+    monkeypatch.setattr(article.settings, "GOOGLE_DRIVE_FOLDER_BRAIN", "brain-folder")
+    monkeypatch.setattr("src.processors.article.database.update_job_status", AsyncMock())
+    monkeypatch.setattr("src.processors.article.database.get_job", AsyncMock(return_value=job))
+    monkeypatch.setattr("src.processors.article.database.insert_markdown_cache", AsyncMock())
+    monkeypatch.setattr("src.processors.article.send_document", AsyncMock())
+    monkeypatch.setattr("src.processors.article.send_message", AsyncMock(return_value={"message_id": 123}))
+    monkeypatch.setattr("src.processors.article.send_inline_keyboard", AsyncMock())
+
+    from src.services import gemini as gc_module
+    monkeypatch.setattr(gc_module, "generate", AsyncMock(return_value=_GEMINI_RESPONSE))
+
+    import src.brain as brain_module
+    monkeypatch.setattr(brain_module, "ingest_links", AsyncMock())
+
+    spy = MagicMock(wraps=background_tasks.spawn_background)
+    monkeypatch.setattr(article, "spawn_background", spy)
+
+    await article.run(job)
+    await _drain_background_tasks()
+
+    assert spy.call_count == 2  # sheets write + brain ingest
