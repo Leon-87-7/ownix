@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ChevronDown, Upload } from 'lucide-react';
+import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
 import {
   IntakeLinksList,
   type IntakeLink,
@@ -115,7 +116,7 @@ export function DocUploadPanel({
             />
             Upload documents
           </span>
-          <ChevronDown
+          <OwnixChevronDown
             aria-hidden="true"
             className={`h-4 w-4 shrink-0 text-muted transition-transform duration-200 ease-out motion-reduce:transition-none ${compact ? '' : 'rotate-180'}`}
           />

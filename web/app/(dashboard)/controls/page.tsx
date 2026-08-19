@@ -8,11 +8,8 @@ import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
 import { apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
-import {
-  SlidersHorizontal,
-  ChevronDown,
-  TagPlus,
-} from 'lucide-react';
+import { SlidersHorizontal, TagPlus } from 'lucide-react';
+import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
 import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
@@ -414,7 +411,7 @@ function Section({
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition-ui hover:bg-raised [&::-webkit-details-marker]:hidden">
         {title}
-        <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+        <OwnixChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
       </summary>
       <div className="border-t border-line bg-canvas p-4">
         {children}
@@ -425,7 +422,16 @@ function Section({
 
 export default function ControlsPage() {
   const { restricted } = useRestrictedMode();
-  if (restricted) return <RestrictedFacade icon={SlidersHorizontal} title="Settings">Settings control domains, tags, and workspace behavior for your own Index. Changes are locked in this read-only preview.</RestrictedFacade>;
+  if (restricted)
+    return (
+      <RestrictedFacade
+        icon={SlidersHorizontal}
+        title="Settings"
+      >
+        Settings control domains, tags, and workspace behavior for
+        your own Index. Changes are locked in this read-only preview.
+      </RestrictedFacade>
+    );
 
   return (
     <PageShell>

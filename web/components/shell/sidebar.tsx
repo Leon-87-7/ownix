@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import OwnixLogo from '@/app/ownix-logo.svg';
 import { GitHubIcon } from '@/components/svg/github-icon';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import {
   Rss,
   Inbox,
@@ -15,8 +16,6 @@ import {
   LayoutGrid,
   MessageSquareText,
   SlidersHorizontal,
-  ChevronRight,
-  ChevronLeft,
   GripVertical,
   FileCode2,
   Handshake,
@@ -401,7 +400,7 @@ export function Sidebar() {
               aria-controls="ownix-nav-panel"
               className="flex h-9 w-9 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
             >
-              <ChevronRight
+              <OwnixChevronRight
                 className="h-[18px] w-[18px]"
                 strokeWidth={2}
                 aria-hidden="true"
@@ -614,8 +613,8 @@ export function Sidebar() {
               tabIndex={open ? undefined : -1}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink"
             >
-              <ChevronLeft
-                className="h-[18px] w-[18px]"
+              <OwnixChevronRight
+                className="rotate-180 h-[18px] w-[18px]"
                 strokeWidth={2}
                 aria-hidden="true"
               />
