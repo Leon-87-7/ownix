@@ -31,7 +31,7 @@ import { useRestrictedMode } from '@/lib/restricted/context';
 import { parseBatchLinkInput } from '@/lib/parse-batch-links';
 
 /** The job the API accepted, timestamped so consumers can react to repeats. */
-export interface AcceptedJob {
+interface AcceptedJob {
   id: string | null;
   url: string;
   title: string | null;
@@ -46,14 +46,14 @@ const CLEAR_FAILED_CONFIRM =
 /** Recovery action the Feed registers so the launcher can drive it with the
  * live scope + availability the Feed's useRecovery already computes. (Retry
  * pending/failed stay in the contextual recovery panel, not the palette.) */
-export interface FeedRecoveryCommands {
+interface FeedRecoveryCommands {
   canClearFailed: boolean;
   clearFailed: () => void;
 }
 
 /** Feed search focus, registered so the launcher can jump into the Feed's
  * search input (or switch to Links first). */
-export interface FeedSearchCommands {
+interface FeedSearchCommands {
   focusSearch: () => void;
   focusLinkSearch: () => void;
 }

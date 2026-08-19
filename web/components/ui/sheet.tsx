@@ -2,7 +2,7 @@
 
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
 
 export const Sheet = RadixDialog.Root;
 
@@ -40,18 +40,5 @@ export function SheetTitle({
       className={`text-base font-semibold text-ink ${className}`}
       {...props}
     />
-  );
-}
-
-export function SheetDescription({
-  children,
-}: {
-  children?: ReactNode;
-}) {
-  if (!children) return null;
-  return (
-    <RadixDialog.Description className="mt-1 text-sm text-body">
-      {children}
-    </RadixDialog.Description>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { apiPost } from '@/lib/fetch-utils';
 
-export interface ChecklistsResult {
+interface ChecklistsResult {
   checklists_md: string;
   checklists_generated_at: string;
 }

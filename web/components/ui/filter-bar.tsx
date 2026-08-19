@@ -34,7 +34,7 @@ export interface StatusOption {
 }
 
 // Shared default: feed and doc-parser both filter on the same job statuses.
-export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
+const DEFAULT_STATUS_FILTERS: StatusOption[] = [
   { label: 'All', value: '' },
   { label: 'Done', value: 'done' },
   { label: 'Pending', value: 'pending' },
@@ -45,9 +45,7 @@ export const DEFAULT_STATUS_FILTERS: StatusOption[] = [
 // Segmented control (motion-primitives "animated background"): the active tab
 // fills bottom-to-top with the signal color via an animated clip-path, with a
 // slight overshoot easing so it reads as poured rather than mechanical.
-// Exported so view-switcher tablists (e.g. Brain) can share the same look without
-// pulling in FilterBar's search + status-panel machinery.
-export function SegmentedTabs({
+function SegmentedTabs({
   tabs,
   value,
   onChange,

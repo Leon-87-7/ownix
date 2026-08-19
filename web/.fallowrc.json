@@ -1,5 +1,13 @@
 {
-  "ignoreDependencies": ["@milkdown/core", "@milkdown/ctx", "@milkdown/transformer"],
+  "ignoreDependencies": [
+    "@milkdown/core",
+    "@milkdown/ctx",
+    "@milkdown/transformer",
+    "msw",
+    "tailwindcss"
+  ],
+  "ignorePatterns": ["public/mockServiceWorker.js"],
+  "dynamicallyLoaded": ["public/sw.js"],
   "duplicates": {
     "ignore": ["**/*.test.ts", "**/*.test.tsx"]
   }

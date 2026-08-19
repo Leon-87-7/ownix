@@ -9,7 +9,7 @@ const DOCUMENT_KEY = /^documents\/([a-f0-9]{64})\.([a-z0-9]+)$/i;
 
 type SourceCopyState = 'idle' | 'copied' | 'copy_failed';
 
-export function getDocumentSourceMeta(source: string) {
+function getDocumentSourceMeta(source: string) {
   const match = DOCUMENT_KEY.exec(source);
   if (match) {
     return {
