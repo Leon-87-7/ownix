@@ -701,6 +701,61 @@ def test_get_job_link_topics_forbidden_for_foreign_job(
     assert resp.status_code == 403
 
 
+def test_update_job_title_persists_and_snapshots_the_original(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    resp = jobs_client.put("/api/jobs/owner-job/title", json={"title": "  Renamed  "})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"title": "Renamed"}
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["title"] == "Renamed"
+    # The pipeline-derived title (set by _insert_thumbnail_job) is snapshotted
+    # on the first rename so a later blank edit can restore it.
+    assert job["original_title"] == "title owner-job"
+
+
+def test_update_job_title_blank_restores_the_original_title(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    resp = jobs_client.put("/api/jobs/owner-job/title", json={"title": "   "})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"title": "title owner-job"}
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["title"] == "title owner-job"
+    assert job["original_title"] == "title owner-job"
+
+
+def test_update_job_title_blank_after_multiple_renames_restores_the_very_first_title(
+    jobs_client: TestClient,
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    jobs_client.put("/api/jobs/owner-job/title", json={"title": "First rename"})
+    jobs_client.put("/api/jobs/owner-job/title", json={"title": "Second rename"})
+    resp = jobs_client.put("/api/jobs/owner-job/title", json={"title": ""})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"title": "title owner-job"}
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["title"] == "title owner-job"
+
+
+def test_update_job_title_forbidden_for_foreign_job(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_b)
+
+    resp = jobs_client.put("/api/jobs/owner-job/title", json={"title": "Hijacked"})
+
+    assert resp.status_code == 403
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["title"] == "title owner-job"
+
+
 class TestJobThumbnailCaching:
     def test_first_request_sets_cache_control_and_etag(self, jobs_client: TestClient) -> None:
         _insert_thumbnail_job("s1", chat_id=1)

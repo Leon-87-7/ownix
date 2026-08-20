@@ -406,6 +406,31 @@ async def upsert_annotation(job_id: str, body: AnnotationIn, request: Request) -
 
 
 # ---------------------------------------------------------------------------
+# Title — declared before /{job_id} to avoid routing conflicts
+# ---------------------------------------------------------------------------
+
+
+class TitleIn(BaseModel):
+    title: str = Field(..., max_length=500)
+
+
+@jobs_router.put("/{job_id}/title")
+async def update_job_title(job_id: str, body: TitleIn, request: Request) -> dict:
+    """Rename *job_id*. An empty/whitespace title restores the pipeline-derived
+    original (snapshotted into `original_title` on the first rename), not NULL."""
+    job = await get_owned_job(job_id, request)
+
+    original = job.get("original_title") or job.get("title")
+    new_title = body.title.strip() or original
+
+    fields: dict[str, str | None] = {"title": new_title}
+    if job.get("original_title") is None:
+        fields["original_title"] = original
+    await database.update_job_fields(job_id, **fields)
+    return {"title": new_title}
+
+
+# ---------------------------------------------------------------------------
 # Job-tag links — declared before /{job_id} to avoid routing conflicts
 # ---------------------------------------------------------------------------
 

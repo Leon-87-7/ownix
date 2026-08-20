@@ -184,6 +184,14 @@ return [
     return HttpResponse.json(a);
   }),
 
+  http.put('/api/jobs/:id/title', async ({ params, request }) => {
+    const job = findJob(params.id as string);
+    if (!job) return new HttpResponse(null, { status: 404 });
+    const body = (await request.json()) as { title: string };
+    job.title = body.title.trim() || null;
+    return HttpResponse.json({ title: job.title });
+  }),
+
   http.get('/api/jobs/:id', ({ params }) => {
     const id = params.id as string;
     const job = findJob(id);

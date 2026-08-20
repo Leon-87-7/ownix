@@ -16,7 +16,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Check, Copy, Download } from 'lucide-react';
+import { Check, Copy, Download, Pencil } from 'lucide-react';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
@@ -339,9 +339,11 @@ function AdjacentNavLink({
 function JobHeader({
   job,
   tags,
+  onTitleSaved,
 }: {
   job: JobDetail;
   tags?: ReactNode;
+  onTitleSaved: (title: string | null) => void;
 }) {
   const { restricted } = useRestrictedMode();
   const router = useRouter();
@@ -362,6 +364,38 @@ function JobHeader({
   const displayTitle = job.title?.trim() || job.url;
   const displayUrl =
     job.url.length > 40 ? `${job.url.slice(0, 40)}...` : job.url;
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState(displayTitle);
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [titleError, setTitleError] = useState<string>();
+  const skipBlurSaveRef = useRef(false);
+  useEffect(() => {
+    setTitleValue(displayTitle);
+  }, [job.id, displayTitle]);
+  const saveTitle = async () => {
+    const next = titleValue.trim();
+    if (next === displayTitle) {
+      setEditingTitle(false);
+      return;
+    }
+    setTitleSaving(true);
+    setTitleError(undefined);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/title`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!res.ok) throw new Error('Could not save title');
+      const data: { title: string | null } = await res.json();
+      onTitleSaved(data.title);
+      setEditingTitle(false);
+    } catch {
+      setTitleError('Could not save title');
+    } finally {
+      setTitleSaving(false);
+    }
+  };
   const jobHref = (id: string) =>
     `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`;
   const feedHref = `/feed${scopeQuery ? `?${scopeQuery}` : ''}`;
@@ -450,9 +484,62 @@ function JobHeader({
         </div>
       </div>
       <div className="flex flex-wrap items-start gap-3">
-        <h1 className="flex-1 break-all text-xl font-semibold leading-snug text-ink">
-          {displayTitle}
-        </h1>
+        {editingTitle ? (
+          <div className="min-w-[12rem] flex-1">
+            <input
+              autoFocus
+              value={titleValue}
+              onChange={(e) => setTitleValue(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onBlur={() => {
+                if (skipBlurSaveRef.current) {
+                  skipBlurSaveRef.current = false;
+                  return;
+                }
+                void saveTitle();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveTitle();
+                }
+                if (e.key === 'Escape') {
+                  skipBlurSaveRef.current = true;
+                  setTitleValue(displayTitle);
+                  setEditingTitle(false);
+                }
+              }}
+              disabled={titleSaving}
+              aria-label="Job title"
+              maxLength={500}
+              className="w-full rounded-md border border-line bg-canvas px-2 py-1 text-xl font-semibold leading-snug text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright"
+            />
+            {titleError && (
+              <p
+                role="alert"
+                className="mt-1 text-xs text-status-error"
+              >
+                {titleError}
+              </p>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingTitle(true)}
+            disabled={restricted}
+            aria-label="Edit title"
+            className="group flex flex-1 items-start gap-1.5 break-all text-left text-xl font-semibold leading-snug text-ink disabled:cursor-default"
+          >
+            {displayTitle}
+            {!restricted && (
+              <Pencil
+                aria-hidden="true"
+                className="mt-1.5 h-3.5 w-3.5 shrink-0 text-muted opacity-0 transition-ui group-hover:opacity-100 group-focus-visible:opacity-100"
+              />
+            )}
+          </button>
+        )}
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           <TypeBadge label={job.content_type} />
           <StatusBadge label={job.status} />
@@ -918,10 +1005,11 @@ export default function JobDetailPage() {
 
   const fieldSet =
     job.content_type === 'short' ? SHORT_FIELDS : ENRICHMENT_FIELDS;
-  // Transcript renders as its own preview card (see TranscriptCard), so drop it
-  // from the generic field loop to avoid showing it twice.
+  // Transcript renders as its own preview card (see TranscriptCard); Topic is
+  // folded into the merged Title | Topic card below — drop both from the
+  // generic field loop to avoid showing them twice.
   const presentFields = fieldSet.filter(({ key }) => {
-    if (key === 'transcript') return false;
+    if (key === 'transcript' || key === 'ai_topic') return false;
     const value = job[key];
     return (
       value !== null &&
@@ -929,6 +1017,9 @@ export default function JobDetailPage() {
       String(value).trim() !== ''
     );
   });
+  const titleTopicValue = [job.title?.trim(), job.ai_topic?.trim()]
+    .filter(Boolean)
+    .join('\n\n');
 
   async function handleDelete() {
     setDeleting(true);
@@ -952,6 +1043,9 @@ export default function JobDetailPage() {
     <PageShell width="narrow">
       <JobHeader
         job={job}
+        onTitleSaved={(title) =>
+          setData((prev) => (prev ? { ...prev, title } : prev))
+        }
         tags={
           <>
             <TagChips
@@ -996,6 +1090,13 @@ export default function JobDetailPage() {
       <TranscriptCard job={job} />
 
       <div className="space-y-3">
+        {titleTopicValue && (
+          <FieldCard
+            label="Title | Topic"
+            value={titleTopicValue}
+            render="text"
+          />
+        )}
         {presentFields.map(({ key, label, render }) => (
           <FieldCard
             key={key}

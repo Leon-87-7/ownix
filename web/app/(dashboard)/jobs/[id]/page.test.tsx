@@ -191,6 +191,52 @@ describe('JobDetailPage', () => {
     expect(screen.getByText('My Awesome Video')).toBeTruthy();
   });
 
+  it('edits and saves the job title, prefilled with the current title', async () => {
+    const setData = vi.fn();
+    setupMocks({ setData });
+    let putBody: unknown;
+    server.use(
+      http.put('/api/jobs/:jobId/title', async ({ request }) => {
+        putBody = await request.json();
+        return HttpResponse.json({ title: 'New Title' });
+      }),
+    );
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    const input = screen.getByLabelText('Job title') as HTMLInputElement;
+    expect(input.value).toBe('My Awesome Video');
+
+    fireEvent.change(input, { target: { value: 'New Title' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(putBody).toEqual({ title: 'New Title' }));
+    expect(setData).toHaveBeenCalledTimes(1);
+    const updater = setData.mock.calls[0][0] as (prev: JobDetail) => JobDetail;
+    expect(updater(JOB).title).toBe('New Title');
+  });
+
+  it('prefills the title field with the URL fallback when no title is set', () => {
+    setupMocks({ job: { ...JOB, title: null } });
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    const input = screen.getByLabelText('Job title') as HTMLInputElement;
+    expect(input.value).toBe('https://www.youtube.com/watch?v=test123');
+  });
+
+  it('cancels the title edit on Escape without saving', () => {
+    setupMocks();
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    const input = screen.getByLabelText('Job title') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Discard me' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(screen.queryByLabelText('Job title')).toBeNull();
+    expect(screen.getByText('My Awesome Video')).toBeTruthy();
+  });
+
   it('deletes after confirmation and navigates back', async () => {
     let deletedPath = '';
     server.use(
@@ -293,14 +339,22 @@ describe('JobDetailPage', () => {
 
   it('renders enrichment field labels', () => {
     render(<JobDetailPage />);
-    expect(screen.getByText('Topic')).toBeTruthy();
+    expect(screen.getByText('Title | Topic')).toBeTruthy();
     expect(screen.getByText('Objective')).toBeTruthy();
   });
 
   it('renders enrichment field values', () => {
     render(<JobDetailPage />);
-    expect(screen.getByText('Machine Learning')).toBeTruthy();
+    expect(screen.getByText(/Machine Learning/)).toBeTruthy();
     expect(screen.getByText('Learn ML basics')).toBeTruthy();
+  });
+
+  it('merges title and topic into one field, omitting a standalone Topic card', () => {
+    render(<JobDetailPage />);
+    expect(screen.queryByText('Topic')).toBeNull();
+    const merged = screen.getByText('Title | Topic').closest('div')?.parentElement;
+    expect(merged?.textContent).toContain('My Awesome Video');
+    expect(merged?.textContent).toContain('Machine Learning');
   });
 
   it('renders a long transcript but omits empty article and repo transcripts', () => {
