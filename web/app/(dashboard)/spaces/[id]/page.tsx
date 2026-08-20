@@ -11,6 +11,8 @@ import { ContextTab } from "./ContextTab";
 import { TabBar } from "@/components/ui/tab-bar";
 import { PageShell } from "@/components/shell/page-shell";
 import { SkeletonBlock } from "@/components/feed/feed-states";
+import { IconPicker } from "@/components/spaces/icon-picker";
+import { spaceIcon } from "@/lib/space-icons";
 
 type ActiveTab = "urls" | "context";
 
@@ -20,15 +22,32 @@ export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { space, setSpace, fetchState } = useSpaceDetail(id);
-  const { editing, editName, setEditName, editColor, setEditColor, editError, editSaving, startEdit, cancelEdit, handleEditSave } =
-    useSpaceEdit(id, space, setSpace);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("urls");
+  const {
+    editing,
+    editName,
+    setEditName,
+    editColor,
+    setEditColor,
+    editIcon,
+    setEditIcon,
+    editError,
+    editSaving,
+    startEdit,
+    cancelEdit,
+    handleEditSave,
+  } = useSpaceEdit(id, space, setSpace);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("context");
   const [showExport, setShowExport] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
 
   const handleDelete = useCallback(async () => {
-    if (!window.confirm("Delete this collection? Saved items will not be deleted.")) return;
+    if (
+      !window.confirm(
+        "Delete this collection? Saved items will not be deleted.",
+      )
+    )
+      return;
     setDeleting(true);
     setDeleteFailed(false);
     try {
@@ -47,7 +66,7 @@ export default function SpaceDetailPage() {
 
   if (fetchState === "loading") {
     return (
-      <PageShell width="narrow">
+      <PageShell>
         <div className="space-y-3">
           <SkeletonBlock className="h-8 w-32" />
           <SkeletonBlock className="h-40" />
@@ -55,63 +74,166 @@ export default function SpaceDetailPage() {
       </PageShell>
     );
   }
-  if (fetchState === "not_found") return <div className="text-sm text-body">Collection not found. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
-  if (fetchState === "forbidden") return <div className="text-sm text-body">Access denied. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
-  if (fetchState === "error" || !space) return <div className="text-sm text-body">Failed to load collection. <Link href="/spaces" className="text-signal hover:underline">Back to collections</Link></div>;
+  if (fetchState === "not_found")
+    return (
+      <div className="text-sm text-body">
+        Collection not found.{" "}
+        <Link href="/spaces" className="text-signal hover:underline">
+          Back to collections
+        </Link>
+      </div>
+    );
+  if (fetchState === "forbidden")
+    return (
+      <div className="text-sm text-body">
+        Access denied.{" "}
+        <Link href="/spaces" className="text-signal hover:underline">
+          Back to collections
+        </Link>
+      </div>
+    );
+  if (fetchState === "error" || !space)
+    return (
+      <div className="text-sm text-body">
+        Failed to load collection.{" "}
+        <Link href="/spaces" className="text-signal hover:underline">
+          Back to collections
+        </Link>
+      </div>
+    );
 
   return (
-    <PageShell width="narrow">
-      <Link href="/spaces" className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink">
+    <PageShell>
+      <Link
+        href="/spaces"
+        className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
+      >
         <span aria-hidden="true">&#8592;</span> Back to collections
       </Link>
 
       {!editing ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="inline-block h-4 w-4 flex-shrink-0 rounded-full" style={{ backgroundColor: space.color }} />
-            <h1 className="text-2xl font-semibold tracking-tight text-ink">{space.name}</h1>
+            {(() => {
+              const Icon = spaceIcon(space.icon);
+              return (
+                <Icon
+                  data-testid={`space-icon-${space.icon ?? "folder"}`}
+                  className="h-5 w-5 flex-shrink-0"
+                  style={{ color: space.color }}
+                  aria-hidden="true"
+                />
+              );
+            })()}
+            <h1 className="text-2xl font-semibold tracking-tight text-ink">
+              {space.name}
+            </h1>
           </div>
           <div className="space-y-2">
             <div className="flex gap-2">
-              <button onClick={() => setShowExport(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised">Export</button>
-              <button onClick={startEdit} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised">Edit</button>
-              <button onClick={handleDelete} disabled={deleting} className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50">{deleting ? "Deleting…" : "Delete"}</button>
+              <button
+                onClick={() => setShowExport(true)}
+                className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised"
+              >
+                Export
+              </button>
+              <button
+                onClick={startEdit}
+                className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised"
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
             </div>
-            {deleteFailed && <p className="text-xs text-status-error">Couldn&apos;t delete — try again.</p>}
+            {deleteFailed && (
+              <p className="text-xs text-status-error">
+                Couldn&apos;t delete — try again.
+              </p>
+            )}
           </div>
         </div>
       ) : (
         <form onSubmit={handleEditSave} className="space-y-4">
           <h2 className="text-sm font-semibold text-ink">Edit Collection</h2>
-          {editError && <p className="text-sm text-status-error">{editError}</p>}
+          {editError && (
+            <p className="text-sm text-status-error">{editError}</p>
+          )}
+          <IconPicker value={editIcon} onChange={setEditIcon} />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-body" htmlFor="edit-name">Name</label>
-              <input id="edit-name" type="text" required value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none" />
+              <label
+                className="mb-1 block text-xs font-medium text-body"
+                htmlFor="edit-name"
+              >
+                Name
+              </label>
+              <input
+                id="edit-name"
+                type="text"
+                required
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-body" htmlFor="edit-color">Color</label>
-              <input id="edit-color" type="color" value={editColor} onChange={(e) => setEditColor(e.target.value)} className="h-9 w-12 cursor-pointer rounded-md border border-line bg-canvas p-0.5" />
+              <label
+                className="mb-1 block text-xs font-medium text-body"
+                htmlFor="edit-color"
+              >
+                Color
+              </label>
+              <input
+                id="edit-color"
+                type="color"
+                value={editColor}
+                onChange={(e) => setEditColor(e.target.value)}
+                className="h-9 w-12 cursor-pointer rounded-md border border-line bg-canvas p-0.5"
+              />
             </div>
             <div className="flex gap-2">
-              <button type="submit" disabled={editSaving} className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted">{editSaving ? "Saving…" : "Save"}</button>
-              <button type="button" onClick={cancelEdit} className="h-8 rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised">Cancel</button>
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
+              >
+                {editSaving ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="h-8 rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </form>
       )}
 
       <TabBar
-        tabs={["urls", "context"] as const}
+        tabs={["context", "urls"] as const}
         active={activeTab}
         onChange={setActiveTab}
-        labels={{ urls: "URLs", context: "Context" }}
+        labels={{ context: "Context", urls: "URLs" }}
       />
 
-      {activeTab === "urls" && <UrlsTab spaceId={id} />}
       {activeTab === "context" && <ContextTab spaceId={id} />}
+      {activeTab === "urls" && <UrlsTab spaceId={id} />}
 
-      {showExport && <ExportModal spaceId={id} spaceName={space.name} onClose={() => setShowExport(false)} />}
+      {showExport && (
+        <ExportModal
+          spaceId={id}
+          spaceName={space.name}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </PageShell>
   );
 }

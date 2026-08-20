@@ -9,7 +9,7 @@ import { ReorderButtons } from '@/components/ui/reorder-buttons';
 const MarkdownEditor = dynamic(() => import('@/components/ui/markdown-editor'), {
   ssr: false,
   loading: () => (
-    <div className="rounded-lg border border-line bg-surface p-4 text-xs text-muted">
+    <div className="rounded-lg border border-line bg-surface p-2 text-xs text-muted sm:p-4">
       Loading editor…
     </div>
   ),

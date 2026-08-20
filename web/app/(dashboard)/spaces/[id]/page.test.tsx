@@ -39,6 +39,7 @@ const SPACE = {
   chat_id: 1234,
   name: 'My Space',
   color: '#ff0000',
+  icon: 'star',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
 };
@@ -60,6 +61,8 @@ function setupMocks(
     setEditName: vi.fn(),
     editColor: SPACE.color,
     setEditColor: vi.fn(),
+    editIcon: SPACE.icon,
+    setEditIcon: vi.fn(),
     editError: null,
     editSaving: false,
     startEdit: vi.fn(),
@@ -111,9 +114,17 @@ describe('SpaceDetailPage', () => {
     expect(screen.getByText('Context')).toBeTruthy();
   });
 
-  it('renders URLs tab by default', () => {
+  it('renders Context tab by default', () => {
     render(<SpaceDetailPage />);
+    expect(screen.getByTestId('context-tab')).toBeTruthy();
+    expect(screen.queryByTestId('urls-tab')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'URLs' }));
     expect(screen.getByTestId('urls-tab')).toBeTruthy();
+  });
+
+  it("renders the space's icon in the header", () => {
+    render(<SpaceDetailPage />);
+    expect(screen.getByTestId('space-icon-star')).toBeTruthy();
   });
 
   it('renders Edit and Export and Delete buttons', () => {

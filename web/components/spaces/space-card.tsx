@@ -4,6 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { spaceIcon } from "@/lib/space-icons";
+import { DateTime } from "@/components/ui/date-time";
+
+// SQLite's CURRENT_TIMESTAMP has no timezone marker; without one, Date parses it
+// as local time instead of UTC. Mark it explicitly so DateTime shows the right instant.
+function asUtcIso(raw: string): string {
+  return /[Zz]|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw.replace(" ", "T")}Z`;
+}
 
 export interface SpaceSummary {
   id: string;
@@ -11,9 +18,21 @@ export interface SpaceSummary {
   color: string;
   icon?: string;
   created_at: string;
+  first_note?: {
+    name: string;
+    snippet: string;
+    updated_at: string;
+    truncated?: boolean;
+  };
 }
 
-export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted?: () => void }) {
+export function SpaceCard({
+  space,
+  onDeleted,
+}: {
+  space: SpaceSummary;
+  onDeleted?: () => void;
+}) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -24,7 +43,12 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
     setFailed(false);
     try {
       const res = await fetch(`/api/spaces/${space.id}`, { method: "DELETE" });
-      if (res.ok) { onDeleted?.(); return; }
+      if (res.ok) {
+        setDeleting(false);
+        setConfirming(false);
+        onDeleted?.();
+        return;
+      }
       setFailed(true);
       setDeleting(false);
     } catch {
@@ -37,7 +61,11 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
     return (
       <div className="flex min-h-[100px] flex-col items-center justify-center gap-2 rounded-lg border border-line bg-surface p-4 text-center">
         <p className="text-sm text-ink">Delete {space.name}?</p>
-        {failed && <p className="text-xs text-status-error">Couldn&apos;t delete — try again.</p>}
+        {failed && (
+          <p className="text-xs text-status-error">
+            Couldn&apos;t delete — try again.
+          </p>
+        )}
         <div className="flex gap-4">
           <button
             type="button"
@@ -70,7 +98,10 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
       />
       <button
         type="button"
-        onClick={(e) => { e.preventDefault(); setConfirming(true); }}
+        onClick={(e) => {
+          e.preventDefault();
+          setConfirming(true);
+        }}
         aria-label={`Delete ${space.name}`}
         className="absolute right-2 top-2 z-10 rounded p-1 text-muted opacity-100 transition-ui hover:text-status-error focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
       >
@@ -80,8 +111,27 @@ export function SpaceCard({ space, onDeleted }: { space: SpaceSummary; onDeleted
         href={`/spaces/${space.id}`}
         className="relative flex h-full min-h-[100px] flex-col justify-center gap-2 p-4"
       >
-        <Icon className="h-6 w-6 text-ink" aria-hidden="true" />
-        <span className="truncate text-sm font-medium text-ink">{space.name}</span>
+        {space.first_note ? (
+          <>
+            <span className="truncate text-sm font-medium text-ink">
+              {space.first_note.name}
+            </span>
+            <p className="line-clamp-2 text-xs text-body">
+              {space.first_note.snippet}
+              {space.first_note.truncated ? "…" : ""}
+            </p>
+            <span className="font-mono text-mono-label text-muted">
+              Updated <DateTime iso={asUtcIso(space.first_note.updated_at)} />
+            </span>
+          </>
+        ) : (
+          <>
+            <Icon className="h-6 w-6 text-ink" aria-hidden="true" />
+            <span className="truncate text-sm font-medium text-ink">
+              {space.name}
+            </span>
+          </>
+        )}
       </Link>
     </div>
   );
