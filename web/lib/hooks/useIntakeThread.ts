@@ -38,7 +38,7 @@ interface PersistedItem {
 
 function readStored(): IntakeThreadItem[] {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -65,8 +65,9 @@ export function useIntakeThread() {
     itemsRef.current = items;
   }, [items]);
 
-  // Hydrate once from sessionStorage: survives reload and back/forward, empty
-  // in a new tab and after the browser session ends (issue #488).
+  // Hydrate once from localStorage: survives reload, new tabs, and browser
+  // restarts — the user's own submissions shouldn't vanish just because a tab
+  // closed. Cleared only on request, via `clear()` (issue #488).
   useEffect(() => {
     setItems(readStored());
     setHydrated(true);
@@ -76,7 +77,7 @@ export function useIntakeThread() {
     if (!hydrated) return;
     try {
       const persisted: PersistedItem[] = items.map(({ id, echo, response }) => ({ id, echo, response }));
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
     } catch {
       // Quota or a disabled store: the thread just doesn't survive reload.
     }

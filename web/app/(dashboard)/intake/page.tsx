@@ -40,7 +40,7 @@ export default function IntakePage() {
 function IntakeWorkspace() {
   const searchParams = useSearchParams();
   const prefillUrl = searchParams.get('url') ?? '';
-  const { items, add, removeAction } = useIntakeThread();
+  const { items, add, clear, removeAction } = useIntakeThread();
   const [error, setError] = useState<string | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [openOfferId, setOpenOfferId] = useState<string | null>(null);
@@ -174,6 +174,7 @@ function IntakeWorkspace() {
         openOfferId={openOfferId}
         onOpenOffer={setOpenOfferId}
         onSaveOffer={handleSaveOffer}
+        onClear={clear}
       />
     </PageShell>
   );
