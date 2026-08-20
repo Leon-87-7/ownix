@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS tags (
     meaning    TEXT NOT NULL DEFAULT '',
     color      TEXT NOT NULL DEFAULT '#8b5cf6',
     icon       TEXT,
+    pinned     INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
 );
@@ -1365,6 +1366,13 @@ _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN original_title TEXT",
 ])
 
+# v42 → v43: "GoTo" quick-jump — any number of a user's own tags can be pinned
+# (command launcher's GT shortcut lists links carrying a pinned tag). Nothing
+# is seeded; every tag starts unpinned.
+_MIGRATIONS.append([
+    "ALTER TABLE tags ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+])
+
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
@@ -2212,18 +2220,25 @@ async def list_pending_users() -> list[dict]:
 
 
 async def list_tags(chat_id: int) -> list[dict]:
-    return await _fetch_dicts(
-        "SELECT id, name, meaning, color, icon, created_at FROM tags WHERE chat_id = ? ORDER BY name",
+    rows = await _fetch_dicts(
+        "SELECT id, name, meaning, color, icon, pinned, created_at FROM tags WHERE chat_id = ? ORDER BY name",
         (chat_id,),
     )
+    for row in rows:
+        row["pinned"] = bool(row["pinned"])
+    return rows
 
 
 async def get_tag(chat_id: int, tag_id: str) -> dict | None:
     row = await _fetch_one(
-        "SELECT id, name, meaning, color, icon FROM tags WHERE id = ? AND chat_id = ?",
+        "SELECT id, name, meaning, color, icon, pinned FROM tags WHERE id = ? AND chat_id = ?",
         (tag_id, chat_id),
     )
-    return dict(row) if row else None
+    if row is None:
+        return None
+    result = dict(row)
+    result["pinned"] = bool(result["pinned"])
+    return result
 
 
 class TagTokenCollisionError(ValueError):
@@ -2258,7 +2273,7 @@ async def create_tag(*, chat_id: int, name: str, meaning: str, color: str, icon:
             (tag_id, chat_id, name, meaning, color, icon),
         )
         await conn.commit()
-    return {"id": tag_id, "name": name, "meaning": meaning, "color": color, "icon": icon}
+    return {"id": tag_id, "name": name, "meaning": meaning, "color": color, "icon": icon, "pinned": False}
 
 
 async def update_tag(*, chat_id: int, tag_id: str, name: str, meaning: str, color: str, icon: str | None = None) -> bool:
@@ -2285,6 +2300,23 @@ async def delete_tag(*, chat_id: int, tag_id: str) -> bool:
         await _execute_rowcount("DELETE FROM tags WHERE id = ? AND chat_id = ?", (tag_id, chat_id))
         > 0
     )
+
+
+async def set_tag_pinned(*, chat_id: int, tag_id: str, pinned: bool) -> dict | None:
+    """Toggle a tag's GoTo-pin. Any number of a chat's tags may be pinned at once."""
+    row = await _fetch_one(
+        "SELECT id, name, meaning, color, icon FROM tags WHERE id = ? AND chat_id = ?",
+        (tag_id, chat_id),
+    )
+    if row is None:
+        return None
+    await _execute_rowcount(
+        "UPDATE tags SET pinned = ? WHERE id = ? AND chat_id = ?",
+        (1 if pinned else 0, tag_id, chat_id),
+    )
+    result = dict(row)
+    result["pinned"] = pinned
+    return result
 
 
 # ---------------------------------------------------------------------------

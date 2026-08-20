@@ -16,6 +16,7 @@ import { GhostButton } from '@/components/ui/ghost-button';
 import {
   FileCode2,
   Link2,
+  Pin,
   Plus,
   Search,
   Trash2,
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
+import { GoToLinksPanel } from '@/components/feed/goto-links-panel';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { parseBatchLinkInput } from '@/lib/parse-batch-links';
 
@@ -42,6 +44,10 @@ interface AcceptedJob {
 
 const CLEAR_FAILED_CONFIRM =
   'Clear failed jobs in this tab? This marks them cancelled; it does not delete them.';
+
+// Window for the "G then T" GoTo chord — a 't' after this long is a fresh,
+// unrelated keystroke, not the second half of the chord.
+const GOTO_CHORD_TIMEOUT_MS = 600;
 
 /** Recovery action the Feed registers so the launcher can drive it with the
  * live scope + availability the Feed's useRecovery already computes. (Retry
@@ -340,6 +346,10 @@ export function SubmitJobProvider({
     },
     [restricted, showRestrictedToast],
   );
+  // GoTo quick-jump — links carrying one of the user's pinned tags. Read-only
+  // view of the user's own data, so unlike the dialogs above it isn't gated
+  // behind restricted mode (same as the Navigate group's "Open Links").
+  const [goToOpen, setGoToOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkError, setAddLinkError] = useState<string | null>(
@@ -370,6 +380,10 @@ export function SubmitJobProvider({
   feedRecoveryRef.current = feedRecovery;
   const feedSearchRef = useRef(feedSearch);
   feedSearchRef.current = feedSearch;
+  // "G then T" is a sequential chord, not a simultaneous combo — remembers the
+  // pending 'g' and its timestamp so a stray 'g' alone (or a stale one after
+  // the timeout) never fires GoTo.
+  const goToChordRef = useRef<number | null>(null);
 
   useEffect(() => {
     // ponytail: single-key shortcuts share one no-modifiers dispatch table;
@@ -400,6 +414,18 @@ export function SubmitJobProvider({
         return;
       }
 
+      if (noMods && !shouldIgnoreGlobalShortcut(event.target)) {
+        const now = Date.now();
+        const pendingG = goToChordRef.current;
+        if (key === 't' && pendingG !== null && now - pendingG < GOTO_CHORD_TIMEOUT_MS) {
+          goToChordRef.current = null;
+          event.preventDefault();
+          setGoToOpen(true);
+          return;
+        }
+        goToChordRef.current = key === 'g' ? now : null;
+      }
+
       const handler = plainKeyShortcuts[key];
       if (noMods && handler && !shouldIgnoreGlobalShortcut(event.target)) {
         event.preventDefault();
@@ -413,6 +439,7 @@ export function SubmitJobProvider({
     setAddLinkOpen,
     setCommandOpen,
     setDocsOpen,
+    setGoToOpen,
     setOpen,
   ]);
 
@@ -833,6 +860,15 @@ export function SubmitJobProvider({
                 shortcut="L"
                 onSelect={() => go('/feed?view=links')}
               />
+              <CommandAction
+                icon={Pin}
+                label="GoTo Links"
+                shortcut="G T"
+                onSelect={() => {
+                  setCommandOpen(false);
+                  setGoToOpen(true);
+                }}
+              />
             </CommandGroup>
             {feedRecovery && (
               <CommandGroup label="Recovery">
@@ -875,6 +911,18 @@ export function SubmitJobProvider({
                 />
               </CommandGroup>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={goToOpen}
+        onOpenChange={setGoToOpen}
+      >
+        <DialogContent>
+          <DialogTitle>GoTo</DialogTitle>
+          <div className="mt-4">
+            <GoToLinksPanel />
           </div>
         </DialogContent>
       </Dialog>

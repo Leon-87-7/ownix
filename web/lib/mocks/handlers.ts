@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 // 1.3MB file is never bundled — see browser.ts). Mutations (tag attach/detach,
 // create tag, annotations) persist for the browser session only.
 interface Job { id: string; content_type: string; status: string; [k: string]: unknown }
-interface Tag { id: string; name: string; meaning: string; color: string }
+interface Tag { id: string; name: string; meaning: string; color: string; pinned?: boolean }
 interface Template { id: string; name: string; description: string; extra_instructions: string; is_builtin: boolean; created_at?: string; updated_at?: string }
 interface DocumentOutput { id: string; kind: string; title: string; preview: string; content_url: string; created_at: string }
 export interface Seed {
@@ -241,6 +241,18 @@ return [
     // Drop attachments to the deleted tag so mock state stays consistent.
     jobTags.forEach((k) => { if (k.endsWith(`:${params.id}`)) jobTags.delete(k); });
     return new HttpResponse(null, { status: 204 });
+  }),
+  http.post('/api/controls/tags/:id/pin', ({ params }) => {
+    const t = tags.find((x) => x.id === params.id);
+    if (!t) return new HttpResponse(null, { status: 404 });
+    t.pinned = true;
+    return HttpResponse.json(t);
+  }),
+  http.delete('/api/controls/tags/:id/pin', ({ params }) => {
+    const t = tags.find((x) => x.id === params.id);
+    if (!t) return new HttpResponse(null, { status: 404 });
+    t.pinned = false;
+    return HttpResponse.json(t);
   }),
 
   http.get('/api/templates', () => HttpResponse.json(templates)),

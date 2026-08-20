@@ -96,6 +96,24 @@ async def delete_tag(tag_id: str, request: Request) -> None:
         raise HTTPException(status_code=404, detail="Tag not found")
 
 
+@controls_router.post("/tags/{tag_id}/pin")
+async def pin_tag(tag_id: str, request: Request) -> dict:
+    chat_id: int = request.state.user["id"]
+    tag = await database.set_tag_pinned(chat_id=chat_id, tag_id=tag_id, pinned=True)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    return tag
+
+
+@controls_router.delete("/tags/{tag_id}/pin")
+async def unpin_tag(tag_id: str, request: Request) -> dict:
+    chat_id: int = request.state.user["id"]
+    tag = await database.set_tag_pinned(chat_id=chat_id, tag_id=tag_id, pinned=False)
+    if tag is None:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    return tag
+
+
 # ---------------------------------------------------------------------------
 # Allowed domains
 # ---------------------------------------------------------------------------

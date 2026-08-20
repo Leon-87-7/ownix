@@ -8,7 +8,7 @@ import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
 import { apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
-import { SlidersHorizontal, TagPlus } from 'lucide-react';
+import { Pin, PinOff, SlidersHorizontal, TagPlus } from 'lucide-react';
 import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
 import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -21,26 +21,51 @@ function TagPill({
   tag,
   editing,
   onClick,
+  onTogglePin,
 }: {
   tag: Tag;
   editing: boolean;
   onClick: () => void;
+  onTogglePin: () => void;
 }) {
   return (
-    <li>
+    <li
+      className={`inline-flex items-center gap-0.5 rounded-full border bg-raised pr-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
+    >
       <Tooltip content={tag.meaning || undefined}>
         <button
           type="button"
           onClick={onClick}
           aria-pressed={editing}
           aria-label={`Edit ${tag.name}`}
-          className={`inline-flex items-center gap-1.5 rounded-full border bg-raised px-2.5 py-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
+          className="inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-1.5"
         >
           <TagMark
             tag={tag}
             className="h-3 w-3"
           />
           {tag.name}
+        </button>
+      </Tooltip>
+      <Tooltip content={tag.pinned ? 'Unpin from GoTo' : 'Pin for GoTo'}>
+        <button
+          type="button"
+          onClick={onTogglePin}
+          aria-pressed={Boolean(tag.pinned)}
+          aria-label={tag.pinned ? `Unpin ${tag.name} from GoTo` : `Pin ${tag.name} for GoTo`}
+          className={`rounded-full p-1 transition-ui hover:bg-surface ${tag.pinned ? 'text-signal' : 'text-muted'}`}
+        >
+          {tag.pinned ? (
+            <Pin
+              className="h-3 w-3"
+              aria-hidden="true"
+            />
+          ) : (
+            <PinOff
+              className="h-3 w-3"
+              aria-hidden="true"
+            />
+          )}
         </button>
       </Tooltip>
     </li>
@@ -55,6 +80,7 @@ function TagsTab() {
     createTag,
     deleteTag,
     updateTag,
+    toggleTagPinned,
   } = useTagList();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<
@@ -168,6 +194,9 @@ function TagsTab() {
               tag={tag}
               editing={tag.id === editingId}
               onClick={() => selectForEdit(tag.id)}
+              onTogglePin={() => {
+                void toggleTagPinned(tag.id, !tag.pinned).catch(() => {});
+              }}
             />
           ))}
         </ul>

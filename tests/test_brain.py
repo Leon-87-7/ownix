@@ -868,6 +868,54 @@ async def test_list_links_search_is_standalone_and_matches_exact_tags():
         os.unlink(db_path)
 
 
+@pytest.mark.asyncio
+async def test_list_links_pinned_only_filters_to_viewers_pinned_tags():
+    """GoTo quick-jump (pinned_only) returns only links carrying one of the viewer's
+    pinned tags — never another chat's pinned tags, never an unpinned tag's links."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, 'j', 1, 't', 't', 't')""",
+                [("a", "https://pinned.example"), ("b", "https://unpinned.example")],
+            )
+            await conn.executemany(
+                "INSERT INTO tags (id, chat_id, name, pinned) VALUES (?, ?, ?, ?)",
+                [
+                    ("t_mine_pinned", 1, "bookmarks", 1),
+                    ("t_mine_plain", 1, "reading", 0),
+                    ("t_other_pinned", 2, "bookmarks", 1),
+                ],
+            )
+            await conn.executemany(
+                "INSERT INTO link_tags (link_id, tag_id) VALUES (?, ?)",
+                [("a", "t_mine_pinned"), ("b", "t_mine_plain"), ("b", "t_other_pinned")],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            result = await list_links(viewer_chat_id=1, pinned_only=True)
+
+        assert [item["url"] for item in result["items"]] == ["https://pinned.example"]
+        assert result["items"][0]["tags"] == [
+            {"id": "t_mine_pinned", "name": "bookmarks", "color": "#8b5cf6", "meaning": "", "icon": None, "pinned": True}
+        ]
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # #385 — refresh loop repairs description IS NULL and re-embeds
 # ---------------------------------------------------------------------------
