@@ -241,6 +241,8 @@ def _youtube_video_id(url: str) -> str | None:
         return path.strip("/").split("/", 1)[0] or None
     if host.endswith("youtube.com") and path.startswith("/shorts/"):
         return path.removeprefix("/shorts/").split("/", 1)[0] or None
+    if host.endswith("youtube.com") and path.startswith("/live/"):
+        return path.removeprefix("/live/").split("/", 1)[0] or None
     return None
 
 

@@ -104,6 +104,7 @@ def detect_pipeline(
 
     Long pipeline:
         - youtube.com/watch?v={id}
+        - youtube.com/live/{id}
         - youtu.be/{id}
 
     Unsized video pipeline:
@@ -181,9 +182,12 @@ def _match_short(host: str, path: str) -> bool:
 
 
 def _match_long(host: str, path: str, query: str) -> bool:
-    """Standard YouTube watch (must include ?v=<id>) or youtu.be short links."""
-    if _host_matches(host, "youtube.com") and path == "/watch":
-        return bool(parse_qs(query).get("v", [""])[0])
+    """Standard YouTube watch (must include ?v=<id>), youtube.com/live/{id}
+    (live streams and their VODs), or youtu.be short links."""
+    if _host_matches(host, "youtube.com"):
+        if path == "/watch":
+            return bool(parse_qs(query).get("v", [""])[0])
+        return path.startswith("/live/") and len(path) > len("/live/")
     return host == "youtu.be" and len(path) > 1
 
 

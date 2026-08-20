@@ -35,7 +35,7 @@ function platformFromUrl(
   const { host, path } = parseUrl(url);
   if (
     host === 'youtu.be' ||
-    (host.endsWith('youtube.com') && path === '/watch')
+    (host.endsWith('youtube.com') && (path === '/watch' || path.startsWith('/live/')))
   )
     return 'youtube';
   if (host.endsWith('youtube.com') && path.startsWith('/shorts/'))

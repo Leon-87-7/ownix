@@ -57,6 +57,8 @@ def test_short_pipeline(url: str) -> None:
         "https://m.youtube.com/watch?v=abc123",
         "https://youtu.be/qZkX_gIlwsY",
         "https://youtu.be/4bfKyZ7hbsU?si=msGtIDZ4Cuqxgz17",
+        "https://www.youtube.com/live/zcLPGC-tvgk?si=FqKGR2T09Q1jIn2U",
+        "https://youtube.com/live/zcLPGC-tvgk",
     ],
 )
 def test_long_pipeline(url: str) -> None:
@@ -118,6 +120,11 @@ def test_youtu_be_requires_path() -> None:
 
 def test_youtube_shorts_requires_id() -> None:
     assert detect_pipeline("https://youtube.com/shorts/") == "rejected"
+
+
+def test_youtube_live_requires_id() -> None:
+    assert detect_pipeline("https://youtube.com/live/") == "rejected"
+    assert detect_pipeline("https://youtube.com/live") == "rejected"
 
 
 def test_tiktok_requires_at_and_video() -> None:
