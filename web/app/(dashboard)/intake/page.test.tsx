@@ -17,14 +17,14 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  // jsdom's sessionStorage persists across tests in a file, and the thread now
+  // jsdom's localStorage persists across tests in a file, and the thread now
   // hydrates from it (#488) — without this, cards leak between test cases.
-  sessionStorage.clear();
+  localStorage.clear();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  sessionStorage.clear();
+  localStorage.clear();
 });
 
 describe('IntakePage', () => {
@@ -34,7 +34,7 @@ describe('IntakePage', () => {
     render(<IntakePage />);
 
     await waitFor(() =>
-      expect(screen.getByText(/nothing submitted yet this session/i)).toBeInTheDocument(),
+      expect(screen.getByText(/nothing submitted yet/i)).toBeInTheDocument(),
     );
   });
 
@@ -142,7 +142,7 @@ describe('IntakePage', () => {
     await user.click(screen.getByRole('button', { name: /send/i }));
     await waitFor(() => expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument());
 
-    // Simulate a reload: the component goes away, sessionStorage does not.
+    // Simulate a reload: the component goes away, localStorage does not.
     first.unmount();
 
     // The job finished while the tab was closed — the restored card must show
@@ -198,15 +198,55 @@ describe('IntakePage', () => {
     expect(screen.queryByText(/job no longer exists/i)).not.toBeInTheDocument();
   });
 
-  it('starts empty when the browser session had nothing stored', async () => {
+  it('starts empty when the stored thread is corrupt', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({ pending: null }));
-    sessionStorage.setItem('ownix.intake.thread', 'not json at all');
+    localStorage.setItem('ownix.intake.thread', 'not json at all');
 
     render(<IntakePage />);
 
     await waitFor(() =>
-      expect(screen.getByText(/nothing submitted yet this session/i)).toBeInTheDocument(),
+      expect(screen.getByText(/nothing submitted yet/i)).toBeInTheDocument(),
     );
+  });
+
+  it('clears the persisted thread only after confirming', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('/api/intake/state')) return jsonResponse({ pending: null });
+      if (url.includes('/api/jobs')) return jsonResponse({ items: [], total: 0, page: 1, limit: 20 });
+      if (url.includes('/api/intake/message') && init?.method === 'POST') {
+        return jsonResponse({
+          schema_version: 1,
+          kind: 'job_created',
+          text: 'Received — job_abcd (short).',
+          job_id: 'j1',
+          job_url: '/jobs/j1',
+          actions: [],
+          artifacts: [],
+          retryable: false,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const confirmMock = vi.fn(() => false);
+    vi.stubGlobal('confirm', confirmMock);
+
+    render(<IntakePage />);
+    const composer = await screen.findByLabelText(/intake composer/i);
+    await user.type(composer, 'https://youtube.com/shorts/abc123');
+    await user.click(screen.getByRole('button', { name: /send/i }));
+    await waitFor(() => expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /clear history/i }));
+    expect(confirmMock).toHaveBeenCalled();
+    // Declined: the card stays.
+    expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument();
+
+    confirmMock.mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: /clear history/i }));
+    await waitFor(() => expect(screen.getByText(/nothing submitted yet/i)).toBeInTheDocument());
+    expect(localStorage.getItem('ownix.intake.thread')).toBe('[]');
   });
 
   it('shows the pending-state banner with a working cancel button', async () => {
