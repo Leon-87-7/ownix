@@ -19,7 +19,7 @@ export function ReorderButtons({
         className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
         aria-label="Move up"
       >
-        <OwnixChevronDown className="h-3.5 w-3.5 rotate-180" />
+        <OwnixChevronDown className="h-2 w-2 rotate-180" />
       </button>
       <button
         onClick={onDown}
@@ -27,7 +27,7 @@ export function ReorderButtons({
         className="rounded px-1 py-0.5 text-xs text-muted transition-ui hover:text-ink disabled:opacity-30"
         aria-label="Move down"
       >
-        <OwnixChevronDown className="h-3.5 w-3.5" />
+        <OwnixChevronDown className="h-2 w-2" />
       </button>
     </div>
   );
