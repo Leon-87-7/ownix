@@ -1,4 +1,7 @@
+import { Trash2 } from 'lucide-react';
+
 import { IntakeResponseCard } from '@/components/intake/intake-response-card';
+import { Tooltip } from '@/components/ui/tooltip';
 import type { IntakeThreadItem } from '@/lib/hooks/useIntakeThread';
 import type { IntakeActionShape } from '@/lib/hooks/useIntake';
 
@@ -38,15 +41,21 @@ export function IntakeThread({
         <>
           {onClear && (
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm("Clear your intake history? This can't be undone.")) onClear();
-                }}
-                className="text-sm font-medium text-muted transition-ui hover:text-status-error"
-              >
-                Clear history
-              </button>
+              <Tooltip content="Clear history">
+                <button
+                  type="button"
+                  aria-label="Clear history"
+                  onClick={() => {
+                    if (window.confirm("Clear your intake history? This can't be undone.")) onClear();
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition-ui hover:text-status-error"
+                >
+                  <Trash2
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  />
+                </button>
+              </Tooltip>
             </div>
           )}
           {items.map((item) => (
