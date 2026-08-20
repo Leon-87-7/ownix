@@ -67,9 +67,12 @@ export function IntakeResponseCard({
   return (
     <div className="space-y-1">
       {echo && (
-        <p className="truncate pl-1 font-mono text-label text-muted" title={echo}>
-          {echo}
-        </p>
+        <div className="flex items-center gap-1 pl-1">
+          <p className="min-w-0 flex-1 truncate font-mono text-label text-muted" title={echo}>
+            {echo}
+          </p>
+          <CopyButton value={echo} ariaLabel="Copy input" />
+        </div>
       )}
 
       <div

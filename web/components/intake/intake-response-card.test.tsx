@@ -49,6 +49,18 @@ describe('IntakeResponseCard', () => {
     expect(screen.getByText('https://youtube.com/shorts/abc')).toBeInTheDocument();
   });
 
+  it('lets you copy the echoed input, even when unsupported and untruncated on hover only', () => {
+    render(
+      <IntakeResponseCard
+        item={item({
+          echo: 'https://www.youtube.com/live/zcLPGC-t123456789',
+          response: response({ kind: 'unsupported', text: 'Unsupported URL.' }),
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /copy input/i })).toBeInTheDocument();
+  });
+
   it('shows the live status line and badge while the job is in flight', () => {
     render(<IntakeResponseCard item={item({ job: job({ status: 'processing' }) })} />);
     expect(screen.getByText(/processing…/i)).toBeInTheDocument();
