@@ -142,6 +142,20 @@ describe('ControlsPage', () => {
     expect(section('Tags').queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
+  it('surfaces a pin-toggle failure instead of discarding it silently', async () => {
+    const toggleTagPinned = vi.fn().mockRejectedValue(new Error('Pin request failed'));
+    setupTagsMock({ toggleTagPinned });
+    render(<ControlsPage />);
+
+    fireEvent.click(
+      section('Tags').getByRole('button', { name: 'Pin Alpha for GoTo' }),
+    );
+
+    await waitFor(() =>
+      expect(section('Tags').getByText('Pin request failed')).toBeTruthy(),
+    );
+  });
+
   it('opens the edit panel pre-filled when a tag pill is clicked', () => {
     render(<ControlsPage />);
     const pill = section('Tags').getByRole('button', { name: 'Edit Alpha' });

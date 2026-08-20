@@ -916,6 +916,53 @@ async def test_list_links_pinned_only_filters_to_viewers_pinned_tags():
         os.unlink(db_path)
 
 
+@pytest.mark.asyncio
+async def test_list_links_pinned_only_combines_with_q_without_dropping_params():
+    """pinned_only=True plus a non-empty q must AND both filters — regression for a
+    bug where the q branch's `filter_params = [...]` reassignment silently dropped
+    the pinned-tag placeholder's bound value instead of extending the list."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.brain import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
+            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, url, title, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'j', 1, 't', 't', 't')""",
+                [
+                    ("a", "https://pinned-match.example", "Pinned Match"),
+                    ("b", "https://pinned-nomatch.example", "Other"),
+                    ("c", "https://unpinned-match.example", "Pinned Match Two"),
+                ],
+            )
+            await conn.execute(
+                "INSERT INTO tags (id, chat_id, name, pinned) VALUES ('t_pinned', 1, 'bookmarks', 1)"
+            )
+            await conn.executemany(
+                "INSERT INTO link_tags (link_id, tag_id) VALUES (?, 't_pinned')",
+                [("a",), ("b",)],
+            )
+            await conn.commit()
+
+        with patch("src.brain.settings") as mock_settings:
+            mock_settings.DB_PATH = db_path
+            # Must not raise (a dropped bound param means a parameter-count
+            # mismatch at execute time) and must AND both filters.
+            result = await list_links(viewer_chat_id=1, q="Pinned Match", pinned_only=True)
+
+        assert [item["url"] for item in result["items"]] == ["https://pinned-match.example"]
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # #385 — refresh loop repairs description IS NULL and re-embeds
 # ---------------------------------------------------------------------------

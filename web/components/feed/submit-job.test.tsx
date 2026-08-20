@@ -420,6 +420,34 @@ describe('Ingest Link — batch paste (#494)', () => {
     expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
   });
 
+  it('does not open GoTo when a modified key interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 't' });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
+  it('does not open GoTo when a keystroke inside a field interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <input aria-label="Notes" />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(screen.getByLabelText('Notes'), { key: 'x' });
+    fireEvent.keyDown(window, { key: 't' });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
   it('does not open GoTo once the chord window has elapsed', () => {
     vi.useFakeTimers();
     try {

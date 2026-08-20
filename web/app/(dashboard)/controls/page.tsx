@@ -86,6 +86,7 @@ function TagsTab() {
   const [deleteError, setDeleteError] = useState<
     string | undefined
   >();
+  const [pinError, setPinError] = useState<string | undefined>();
   const editingTag = tags.find((t) => t.id === editingId) ?? null;
   const editPanelRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +124,15 @@ function TagsTab() {
       setDeleteError(
         err instanceof Error ? err.message : 'Delete failed',
       );
+    }
+  };
+
+  const handleTogglePin = async (tag: Tag) => {
+    setPinError(undefined);
+    try {
+      await toggleTagPinned(tag.id, !tag.pinned);
+    } catch (err) {
+      setPinError(err instanceof Error ? err.message : 'Pin failed');
     }
   };
 
@@ -195,11 +205,14 @@ function TagsTab() {
               editing={tag.id === editingId}
               onClick={() => selectForEdit(tag.id)}
               onTogglePin={() => {
-                void toggleTagPinned(tag.id, !tag.pinned).catch(() => {});
+                void handleTogglePin(tag);
               }}
             />
           ))}
         </ul>
+        {pinError && (
+          <p className="text-xs text-status-error">{pinError}</p>
+        )}
       </div>
     </div>
   );

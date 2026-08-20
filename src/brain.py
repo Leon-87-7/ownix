@@ -754,7 +754,7 @@ async def list_links(
         query = q.strip()
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{escaped}%"
-        filter_params = [like, like, like, query, viewer_chat_id, viewer_chat_id]
+        filter_params += [like, like, like, query, viewer_chat_id, viewer_chat_id]
 
     where = " AND ".join(where_parts)
 

@@ -406,24 +406,25 @@ export function SubmitJobProvider({
       const key = event.key.toLowerCase();
       const noMods = !event.altKey && !event.ctrlKey && !event.metaKey;
 
+      // Chord bookkeeping runs on every keydown (not just the shortcut-eligible
+      // branch below) so any interrupting key — modified, or typed into a field —
+      // clears a pending 'g' instead of leaving it live for a later, unrelated 't'.
+      const canFireGoTo = noMods && !shouldIgnoreGlobalShortcut(event.target);
+      const pendingG = goToChordRef.current;
+      if (canFireGoTo && key === 't' && pendingG !== null && Date.now() - pendingG < GOTO_CHORD_TIMEOUT_MS) {
+        goToChordRef.current = null;
+        event.preventDefault();
+        setGoToOpen(true);
+        return;
+      }
+      goToChordRef.current = canFireGoTo && key === 'g' ? Date.now() : null;
+
       if (key === 'k' && (event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey) {
         if (!shouldIgnoreGlobalShortcut(event.target)) {
           event.preventDefault();
           setCommandOpen(true);
         }
         return;
-      }
-
-      if (noMods && !shouldIgnoreGlobalShortcut(event.target)) {
-        const now = Date.now();
-        const pendingG = goToChordRef.current;
-        if (key === 't' && pendingG !== null && now - pendingG < GOTO_CHORD_TIMEOUT_MS) {
-          goToChordRef.current = null;
-          event.preventDefault();
-          setGoToOpen(true);
-          return;
-        }
-        goToChordRef.current = key === 'g' ? now : null;
       }
 
       const handler = plainKeyShortcuts[key];
