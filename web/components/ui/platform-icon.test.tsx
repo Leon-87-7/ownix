@@ -7,6 +7,7 @@ describe("platform icon helpers", () => {
     ["https://www.youtube.com/watch?v=abc", "long", "YouTube source"],
     ["https://www.youtube.com/shorts/abc", "short", "YouTube Shorts source"],
     ["https://youtu.be/abc", "long", "YouTube source"],
+    ["https://www.youtube.com/live/abc?si=xyz", "long", "YouTube source"],
     ["https://www.tiktok.com/@vig/video/1", "short", "TikTok source"],
     ["https://www.instagram.com/reel/1", "short", "Instagram source"],
     ["https://github.com/example/repo", "repo", "GitHub source"],

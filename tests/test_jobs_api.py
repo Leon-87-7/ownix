@@ -33,6 +33,16 @@ async def test_resolve_thumbnail_long_youtu_be() -> None:
 
 
 @pytest.mark.asyncio
+async def test_resolve_thumbnail_long_youtube_live() -> None:
+    assert await resolve_thumbnail(
+        {"id": "j1", "url": "https://www.youtube.com/live/abc123?si=xyz", "content_type": "long"}
+    ) == (
+        "https://img.youtube.com/vi/abc123/hqdefault.jpg",
+        "landscape",
+    )
+
+
+@pytest.mark.asyncio
 async def test_resolve_thumbnail_repo() -> None:
     assert await resolve_thumbnail(
         {"id": "j1", "url": "https://github.com/owner/repo/issues/1", "content_type": "repo"}
