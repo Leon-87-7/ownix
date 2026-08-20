@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     error_msg                   TEXT,
     drive_url                   TEXT,
     title                       TEXT,
+    original_title              TEXT,
     transcript                  TEXT,
     ai_category                 TEXT,
     ai_topic                    TEXT,
@@ -1355,6 +1356,13 @@ _MIGRATIONS.append([
 _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN source_url TEXT",
     "CREATE INDEX IF NOT EXISTS idx_jobs_source_url ON jobs(source_url)",
+])
+
+# v41 → v42: the dashboard lets a user rename a job's title. `original_title`
+# snapshots the pipeline-derived title on first rename so clearing the field
+# later restores it (rather than clearing to NULL/the URL fallback).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN original_title TEXT",
 ])
 
 
