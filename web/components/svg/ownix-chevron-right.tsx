@@ -1,5 +1,4 @@
 // The arrow stroke cut into the Ownix wordmark's "X", isolated and rotated
-// 90deg clockwise so it reads as a chevron-down instead of a chevron-right.
 export function OwnixChevronRight(
   props: React.SVGProps<SVGSVGElement>,
 ) {
