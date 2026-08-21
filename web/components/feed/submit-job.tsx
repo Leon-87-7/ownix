@@ -404,7 +404,8 @@ export function SubmitJobProvider({
 
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      const noMods = !event.altKey && !event.ctrlKey && !event.metaKey;
+      const noMods =
+        !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
 
       // Chord bookkeeping runs on every keydown (not just the shortcut-eligible
       // branch below) so any interrupting key — modified, or typed into a field —

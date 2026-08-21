@@ -434,6 +434,19 @@ describe('Ingest Link — batch paste (#494)', () => {
     expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
   });
 
+  it('does not open GoTo when Shift interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: 't', shiftKey: true });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
   it('does not open GoTo when a keystroke inside a field interrupts the chord', () => {
     render(
       <SubmitJobProvider>
