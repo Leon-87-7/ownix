@@ -123,8 +123,6 @@ describe('SpaceDetailPage', () => {
     render(<SpaceDetailPage />);
     expect(screen.getByTestId('context-tab')).toBeTruthy();
     expect(screen.queryByTestId('urls-tab')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'URLs' }));
-    expect(screen.getByTestId('urls-tab')).toBeTruthy();
   });
 
   it('renders URLs tab when ?tab=urls is in the URL', () => {

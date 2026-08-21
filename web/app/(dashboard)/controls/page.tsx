@@ -16,6 +16,7 @@ import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 function TagPill({
   tag,
@@ -447,6 +448,7 @@ function Section({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
+  const reducedMotion = useReducedMotion();
 
   return (
     <details
@@ -455,7 +457,7 @@ function Section({
       onToggle={(e) => {
         if ((e.target as HTMLDetailsElement).open) {
           ref.current?.scrollIntoView?.({
-            behavior: 'smooth',
+            behavior: reducedMotion ? 'auto' : 'smooth',
             block: 'nearest',
           });
         }

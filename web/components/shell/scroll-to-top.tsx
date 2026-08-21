@@ -25,21 +25,27 @@ export function ScrollToTop() {
     // the scroller's content if that turns out to matter.
     const checkOverlap = () => {
       const btn = buttonRef.current;
-      if (!btn || typeof document.elementFromPoint !== 'function') return;
-      const rect = btn.getBoundingClientRect();
-      const prevPointerEvents = btn.style.pointerEvents;
-      btn.style.pointerEvents = 'none';
-      let el: Element | null = null;
-      try {
-        el = document.elementFromPoint(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-        );
-      } catch {
-        // jsdom doesn't implement elementFromPoint
+      if (!btn) return;
+      const btnRect = btn.getBoundingClientRect();
+      const candidates = document.querySelectorAll<HTMLElement>(
+        INTERACTIVE_SELECTOR,
+      );
+      let overlap = false;
+      for (const el of candidates) {
+        if (el === btn || btn.contains(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        if (
+          r.left < btnRect.right &&
+          r.right > btnRect.left &&
+          r.top < btnRect.bottom &&
+          r.bottom > btnRect.top
+        ) {
+          overlap = true;
+          break;
+        }
       }
-      btn.style.pointerEvents = prevPointerEvents;
-      setDimmed(Boolean(el?.closest(INTERACTIVE_SELECTOR)));
+      setDimmed(overlap);
     };
 
     const onScroll = () => {
@@ -67,7 +73,7 @@ export function ScrollToTop() {
       tabIndex={visible ? 0 : -1}
       className={`group fixed bottom-6 right-6 z-30 flex h-11 w-11 items-center justify-center rounded-md bg-signal text-onsignal shadow-[0_6px_20px_-4px_rgba(217,154,69,0.5)] outline-none transition-[opacity,transform,box-shadow,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-signal-bright hover:shadow-[0_12px_30px_-6px_rgba(217,154,69,0.7)] active:translate-y-0 active:bg-signal-deep focus-visible:ring-2 focus-visible:ring-signal-bright focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none ${
         visible
-          ? `translate-y-0 scale-100 ${dimmed ? 'opacity-60' : 'opacity-100'}`
+          ? `translate-y-0 scale-100 ${dimmed ? 'pointer-events-none opacity-60' : 'opacity-100'}`
           : 'pointer-events-none translate-y-1 scale-90 opacity-0'
       }`}
     >

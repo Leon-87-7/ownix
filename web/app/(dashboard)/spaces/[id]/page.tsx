@@ -38,12 +38,10 @@ export default function SpaceDetailPage() {
     cancelEdit,
     handleEditSave,
   } = useSpaceEdit(id, space, setSpace);
-  const [activeTab, setActiveTabState] = useState<ActiveTab>(
-    searchParams.get("tab") === "urls" ? "urls" : "context",
-  );
+  const activeTab: ActiveTab =
+    searchParams.get("tab") === "urls" ? "urls" : "context";
   const setActiveTab = useCallback(
     (tab: ActiveTab) => {
-      setActiveTabState(tab);
       const params = new URLSearchParams(searchParams.toString());
       if (tab === "urls") params.set("tab", "urls");
       else params.delete("tab");

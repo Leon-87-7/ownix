@@ -34,7 +34,7 @@ describe('ScrollToTop', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
 
-  it('dims to 60% opacity when it overlaps an interactive element', () => {
+  it('dims and disables pointer events when it overlaps an interactive element', () => {
     const { container } = render(
       <div>
         <main />
@@ -52,17 +52,38 @@ describe('ScrollToTop', () => {
       value: 240,
       configurable: true,
     });
-
-    const underneath = screen.getByText('underneath');
-    const elementFromPoint = vi.fn().mockReturnValue(underneath);
-    document.elementFromPoint = elementFromPoint;
     fireEvent.scroll(scroller);
 
     const button = screen.getByRole('button', { name: /scroll to top/i });
-    expect(button.className).toContain('opacity-60');
+    const underneath = screen.getByText('underneath');
 
-    elementFromPoint.mockReturnValue(null);
+    const overlapping = {
+      left: 0,
+      top: 0,
+      right: 40,
+      bottom: 40,
+      width: 40,
+      height: 40,
+    } as DOMRect;
+    const elsewhere = {
+      left: 500,
+      top: 500,
+      right: 540,
+      bottom: 540,
+      width: 40,
+      height: 40,
+    } as DOMRect;
+
+    button.getBoundingClientRect = vi.fn().mockReturnValue(overlapping);
+    underneath.getBoundingClientRect = vi.fn().mockReturnValue(overlapping);
+    fireEvent.scroll(scroller);
+
+    expect(button.className).toContain('opacity-60');
+    expect(button.className).toContain('pointer-events-none');
+
+    underneath.getBoundingClientRect = vi.fn().mockReturnValue(elsewhere);
     fireEvent.scroll(scroller);
     expect(button.className).toContain('opacity-100');
+    expect(button.className).not.toContain('pointer-events-none');
   });
 });
