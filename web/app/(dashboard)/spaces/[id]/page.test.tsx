@@ -3,11 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import SpaceDetailPage from './page';
 
+const mockRouterReplace = vi.fn();
+let mockSearchParams = new URLSearchParams();
+
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 's1' }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: mockRouterReplace, back: vi.fn() }),
   usePathname: () => '/spaces/s1',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
 }));
 
 vi.mock('@/lib/hooks/useSpaceDetail', () => ({
@@ -75,6 +78,8 @@ function setupMocks(
 beforeEach(() => {
   // Restore first — restoring after setupMocks would wipe its mockReturnValues.
   vi.restoreAllMocks();
+  mockSearchParams = new URLSearchParams();
+  mockRouterReplace.mockClear();
   setupMocks();
 });
 
@@ -118,8 +123,26 @@ describe('SpaceDetailPage', () => {
     render(<SpaceDetailPage />);
     expect(screen.getByTestId('context-tab')).toBeTruthy();
     expect(screen.queryByTestId('urls-tab')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'URLs' }));
+  });
+
+  it('renders URLs tab when ?tab=urls is in the URL', () => {
+    mockSearchParams = new URLSearchParams('tab=urls');
+    render(<SpaceDetailPage />);
     expect(screen.getByTestId('urls-tab')).toBeTruthy();
+    expect(screen.queryByTestId('context-tab')).toBeNull();
+  });
+
+  it('replaces the URL with ?tab=urls when switching to the URLs tab', () => {
+    render(<SpaceDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'URLs' }));
+    expect(mockRouterReplace).toHaveBeenCalledWith('/spaces/s1?tab=urls', { scroll: false });
+  });
+
+  it('replaces the URL with no tab param when switching back to Context', () => {
+    mockSearchParams = new URLSearchParams('tab=urls');
+    render(<SpaceDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Context' }));
+    expect(mockRouterReplace).toHaveBeenCalledWith('/spaces/s1', { scroll: false });
   });
 
   it("renders the space's icon in the header", () => {

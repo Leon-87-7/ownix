@@ -16,6 +16,7 @@ import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 function TagPill({
   tag,
@@ -446,9 +447,21 @@ function Section({
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const reducedMotion = useReducedMotion();
+
   return (
     <details
+      ref={ref}
       open={defaultOpen}
+      onToggle={(e) => {
+        if ((e.target as HTMLDetailsElement).open) {
+          ref.current?.scrollIntoView?.({
+            behavior: reducedMotion ? 'auto' : 'smooth',
+            block: 'nearest',
+          });
+        }
+      }}
       className="group overflow-hidden rounded-lg border border-line bg-surface"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition-ui hover:bg-raised [&::-webkit-details-marker]:hidden">

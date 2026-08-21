@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import ExportModal from "@/components/ui/export-modal";
 import { useSpaceDetail } from "@/lib/hooks/useSpaceDetail";
 import { useSpaceEdit } from "@/lib/hooks/useSpaceEdit";
@@ -21,6 +21,8 @@ export default function SpaceDetailPage() {
   // client-side (see jobs/[id] for the /api/…/undefined failure this avoids).
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { space, setSpace, fetchState } = useSpaceDetail(id);
   const {
     editing,
@@ -36,7 +38,18 @@ export default function SpaceDetailPage() {
     cancelEdit,
     handleEditSave,
   } = useSpaceEdit(id, space, setSpace);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("context");
+  const activeTab: ActiveTab =
+    searchParams.get("tab") === "urls" ? "urls" : "context";
+  const setActiveTab = useCallback(
+    (tab: ActiveTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === "urls") params.set("tab", "urls");
+      else params.delete("tab");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
   const [showExport, setShowExport] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
