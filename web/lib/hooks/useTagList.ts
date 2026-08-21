@@ -9,6 +9,7 @@ export interface Tag {
   meaning: string;
   color: string;
   icon?: string | null;
+  pinned?: boolean;
   created_at?: string;
 }
 
@@ -40,5 +41,17 @@ export function useTagList() {
     setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)).sort((a, b) => a.name.localeCompare(b.name)));
   }, [setTags]);
 
-  return { tags, loading, fetchError, createTag, deleteTag, updateTag };
+  // GoTo quick-jump: any number of a user's own tags can be pinned. Nothing is
+  // locked — pinning is just this one boolean, toggled freely like color/icon.
+  const toggleTagPinned = useCallback(async (id: string, pinned: boolean): Promise<void> => {
+    if (pinned) {
+      const result = await apiPost<Tag>(`/api/controls/tags/${id}/pin`, {});
+      if (!result.ok) throw new Error(result.detail);
+    } else {
+      await apiDelete(`/api/controls/tags/${id}/pin`, 'Unpin failed');
+    }
+    setTags((prev) => prev.map((t) => (t.id === id ? { ...t, pinned } : t)));
+  }, [setTags]);
+
+  return { tags, loading, fetchError, createTag, deleteTag, updateTag, toggleTagPinned };
 }

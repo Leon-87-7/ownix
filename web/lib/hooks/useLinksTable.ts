@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-export type LinkTag = { id: string; name: string; color: string; meaning: string; icon?: string | null };
+export type LinkTag = { id: string; name: string; color: string; meaning: string; icon?: string | null; pinned?: boolean };
 
 type LinkPreview = {
   id: string;

@@ -392,4 +392,105 @@ describe('Ingest Link — batch paste (#494)', () => {
     await waitFor(() => expect(screen.getByText('link')).toBeTruthy());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
+
+  it('opens GoTo with the G then T chord', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items: [] }))));
+
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: 't' });
+
+    expect(screen.getByRole('dialog', { name: 'GoTo' })).toBeTruthy();
+  });
+
+  it('does not open GoTo on a lone G', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
+  it('does not open GoTo when a modified key interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 't' });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
+  it('does not open GoTo when Shift interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(window, { key: 't', shiftKey: true });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
+  it('does not open GoTo when a keystroke inside a field interrupts the chord', () => {
+    render(
+      <SubmitJobProvider>
+        <input aria-label="Notes" />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { key: 'g' });
+    fireEvent.keyDown(screen.getByLabelText('Notes'), { key: 'x' });
+    fireEvent.keyDown(window, { key: 't' });
+
+    expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+  });
+
+  it('does not open GoTo once the chord window has elapsed', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <SubmitJobProvider>
+          <span />
+        </SubmitJobProvider>,
+      );
+
+      fireEvent.keyDown(window, { key: 'g' });
+      vi.advanceTimersByTime(700);
+      fireEvent.keyDown(window, { key: 't' });
+
+      expect(screen.queryByRole('dialog', { name: 'GoTo' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lists GoTo Links in the launcher Navigate group with its G T shortcut', () => {
+    render(
+      <SubmitJobProvider>
+        <span />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
+
+    expect(
+      screen.getByRole('button', { name: /GoTo Links\s*G\s*T/i }),
+    ).toBeTruthy();
+  });
 });

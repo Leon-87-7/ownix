@@ -56,4 +56,20 @@ describe('useTagList', () => {
     await act(() => result.current.deleteTag('t1'));
     expect(result.current.tags).toHaveLength(0);
   });
+
+  it('toggleTagPinned POSTs to pin and flips local state', async () => {
+    stubMethodFetch('POST', { ok: true, status: 200, body: { ...TAGS[0], pinned: true } });
+    const result = await renderLoadedTags();
+
+    await act(() => result.current.toggleTagPinned('t1', true));
+    expect(result.current.tags[0].pinned).toBe(true);
+  });
+
+  it('toggleTagPinned DELETEs to unpin and flips local state', async () => {
+    stubMethodFetch('DELETE', { ok: true, status: 200, body: { ...TAGS[0], pinned: false } });
+    const result = await renderLoadedTags();
+
+    await act(() => result.current.toggleTagPinned('t1', false));
+    expect(result.current.tags[0].pinned).toBe(false);
+  });
 });

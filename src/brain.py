@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS tags (
     meaning    TEXT NOT NULL DEFAULT '',
     color      TEXT NOT NULL DEFAULT '#8b5cf6',
     icon       TEXT,
+    pinned     INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(chat_id, name)
 );
@@ -706,11 +707,14 @@ async def list_links(
     q: str = "",
     order: str = "desc",
     viewer_chat_id: int | None = None,
+    pinned_only: bool = False,
 ) -> dict[str, Any]:
     """Return deduplicated Brain links with configurable sorting and pagination.
 
     ``order`` controls last-seen ordering (anything except ``asc`` is descending).
     ``q`` filters by case-insensitive substring across url/title/description, plus exact tag names.
+    ``pinned_only`` restricts to links carrying at least one of the viewer's pinned
+    tags (the GoTo quick-jump list) — requires ``viewer_chat_id``.
     Tags are private to their owner (CONTEXT.md "Link tag") — matching and the
     returned tag payload are constrained to ``viewer_chat_id`` when given.
     # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
@@ -724,6 +728,15 @@ async def list_links(
     # itself never varies with the caller.
     where_parts = ["COALESCE(j.status, '') != 'cancelled'"]
     filter_params: list[Any] = []
+    if pinned_only:
+        where_parts.append(
+            """EXISTS (
+                SELECT 1 FROM link_tags lt
+                JOIN tags t ON t.id = lt.tag_id
+                WHERE lt.link_id = l.id AND t.chat_id = ? AND t.pinned = 1
+            )"""
+        )
+        filter_params.append(viewer_chat_id)
     if q.strip():
         where_parts.append(
             """(
@@ -741,7 +754,7 @@ async def list_links(
         query = q.strip()
         escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         like = f"%{escaped}%"
-        filter_params = [like, like, like, query, viewer_chat_id, viewer_chat_id]
+        filter_params += [like, like, like, query, viewer_chat_id, viewer_chat_id]
 
     where = " AND ".join(where_parts)
 
@@ -778,7 +791,7 @@ async def list_links(
         if link_ids:
             try:
                 tag_cursor = await conn.execute(
-                    """SELECT lt.link_id, t.id, t.name, t.color, t.meaning, t.icon
+                    """SELECT lt.link_id, t.id, t.name, t.color, t.meaning, t.icon, t.pinned
                        FROM link_tags lt
                        JOIN tags t ON t.id = lt.tag_id
                        WHERE lt.link_id IN (SELECT value FROM json_each(?))
@@ -788,6 +801,7 @@ async def list_links(
                 )
                 for tag_row in await tag_cursor.fetchall():
                     tag = dict(tag_row)
+                    tag["pinned"] = bool(tag["pinned"])
                     tags_by_link[tag.pop("link_id")].append(tag)
             except aiosqlite.OperationalError:
                 pass

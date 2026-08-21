@@ -43,6 +43,7 @@ async def list_links(
     offset: int = Query(default=0, ge=0),
     q: str = Query(default="", max_length=300),
     order: str = Query(default="desc"),
+    pinned: bool = Query(default=False),
 ) -> dict:
     # Link inventory stays operator-wide; tag matching/payload is viewer-private.
     return await brain.list_links(
@@ -51,6 +52,7 @@ async def list_links(
         q=q,
         order=order,
         viewer_chat_id=request.state.user["id"],
+        pinned_only=pinned,
     )
 
 

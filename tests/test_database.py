@@ -1261,6 +1261,26 @@ async def test_update_tag_preserves_and_clears_icon(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_set_tag_pinned_round_trip_and_chat_scoped(temp_db):
+    """set_tag_pinned (GoTo quick-jump) toggles per-owner and rejects other chats."""
+    from src import database as db
+
+    tag = await db.create_tag(chat_id=1, name="bookmarks", meaning="", color="#8b5cf6")
+    assert tag["pinned"] is False
+
+    pinned = await db.set_tag_pinned(chat_id=1, tag_id=tag["id"], pinned=True)
+    assert pinned is not None and pinned["pinned"] is True
+    stored = await db.get_tag(1, tag["id"])
+    assert stored is not None and stored["pinned"] is True
+
+    assert await db.set_tag_pinned(chat_id=2, tag_id=tag["id"], pinned=True) is None
+
+    unpinned = await db.set_tag_pinned(chat_id=1, tag_id=tag["id"], pinned=False)
+    assert unpinned is not None and unpinned["pinned"] is False
+    assert await db.set_tag_pinned(chat_id=1, tag_id="nope", pinned=True) is None
+
+
+@pytest.mark.asyncio
 async def test_tag_writes_reject_canonical_token_collisions(temp_db):
     from src import database as db
 
@@ -1401,6 +1421,12 @@ async def test_migration_creates_audit_log_and_triggers_directly(tmp_path, monke
             "url TEXT NOT NULL, content_type TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', "
             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         )
+        # A real DB at this version already has `tags` (created at v9→v10) — v42→v43 ALTERs it.
+        await conn.execute(
+            "CREATE TABLE tags (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, name TEXT NOT NULL, "
+            "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
+            "UNIQUE(chat_id, name))"
+        )
         await conn.execute(f"PRAGMA user_version = {target_version}")
         await conn.commit()
 
@@ -1463,6 +1489,12 @@ async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
     db_file = tmp_path / "checklists_v39.db"
     async with aiosqlite.connect(db_file) as conn:
         await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY)")
+        # A real v39 DB already has `tags` (created at v9→v10) — v42→v43 ALTERs it.
+        await conn.execute(
+            "CREATE TABLE tags (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, name TEXT NOT NULL, "
+            "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
+            "UNIQUE(chat_id, name))"
+        )
         await conn.execute("PRAGMA user_version = 39")
         await conn.commit()
         await database._run_migrations(conn)

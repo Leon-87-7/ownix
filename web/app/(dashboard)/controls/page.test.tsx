@@ -24,8 +24,8 @@ const mockUseTagList = vi.mocked(useTagList);
 const mockUseDomainList = vi.mocked(useDomainList);
 
 const TAGS = [
-  { id: 't1', name: 'Alpha', meaning: 'first', color: '#ff0000' },
-  { id: 't2', name: 'Beta', meaning: '', color: '#00ff00' },
+  { id: 't1', name: 'Alpha', meaning: 'first', color: '#ff0000', pinned: false },
+  { id: 't2', name: 'Beta', meaning: '', color: '#00ff00', pinned: true },
 ];
 const DOMAINS = ['example.com', 'test.org'];
 
@@ -37,6 +37,7 @@ function setupTagsMock(overrides: Partial<ReturnType<typeof useTagList>> = {}) {
     createTag: vi.fn(),
     deleteTag: vi.fn(),
     updateTag: vi.fn(),
+    toggleTagPinned: vi.fn(),
     ...overrides,
   } as ReturnType<typeof useTagList>);
 }
@@ -115,6 +116,44 @@ describe('ControlsPage', () => {
     setupTagsMock({ tags: [] });
     render(<ControlsPage />);
     expect(section('Tags').getByText(/no tags yet/i)).toBeTruthy();
+  });
+
+  it('reflects each tag\'s pinned state and calls toggleTagPinned on click', () => {
+    const toggleTagPinned = vi.fn().mockResolvedValue(undefined);
+    setupTagsMock({ toggleTagPinned });
+    render(<ControlsPage />);
+
+    const unpinBeta = section('Tags').getByRole('button', {
+      name: 'Unpin Beta from GoTo',
+    });
+    expect(unpinBeta).toHaveAttribute('aria-pressed', 'true');
+    const pinAlpha = section('Tags').getByRole('button', {
+      name: 'Pin Alpha for GoTo',
+    });
+    expect(pinAlpha).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(pinAlpha);
+    expect(toggleTagPinned).toHaveBeenCalledWith('t1', true);
+
+    fireEvent.click(unpinBeta);
+    expect(toggleTagPinned).toHaveBeenCalledWith('t2', false);
+
+    // Toggling pin must never open the edit panel.
+    expect(section('Tags').queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('surfaces a pin-toggle failure instead of discarding it silently', async () => {
+    const toggleTagPinned = vi.fn().mockRejectedValue(new Error('Pin request failed'));
+    setupTagsMock({ toggleTagPinned });
+    render(<ControlsPage />);
+
+    fireEvent.click(
+      section('Tags').getByRole('button', { name: 'Pin Alpha for GoTo' }),
+    );
+
+    await waitFor(() =>
+      expect(section('Tags').getByText('Pin request failed')).toBeTruthy(),
+    );
   });
 
   it('opens the edit panel pre-filled when a tag pill is clicked', () => {
