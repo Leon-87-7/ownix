@@ -33,4 +33,36 @@ describe('ScrollToTop', () => {
 
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
+
+  it('dims to 60% opacity when it overlaps an interactive element', () => {
+    const { container } = render(
+      <div>
+        <main />
+        <div data-dashboard-scroll>
+          <ScrollToTop />
+          <button>underneath</button>
+        </div>
+      </div>,
+    );
+    const scroller = container.querySelector<HTMLElement>(
+      '[data-dashboard-scroll]',
+    );
+    if (!scroller) throw new Error('Missing dashboard scroller');
+    Object.defineProperty(scroller, 'scrollTop', {
+      value: 240,
+      configurable: true,
+    });
+
+    const underneath = screen.getByText('underneath');
+    const elementFromPoint = vi.fn().mockReturnValue(underneath);
+    document.elementFromPoint = elementFromPoint;
+    fireEvent.scroll(scroller);
+
+    const button = screen.getByRole('button', { name: /scroll to top/i });
+    expect(button.className).toContain('opacity-60');
+
+    elementFromPoint.mockReturnValue(null);
+    fireEvent.scroll(scroller);
+    expect(button.className).toContain('opacity-100');
+  });
 });
