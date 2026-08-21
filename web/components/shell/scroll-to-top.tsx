@@ -23,29 +23,44 @@ export function ScrollToTop() {
     // ponytail: only rechecks on scroll/resize, not on layout shifts from
     // other accordions opening above this button. Add a ResizeObserver on
     // the scroller's content if that turns out to matter.
+    //
+    // Samples the center + all 4 corners (native z-index-aware hit testing,
+    // not a raw rectangle overlap): a naive rect intersection treats any
+    // interactive element sharing screen space as "blocked", even ones that
+    // already render above this button (e.g. the dev persona switch, z-50)
+    // and don't need it to get out of the way at all.
     const checkOverlap = () => {
       const btn = buttonRef.current;
-      if (!btn) return;
-      const btnRect = btn.getBoundingClientRect();
-      const candidates = document.querySelectorAll<HTMLElement>(
-        INTERACTIVE_SELECTOR,
-      );
-      let overlap = false;
-      for (const el of candidates) {
-        if (el === btn || btn.contains(el)) continue;
-        const r = el.getBoundingClientRect();
-        if (r.width <= 0 || r.height <= 0) continue;
-        if (
-          r.left < btnRect.right &&
-          r.right > btnRect.left &&
-          r.top < btnRect.bottom &&
-          r.bottom > btnRect.top
-        ) {
-          overlap = true;
-          break;
+      if (!btn || typeof document.elementFromPoint !== 'function') return;
+      const rect = btn.getBoundingClientRect();
+      const inset = 4;
+      const points: Array<[number, number]> = [
+        [rect.left + rect.width / 2, rect.top + rect.height / 2],
+        [rect.left + inset, rect.top + inset],
+        [rect.right - inset, rect.top + inset],
+        [rect.left + inset, rect.bottom - inset],
+        [rect.right - inset, rect.bottom - inset],
+      ];
+      const isButton = (el: Element | null) =>
+        el === btn || Boolean(el && btn.contains(el));
+
+      let blocking = false;
+      try {
+        const coveredPoints = points.filter(([x, y]) =>
+          isButton(document.elementFromPoint(x, y)),
+        );
+        if (coveredPoints.length > 0) {
+          const prevPointerEvents = btn.style.pointerEvents;
+          btn.style.pointerEvents = 'none';
+          blocking = coveredPoints.some(([x, y]) =>
+            Boolean(document.elementFromPoint(x, y)?.closest(INTERACTIVE_SELECTOR)),
+          );
+          btn.style.pointerEvents = prevPointerEvents;
         }
+      } catch {
+        // jsdom doesn't implement elementFromPoint
       }
-      setDimmed(overlap);
+      setDimmed(blocking);
     };
 
     const onScroll = () => {

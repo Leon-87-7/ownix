@@ -454,13 +454,11 @@ function Section({
     <details
       ref={ref}
       open={defaultOpen}
-      onToggle={(e) => {
-        if ((e.target as HTMLDetailsElement).open) {
-          ref.current?.scrollIntoView?.({
-            behavior: reducedMotion ? 'auto' : 'smooth',
-            block: 'nearest',
-          });
-        }
+      onToggle={() => {
+        ref.current?.scrollIntoView?.({
+          behavior: reducedMotion ? 'auto' : 'smooth',
+          block: 'nearest',
+        });
       }}
       className="group overflow-hidden rounded-lg border border-line bg-surface"
     >
