@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/badges";
 import { DateTime } from "@/components/ui/date-time";
-import type { JobSummary } from "@/components/feed/job-card";
+import { ChecklistBadge, type JobSummary } from "@/components/feed/job-card";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
 import { NoPreviewRing } from "@/components/ui/no-preview-ring";
@@ -51,8 +51,13 @@ function Thumbnail({
 
   return (
     <div
-      className={`${aspectClass} overflow-hidden rounded-md border border-line bg-canvas`}
+      className={`relative ${aspectClass} overflow-hidden rounded-md border border-line bg-canvas`}
     >
+      {job.checklists_generated_at && (
+        <span className="pointer-events-auto absolute bottom-1.5 right-1.5 z-10">
+          <ChecklistBadge bare />
+        </span>
+      )}
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
