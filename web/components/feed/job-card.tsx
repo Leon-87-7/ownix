@@ -76,7 +76,11 @@ export function JobCard({ job, contentType, status }: JobCardProps) {
         <div className="flex shrink-0 items-center gap-1.5">
           <StatusBadge label={job.status} />
           <PlatformBadge url={job.url} contentType={job.content_type} />
-          {job.checklists_generated_at && <ChecklistBadge />}
+          {job.checklists_generated_at && (
+            <span className="pointer-events-auto">
+              <ChecklistBadge />
+            </span>
+          )}
         </div>
       </div>
       {/* Footer: timestamp left, tag badges + dropdown right, one dense line. */}
