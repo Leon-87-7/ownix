@@ -16,7 +16,7 @@ from src.utils.validators import detect_pipeline, extract_description_links, nor
 log = get_logger(__name__)
 
 _REPO_PICK_TTL_SECONDS = 60 * 60
-_REPO_PICK_LIMIT = 5
+_REPO_PICK_LIMIT = 15
 
 
 def _candidate_name(item: dict[str, Any], normalized_url: str) -> str:
