@@ -121,4 +121,16 @@ describe("PreviewGrid", () => {
     expect(preloadedImage).toHaveAttribute("loading", "eager");
     expect(preloadedImage).toHaveAttribute("fetchpriority", "high");
   });
+
+  it("shows the checklist badge on the thumbnail only when a checklist was generated", () => {
+    render(<PreviewGrid jobs={[landscapeJob]} />);
+    expect(screen.queryByLabelText("Checklist generated")).toBeNull();
+
+    render(
+      <PreviewGrid
+        jobs={[{ ...landscapeJob, checklists_generated_at: "2026-07-22T11:00:00.000Z" }]}
+      />,
+    );
+    expect(screen.getByLabelText("Checklist generated")).toBeTruthy();
+  });
 });
