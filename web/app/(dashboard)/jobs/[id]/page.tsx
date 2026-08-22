@@ -405,7 +405,7 @@ function JobHeader({
   };
 
   useEffect(() => {
-    // Adjacent nav is session-gated (/api/jobs/*) — in Restricted mode the
+    // Adjacent nav is session-gated (/api/jobs/*) - in Restricted mode the
     // request would just 401, so skip it and leave the pager links hidden.
     if (restricted) return;
     let cancelled = false;
@@ -468,7 +468,9 @@ function JobHeader({
         </button>
         <div className="flex h-11 flex-1 items-stretch overflow-hidden rounded-full border border-line bg-surface">
           <AdjacentNavLink
-            href={adjacent.previous_id && jobHref(adjacent.previous_id)}
+            href={
+              adjacent.previous_id && jobHref(adjacent.previous_id)
+            }
           >
             ← Previous
           </AdjacentNavLink>
@@ -708,7 +710,7 @@ function CardDownloadButton({
   );
 }
 
-// Transcript preview card — mirrors the doc-parser detail page's output cards
+// Transcript preview card - mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
 function TranscriptCard({ job }: { job: JobDetail }) {
@@ -802,7 +804,7 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
           >
             {generating ? (
               // `.ownix-shimmer` only takes effect under
-              // `prefers-reduced-motion: no-preference` — otherwise it inherits
+              // `prefers-reduced-motion: no-preference` - otherwise it inherits
               // the button's own `disabled:text-muted`.
               <span className="ownix-shimmer">Generating…</span>
             ) : markdown ? (
@@ -830,7 +832,13 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
   );
 }
 
-const GEMINI_RECIPES = ['summary', 'method', 'technical', 'review', 'narrative'] as const;
+const GEMINI_RECIPES = [
+  'summary',
+  'method',
+  'technical',
+  'review',
+  'narrative',
+] as const;
 
 function useDesktopViewport() {
   const [desktop, setDesktop] = useState(false);
@@ -844,27 +852,68 @@ function useDesktopViewport() {
   return desktop;
 }
 
-function RecipeChoices({ onSubmit, descriptions = {}, disabled = false }: { onSubmit: (template: string, prompt?: string) => Promise<void>; descriptions?: Record<string, string>; disabled?: boolean }) {
+function RecipeChoices({
+  onSubmit,
+  descriptions = {},
+  disabled = false,
+}: {
+  onSubmit: (template: string, prompt?: string) => Promise<void>;
+  descriptions?: Record<string, string>;
+  disabled?: boolean;
+}) {
   const [freestyle, setFreestyle] = useState(false);
   const [prompt, setPrompt] = useState('');
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {GEMINI_RECIPES.map((recipe) => (
-          <button key={recipe} type="button" disabled={disabled} onClick={() => void onSubmit(recipe)} className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}>
+          <button
+            key={recipe}
+            type="button"
+            disabled={disabled}
+            onClick={() => void onSubmit(recipe)}
+            className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}
+          >
             <span className="block">{recipe}</span>
-            {descriptions[recipe] && <span className="mt-1 block text-sm font-normal normal-case text-body">{descriptions[recipe]}</span>}
+            {descriptions[recipe] && (
+              <span className="mt-1 block text-sm font-normal normal-case text-body">
+                {descriptions[recipe]}
+              </span>
+            )}
           </button>
         ))}
-        <button type="button" disabled={disabled} onClick={() => setFreestyle(true)} className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setFreestyle(true)}
+          className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+        >
           Freestyle
         </button>
       </div>
       {freestyle && (
         <div className="space-y-2">
-          <label htmlFor="gemini-freestyle" className="block text-label font-medium text-body">Freestyle instructions</label>
-          <textarea id="gemini-freestyle" value={prompt} disabled={disabled} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} rows={4} className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal" />
-          <button type="button" disabled={disabled || !prompt.trim()} onClick={() => void onSubmit('freestyle', prompt.trim())} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted">
+          <label
+            htmlFor="gemini-freestyle"
+            className="block text-label font-medium text-body"
+          >
+            Freestyle instructions
+          </label>
+          <textarea
+            id="gemini-freestyle"
+            value={prompt}
+            disabled={disabled}
+            onChange={(event) => setPrompt(event.target.value)}
+            maxLength={4000}
+            rows={4}
+            className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+          />
+          <button
+            type="button"
+            disabled={disabled || !prompt.trim()}
+            onClick={() => void onSubmit('freestyle', prompt.trim())}
+            className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+          >
             Run Freestyle
           </button>
         </div>
@@ -873,7 +922,7 @@ function RecipeChoices({ onSubmit, descriptions = {}, disabled = false }: { onSu
   );
 }
 
-/** Replaces the Run Gemini button while enrichment is in flight — the button
+/** Replaces the Run Gemini button while enrichment is in flight - the button
  * disappearing with no feedback read as broken (see #528). Shimmer style
  * matches the intake console's in-flight treatment (`.ownix-shimmer`). */
 function EnrichmentStatusCard() {
@@ -886,36 +935,97 @@ function EnrichmentStatusCard() {
   );
 }
 
-function RunGeminiSection({ job, onClaim }: { job: JobDetail; onClaim: () => void }) {
+function RunGeminiSection({
+  job,
+  onClaim,
+}: {
+  job: JobDetail;
+  onClaim: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   const desktop = useDesktopViewport();
   const { templates } = useTemplateList();
-  const submit = async (template: string, freestylePrompt?: string) => {
+  const submit = async (
+    template: string,
+    freestylePrompt?: string,
+  ) => {
     setError(undefined);
-    const result = await apiPost<{ status: string }>(`/api/jobs/${job.id}/enrich`, {
-      template,
-      freestyle_prompt: template === 'freestyle' ? freestylePrompt : null,
-    }, 'Could not run Gemini');
-    if (!result.ok) { setError(result.detail); return; }
+    const result = await apiPost<{ status: string }>(
+      `/api/jobs/${job.id}/enrich`,
+      {
+        template,
+        freestyle_prompt:
+          template === 'freestyle' ? freestylePrompt : null,
+      },
+      'Could not run Gemini',
+    );
+    if (!result.ok) {
+      setError(result.detail);
+      return;
+    }
     onClaim();
   };
 
   return (
     <section className="space-y-3">
-      <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+      >
         Run Gemini
       </button>
-      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
+          {error}
+        </p>
+      )}
       {open && !desktop && (
-        <div data-testid="gemini-accordion" className="rounded-lg border border-line bg-surface p-4 motion-safe:animate-in motion-reduce:transition-none">
+        <div
+          data-testid="gemini-accordion"
+          className="rounded-lg border border-line bg-surface p-4 motion-safe:animate-in motion-reduce:transition-none"
+        >
           <RecipeChoices onSubmit={submit} />
         </div>
       )}
       {desktop && (
-        <aside data-testid="gemini-slide-panel" aria-label="Gemini recipes" aria-hidden={!open} inert={!open} className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}>
-          <div className="mb-5 flex items-center justify-between"><h2 className="text-title font-semibold text-ink">Choose a recipe</h2><button type="button" disabled={!open} onClick={() => setOpen(false)} className="text-sm text-body hover:text-ink">Close</button></div>
-          <RecipeChoices disabled={!open} onSubmit={submit} descriptions={Object.fromEntries(templates.filter((template) => template.is_builtin).map((template) => [template.name, template.description]))} />
+        <aside
+          data-testid="gemini-slide-panel"
+          aria-label="Gemini recipes"
+          aria-hidden={!open}
+          inert={!open}
+          className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
+        >
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-title font-semibold text-ink">
+              Choose a recipe
+            </h2>
+            <button
+              type="button"
+              disabled={!open}
+              onClick={() => setOpen(false)}
+              className="text-sm text-body hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+          <RecipeChoices
+            disabled={!open}
+            onSubmit={submit}
+            descriptions={Object.fromEntries(
+              templates
+                .filter((template) => template.is_builtin)
+                .map((template) => [
+                  template.name,
+                  template.description,
+                ]),
+            )}
+          />
         </aside>
       )}
     </section>
@@ -934,15 +1044,24 @@ export default function JobDetailPage() {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [withLinks, setWithLinks] = useState(false);
   const [folderTagFormOpen, setFolderTagFormOpen] = useState(false);
-  const { job, setData, fetchState, reload } = useJobDetail(id, restricted);
+  const { job, setData, fetchState, reload } = useJobDetail(
+    id,
+    restricted,
+  );
   const jobRef = useRef(job);
   useEffect(() => {
     jobRef.current = job;
   }, [job]);
-  const reloadJob = useCallback(async () => { await reload(); }, [reload]);
+  const reloadJob = useCallback(async () => {
+    await reload();
+  }, [reload]);
   useEffect(() => {
     if (job?.status !== 'enriching') return;
-    return startPolling(reloadJob, () => jobRef.current?.status !== 'enriching', 10_000);
+    return startPolling(
+      reloadJob,
+      () => jobRef.current?.status !== 'enriching',
+      10_000,
+    );
   }, [job?.status, reloadJob]);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     id,
@@ -1006,7 +1125,7 @@ export default function JobDetailPage() {
   const fieldSet =
     job.content_type === 'short' ? SHORT_FIELDS : ENRICHMENT_FIELDS;
   // Transcript renders as its own preview card (see TranscriptCard); Topic is
-  // folded into the merged Title | Topic card below — drop both from the
+  // folded into the merged Title | Topic card below - drop both from the
   // generic field loop to avoid showing them twice.
   const presentFields = fieldSet.filter(({ key }) => {
     if (key === 'transcript' || key === 'ai_topic') return false;
@@ -1071,19 +1190,35 @@ export default function JobDetailPage() {
 
       <JobActionsBar
         job={job}
-        hasFields={presentFields.length > 0 || !!job.transcript?.trim()}
+        hasFields={
+          presentFields.length > 0 || !!job.transcript?.trim()
+        }
       />
 
-      {!restricted && job.content_type === 'long' && job.status === 'transcript_done' && (
-        <RunGeminiSection job={job} onClaim={() => setData((current) => current ? { ...current, status: 'enriching' } : current)} />
-      )}
-      {!restricted && job.content_type === 'long' && job.status === 'enriching' && (
-        <EnrichmentStatusCard />
-      )}
+      {!restricted &&
+        job.content_type === 'long' &&
+        job.status === 'transcript_done' && (
+          <RunGeminiSection
+            job={job}
+            onClaim={() =>
+              setData((current) =>
+                current
+                  ? { ...current, status: 'enriching' }
+                  : current,
+              )
+            }
+          />
+        )}
+      {!restricted &&
+        job.content_type === 'long' &&
+        job.status === 'enriching' && <EnrichmentStatusCard />}
 
-      {!restricted && job.status === 'done' && (job.content_type === 'long' || job.content_type === 'short') && (
-        <RepoFollowupPanel jobId={job.id} />
-      )}
+      {!restricted &&
+        job.status === 'done' &&
+        (job.content_type === 'long' ||
+          job.content_type === 'short') && (
+          <RepoFollowupPanel jobId={job.id} />
+        )}
 
       {!restricted && <ChecklistsSection job={job} />}
 
@@ -1118,7 +1253,7 @@ export default function JobDetailPage() {
               aria-disabled="true"
               className="rounded-lg border border-line bg-surface p-4 text-sm text-muted"
             >
-              Notes stay with your own Index — sign in to write them.
+              Notes stay with your own Index - sign in to write them.
             </div>
           </Tooltip>
         ) : (
@@ -1145,7 +1280,7 @@ export default function JobDetailPage() {
               <p className="text-sm text-body">
                 Turn this import&apos;s bookmark folders into link
                 tags, applied to every link in that folder. Safe to
-                run any time — nothing is lost by skipping it now.
+                run any time - nothing is lost by skipping it now.
               </p>
             </div>
             <FolderTagForm
@@ -1171,7 +1306,7 @@ export default function JobDetailPage() {
                   </button>
                 }
               >
-                {/* ADR-0046: links outlive the job by default — this is the
+                {/* ADR-0046: links outlive the job by default - this is the
                     opt-in back into the old cascade. */}
                 {typeof job.link_count === 'number' &&
                   job.link_count > 0 && (
@@ -1194,7 +1329,7 @@ export default function JobDetailPage() {
               </ConfirmDialog>
               {deleteFailed && (
                 <p className="text-xs text-status-error">
-                  Couldn&apos;t delete — try again.
+                  Couldn&apos;t delete - try again.
                 </p>
               )}
             </div>

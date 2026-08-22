@@ -1,21 +1,21 @@
-"use client";
+'use client';
 
-import { useRef, useState } from "react";
-import { Brain } from "lucide-react";
-import { BrainGraph } from "@/components/brain/brain-graph";
-import { useSemanticSearch } from "@/lib/hooks/useSemanticSearch";
-import type { BrainResult } from "@/lib/hooks/useSemanticSearch";
-import { PageShell, PageHeader } from "@/components/shell/page-shell";
-import { SimpleErrorBanner } from "@/components/ui/simple-error-banner";
-import { safeUrl } from "@/lib/url-utils";
+import { useRef, useState } from 'react';
+import { Brain } from 'lucide-react';
+import { BrainGraph } from '@/components/brain/brain-graph';
+import { useSemanticSearch } from '@/lib/hooks/useSemanticSearch';
+import type { BrainResult } from '@/lib/hooks/useSemanticSearch';
+import { PageShell, PageHeader } from '@/components/shell/page-shell';
+import { SimpleErrorBanner } from '@/components/ui/simple-error-banner';
+import { safeUrl } from '@/lib/url-utils';
 
 function IdleBanner() {
   return (
     <div className="rounded-lg border border-line bg-surface px-6 py-12 text-center">
       <p className="text-lg font-medium text-ink">Search the Brain</p>
       <p className="mt-1 text-pretty text-sm text-body">
-        Type a query above to find semantically similar videos and articles you
-        have saved.
+        Type a query above to find semantically similar videos and
+        articles you have saved.
       </p>
     </div>
   );
@@ -24,7 +24,8 @@ function IdleBanner() {
 function EmptyBanner() {
   return (
     <p className="text-pretty rounded-lg border border-line bg-surface px-6 py-8 text-center text-sm text-body">
-      No results found. Try a different query or add more videos to your Brain.
+      No results found. Try a different query or add more videos to
+      your Brain.
     </p>
   );
 }
@@ -62,8 +63,14 @@ function ResultRow({ result }: { result: BrainResult }) {
 }
 
 export default function BrainPage() {
-  const { query, setQuery, results, searchState, errorMessage, runSearch } =
-    useSemanticSearch();
+  const {
+    query,
+    setQuery,
+    results,
+    searchState,
+    errorMessage,
+    runSearch,
+  } = useSemanticSearch();
   const [blankWarning, setBlankWarning] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -77,23 +84,27 @@ export default function BrainPage() {
     runSearch();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") handleRun();
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key === 'Enter') handleRun();
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     setQuery(e.target.value);
     if (blankWarning && e.target.value.trim()) setBlankWarning(false);
   };
 
-  const loading = searchState === "loading";
+  const loading = searchState === 'loading';
 
   return (
     <PageShell>
       <PageHeader
         icon={Brain}
         title="Brain"
-        description="Semantic search across your Index — plus shared signal from anyone who's opted their saves into the Brain."
+        description="Semantic search across your Index - plus shared signal from anyone who's opted their saves into the Brain."
       />
 
       <section className="flex gap-2">
@@ -123,7 +134,7 @@ export default function BrainPage() {
               Searching…
             </span>
           ) : (
-            "Search"
+            'Search'
           )}
         </button>
       </section>
@@ -134,19 +145,27 @@ export default function BrainPage() {
         </p>
       )}
 
-      <BrainGraph results={results} searchState={searchState} />
+      <BrainGraph
+        results={results}
+        searchState={searchState}
+      />
 
-      {searchState === "idle" && <IdleBanner />}
-      {searchState === "error" && <SimpleErrorBanner message={errorMessage} />}
-      {searchState === "empty" && <EmptyBanner />}
-      {searchState === "results" && (
+      {searchState === 'idle' && <IdleBanner />}
+      {searchState === 'error' && (
+        <SimpleErrorBanner message={errorMessage} />
+      )}
+      {searchState === 'empty' && <EmptyBanner />}
+      {searchState === 'results' && (
         <section>
           <p className="mb-2 font-mono text-xs text-muted">
-            {results.length} result{results.length === 1 ? "" : "s"}
+            {results.length} result{results.length === 1 ? '' : 's'}
           </p>
           <ul className="space-y-2">
             {results.map((r) => (
-              <ResultRow key={r.url} result={r} />
+              <ResultRow
+                key={r.url}
+                result={r}
+              />
             ))}
           </ul>
         </section>

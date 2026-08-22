@@ -18,7 +18,6 @@ import {
   SlidersHorizontal,
   GripVertical,
   FileCode2,
-  Handshake,
   ShieldUser,
   LogOut,
   Unplug,
@@ -376,7 +375,7 @@ export function Sidebar() {
           )}
           <Tooltip content="GitHub repository">
             <a
-              href="https://github.com/Leon-87-7/vig"
+              href="https://github.com/leon-87-7/ownix"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub repository"
@@ -564,7 +563,7 @@ export function Sidebar() {
             </div>
           )}
           <a
-            href="https://github.com/Leon-87-7/vig"
+            href="https://github.com/leon-87-7/ownix"
             target="_blank"
             rel="noopener noreferrer"
             tabIndex={open ? undefined : -1}
@@ -577,30 +576,17 @@ export function Sidebar() {
             />
             GitHub
           </a>
-          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-            <Link
-              href="/terms"
-              tabIndex={open ? undefined : -1}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
-            >
-              <Handshake
-                className="h-[18px] w-[18px] shrink-0"
-                aria-hidden="true"
-              />
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              tabIndex={open ? undefined : -1}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
-            >
-              <ShieldUser
-                className="h-[18px] w-[18px] shrink-0"
-                aria-hidden="true"
-              />
-              Privacy
-            </Link>
-          </div>
+          <Link
+            href="/privacy"
+            tabIndex={open ? undefined : -1}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
+          >
+            <ShieldUser
+              className="h-[18px] w-[18px] shrink-0"
+              aria-hidden="true"
+            />
+            Policies
+          </Link>
           {/* Close (left) sits under the collapsed rail's expand button, so a
               double-click on expand lands its second click here — closing the
               drawer, not firing Sign Out (right). #329 */}
