@@ -1,8 +1,15 @@
+import {
+  Accessibility,
+  Handshake,
+  ShieldUser,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import OwnixLogo from '@/app/ownix-logo.svg';
+import { PublicBackButton } from '@/components/shell/public-back-button';
 
-type PublicPage = 'terms' | 'privacy';
+type PublicPage = 'terms' | 'privacy' | 'accessibility';
 
 const focusRing =
   'focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface';
@@ -11,28 +18,49 @@ const navItems: Array<{
   href: string;
   label: string;
   page: PublicPage;
+  icon: LucideIcon;
 }> = [
-  { href: '/privacy', label: 'Privacy', page: 'privacy' },
-  { href: '/terms', label: 'Terms', page: 'terms' },
+  {
+    href: '/privacy',
+    label: 'Privacy',
+    page: 'privacy',
+    icon: ShieldUser,
+  },
+  { href: '/terms', label: 'Terms', page: 'terms', icon: Handshake },
+  {
+    href: '/accessibility',
+    label: 'Accessibility',
+    page: 'accessibility',
+    icon: Accessibility,
+  },
 ];
 
 function PublicNavLink({
   item,
   current,
+  showIcon = false,
 }: {
-  item: { href: string; label: string };
+  item: { href: string; label: string; icon: LucideIcon };
   current: boolean;
+  showIcon?: boolean;
 }) {
+  const Icon = item.icon;
   return (
     <Link
       href={item.href}
       aria-current={current ? 'page' : undefined}
-      className={`rounded-md px-3 py-2 text-sm font-medium transition-ui ${focusRing} ${
+      className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-ui ${focusRing} ${
         current
           ? 'bg-raised text-signal'
           : 'text-body hover:bg-raised hover:text-ink'
       }`}
     >
+      {showIcon && (
+        <Icon
+          className="h-[18px] w-[18px] shrink-0"
+          aria-hidden="true"
+        />
+      )}
       {item.label}
     </Link>
   );
@@ -115,6 +143,7 @@ export function LegalLayout({
               key={item.href}
               item={item}
               current={active === item.page}
+              showIcon
             />
           ))}
         </nav>
@@ -144,9 +173,12 @@ export function LegalTitle({
 }) {
   return (
     <header className="mb-8 border-b border-line pb-7">
-      <p className="mb-3 font-mono text-label font-medium text-muted">
-        Ownix legal
-      </p>
+      <div className="mb-3 flex items-center gap-2">
+        <PublicBackButton />
+        <p className="font-mono text-label font-medium text-muted">
+          Ownix legal policies
+        </p>
+      </div>
       <h1 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         {title}
       </h1>

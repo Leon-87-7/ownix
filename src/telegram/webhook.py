@@ -2020,10 +2020,18 @@ def _extract_message_identity(sender: dict, chat: dict) -> dict:
     }
 
 
+_RATE_LIMIT_MSG = "🐢 Slow down — too many jobs from this chat in the last minute. Try again shortly."
+
+
 async def _webhook_route_photo(chat_id: int, message: dict, photo: list, identity: dict) -> None:
     try:
         if await _invite_gate_allows(chat_id, "", identity):
             await _handle_photo_update(chat_id, message, photo)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_photo_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_photo_error", chat_id=chat_id)
 
@@ -2034,6 +2042,11 @@ async def _webhook_route_document(
     try:
         if await _invite_gate_allows(chat_id, "", identity):
             await _handle_document_update(chat_id, message, document)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_document_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_document_error", chat_id=chat_id)
 
@@ -2043,6 +2056,11 @@ async def _webhook_route_text(
 ) -> None:
     try:
         await _route_text(chat_id, text, message_id, identity)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_handler_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_handler_error", chat_id=chat_id)
         try:

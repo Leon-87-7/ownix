@@ -39,6 +39,21 @@ trailer<</Root 1 0 R/Size 6>>
 %%EOF"""
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """`src.intake.rate_limit` is a shared in-process dict keyed by caller id.
+
+    `create_and_enqueue_job` (src/services/jobs.py) now enforces it on every
+    job creation, so without a reset here, unrelated tests that create several
+    jobs for the same chat_id in a fast test run could trip each other's
+    window and start seeing spurious 429s."""
+    from src.intake import rate_limit
+
+    rate_limit.reset()
+    yield
+    rate_limit.reset()
+
+
 @pytest.fixture
 def tiny_pdf() -> bytes:
     """A minimal valid one-page PDF containing the text 'Hello Vig'."""

@@ -57,7 +57,10 @@ function CreateForm({
               (no spaces, no leading - or /)
             </span>
           </label>
-          <Tooltip content="Lowercase letters, digits, hyphens, underscores only" mono>
+          <Tooltip
+            content="Lowercase letters, digits, hyphens, underscores only"
+            mono
+          >
             <input
               type="text"
               required
@@ -97,7 +100,7 @@ function CreateForm({
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-body">
-          Extra instructions (optional — sent as Gemini prompt)
+          Extra instructions (optional - sent as Gemini prompt)
         </label>
         <textarea
           maxLength={4000}
@@ -292,7 +295,17 @@ function UserTemplateRow({
 
 export default function PromptsPage() {
   const { restricted } = useRestrictedMode();
-  if (restricted) return <RestrictedFacade icon={MessageSquareText} title="Recipes">Recipes shape enrichment prompts for your own Index. Creating, editing, and deleting recipes is locked in this read-only preview.</RestrictedFacade>;
+  if (restricted)
+    return (
+      <RestrictedFacade
+        icon={MessageSquareText}
+        title="Recipes"
+      >
+        Recipes shape enrichment prompts for your own Index. Creating,
+        editing, and deleting recipes is locked in this read-only
+        preview.
+      </RestrictedFacade>
+    );
   return <PromptsWorkspace />;
 }
 
@@ -314,7 +327,7 @@ function PromptsWorkspace() {
       <PageHeader
         icon={MessageSquareText}
         title="Recipes"
-        description="Named prompt presets that shape how Gemini analyzes what you save — invoke one by name to change what comes back."
+        description="Named prompt presets that shape how Gemini analyzes what you save - invoke one by name to change what comes back."
       />
 
       {loading && (
@@ -367,7 +380,7 @@ function PromptsWorkspace() {
             <h2 className="mb-3 text-sm font-semibold text-ink">
               Your recipes{' '}
               <span className="font-normal text-muted">
-                (use as -name &lt;url&gt; in Telegram)
+                (use as - name &lt;url&gt; in Telegram)
               </span>
             </h2>
             <div className="mb-4 rounded-lg border border-line bg-surface p-4">

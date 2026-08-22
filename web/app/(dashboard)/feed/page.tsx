@@ -20,7 +20,10 @@ import { useBackgroundFreshness } from '@/lib/hooks/useBackgroundFreshness';
 import { useLinksTable } from '@/lib/hooks/useLinksTable';
 import { JobCard } from '@/components/feed/job-card';
 import { StatsOverview } from '@/components/feed/stats-overview';
-import { FilterBar, type FilterTab } from '@/components/ui/filter-bar';
+import {
+  FilterBar,
+  type FilterTab,
+} from '@/components/ui/filter-bar';
 import { GhostButton } from '@/components/ui/ghost-button';
 import {
   SkeletonGrid,
@@ -37,7 +40,10 @@ import { LayoutDashboard, Link2, List } from 'lucide-react';
 import { OwnixAddIcon } from '@/components/svg/ownix-add-icon';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/feed/job-card';
-import { LinksSearchBar, LinksTable } from '@/components/feed/links-table';
+import {
+  LinksSearchBar,
+  LinksTable,
+} from '@/components/feed/links-table';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { extractSharedUrl } from '@/lib/share-target';
 import {
@@ -163,7 +169,9 @@ function FeedPageContent() {
     registerFeedSearch,
   } = useSubmitJob();
   const [feedView, setFeedView] = useState<'jobs' | 'links'>(
-    !restricted && searchParams.get('view') === 'links' ? 'links' : 'jobs',
+    !restricted && searchParams.get('view') === 'links'
+      ? 'links'
+      : 'jobs',
   );
   const [optimisticJobs, setOptimisticJobs] = useState<JobSummary[]>(
     [],
@@ -204,7 +212,8 @@ function FeedPageContent() {
   useEffect(() => {
     const google = searchParams.get('google');
     const rawType = searchParams.get('type');
-    const restrictedLinksView = restricted && searchParams.get('view') === 'links';
+    const restrictedLinksView =
+      restricted && searchParams.get('view') === 'links';
     const hasShareParams =
       searchParams.has('share_title') ||
       searchParams.has('share_text') ||
@@ -215,7 +224,13 @@ function FeedPageContent() {
     );
     const oauthReturn = google === 'connected' || google === 'denied';
     const badType = Boolean(rawType && !CONTENT_TYPES.has(rawType));
-    if (!oauthReturn && !badType && !restrictedLinksView && !hasShareParams) return;
+    if (
+      !oauthReturn &&
+      !badType &&
+      !restrictedLinksView &&
+      !hasShareParams
+    )
+      return;
     if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
     if (sharedUrl) openSubmitWith(sharedUrl);
     const params = new URLSearchParams(searchParams.toString());
@@ -252,7 +267,9 @@ function FeedPageContent() {
 
   useEffect(() => {
     setFeedView(
-      !restricted && searchParams.get('view') === 'links' ? 'links' : 'jobs',
+      !restricted && searchParams.get('view') === 'links'
+        ? 'links'
+        : 'jobs',
     );
   }, [searchParams, restricted]);
 
@@ -285,10 +302,16 @@ function FeedPageContent() {
     params.set('view', 'links');
     router.replace(`${pathname}?${params}`, { scroll: false });
     setFeedView('links');
-  }, [pathname, router, searchParams, restricted, showRestrictedToast]);
+  }, [
+    pathname,
+    router,
+    searchParams,
+    restricted,
+    showRestrictedToast,
+  ]);
 
   // Expose the Feed search focus to the command launcher. focusLinkSearch
-  // switches to Links first, then focuses LinksTable's own search input — not
+  // switches to Links first, then focuses LinksTable's own search input - not
   // #feed-search, which drives the Jobs query and would leave a stale filter.
   // focusSearch does the reverse: #feed-search is unmounted while Links is
   // active (FilterBar hides it there), so hitting `/` on that tab backs out
@@ -340,12 +363,14 @@ function FeedPageContent() {
     [contentTypeCounts],
   );
   const contentTypeTabs = useMemo(() => {
-    const tabs: FilterTab[] = CONTENT_TYPE_FILTERS.map(({ label, value }, i) => ({
-      label,
-      value,
-      count: value ? (contentTypeCounts[value] ?? 0) : totalCount,
-      dividerBefore: i > 0,
-    }));
+    const tabs: FilterTab[] = CONTENT_TYPE_FILTERS.map(
+      ({ label, value }, i) => ({
+        label,
+        value,
+        count: value ? (contentTypeCounts[value] ?? 0) : totalCount,
+        dividerBefore: i > 0,
+      }),
+    );
     if (!restricted) {
       tabs.push({
         label: 'Links',
@@ -363,9 +388,11 @@ function FeedPageContent() {
   const showingLinksRef = useRef(showingLinks);
   showingLinksRef.current = showingLinks;
   // Gated by `enabled` so Links data only fetches while its tab is actually
-  // active — mirrors how the Jobs feed already fetches regardless of tab,
+  // active - mirrors how the Jobs feed already fetches regardless of tab,
   // except Links has no reason to poll while parked on Jobs.
-  const linksData = useLinksTable({ enabled: showingLinks && !restricted });
+  const linksData = useLinksTable({
+    enabled: showingLinks && !restricted,
+  });
   // CONTEXT.md `Feed layout toggle`: All-tab-only grid↔list switch, grid
   // default, persisted. Hydrated in an effect so SSR/first paint stay 'grid'.
   const [allLayout, setAllLayout] = useState<'grid' | 'list'>('grid');
@@ -375,7 +402,7 @@ function FeedPageContent() {
         setAllLayout('list');
       }
     } catch {
-      // storage unavailable (private mode) — stay on the grid default
+      // storage unavailable (private mode) - stay on the grid default
     }
   }, []);
   const switchLayout = (mode: 'grid' | 'list') => {
@@ -399,7 +426,7 @@ function FeedPageContent() {
   );
 
   // The global dialog (SubmitJobProvider) owns the mutation; the Feed only
-  // reacts to an accepted job — insert an optimistic row so the submission is
+  // reacts to an accepted job - insert an optimistic row so the submission is
   // visible immediately, and refresh. The row stays until the feed carries the
   // same id (the reconcile effect on `jobs`), and in-flight polling keeps
   // retrying the refresh for as long as it reads as pending.
@@ -446,12 +473,12 @@ function FeedPageContent() {
           }`}
         >
           {oauthResult === 'connected'
-            ? 'Google connected — exports will land in your Drive.'
-            : 'Google connection was denied — you can try again anytime.'}
+            ? 'Google connected - exports will land in your Drive.'
+            : 'Google connection was denied - you can try again anytime.'}
         </div>
       )}
 
-      {/* Disconnected-only nudge (CONTEXT.md `Account affordance`) — the
+      {/* Disconnected-only nudge (CONTEXT.md `Account affordance`) - the
           sidebar owns the persistent state; this panel disappears once connected. */}
       {!restricted && googleConnected === false && (
         <section className="rounded-lg border border-line bg-surface p-4">
@@ -557,7 +584,7 @@ function FeedPageContent() {
             >
               {countLabel}
             </span>
-            {/* CONTEXT.md `Feed layout toggle` — All tab only; typed tabs keep
+            {/* CONTEXT.md `Feed layout toggle` - All tab only; typed tabs keep
                 their fixed layouts. */}
             {!ctFilter && (
               <div
@@ -576,7 +603,10 @@ function FeedPageContent() {
                       : 'text-muted hover:bg-raised hover:text-ink'
                   }`}
                 >
-                  <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  <LayoutDashboard
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  />
                 </button>
                 <button
                   type="button"
@@ -589,7 +619,10 @@ function FeedPageContent() {
                       : 'text-muted hover:bg-raised hover:text-ink'
                   }`}
                 >
-                  <List className="h-4 w-4" aria-hidden="true" />
+                  <List
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
             )}

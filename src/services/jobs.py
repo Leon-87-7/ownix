@@ -5,9 +5,19 @@ from __future__ import annotations
 from typing import Any
 
 from src import database, queue
+from src.intake.rate_limit import enforce as _enforce_rate_limit
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+# Shared cost-control gate (ADR-0033 chokepoint): every ingest surface
+# (Telegram, dashboard API, repo follow-up) funnels through this function, so
+# gating here — rather than per-surface — is the one place that bounds how
+# often a single chat can drive a Gemini/GCS-costing job, including the
+# Telegram URL path that had no rate limit before (unlike the upload-only
+# limiter in src/intake/rate_limit.py's other caller).
+_JOB_CREATE_MAX = 20
+_JOB_CREATE_WINDOW_SECONDS = 60.0
 
 
 def task_for_content_type(content_type: str | None, *, default: str | None) -> str | None:
@@ -71,7 +81,16 @@ async def create_and_enqueue_job(
     The helper intentionally does not notify Telegram or HTTP callers. It owns
     the cache/dedup decision and the create+enqueue write path so all ingest
     surfaces share identical behavior.
+
+    Raises fastapi.HTTPException(429) if chat_id has created too many jobs in
+    the last minute — a bare Exception to non-HTTP callers (e.g. Telegram),
+    so catch it explicitly for a specific reply there.
     """
+    _enforce_rate_limit(
+        f"job_create:{chat_id}",
+        max_requests=_JOB_CREATE_MAX,
+        window_seconds=_JOB_CREATE_WINDOW_SECONDS,
+    )
     # Explicit template/freestyle requests always run fresh — a cached
     # URL-only job would silently ignore the requested analysis. Callers
     # with template intent the arguments can't express set skip_cache.
