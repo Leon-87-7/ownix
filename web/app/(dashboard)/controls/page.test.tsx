@@ -363,4 +363,19 @@ describe('ControlsPage', () => {
       );
     });
   });
+
+  it('renders the account-deletion consequences before the delete button in DOM order', () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    // Regex, not a literal substring: the exact consequences wording is
+    // hoisted into a shared constant in a later task and may change slightly
+    // — this only needs to keep matching "roughly this sentence", not an
+    // exact string, so it doesn't go stale when that happens.
+    const consequences = zone.getByText(/deletes every job.*brain link.*domain rule/i);
+    const button = zone.getByRole('button', { name: 'Delete my account' });
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): button comes after consequences.
+    expect(
+      consequences.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

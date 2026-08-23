@@ -471,6 +471,12 @@ function DeleteAccountSection() {
 
   return (
     <div className="flex items-stretch gap-4 max-[620px]:flex-col">
+      <p className="text-sm text-body">
+        Deletes every job, Brain link, tag, and domain rule tied to your
+        account, disconnects Google, and revokes your session. This
+        cannot be undone.
+      </p>
+      <div className="border-l border-line max-[620px]:hidden" />
       <div className="flex-shrink-0">
         <ConfirmDialog
           title="Permanently delete your account?"
@@ -488,12 +494,6 @@ function DeleteAccountSection() {
           <p className="mt-2 text-xs text-status-error">{error}</p>
         )}
       </div>
-      <div className="border-l border-line max-[620px]:hidden" />
-      <p className="text-sm text-body">
-        Deletes every job, Brain link, tag, and domain rule tied to your
-        account, disconnects Google, and revokes your session. This
-        cannot be undone.
-      </p>
     </div>
   );
 }
