@@ -519,10 +519,12 @@ function DeleteAccountSection() {
 
 function Section({
   title,
+  titleClassName,
   defaultOpen,
   children,
 }: {
   title: string;
+  titleClassName?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -542,7 +544,7 @@ function Section({
       className="group overflow-hidden rounded-lg border border-line bg-surface"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition-ui hover:bg-raised [&::-webkit-details-marker]:hidden">
-        {title}
+        <span className={titleClassName}>{title}</span>
         <OwnixChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
       </summary>
       <div className="border-t border-line bg-canvas p-4">
@@ -616,7 +618,10 @@ export default function ControlsPage() {
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
         </Section>
-        <Section title="Danger zone">
+        <Section
+          title="Danger zone"
+          titleClassName="text-status-error"
+        >
           <DeleteAccountSection />
         </Section>
       </div>

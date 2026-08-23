@@ -453,4 +453,13 @@ describe('ControlsPage', () => {
     expect(dialogText).toContain(staticParagraph.textContent);
   });
 
+  it('gives the Danger zone section title a distinct text treatment', () => {
+    render(<ControlsPage />);
+    const title = screen.getByText('Danger zone');
+    expect(title.className).toContain('text-status-error');
+
+    const otherTitle = screen.getByText('Chrome Extension');
+    expect(otherTitle.className).not.toContain('text-status-error');
+  });
+
 });
