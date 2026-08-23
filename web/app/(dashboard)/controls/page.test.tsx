@@ -418,10 +418,10 @@ describe('ControlsPage', () => {
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
-    // Query for the alert by text; the element has role="alert" in the JSX
-    await waitFor(() =>
-      expect(zone.getByText('Cannot delete right now')).toHaveAttribute('role', 'alert'),
-    );
+    // Use hidden: true to work around test isolation leak from Radix Dialog aria-hidden state
+    // not fully clearing between tests. This still validates the role="alert" is present,
+    // catching regressions where the role genuinely disappears.
+    await waitFor(() => expect(zone.getByRole('alert', { hidden: true })).toHaveTextContent('Cannot delete right now'));
   });
 
   it('keeps the confirm dialog open when account deletion fails', async () => {
