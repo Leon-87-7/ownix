@@ -47,4 +47,23 @@ describe('ConfirmDialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByText('Delete?')).toBeNull());
   });
+
+  it('disables the confirm button when confirmDisabled is true', async () => {
+    const onConfirm = vi.fn();
+    render(
+      <ConfirmDialog
+        trigger={<button>Delete job</button>}
+        title="Delete?"
+        description="Cannot be undone"
+        confirmLabel="Delete permanently"
+        confirmDisabled
+        onConfirm={onConfirm}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete job' }));
+    const confirmButton = await screen.findByRole('button', { name: 'Delete permanently' });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.click(confirmButton);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
