@@ -1057,6 +1057,20 @@ def _make_init_data(
     return urlencode(data)
 
 
+def test_resume_deletion_helper_is_used_by_both_login_paths() -> None:
+    """_login_telegram_user and miniapp_session must both resume a stuck
+    deletion through the same shared helper, not duplicated inline logic."""
+    import inspect
+
+    from src.api import auth as auth_api
+
+    assert callable(auth_api._resume_deletion_if_stuck)
+    login_src = inspect.getsource(auth_api._login_telegram_user)
+    miniapp_src = inspect.getsource(auth_api.miniapp_session)
+    assert "_resume_deletion_if_stuck" in login_src
+    assert "_resume_deletion_if_stuck" in miniapp_src
+
+
 def test_verify_miniapp_init_data_accepts_fresh_signed_payload() -> None:
     from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 

@@ -45,6 +45,22 @@ class TelegramPayload(BaseModel):
     hash: str
 
 
+async def _resume_deletion_if_stuck(tg_id: int) -> dict | None:
+    """Finish a deletion left mid-flight instead of minting a session into a
+    half-deleted account (a prior /api/auth/me DELETE that failed partway,
+    e.g. a network blip during Google token cleanup, still reads "deleting"
+    here). Returns the response body to send back if a stuck deletion was
+    resumed, or None to mean "continue with normal login". Every step in
+    delete_account() is delete-if-exists / best-effort, so resuming is safe
+    even if a previous call finished some steps already.
+    """
+    if await database.get_user_status(tg_id) != "deleting":
+        return None
+    await delete_account(tg_id)
+    log.info("auth.resumed_account_deletion", tg_id=tg_id)
+    return {"ok": True, "account_deleted": True}
+
+
 async def _login_telegram_user(
     payload: TelegramPayload, response: Response, *, source: str | None = None
 ) -> dict:
@@ -61,10 +77,9 @@ async def _login_telegram_user(
     # during Google token cleanup) still reads "deleting" here. Finish it now
     # instead of minting a session into a half-deleted account — every step in
     # delete_account() is delete-if-exists / best-effort, so resuming is safe.
-    if await database.get_user_status(payload.id) == "deleting":
-        await delete_account(payload.id)
-        log.info("auth.resumed_account_deletion", tg_id=payload.id)
-        return {"ok": True, "account_deleted": True}
+    resumed = await _resume_deletion_if_stuck(payload.id)
+    if resumed is not None:
+        return resumed
 
     session_user = {
         "id": payload.id,
@@ -119,10 +134,9 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
 
     # See _login_telegram_user: resume a deletion left mid-flight rather than
     # minting a session into a half-deleted account.
-    if await database.get_user_status(chat_id) == "deleting":
-        await delete_account(chat_id)
-        log.info("auth.resumed_account_deletion", tg_id=chat_id)
-        return {"ok": True, "account_deleted": True}
+    resumed = await _resume_deletion_if_stuck(chat_id)
+    if resumed is not None:
+        return resumed
 
     session_user = {
         "id": chat_id,
