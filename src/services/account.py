@@ -22,6 +22,15 @@ async def delete_account(chat_id: int) -> None:
     # the bulk query, instead of re-fetching each job row individually with
     # database.get_job() — that was an extra SQLite connection open/close per
     # job on top of the delete_job() call already needed for it.
+    # Jobs still pending/processing and already enqueued in Redis (video_jobs)
+    # are not dequeued here. When the worker eventually pops that task,
+    # _load_job_or_log() (src/worker.py) finds the row gone and every handler
+    # no-ops with a logged "job_gone_skipped" / "job_not_found" rather than
+    # crashing or writing to a missing job id — verified by reading
+    # src/worker.py's dispatch handlers. Actually dequeuing mid-request would
+    # need a scan-and-remove across the whole Redis list with no atomic
+    # removal-by-content primitive available; not worth it for a case the
+    # worker already handles safely.
     job_rows = await database._fetch_dicts(
         "SELECT id, chat_id, url, drive_url, prd_auto_drive_file_id, prd_intent_drive_file_id "
         "FROM jobs WHERE chat_id = ?",
