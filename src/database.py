@@ -2209,8 +2209,12 @@ async def delete_user(tg_id: int) -> bool:
     return deleted
 
 
-_ACCOUNT_SETTINGS_TABLES = (
-    "tags", "allowed_domains", "ignored_domains", "templates", "user_settings",
+_ACCOUNT_SETTINGS_DELETE_QUERIES = (
+    "DELETE FROM tags WHERE chat_id = ?",
+    "DELETE FROM allowed_domains WHERE chat_id = ?",
+    "DELETE FROM ignored_domains WHERE chat_id = ?",
+    "DELETE FROM templates WHERE chat_id = ?",
+    "DELETE FROM user_settings WHERE chat_id = ?",
 )
 
 
@@ -2218,8 +2222,8 @@ async def delete_account_settings(chat_id: int) -> None:
     """Wipe chat_id's rows from every per-account settings table (Controls: tags,
     domain rules, templates, recovery prefs) as part of full account deletion."""
     async with connection() as conn:
-        for table in _ACCOUNT_SETTINGS_TABLES:
-            await conn.execute(f"DELETE FROM {table} WHERE chat_id = ?", (chat_id,))
+        for query in _ACCOUNT_SETTINGS_DELETE_QUERIES:
+            await conn.execute(query, (chat_id,))
         await conn.commit()
 
 
