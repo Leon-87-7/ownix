@@ -102,3 +102,27 @@ def test_delete_account_is_scoped_to_the_caller(account_db) -> None:
 
     assert asyncio.run(database.get_job("job_other")) is not None
     assert asyncio.run(database.get_user(999)) is not None
+
+
+def test_delete_account_does_not_refetch_each_job_individually(account_db, monkeypatch) -> None:
+    """The purge-task loop must build its payload from the initial bulk
+    query, not re-fetch each job row with database.get_job() (an extra
+    round trip per job that matters at "hundreds of jobs" scale)."""
+    from src.services import account as account_module
+
+    database = account_db
+    calls: list[str] = []
+    real_get_job = database.get_job
+
+    async def spy_get_job(job_id: str):
+        calls.append(job_id)
+        return await real_get_job(job_id)
+
+    monkeypatch.setattr(account_module.database, "get_job", spy_get_job)
+
+    asyncio.run(account_module.delete_account(CHAT_ID))
+
+    assert calls == []
+    assert asyncio.run(database.get_user(CHAT_ID)) is None
+    row = asyncio.run(database._fetch_one("SELECT 1 FROM purge_tasks WHERE job_id = 'job_1'"))
+    assert row is not None

@@ -18,13 +18,18 @@ log = get_logger(__name__)
 
 async def delete_account(chat_id: int) -> None:
     """Hard-delete every job, link, credential, and setting chat_id owns."""
-    job_rows = await database._fetch_dicts("SELECT id FROM jobs WHERE chat_id = ?", (chat_id,))
+    # Select exactly the columns build_job_purge_task() needs directly from
+    # the bulk query, instead of re-fetching each job row individually with
+    # database.get_job() — that was an extra SQLite connection open/close per
+    # job on top of the delete_job() call already needed for it.
+    job_rows = await database._fetch_dicts(
+        "SELECT id, chat_id, url, drive_url, prd_auto_drive_file_id, prd_intent_drive_file_id "
+        "FROM jobs WHERE chat_id = ?",
+        (chat_id,),
+    )
     for row in job_rows:
-        job = await database.get_job(row["id"])
-        if job is None:
-            continue
-        purge_task = await build_job_purge_task(job)
-        await database.delete_job(job["id"], purge_payload=purge_task, with_links=True)
+        purge_task = await build_job_purge_task(row)
+        await database.delete_job(row["id"], purge_payload=purge_task, with_links=True)
 
     # Standalone links (e.g. bookmark imports) not tied to a job deleted above.
     link_rows = await database._fetch_dicts("SELECT id FROM links WHERE chat_id = ?", (chat_id,))
