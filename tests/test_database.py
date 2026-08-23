@@ -1539,3 +1539,64 @@ async def test_begin_account_deletion_is_exclusive(tmp_path, monkeypatch) -> Non
     assert first is True
     assert second is False
     assert await database.get_user_status(1) == "deleting"
+
+
+@pytest.mark.asyncio
+async def test_migrate_v43_v44_rolls_back_atomically_on_failure(tmp_path, monkeypatch) -> None:
+    """A crash between DROP TABLE users and the RENAME must not destroy the
+    only surviving copy of every user row — the whole rebuild is one
+    transaction, so a failure leaves the original `users` table intact for a
+    safe retry on the next startup."""
+    from src import database
+
+    db_file = str(tmp_path / "v43_crash.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked'))"
+            ")"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, first_name, status) VALUES (1, 'Alice', 'approved')"
+        )
+        await conn.commit()
+
+        # Fail the RENAME step, simulating a crash after DROP TABLE users.
+        real_execute = conn.execute
+
+        async def failing_execute(sql, *args, **kwargs):
+            if "RENAME TO users" in sql:
+                raise RuntimeError("simulated crash")
+            return await real_execute(sql, *args, **kwargs)
+
+        monkeypatch.setattr(conn, "execute", failing_execute)
+
+        with pytest.raises(RuntimeError):
+            await database._migrate_v43_v44(conn)
+
+        monkeypatch.setattr(conn, "execute", real_execute)
+
+        # The original users table (and Alice's row) must have survived —
+        # not a half-renamed users_v44 shell.
+        cur = await conn.execute("SELECT tg_id, first_name FROM users")
+        rows = await cur.fetchall()
+        assert [tuple(r) for r in rows] == [(1, "Alice")]
+
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users_v44'"
+        )
+        assert await cur.fetchone() is None, "the failed rebuild must not leave a stray users_v44 table"
+
+    # A retry from the same starting state must still succeed cleanly.
+    async with aiosqlite.connect(db_file) as conn2:
+        await database._migrate_v43_v44(conn2)
+        cur = await conn2.execute("PRAGMA table_info(users)")
+        cols = {row[1] for row in await cur.fetchall()}
+        assert "status" in cols
+        cur = await conn2.execute("SELECT tg_id, first_name, status FROM users")
+        assert await cur.fetchone() == (1, "Alice", "approved")

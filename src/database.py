@@ -1378,35 +1378,50 @@ _MIGRATIONS.append([
 # self-serve account deletion holds while it runs, so every other account-write
 # route (gated on status == 'approved') rejects concurrent writes during
 # cleanup. SQLite can't ALTER a CHECK, so rebuild via selective column copy.
+#
+# The five DDL/DML statements below are wrapped in one explicit transaction:
+# without BEGIN, each DDL statement auto-commits as it runs (PRAGMA
+# user_version only advances after _run_migrations fully returns), so a
+# crash between DROP TABLE users and the RENAME, followed by a restart,
+# would rerun this migration from `DROP TABLE IF EXISTS users_v44` with the
+# original `users` table already gone — destroying every user row. SQLite
+# supports transactional DDL, so BEGIN/COMMIT/ROLLBACK make the whole
+# rebuild all-or-nothing.
 async def _migrate_v43_v44(conn: aiosqlite.Connection) -> None:
-    await conn.execute("DROP TABLE IF EXISTS users_v44")
-    await conn.execute(
-        """
-        CREATE TABLE users_v44 (
-            tg_id       INTEGER PRIMARY KEY,
-            username    TEXT,
-            first_name  TEXT NOT NULL,
-            last_name   TEXT,
-            photo_url   TEXT,
-            email       TEXT,
-            status      TEXT NOT NULL DEFAULT 'pending',
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            CHECK(status IN ('pending','approved','blocked','deleting'))
+    await conn.execute("BEGIN IMMEDIATE")
+    try:
+        await conn.execute("DROP TABLE IF EXISTS users_v44")
+        await conn.execute(
+            """
+            CREATE TABLE users_v44 (
+                tg_id       INTEGER PRIMARY KEY,
+                username    TEXT,
+                first_name  TEXT NOT NULL,
+                last_name   TEXT,
+                photo_url   TEXT,
+                email       TEXT,
+                status      TEXT NOT NULL DEFAULT 'pending',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK(status IN ('pending','approved','blocked','deleting'))
+            )
+            """
         )
-        """
-    )
-    await conn.execute(
-        """
-        INSERT INTO users_v44 (tg_id, username, first_name, last_name, photo_url,
-                                email, status, created_at, updated_at)
-        SELECT tg_id, username, first_name, last_name, photo_url,
-               email, status, created_at, updated_at
-          FROM users
-        """
-    )
-    await conn.execute("DROP TABLE users")
-    await conn.execute("ALTER TABLE users_v44 RENAME TO users")
+        await conn.execute(
+            """
+            INSERT INTO users_v44 (tg_id, username, first_name, last_name, photo_url,
+                                    email, status, created_at, updated_at)
+            SELECT tg_id, username, first_name, last_name, photo_url,
+                   email, status, created_at, updated_at
+              FROM users
+            """
+        )
+        await conn.execute("DROP TABLE users")
+        await conn.execute("ALTER TABLE users_v44 RENAME TO users")
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
 
 
 _MIGRATIONS.append(_migrate_v43_v44)
