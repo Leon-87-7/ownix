@@ -2,6 +2,7 @@
 
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { RestrictedFacade } from '@/components/shell/restricted-facade';
+import { useRouter } from 'next/navigation';
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
@@ -19,6 +20,7 @@ import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
@@ -449,6 +451,53 @@ function RecoveryTab() {
   );
 }
 
+function DeleteAccountSection() {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(undefined);
+    try {
+      const res = await fetch('/api/auth/me', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Could not delete account');
+      router.replace('/login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete account');
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-stretch gap-4 max-[620px]:flex-col">
+      <div className="flex-shrink-0">
+        <ConfirmDialog
+          title="Permanently delete your account?"
+          description="This deletes every job, Brain link, tag, and domain rule you own, disconnects Google, and revokes your session. This can't be undone."
+          confirmLabel="Delete my account"
+          pending={deleting}
+          onConfirm={handleDelete}
+          trigger={
+            <button className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised">
+              Delete my account
+            </button>
+          }
+        />
+        {error && (
+          <p className="mt-2 text-xs text-status-error">{error}</p>
+        )}
+      </div>
+      <div className="border-l border-line max-[620px]:hidden" />
+      <p className="text-sm text-body">
+        Deletes every job, Brain link, tag, and domain rule tied to your
+        account, disconnects Google, and revokes your session. This
+        cannot be undone.
+      </p>
+    </div>
+  );
+}
+
 function Section({
   title,
   defaultOpen,
@@ -547,6 +596,9 @@ export default function ControlsPage() {
         </div>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
+        </Section>
+        <Section title="Danger zone">
+          <DeleteAccountSection />
         </Section>
       </div>
     </PageShell>

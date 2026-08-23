@@ -30,9 +30,11 @@ export default function TermsPage() {
               Ownix collects the internet you care about: videos,
               links, articles, repos, documents, and ideas. Saved
               items become part of your personal Index, organized into
-              a Feed you own and can return to. Some items may also
-              contribute signal to the shared Brain if you choose to
-              share them.
+              a Feed you own and can return to, and your own private
+              Brain (a link graph built from your saves) - see the{' '}
+              <LegalLink href="/privacy">Privacy Policy</LegalLink>&apos;s
+              &quot;Your Brain is private&quot; section for who can see
+              it.
             </p>
           </LegalSection>
 
@@ -51,9 +53,11 @@ export default function TermsPage() {
               that accurately identifies you for approval purposes.
             </p>
             <p>
-              The approval email may also be used to contact you about
-              improving Ownix, gathering product feedback, and shaping
-              the product with real workflows and honest feedback.
+              Separately, and only once you&apos;re approved, that
+              email may also be used to contact you about improving
+              Ownix and gathering product feedback - see the{' '}
+              <LegalLink href="/privacy">Privacy Policy</LegalLink> for
+              how to opt out.
             </p>
           </LegalSection>
 
@@ -84,9 +88,10 @@ export default function TermsPage() {
 
           <LegalSection title="Limitation of liability">
             <p>
-              Ownix is a personal project, provided without warranty
-              of any kind. We are not liable for any loss or damage
-              arising from its use.
+              Ownix is a personal project, operated by Leon Eidelman,
+              provided without warranty of any kind. We are not liable
+              for any loss or damage arising from its use. These terms
+              are governed by the laws of the State of Israel.
             </p>
           </LegalSection>
 

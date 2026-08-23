@@ -18,6 +18,7 @@ from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
+from src.services.account import delete_account
 from src.services.invite_notifications import notify_operator_invite
 from src.utils.logger import get_logger
 from src.utils.validators import normalize_email
@@ -317,6 +318,22 @@ async def me(request: Request, response: Response) -> dict:
         "email": db_user.get("email") if db_user else None,
         "status": status,
     }
+
+
+@auth_router.delete("/me", status_code=204)
+async def delete_account_route(request: Request) -> Response:
+    """Self-serve full account deletion: hard-deletes every job/link/credential/
+    setting owned by the caller, disconnects Google, then ends the session."""
+    tg_id = int(request.state.user["id"])
+    await delete_account(tg_id)
+
+    session_id = request.cookies.get(COOKIE_NAME)
+    if session_id:
+        await session_store.revoke(session_id)
+    out = Response(status_code=204)
+    out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
+    out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    return out
 
 
 @auth_router.put("/email")

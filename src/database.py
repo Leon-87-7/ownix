@@ -2202,6 +2202,27 @@ async def set_user_email(tg_id: int, email: str | None) -> None:
     log.info("user_email_set", tg_id=tg_id, has_email=email is not None)
 
 
+async def delete_user(tg_id: int) -> bool:
+    """Hard-delete the invite-gate row for tg_id (account deletion's last step)."""
+    deleted = await _execute_rowcount("DELETE FROM users WHERE tg_id = ?", (tg_id,)) > 0
+    log.info("user_deleted", tg_id=tg_id)
+    return deleted
+
+
+_ACCOUNT_SETTINGS_TABLES = (
+    "tags", "allowed_domains", "ignored_domains", "templates", "user_settings",
+)
+
+
+async def delete_account_settings(chat_id: int) -> None:
+    """Wipe chat_id's rows from every per-account settings table (Controls: tags,
+    domain rules, templates, recovery prefs) as part of full account deletion."""
+    async with connection() as conn:
+        for table in _ACCOUNT_SETTINGS_TABLES:
+            await conn.execute(f"DELETE FROM {table} WHERE chat_id = ?", (chat_id,))
+        await conn.commit()
+
+
 async def list_pending_users() -> list[dict]:
     """Return users waiting for approval, oldest first."""
     return await _fetch_dicts(
