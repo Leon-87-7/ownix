@@ -1600,3 +1600,29 @@ async def test_migrate_v43_v44_rolls_back_atomically_on_failure(tmp_path, monkey
         assert "status" in cols
         cur = await conn2.execute("SELECT tg_id, first_name, status FROM users")
         assert await cur.fetchone() == (1, "Alice", "approved")
+
+
+@pytest.mark.asyncio
+async def test_delete_user_logs_deleted_flag_when_row_is_missing(tmp_path, monkeypatch) -> None:
+    """delete_user's log line must report whether a row was actually
+    removed, not fire the same unconditional message either way."""
+    from src import database
+
+    db_file = str(tmp_path / "delete_user_log.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await database.init_db()
+
+    logged: dict = {}
+
+    def fake_info(event, **kwargs):
+        logged["event"] = event
+        logged["kwargs"] = kwargs
+
+    monkeypatch.setattr(database.log, "info", fake_info)
+
+    result = await database.delete_user(999999)
+
+    assert result is False
+    assert logged["event"] == "user_deleted"
+    assert logged["kwargs"].get("deleted") is False

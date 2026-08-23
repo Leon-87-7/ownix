@@ -2274,7 +2274,7 @@ async def set_user_email(tg_id: int, email: str | None) -> None:
 async def delete_user(tg_id: int) -> bool:
     """Hard-delete the invite-gate row for tg_id (account deletion's last step)."""
     deleted = await _execute_rowcount("DELETE FROM users WHERE tg_id = ?", (tg_id,)) > 0
-    log.info("user_deleted", tg_id=tg_id)
+    log.info("user_deleted", tg_id=tg_id, deleted=deleted)
     return deleted
 
 
