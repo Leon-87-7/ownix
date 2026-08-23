@@ -427,15 +427,17 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
         await answer_callback_query(ctx.cq_id, text="Job not found — please resend the link.")
         return
     await answer_callback_query(ctx.cq_id)
-    enforce_job_rate_limit(ctx.chat_id)
-    new_job_id = await database.create_job(
-        chat_id=ctx.chat_id,
-        url=job["url"],
-        content_type=job["content_type"],
+    # skip_cache: this must always be a brand-new job, never a dedup hit off
+    # the orphaned row's own URL (see docstring).
+    result = await create_and_enqueue_job(
+        ctx.chat_id,
+        job["url"],
+        job["content_type"],
         template=job.get("template"),
+        skip_cache=True,
+        task=task_for_content_type(job["content_type"], default="video"),
     )
-    task_type = task_for_content_type(job["content_type"], default="video")
-    await queue.enqueue({"task": task_type, "job_id": new_job_id})
+    new_job_id = result["id"]
     log.info("reprocess_enqueued", orphan_job_id=ctx.job_id, new_job_id=new_job_id)
     await send_message(ctx.chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
 
@@ -1238,19 +1240,20 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
             await send_message(chat_id, "🔄 Previous intent canceled.")
             await _reply_cached_job(chat_id, cached)
             return
-        # Rate limit before touching chat_state, so a 429 leaves the pending
-        # intent workflow intact instead of silently dropping it.
-        enforce_job_rate_limit(chat_id)
-        await database.clear_chat_state(chat_id)
-        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
-        await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
-        new_job_id = await database.create_job(
-            chat_id=chat_id, url=url_to_store, content_type=pipeline
-        )
+        # Create (rate-limited, deduplication skipped since `cached` above
+        # already came back empty) before touching chat_state, so a 429 or a
+        # failed enqueue leaves the pending intent workflow intact instead of
+        # silently dropping it.
         task_type = (
             "repo" if pipeline == "repo" else ("article" if pipeline == "article" else "video")
         )
-        await queue.enqueue({"task": task_type, "job_id": new_job_id})
+        result = await create_and_enqueue_job(
+            chat_id, url_to_store, pipeline, skip_cache=True, task=task_type
+        )
+        new_job_id = result["id"]
+        await database.clear_chat_state(chat_id)
+        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
+        await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
         await send_message(chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
         return
     stripped = text.strip()
