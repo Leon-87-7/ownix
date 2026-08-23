@@ -444,4 +444,13 @@ describe('ControlsPage', () => {
     expect(screen.getByText('Permanently delete your account?')).toBeTruthy();
   });
 
+  it('uses the same consequences copy in the dialog description and the static paragraph', () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialogText = screen.getByRole('dialog').textContent ?? '';
+    const staticParagraph = zone.getByText(/deletes every job, brain link, tag, and domain rule/i);
+    expect(dialogText).toContain(staticParagraph.textContent);
+  });
+
 });
