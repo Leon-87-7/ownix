@@ -100,6 +100,7 @@ class TestVerifyTelegramAuth:
 class FakeRedis:
     def __init__(self) -> None:
         self._store: dict[str, str] = {}
+        self._sets: dict[str, set[str]] = {}
 
     async def set(self, key: str, value: str, ex: int | None = None) -> None:
         self._store[key] = value
@@ -108,13 +109,21 @@ class FakeRedis:
         return self._store.get(key)
 
     async def delete(self, *keys: str) -> int:
-        return sum(1 for k in keys if self._store.pop(k, None) is not None)
+        removed = sum(1 for k in keys if self._store.pop(k, None) is not None)
+        removed += sum(1 for k in keys if self._sets.pop(k, None) is not None)
+        return removed
 
     async def getdel(self, key: str) -> str | None:
         return self._store.pop(key, None)
 
+    async def sadd(self, key: str, *members: str) -> int:
+        target = self._sets.setdefault(key, set())
+        before = len(target)
+        target.update(members)
+        return len(target) - before
+
     async def smembers(self, key: str) -> set[str]:
-        return self._store.get(key, set())
+        return set(self._sets.get(key, ()))
 
     async def close(self) -> None:
         pass
@@ -877,6 +886,48 @@ class TestAccountDeletionLock:
             asyncio.run(database._fetch_one("SELECT 1 FROM jobs WHERE chat_id = ?", (555004,)))
             is None
         )
+
+    def test_set_email_rejected_during_deletion(self, auth_client: TestClient) -> None:
+        """/email is pre-approval-reachable by design (middleware.py), so it
+        bypasses the "deleting" lock too — a second session/device still
+        holding a valid cookie must not be able to sneak in a write."""
+        import src.auth.session as session_module
+        from src import database
+
+        asyncio.run(database.set_user_status(555006, "deleting"))
+        user = {"id": 555006, "username": "other_device"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:other-device-sid"] = json.dumps(user)
+
+        resp = auth_client.put(
+            "/api/auth/email",
+            cookies={"vig_session": "other-device-sid"},
+            json={"email": "sneaky@example.com"},
+        )
+
+        assert resp.status_code == 403
+        assert asyncio.run(database.get_user(555006))["email"] is None
+
+    def test_dev_approve_rejected_during_deletion(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """dev-approve would otherwise flip "deleting" back to "approved" and
+        defeat the lock entirely."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
+        asyncio.run(database.set_user_status(555007, "deleting"))
+        user = {"id": 555007, "username": "other_device"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:dev-approve-other-sid"] = json.dumps(user)
+
+        resp = auth_client.post(
+            "/api/auth/dev-approve", cookies={"vig_session": "dev-approve-other-sid"}
+        )
+
+        assert resp.status_code == 403
+        assert asyncio.run(database.get_user_status(555007)) == "deleting"
 
 
 # ---------------------------------------------------------------------------

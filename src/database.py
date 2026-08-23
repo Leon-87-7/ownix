@@ -2253,12 +2253,20 @@ _ACCOUNT_SETTINGS_DELETE_QUERIES = (
     "DELETE FROM ignored_domains WHERE chat_id = ?",
     "DELETE FROM templates WHERE chat_id = ?",
     "DELETE FROM user_settings WHERE chat_id = ?",
+    # spaces cascades (ON DELETE CASCADE, FK enforcement is on for this
+    # connection) to space_urls and context_blobs — delete_job() only cascades
+    # space_urls for jobs it removes, so the space itself would otherwise survive.
+    "DELETE FROM spaces WHERE chat_id = ?",
+    # Short-lived Google OAuth CSRF state (has its own expires_at), but still
+    # chat_id-scoped account data — clean it up rather than let it expire.
+    "DELETE FROM google_oauth_states WHERE chat_id = ?",
 )
 
 
 async def delete_account_settings(chat_id: int) -> None:
-    """Wipe chat_id's rows from every per-account settings table (Controls: tags,
-    domain rules, templates, recovery prefs) as part of full account deletion."""
+    """Wipe chat_id's rows from every per-account table account deletion doesn't
+    already cover via delete_job()/delete_link() (Controls settings, Spaces,
+    pending OAuth state)."""
     async with connection() as conn:
         for query in _ACCOUNT_SETTINGS_DELETE_QUERIES:
             await conn.execute(query, (chat_id,))

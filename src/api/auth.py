@@ -304,6 +304,8 @@ async def dev_approve(request: Request) -> dict:
     if not settings.DEV_LOGIN_ENABLED:
         raise HTTPException(status_code=404, detail="Dev approval is disabled")
     tg_id = int(request.state.user["id"])
+    if await database.get_user_status(tg_id) == "deleting":
+        raise HTTPException(status_code=403, detail="Account deletion in progress")
     await database.set_user_status(tg_id, "approved")
     log.info("auth.dev_approve", tg_id=tg_id)
     return {"ok": True, "status": "approved"}
@@ -378,6 +380,14 @@ async def set_email(payload: EmailPayload, request: Request) -> dict:
     if email is None:
         raise HTTPException(status_code=422, detail="Invalid email")
     tg_id = int(request.state.user["id"])
+    # /email is in _PRE_APPROVAL_AUTH_PATHS (middleware.py) so it bypasses the
+    # approval-status gate on purpose (pending users need it) — that means it
+    # also bypasses the "deleting" lock, and unlike DELETE /me a second call
+    # here isn't idempotent/safe, so check explicitly. A second session/device
+    # still holding a valid cookie is the only way to reach this mid-deletion:
+    # delete_account_route revokes the triggering session before cleanup runs.
+    if await database.get_user_status(tg_id) == "deleting":
+        raise HTTPException(status_code=403, detail="Account deletion in progress")
     await database.set_user_email(tg_id, email)
     status = await database.get_user_status(tg_id)
     if status == "pending":

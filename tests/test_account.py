@@ -39,6 +39,21 @@ def account_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             await conn.commit()
         await database.create_tag(chat_id=CHAT_ID, name="t", meaning="", color="#8b5cf6", icon=None)
         await database.add_allowed_domain(CHAT_ID, "example.com")
+        async with database.connection() as conn:
+            await conn.execute(
+                "INSERT INTO spaces (id, chat_id, name) VALUES ('space_1', ?, 'Space')",
+                (CHAT_ID,),
+            )
+            await conn.execute(
+                "INSERT INTO context_blobs (id, space_id, name, content) "
+                "VALUES ('blob_1', 'space_1', 'Notes', 'hi')"
+            )
+            await conn.execute(
+                "INSERT INTO google_oauth_states (state, chat_id, expires_at) "
+                "VALUES ('state_1', ?, '2026-01-01')",
+                (CHAT_ID,),
+            )
+            await conn.commit()
 
     asyncio.run(_setup())
     return database
@@ -55,6 +70,13 @@ def test_delete_account_removes_every_owned_row(account_db) -> None:
     assert asyncio.run(database._fetch_one("SELECT 1 FROM links WHERE chat_id = ?", (CHAT_ID,))) is None
     assert asyncio.run(database.list_tags(CHAT_ID)) == []
     assert asyncio.run(database.list_allowed_domains(CHAT_ID)) == set()
+    assert asyncio.run(database._fetch_one("SELECT 1 FROM spaces WHERE chat_id = ?", (CHAT_ID,))) is None
+    # context_blobs has no chat_id of its own — cascades from the spaces delete (FK ON DELETE CASCADE).
+    assert asyncio.run(database._fetch_one("SELECT 1 FROM context_blobs WHERE id = 'blob_1'")) is None
+    assert (
+        asyncio.run(database._fetch_one("SELECT 1 FROM google_oauth_states WHERE chat_id = ?", (CHAT_ID,)))
+        is None
+    )
     # The delete is recorded as a durable purge task even though nothing external was ever attached.
     row = asyncio.run(database._fetch_one("SELECT 1 FROM purge_tasks WHERE job_id = 'job_1'"))
     assert row is not None
