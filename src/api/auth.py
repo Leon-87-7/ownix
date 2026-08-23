@@ -259,6 +259,16 @@ async def redeem_handoff_login(
     if chat_id is None:
         raise HTTPException(status_code=401, detail="This link has expired or was already used")
 
+    # See _login_telegram_user: resume a deletion left mid-flight rather than
+    # minting a session into a half-deleted account. Unlike the other two
+    # login paths, this route redirects rather than returning a session JSON
+    # body, so on resume it rejects with the same 401 the "user is None" path
+    # below already uses (delete_account() will have just made that true).
+    if await database.get_user_status(chat_id) == "deleting":
+        await delete_account(chat_id)
+        log.info("auth.resumed_account_deletion", tg_id=chat_id)
+        raise HTTPException(status_code=401, detail="Dashboard access is unavailable")
+
     user = await database.get_user(chat_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Dashboard access is unavailable")

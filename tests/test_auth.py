@@ -929,6 +929,34 @@ class TestAccountDeletionLock:
         assert resp.status_code == 403
         assert asyncio.run(database.get_user_status(555007)) == "deleting"
 
+    def test_handoff_login_resumes_stuck_deletion_instead_of_minting_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The dashboard-notification handoff login is a third session-minting
+        path (alongside _login_telegram_user and miniapp_session) — it must
+        not mint a session into an account whose row is mid-deletion."""
+        import src.auth.session as session_module
+        from src import database
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555009, username="handoff_user", first_name="H", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555009, "deleting"))
+
+        token = asyncio.run(session_module.mint_dashboard_handoff(555009, ttl=3600))
+
+        resp = auth_client.post(
+            "/api/auth/handoff",
+            data={"token": token, "job_id": "job_abc"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code == 401
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+        assert asyncio.run(database.get_user(555009)) is None
+
 
 # ---------------------------------------------------------------------------
 # Telegram Mini App initData
