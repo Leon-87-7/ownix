@@ -354,15 +354,21 @@ async def delete_account_route(request: Request) -> Response:
     """Self-serve full account deletion: hard-deletes every job/link/credential/
     setting owned by the caller, disconnects Google, then ends the session.
 
-    "deleting" status is set (and the session revoked) *before* the cleanup
-    runs, not after: every other account-write route already rejects non-
-    "approved" users (src/auth/middleware.py), so flipping status first shuts
-    out concurrent writes from other sessions/devices, and revoking this
-    session first closes the same-tab race the naive "delete then revoke"
-    order leaves open. delete_account()'s steps are all delete-if-exists /
-    best-effort, so if this call fails partway the row is left in "deleting"
-    (still locked out) and a later retry safely resumes rather than redoing
-    already-finished work.
+    begin_account_deletion() atomically flips status to "deleting" (and the
+    session is revoked) *before* the cleanup runs, not after: every other
+    account-write route already rejects non-"approved" users
+    (src/auth/middleware.py), so flipping status first shuts out concurrent
+    writes from other sessions/devices, and revoking this session first
+    closes the same-tab race the naive "delete then revoke" order leaves
+    open. The lock is compare-and-set (WHERE status != 'deleting'), so a
+    second concurrent call — another tab/device with a still-valid session,
+    since /api/auth/me stays reachable during deletion — short-circuits here
+    instead of running delete_account() a second time (which would otherwise
+    insert duplicate purge_tasks rows and double-revoke the Google token).
+    delete_account()'s steps are all delete-if-exists / best-effort, so if
+    this call fails partway the row is left in "deleting" (still locked out)
+    and a later retry safely resumes rather than redoing already-finished
+    work.
     """
     tg_id = int(request.state.user["id"])
     if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
@@ -370,7 +376,17 @@ async def delete_account_route(request: Request) -> Response:
         # (src/database.py) — the "deleting" lock above would silently no-op
         # for this account, so refuse self-service deletion outright instead.
         raise HTTPException(status_code=403, detail="Operator account cannot be deleted")
-    await database.set_user_status(tg_id, "deleting")
+
+    locked = await database.begin_account_deletion(tg_id)
+    if not locked:
+        # Another concurrent call already holds the lock and owns the
+        # cleanup — the account is/will be gone either way, so report the
+        # same success the winning call's caller will also see rather than
+        # running delete_account() again.
+        out = Response(status_code=204)
+        out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
+        out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+        return out
 
     session_id = request.cookies.get(COOKIE_NAME)
     if session_id:

@@ -2232,6 +2232,22 @@ async def set_user_status(tg_id: int, status: UserStatus) -> None:
     log.info("user_status_set", tg_id=tg_id, status=status)
 
 
+async def begin_account_deletion(tg_id: int) -> bool:
+    """Atomically flip status to "deleting" unless a deletion is already in
+    progress. Returns True if this call acquired the lock, False if another
+    concurrent call (a second device/tab, or a login-resume race) already
+    holds it — the caller should treat False as "nothing left to do here"
+    rather than running delete_account() a second time.
+    """
+    rowcount = await _execute_rowcount(
+        "UPDATE users SET status = 'deleting', updated_at = CURRENT_TIMESTAMP "
+        "WHERE tg_id = ? AND status != 'deleting'",
+        (tg_id,),
+    )
+    log.info("account_deletion_lock_attempted", tg_id=tg_id, acquired=rowcount > 0)
+    return rowcount > 0
+
+
 async def set_user_email(tg_id: int, email: str | None) -> None:
     """Set a user's email address, creating a pending minimal row if needed."""
     async with connection() as conn:

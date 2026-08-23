@@ -791,6 +791,40 @@ class TestAccountDeletionLock:
         assert asyncio.run(database.get_user_status(555005)) == "approved"
         assert asyncio.run(session_module.resolve("operator-sid")) == user
 
+    def test_delete_account_route_short_circuits_when_already_deleting(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A second concurrent DELETE /api/auth/me (another tab/device with a
+        still-valid session, since /api/auth/me stays reachable during
+        deletion) must not run delete_account() a second time."""
+        import src.auth.session as session_module
+        from src import database
+        from src.api import auth as auth_api
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555008, username="race_user", first_name="R", last_name=None, photo_url=None
+            )
+        )
+        # Simulate the first concurrent call having already acquired the lock.
+        asyncio.run(database.set_user_status(555008, "deleting"))
+        user = {"id": 555008, "username": "race_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:race-sid"] = json.dumps(user)
+
+        called = False
+
+        async def spy_delete_account(chat_id: int) -> None:
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr(auth_api, "delete_account", spy_delete_account)
+
+        resp = auth_client.delete("/api/auth/me", cookies={"vig_session": "race-sid"})
+
+        assert resp.status_code == 204
+        assert called is False
+
     def test_delete_account_route_locks_and_revokes_session_before_cleanup_runs(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -1516,3 +1516,26 @@ async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
         columns = {row[1] for row in await cur.fetchall()}
 
     assert {"checklists_md", "checklists_generated_at"} <= columns
+
+
+@pytest.mark.asyncio
+async def test_begin_account_deletion_is_exclusive(tmp_path, monkeypatch) -> None:
+    """Only the first caller wins the lock; a second call on an already-
+    'deleting' row must report False instead of re-flipping the status
+    (finding #2: two concurrent DELETE /api/auth/me calls must not both
+    run delete_account())."""
+    from src import database
+
+    db_file = str(tmp_path / "lock_test.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await database.init_db()
+    await database.upsert_user(tg_id=1, username="u", first_name="U", last_name=None, photo_url=None)
+    await database.set_user_status(1, "approved")
+
+    first = await database.begin_account_deletion(1)
+    second = await database.begin_account_deletion(1)
+
+    assert first is True
+    assert second is False
+    assert await database.get_user_status(1) == "deleting"
