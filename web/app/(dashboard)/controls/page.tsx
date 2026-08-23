@@ -455,6 +455,7 @@ function DeleteAccountSection() {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [confirmText, setConfirmText] = useState('');
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -482,13 +483,25 @@ function DeleteAccountSection() {
           description="This deletes every job, Brain link, tag, and domain rule you own, disconnects Google, and revokes your session. This can't be undone."
           confirmLabel="Delete my account"
           pending={deleting}
+          confirmDisabled={confirmText.trim().toLowerCase() !== 'delete'}
           onConfirm={handleDelete}
           trigger={
             <button className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised">
               Delete my account
             </button>
           }
-        />
+        >
+          <label className="flex flex-col gap-1 text-xs text-body">
+            Type <span className="font-mono font-semibold text-ink">delete</span> to confirm
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoComplete="off"
+              className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted focus:border-signal focus:outline-none"
+            />
+          </label>
+        </ConfirmDialog>
         {error && (
           <p className="mt-2 text-xs text-status-error">{error}</p>
         )}

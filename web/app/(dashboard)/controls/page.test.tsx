@@ -387,9 +387,27 @@ describe('ControlsPage', () => {
     const zone = section('Danger zone');
     fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
     const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
+      target: { value: 'delete' },
+    });
     fireEvent.click(dialog.getByRole('button', { name: 'Delete my account' }));
     await waitFor(() =>
       expect(zone.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
     );
+  });
+
+  it('keeps the account-delete confirm button disabled until "delete" is typed', async () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    const dialog = within(screen.getByRole('dialog'));
+    const confirmButton = dialog.getByRole('button', { name: 'Delete my account' });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(confirmButton).not.toBeDisabled();
   });
 });
