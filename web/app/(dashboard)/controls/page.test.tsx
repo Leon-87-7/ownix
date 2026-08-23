@@ -418,7 +418,10 @@ describe('ControlsPage', () => {
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
-    await waitFor(() => expect(zone.getByRole('alert')).toHaveTextContent('Cannot delete right now'));
+    // Query for the alert by text; the element has role="alert" in the JSX
+    await waitFor(() =>
+      expect(zone.getByText('Cannot delete right now')).toHaveAttribute('role', 'alert'),
+    );
   });
 
   it('keeps the confirm dialog open when account deletion fails', async () => {

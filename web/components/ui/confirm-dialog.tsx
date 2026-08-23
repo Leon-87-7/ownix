@@ -66,8 +66,13 @@ export function ConfirmDialog({
             type="button"
             disabled={pending || confirmDisabled}
             onClick={async () => {
-              await onConfirm();
-              setOpen(false);
+              try {
+                await onConfirm();
+                setOpen(false);
+              } catch (err) {
+                // onConfirm failed — error is displayed in component state,
+                // dialog stays open. Catch here to prevent unhandled rejection.
+              }
             }}
             className="h-8 rounded-md bg-status-error px-3 text-button font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
           >
