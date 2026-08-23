@@ -503,7 +503,12 @@ function DeleteAccountSection() {
           </label>
         </ConfirmDialog>
         {error && (
-          <p className="mt-2 text-xs text-status-error">{error}</p>
+          <p
+            className="mt-2 text-xs text-status-error"
+            role="alert"
+          >
+            {error}
+          </p>
         )}
       </div>
     </div>

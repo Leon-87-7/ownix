@@ -408,4 +408,17 @@ describe('ControlsPage', () => {
     });
     expect(confirmButton).not.toBeDisabled();
   });
+  it('announces the account-delete error as an alert', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ detail: 'Cannot delete right now' }), { status: 502 }),
+    ));
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
+    await waitFor(() => expect(zone.getByRole('alert')).toHaveTextContent('Cannot delete right now'));
+  });
+
 });
