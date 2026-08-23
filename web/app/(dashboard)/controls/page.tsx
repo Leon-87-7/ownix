@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
-import { apiPut } from '@/lib/fetch-utils';
+import { apiDelete, apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
 import {
   Pin,
@@ -460,8 +460,7 @@ function DeleteAccountSection() {
     setDeleting(true);
     setError(undefined);
     try {
-      const res = await fetch('/api/auth/me', { method: 'DELETE' });
-      if (!res.ok) throw new Error('Could not delete account');
+      await apiDelete('/api/auth/me', 'Could not delete account');
       router.replace('/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete account');

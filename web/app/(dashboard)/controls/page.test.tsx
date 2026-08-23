@@ -378,4 +378,18 @@ describe('ControlsPage', () => {
       consequences.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('shows the server-provided error detail when account deletion fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ detail: 'Cannot delete: Google disconnect failed' }), { status: 502 }),
+    ));
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.click(dialog.getByRole('button', { name: 'Delete my account' }));
+    await waitFor(() =>
+      expect(zone.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
+    );
+  });
 });
