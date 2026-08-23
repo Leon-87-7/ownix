@@ -825,6 +825,38 @@ class TestAccountDeletionLock:
         assert resp.status_code == 204
         assert called is False
 
+    def test_delete_account_route_revokes_losing_callers_own_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The losing side of a concurrent DELETE /api/auth/me race still owns
+        a live session cookie — it must be revoked too, not just the winning
+        caller's, or the loser's session token stays valid until its natural
+        TTL even though the account is being deleted."""
+        import src.auth.session as session_module
+        from src import database
+        from src.api import auth as auth_api
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555009, username="race_loser", first_name="R", last_name=None, photo_url=None
+            )
+        )
+        # Simulate the first concurrent call having already acquired the lock.
+        asyncio.run(database.set_user_status(555009, "deleting"))
+        user = {"id": 555009, "username": "race_loser"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:race-loser-sid"] = json.dumps(user)
+
+        async def spy_delete_account(chat_id: int) -> None:
+            pass
+
+        monkeypatch.setattr(auth_api, "delete_account", spy_delete_account)
+
+        resp = auth_client.delete("/api/auth/me", cookies={"vig_session": "race-loser-sid"})
+
+        assert resp.status_code == 204
+        assert asyncio.run(session_module.resolve("race-loser-sid")) is None
+
     def test_delete_account_route_locks_and_revokes_session_before_cleanup_runs(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:

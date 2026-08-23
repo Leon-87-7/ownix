@@ -382,7 +382,13 @@ async def delete_account_route(request: Request) -> Response:
         # Another concurrent call already holds the lock and owns the
         # cleanup — the account is/will be gone either way, so report the
         # same success the winning call's caller will also see rather than
-        # running delete_account() again.
+        # running delete_account() again. Still revoke *this* caller's own
+        # session, though: the docstring promises every DELETE /api/auth/me
+        # call ends its session, and leaving this one alive would let it
+        # outlive the account it belonged to until its natural TTL.
+        losing_session_id = request.cookies.get(COOKIE_NAME)
+        if losing_session_id:
+            await session_store.revoke(losing_session_id)
         out = Response(status_code=204)
         out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
         out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
