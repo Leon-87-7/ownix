@@ -354,7 +354,7 @@ export default function PrivacyPage() {
           <LegalSection title="Children">
             <p>
               Ownix is not intended for, and we do not knowingly
-              collect information from, anyone under 16.
+              collect information from, anyone under 18.
             </p>
           </LegalSection>
 
