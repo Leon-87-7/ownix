@@ -481,7 +481,7 @@ function DeleteAccountSection() {
         <ConfirmDialog
           title="Permanently delete your account?"
           description="This deletes every job, Brain link, tag, and domain rule you own, disconnects Google, and revokes your session. This can't be undone."
-          confirmLabel="Delete my account"
+          confirmLabel="Yes, delete my account"
           pending={deleting}
           confirmDisabled={confirmText.trim().toLowerCase() !== 'delete'}
           onConfirm={handleDelete}

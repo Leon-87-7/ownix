@@ -387,10 +387,8 @@ describe('ControlsPage', () => {
     const zone = section('Danger zone');
     fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
     const dialog = within(screen.getByRole('dialog'));
-    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
-      target: { value: 'delete' },
-    });
-    fireEvent.click(dialog.getByRole('button', { name: 'Delete my account' }));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
     await waitFor(() =>
       expect(zone.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
     );
@@ -402,7 +400,7 @@ describe('ControlsPage', () => {
     fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
 
     const dialog = within(screen.getByRole('dialog'));
-    const confirmButton = dialog.getByRole('button', { name: 'Delete my account' });
+    const confirmButton = dialog.getByRole('button', { name: 'Yes, delete my account' });
     expect(confirmButton).toBeDisabled();
 
     fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
