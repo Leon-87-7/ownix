@@ -5,10 +5,10 @@ import { AuthShell } from '@/components/shell/auth-shell';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 
-// Thin auth page — index space is better spent on the landing page.
+// Thin auth page - index space is better spent on the landing page.
 // follow: true so link equity still flows through to pages this one links to.
 export const metadata: Metadata = {
-  title: 'Sign in — Ownix',
+  title: 'Sign in - Ownix',
   robots: { index: false, follow: true },
 };
 
@@ -28,8 +28,8 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-2 text-center text-xs leading-5 text-muted">
-          Telegram may remember the account shown here. Ownix signs you
-          in only after you choose it.
+          Telegram may remember the account shown here. Ownix signs
+          you in only after you choose it.
         </p>
 
         <div

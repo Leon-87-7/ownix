@@ -8,7 +8,12 @@ import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
 import { apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
-import { Pin, PinOff, SlidersHorizontal, TagPlus } from 'lucide-react';
+import {
+  Pin,
+  PinOff,
+  SlidersHorizontal,
+  TagPlus,
+} from 'lucide-react';
 import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
 import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -48,12 +53,18 @@ function TagPill({
           {tag.name}
         </button>
       </Tooltip>
-      <Tooltip content={tag.pinned ? 'Unpin from GoTo' : 'Pin for GoTo'}>
+      <Tooltip
+        content={tag.pinned ? 'Unpin from GoTo' : 'Pin for GoTo'}
+      >
         <button
           type="button"
           onClick={onTogglePin}
           aria-pressed={Boolean(tag.pinned)}
-          aria-label={tag.pinned ? `Unpin ${tag.name} from GoTo` : `Pin ${tag.name} for GoTo`}
+          aria-label={
+            tag.pinned
+              ? `Unpin ${tag.name} from GoTo`
+              : `Pin ${tag.name} for GoTo`
+          }
           className={`rounded-full p-1 transition-ui hover:bg-surface ${tag.pinned ? 'text-signal' : 'text-muted'}`}
         >
           {tag.pinned ? (
@@ -228,7 +239,7 @@ function DomainTab({
 }) {
   const { domains, loading, fetchError, addDomain, removeDomain } =
     useDomainList(apiPath, label);
-  const inputId = useId(); // both DomainTab instances render at once — IDs must be unique
+  const inputId = useId(); // both DomainTab instances render at once - IDs must be unique
   const [input, setInput] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | undefined>();
@@ -507,7 +518,7 @@ export default function ControlsPage() {
           <p className="mb-4 text-sm text-body">
             Control which link domains Ownix processes automatically.
             Adding a domain to Allowed lets Ownix process links from
-            it; adding it to Ignored skips those links — steer around
+            it; adding it to Ignored skips those links - steer around
             noisy sources without touching individual saves.
           </p>
           <div className="grid gap-6 md:grid-cols-2">

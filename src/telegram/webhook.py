@@ -33,7 +33,12 @@ from src.services.parse import (
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
 from src.services.email import send_welcome_email
-from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_content_type
+from src.services.jobs import (
+    create_and_enqueue_job,
+    enforce_job_rate_limit,
+    flush_held_jobs,
+    task_for_content_type,
+)
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
@@ -422,14 +427,17 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
         await answer_callback_query(ctx.cq_id, text="Job not found — please resend the link.")
         return
     await answer_callback_query(ctx.cq_id)
-    new_job_id = await database.create_job(
-        chat_id=ctx.chat_id,
-        url=job["url"],
-        content_type=job["content_type"],
+    # skip_cache: this must always be a brand-new job, never a dedup hit off
+    # the orphaned row's own URL (see docstring).
+    result = await create_and_enqueue_job(
+        ctx.chat_id,
+        job["url"],
+        job["content_type"],
         template=job.get("template"),
+        skip_cache=True,
+        task=task_for_content_type(job["content_type"], default="video"),
     )
-    task_type = task_for_content_type(job["content_type"], default="video")
-    await queue.enqueue({"task": task_type, "job_id": new_job_id})
+    new_job_id = result["id"]
     log.info("reprocess_enqueued", orphan_job_id=ctx.job_id, new_job_id=new_job_id)
     await send_message(ctx.chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
 
@@ -555,6 +563,7 @@ async def _handle_freestyle_url(
     chat_id: int, url: str, pipeline: str, message_id: int | None
 ) -> None:
     """Shared logic for /freestyle <url> and pending_template=freestyle URL message."""
+    enforce_job_rate_limit(chat_id)
     job_id = await database.create_job(
         chat_id=chat_id,
         url=url,
@@ -1223,22 +1232,28 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
     job_id = state["job_id"]
     pipeline = detect_pipeline(text)
     if pipeline in ("short", "long", "unsized", "article", "repo"):
-        await database.clear_chat_state(chat_id)
-        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
         url_to_store = normalize_repo_url(text) if pipeline == "repo" else text
         cached = await database.find_recent_job_by_url(chat_id, url_to_store)
         if cached:
+            await database.clear_chat_state(chat_id)
+            log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
             await send_message(chat_id, "🔄 Previous intent canceled.")
             await _reply_cached_job(chat_id, cached)
             return
-        await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
-        new_job_id = await database.create_job(
-            chat_id=chat_id, url=url_to_store, content_type=pipeline
-        )
+        # Create (rate-limited, deduplication skipped since `cached` above
+        # already came back empty) before touching chat_state, so a 429 or a
+        # failed enqueue leaves the pending intent workflow intact instead of
+        # silently dropping it.
         task_type = (
             "repo" if pipeline == "repo" else ("article" if pipeline == "article" else "video")
         )
-        await queue.enqueue({"task": task_type, "job_id": new_job_id})
+        result = await create_and_enqueue_job(
+            chat_id, url_to_store, pipeline, skip_cache=True, task=task_type
+        )
+        new_job_id = result["id"]
+        await database.clear_chat_state(chat_id)
+        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
+        await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
         await send_message(chat_id, f"📥 Received!\njob_{new_job_id[-4:]}")
         return
     stripped = text.strip()
@@ -2005,6 +2020,16 @@ async def ops_webhook(
 async def _webhook_route_callback(callback: dict) -> None:
     try:
         await _handle_callback(callback)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
+            if chat_id is not None:
+                with suppress(Exception):
+                    await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_callback_error")
+        with suppress(Exception):
+            await answer_callback_query(callback.get("id", ""))
     except Exception:
         log.exception("webhook_callback_error")
         # Acknowledge so the client's inline button stops spinning even on failure.
@@ -2020,10 +2045,21 @@ def _extract_message_identity(sender: dict, chat: dict) -> dict:
     }
 
 
+_RATE_LIMIT_MSG = (
+    "🐢 Slow down — too many jobs from this chat in the last minute. "
+    "Try again shortly."
+)
+
+
 async def _webhook_route_photo(chat_id: int, message: dict, photo: list, identity: dict) -> None:
     try:
         if await _invite_gate_allows(chat_id, "", identity):
             await _handle_photo_update(chat_id, message, photo)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_photo_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_photo_error", chat_id=chat_id)
 
@@ -2034,6 +2070,11 @@ async def _webhook_route_document(
     try:
         if await _invite_gate_allows(chat_id, "", identity):
             await _handle_document_update(chat_id, message, document)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_document_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_document_error", chat_id=chat_id)
 
@@ -2043,6 +2084,11 @@ async def _webhook_route_text(
 ) -> None:
     try:
         await _route_text(chat_id, text, message_id, identity)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_handler_error", chat_id=chat_id)
     except Exception:
         log.exception("webhook_handler_error", chat_id=chat_id)
         try:
@@ -2143,6 +2189,7 @@ async def _enqueue_document_job(
     tag_names: list[str] | None = None,
 ) -> None:
     """Store document bytes content-addressed, create + enqueue the job, ack the user."""
+    enforce_job_rate_limit(chat_id)
     sha = hashlib.sha256(data).hexdigest()
     key = storage.object_key("documents", sha, ext)
     await storage.upload(key, data, content_type_for(ext))

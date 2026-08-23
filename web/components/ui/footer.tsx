@@ -56,6 +56,12 @@ export default function Footer() {
           >
             Terms
           </Link>
+          <Link
+            href="/accessibility"
+            className={linkClasses}
+          >
+            Accessibility
+          </Link>
         </nav>
       </div>
     </footer>

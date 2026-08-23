@@ -10,7 +10,7 @@ import {
 } from '@/components/shell/public-shell';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Ownix',
+  title: 'Terms of Service - Ownix',
 };
 
 export default function TermsPage() {
@@ -19,13 +19,11 @@ export default function TermsPage() {
       <LegalLayout active="terms">
         <LegalArticle>
           <LegalTitle
-            title="Terms of Service — Ownix"
+            title="Terms of Service - Ownix"
             updated="Last updated: July 15, 2026"
           />
 
-          <p>
-            By using Ownix, you agree to these terms.
-          </p>
+          <p>By using Ownix, you agree to these terms.</p>
 
           <LegalSection title="The service">
             <p>
@@ -40,11 +38,12 @@ export default function TermsPage() {
 
           <LegalSection title="Invite-only access">
             <p>
-              Ownix is invite-only while it is young. After you sign in with Telegram, you
-              may be asked for an email address so your request can
-              be reviewed and approved. Providing an email does
-              not guarantee access; your account may stay pending, be
-              approved, be blocked, or have access revoked later.
+              Ownix is invite-only while it is young. After you sign
+              in with Telegram, you may be asked for an email address
+              so your request can be reviewed and approved. Providing
+              an email does not guarantee access; your account may
+              stay pending, be approved, be blocked, or have access
+              revoked later.
             </p>
             <p>
               Until your Telegram account is approved, dashboard and
@@ -74,19 +73,19 @@ export default function TermsPage() {
           <LegalSection title="Google account connection">
             <p>
               If you connect a Google account, Ownix creates files (a
-              folder named <code>Ownix</code>, a spreadsheet,
-              and uploads) in your own Drive using the{' '}
-              <code>drive.file</code> and{' '}
-              <code>spreadsheets</code> scopes. Ownix only ever touches
-              files it created. You can disconnect at any time by
-              sending <code>/disconnect</code>.
+              folder named <code>Ownix</code>, a spreadsheet, and
+              uploads) in your own Drive using the{' '}
+              <code>drive.file</code> and <code>spreadsheets</code>{' '}
+              scopes. Ownix only ever touches files it created. You
+              can disconnect at any time by sending{' '}
+              <code>/disconnect</code>.
             </p>
           </LegalSection>
 
           <LegalSection title="Limitation of liability">
             <p>
-              Ownix is a personal project, provided without warranty of
-              any kind. We are not liable for any loss or damage
+              Ownix is a personal project, provided without warranty
+              of any kind. We are not liable for any loss or damage
               arising from its use.
             </p>
           </LegalSection>

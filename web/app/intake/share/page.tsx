@@ -8,12 +8,12 @@ import { storePendingShareUrl } from '@/lib/intake-share-redirect';
 
 /**
  * PWA share-target landing (issue #476). Public route (see `proxy.ts`
- * PUBLIC_PATHS) so it works before login — this intentionally supersedes the
+ * PUBLIC_PATHS) so it works before login - this intentionally supersedes the
  * closed #423 Feed-prefill behavior; `web/app/manifest.json`'s share_target
  * now points here instead of `/feed`.
  *
  * Default choice for the plan's open question (auto-submit vs. prefill):
- * **prefill + confirm** — this page never calls `/api/intake/message`
+ * **prefill + confirm** - this page never calls `/api/intake/message`
  * itself, it only redirects into `/intake?url=...` so the user reviews and
  * sends explicitly, same as pasting the URL by hand.
  */
@@ -36,7 +36,9 @@ function IntakeShareRedirect() {
     const shareUrl = searchParams.get('share_url');
     const shareText = searchParams.get('share_text');
     const extracted = extractSharedUrl(shareUrl, shareText);
-    const intakeTarget = extracted ? `/intake?url=${encodeURIComponent(extracted)}` : '/intake';
+    const intakeTarget = extracted
+      ? `/intake?url=${encodeURIComponent(extracted)}`
+      : '/intake';
 
     let cancelled = false;
     fetch('/api/auth/me')
@@ -47,7 +49,7 @@ function IntakeShareRedirect() {
           return;
         }
         // Not authenticated: preserve the shared URL across login instead of
-        // losing it — the login widget redirects back to /intake on success.
+        // losing it - the login widget redirects back to /intake on success.
         if (extracted) storePendingShareUrl(extracted);
         router.replace('/login');
       })

@@ -1,15 +1,33 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobSummary } from '@/components/feed/job-card';
 import { AppHeader } from '@/components/shell/app-header';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import FeedPage from './page';
 
+const RECOVERY_SUMMARY = { stale_pending: 2, error_jobs: 1, stale_in_flight: 1 };
+
+// RecoveryPanel is always mounted (only its `active` prop changes), so its
+// GET fires on every render regardless of which view/tab a test exercises.
+const server = setupServer(
+  http.get('/api/jobs/recovery/summary', () => HttpResponse.json(RECOVERY_SUMMARY)),
+  http.post('/api/jobs/recovery/retry-pending', () => HttpResponse.json({ enqueued: 1 })),
+  http.post('/api/jobs/recovery/retry-error', () => HttpResponse.json({ enqueued: 1 })),
+  http.post('/api/jobs/recovery/clear-failed', () => HttpResponse.json({ enqueued: 1 })),
+);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterAll(() => server.close());
+
 // FeedPage now consumes the global submit dialog + header the (dashboard)
 // layout provides; render the same tree here so both triggers stay covered.
-function FeedTree({ restricted = false }: { restricted?: boolean } = {}) {
+function FeedTree({
+  restricted = false,
+}: { restricted?: boolean } = {}) {
   return (
     <RestrictedModeProvider restricted={restricted}>
       <SubmitJobProvider>
@@ -24,7 +42,7 @@ const navigationMock = vi.hoisted(() => {
   const replace = vi.fn();
   return {
     replace,
-    // Stable identity like the real useRouter — an unstable object re-fires
+    // Stable identity like the real useRouter - an unstable object re-fires
     // effects that depend on the router.
     router: { push: vi.fn(), replace, back: vi.fn() },
     searchParams: new URLSearchParams(),
@@ -39,7 +57,11 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navigationMock.searchParams,
 }));
 
-const STATS = { total: 5, by_status: { done: 3, error: 1 }, by_content_type: { short: 3, long: 2 } };
+const STATS = {
+  total: 5,
+  by_status: { done: 3, error: 1 },
+  by_content_type: { short: 3, long: 2 },
+};
 const JOBS: JobSummary[] = [
   {
     id: 'j1',
@@ -82,7 +104,9 @@ import { useInFlightPolling } from '@/lib/hooks/useInFlightPolling';
 const mockUseFeedData = vi.mocked(useFeedData);
 const mockUseFuseSearch = vi.mocked(useFuseSearch);
 
-function setupMocks(overrides: Partial<ReturnType<typeof useFeedData>> = {}) {
+function setupMocks(
+  overrides: Partial<ReturnType<typeof useFeedData>> = {},
+) {
   mockUseFeedData.mockReturnValue({
     ctFilter: '',
     setCtFilter: vi.fn(),
@@ -107,8 +131,12 @@ function setupMocks(overrides: Partial<ReturnType<typeof useFeedData>> = {}) {
 }
 
 async function openRecoveryActions() {
-  fireEvent.click(await screen.findByRole('button', { name: /4 need attention/i }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: /4 need attention/i }),
+  );
 }
+
+let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -117,17 +145,13 @@ beforeEach(() => {
   googleStatusMock.connected = null;
   mockUseFeedData.mockReset();
   mockUseFuseSearch.mockReset();
-  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-    if (init?.method === 'POST') {
-      return new Response(JSON.stringify({ enqueued: 1 }), { status: 200 });
-    }
-    return new Response(JSON.stringify({
-      stale_pending: 2,
-      error_jobs: 1,
-      stale_in_flight: 1,
-    }), { status: 200 });
-  }));
+  fetchSpy = vi.spyOn(globalThis, 'fetch');
   setupMocks();
+});
+
+afterEach(() => {
+  fetchSpy.mockRestore();
+  server.resetHandlers();
 });
 
 // extractSharedUrl unit tests live beside the helper: lib/share-target.test.ts
@@ -146,46 +170,69 @@ describe('FeedPage', () => {
   it('shows the Connect Google nudge only while disconnected', () => {
     googleStatusMock.connected = false;
     render(<FeedTree />);
-    expect(screen.getByRole('link', { name: /connect google/i })).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /connect google/i }),
+    ).toBeTruthy();
   });
 
   it('hides the Connect Google nudge when connected', () => {
     googleStatusMock.connected = true;
     render(<FeedTree />);
-    expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: /connect google/i }),
+    ).toBeNull();
   });
 
   it('hides the Connect Google nudge while status is unknown', () => {
     render(<FeedTree />);
-    expect(screen.queryByRole('link', { name: /connect google/i })).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: /connect google/i }),
+    ).toBeNull();
   });
 
   it('shows a one-time success banner on ?google=connected and strips the param', () => {
-    navigationMock.searchParams = new URLSearchParams('google=connected');
+    navigationMock.searchParams = new URLSearchParams(
+      'google=connected',
+    );
     render(<FeedTree />);
     expect(screen.getByText(/google connected/i)).toBeTruthy();
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
   });
 
   it('shows a denied banner on ?google=denied and strips the param', () => {
-    navigationMock.searchParams = new URLSearchParams('google=denied');
+    navigationMock.searchParams = new URLSearchParams(
+      'google=denied',
+    );
     render(<FeedTree />);
     expect(screen.getByText(/connection was denied/i)).toBeTruthy();
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
   });
 
   it('preserves other query params when stripping ?google=', () => {
-    navigationMock.searchParams = new URLSearchParams('type=short&google=connected');
+    navigationMock.searchParams = new URLSearchParams(
+      'type=short&google=connected',
+    );
     render(<FeedTree />);
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed?type=short', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith(
+      '/feed?type=short',
+      { scroll: false },
+    );
   });
 
   it('strips ?google= and an unsupported ?type= in a single replace', () => {
-    navigationMock.searchParams = new URLSearchParams('type=bogus&google=connected');
+    navigationMock.searchParams = new URLSearchParams(
+      'type=bogus&google=connected',
+    );
     render(<FeedTree />);
     expect(screen.getByText(/google connected/i)).toBeTruthy();
     expect(navigationMock.replace).toHaveBeenCalledTimes(1);
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
   });
 
   it('still drops an unsupported ?type= without a google param', () => {
@@ -193,10 +240,11 @@ describe('FeedPage', () => {
     setupMocks({ setCtFilter });
     navigationMock.searchParams = new URLSearchParams('type=bogus');
     render(<FeedTree />);
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
     expect(setCtFilter).toHaveBeenCalledWith('');
   });
-
 
   it('hands share_text URLs to the Submit URL dialog and strips share params once', async () => {
     navigationMock.searchParams = new URLSearchParams(
@@ -205,10 +253,16 @@ describe('FeedPage', () => {
     const { rerender } = render(<FeedTree />);
 
     await waitFor(() =>
-      expect(screen.getByRole('dialog', { name: 'Submit URL' })).toBeTruthy(),
+      expect(
+        screen.getByRole('dialog', { name: 'Submit URL' }),
+      ).toBeTruthy(),
     );
-    expect(screen.getByDisplayValue('https://example.com/x')).toBeTruthy();
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(
+      screen.getByDisplayValue('https://example.com/x'),
+    ).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
 
     navigationMock.replace.mockClear();
     navigationMock.searchParams = new URLSearchParams();
@@ -218,11 +272,17 @@ describe('FeedPage', () => {
   });
 
   it('strips share params even when no shared URL can be extracted', () => {
-    navigationMock.searchParams = new URLSearchParams('share_text=nope&share_url=ftp%3A%2F%2Fexample.com');
+    navigationMock.searchParams = new URLSearchParams(
+      'share_text=nope&share_url=ftp%3A%2F%2Fexample.com',
+    );
     render(<FeedTree />);
 
-    expect(screen.queryByRole('dialog', { name: 'Submit URL' })).toBeNull();
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(
+      screen.queryByRole('dialog', { name: 'Submit URL' }),
+    ).toBeNull();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
   });
 
   it('shows job count when loaded', () => {
@@ -231,8 +291,18 @@ describe('FeedPage', () => {
   });
 
   it('shows skeleton during first load (loading=true, no jobs, no error)', () => {
-    setupMocks({ loading: true, jobs: [], total: 0, stats: undefined, error: null });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
+    setupMocks({
+      loading: true,
+      jobs: [],
+      total: 0,
+      stats: undefined,
+      error: null,
+    });
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery: vi.fn(),
+      displayedJobs: [],
+    } as ReturnType<typeof useFuseSearch>);
     render(<FeedTree />);
     expect(screen.getByText('loading…')).toBeTruthy();
   });
@@ -244,22 +314,39 @@ describe('FeedPage', () => {
   });
 
   it('shows error banner on error', () => {
-    setupMocks({ error: 'Failed to load jobs', jobs: [], total: 0, stats: undefined });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
+    setupMocks({
+      error: 'Failed to load jobs',
+      jobs: [],
+      total: 0,
+      stats: undefined,
+    });
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery: vi.fn(),
+      displayedJobs: [],
+    } as ReturnType<typeof useFuseSearch>);
     render(<FeedTree />);
     expect(screen.getByText(/failed to load jobs/i)).toBeTruthy();
   });
 
   it('shows result count when query is present', () => {
     setupMocks();
-    mockUseFuseSearch.mockReturnValue({ query: 'test', setQuery: vi.fn(), displayedJobs: JOBS } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseSearch.mockReturnValue({
+      query: 'test',
+      setQuery: vi.fn(),
+      displayedJobs: JOBS,
+    } as ReturnType<typeof useFuseSearch>);
     render(<FeedTree />);
     expect(screen.getByText('1 result')).toBeTruthy();
   });
 
   it('shows empty state when no jobs match and no filters', () => {
     setupMocks({ jobs: [], total: 0, stats: undefined });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery: vi.fn(),
+      displayedJobs: [],
+    } as ReturnType<typeof useFuseSearch>);
     render(<FeedTree />);
     // empty state renders something when displayedJobs.length === 0 and no first load
     expect(screen.getByText('0 jobs')).toBeTruthy();
@@ -267,11 +354,29 @@ describe('FeedPage', () => {
 
   it('shows plural job count', () => {
     const multiJobs = [
-      { id: 'j1', url: 'https://a.com', title: 'A', content_type: 'short', status: 'done', created_at: '' },
-      { id: 'j2', url: 'https://b.com', title: 'B', content_type: 'long', status: 'done', created_at: '' },
+      {
+        id: 'j1',
+        url: 'https://a.com',
+        title: 'A',
+        content_type: 'short',
+        status: 'done',
+        created_at: '',
+      },
+      {
+        id: 'j2',
+        url: 'https://b.com',
+        title: 'B',
+        content_type: 'long',
+        status: 'done',
+        created_at: '',
+      },
     ];
     setupMocks({ jobs: multiJobs, total: 2 });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: multiJobs } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery: vi.fn(),
+      displayedJobs: multiJobs,
+    } as ReturnType<typeof useFuseSearch>);
     render(<FeedTree />);
     expect(screen.getByText('2 jobs')).toBeTruthy();
   });
@@ -284,39 +389,48 @@ describe('FeedPage', () => {
 
   it('renders content-type tabs with counts', () => {
     render(<FeedTree />);
-    expect(screen.getByRole('button', { name: /all 5/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /short 3/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /long 2/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /article 0/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /repo 0/i })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /all 5/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /short 3/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /long 2/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /article 0/i }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /repo 0/i }),
+    ).toBeTruthy();
   });
 
-
   it('renders extracted links as a first-class Feed view', async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url === '/api/brain/links/view' && init?.method === 'PUT') {
-        return Promise.resolve(new Response(JSON.stringify({ order: 'desc', size: 25 }), { status: 200 }));
-      }
-      if (url === '/api/brain/links/view') {
-        return Promise.resolve(new Response(JSON.stringify({ order: 'desc', size: 25 }), { status: 200 }));
-      }
-      return Promise.resolve(new Response(JSON.stringify({
-        items: [
-          {
-            url: 'https://example.com/canonical',
-            title: 'Canonical',
-            topic: 'Docs',
-            seen_count: 4,
-            first_seen: '2026-06-28T12:00:00+00:00',
-          },
-        ],
-        limit: 25,
-        offset: 0,
-        total: 1,
-      }), { status: 200 }));
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    server.use(
+      http.get('/api/brain/links/view', () =>
+        HttpResponse.json({ order: 'desc', size: 25 }),
+      ),
+      http.put('/api/brain/links/view', () =>
+        HttpResponse.json({ order: 'desc', size: 25 }),
+      ),
+      http.get('/api/brain/links', () =>
+        HttpResponse.json({
+          items: [
+            {
+              url: 'https://example.com/canonical',
+              title: 'Canonical',
+              topic: 'Docs',
+              seen_count: 4,
+              first_seen: '2026-06-28T12:00:00+00:00',
+            },
+          ],
+          limit: 25,
+          offset: 0,
+          total: 1,
+        }),
+      ),
+    );
 
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /links/i }));
@@ -324,62 +438,87 @@ describe('FeedPage', () => {
     await waitFor(() => {
       // Link rows show the trimmed URL (path only); the full URL lives in
       // tooltip + expanded More panel.
-      expect(screen.getAllByText('/canonical').length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText('/canonical').length,
+      ).toBeGreaterThan(0);
     });
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed?view=links', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith(
+      '/feed?view=links',
+      { scroll: false },
+    );
     expect(screen.queryByText('Jobs')).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith('/api/brain/links?limit=25&offset=0&order=desc');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/brain/links?limit=25&offset=0&order=desc',
+    );
   });
 
   it('omits the Links view and skips authenticated links fetches in restricted mode', async () => {
     navigationMock.searchParams = new URLSearchParams('view=links');
-    const fetchMock = vi.fn(async (_input?: RequestInfo | URL) =>
-      new Response(JSON.stringify({
-        stale_pending: 0,
-        error_jobs: 0,
-        stale_in_flight: 0,
-      }), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
 
     render(<FeedTree restricted />);
 
-    expect(screen.queryByRole('button', { name: /^links$/i })).toBeNull();
-    expect(screen.getByText('Jobs')).toBeTruthy();
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
-    expect(fetchMock).not.toHaveBeenCalledWith('/api/brain/links/view');
     expect(
-      fetchMock.mock.calls.some(([input]) =>
+      screen.queryByRole('button', { name: /^links$/i }),
+    ).toBeNull();
+    expect(screen.getByText('Jobs')).toBeTruthy();
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      '/api/brain/links/view',
+    );
+    expect(
+      fetchSpy.mock.calls.some(([input]) =>
         String(input).startsWith('/api/brain/links'),
       ),
     ).toBe(false);
   });
 
-
-
   it('renders one mobile intake launcher instead of separate Submit and Docs chips', () => {
     render(<FeedTree />);
 
-    expect(screen.getByRole('button', { name: 'Add to your Index' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Submit URL' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Ingest docs' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Add to your Index' }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Submit URL' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Ingest docs' }),
+    ).toBeNull();
   });
 
   it('opens the intake sheet from the mobile launcher in restricted mode and gates per item', async () => {
     render(<FeedTree restricted />);
-    fireEvent.click(screen.getByRole('button', { name: 'Keep looking' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Keep looking' }),
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add to your Index' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to your Index' }),
+    );
 
     expect(screen.getByText('Add to your Index')).toBeTruthy();
-    expect(screen.getByText('Save a link as-is to your Brain - no processing.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Save a link as-is to your Brain - no processing.',
+      ),
+    ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*Paste a URL/i }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Submit URL\s*Paste a URL/i,
+      }),
+    );
 
     await waitFor(() =>
-      expect(screen.getByText('Sign in to submit URLs to your own Index.')).toBeTruthy(),
+      expect(
+        screen.getByText('Sign in to submit URLs to your own Index.'),
+      ).toBeTruthy(),
     );
-    expect(screen.queryByRole('dialog', { name: 'Submit URL' })).toBeNull();
+    expect(
+      screen.queryByRole('dialog', { name: 'Submit URL' }),
+    ).toBeNull();
   });
 
   it('opens the docs ingest dialog with the D shortcut', async () => {
@@ -389,7 +528,9 @@ describe('FeedPage', () => {
     expect(screen.getByText('Ingest Docs')).toBeTruthy();
     // The dialog now hosts the full DocUploadPanel (URL fetch + PDF drop),
     // not the old "Open Doc Parser" redirect button.
-    expect(screen.getByRole('button', { name: /fetch/i })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /fetch/i }),
+    ).toBeTruthy();
   });
 
   it('updates the type query param when a content tab is clicked', () => {
@@ -399,34 +540,47 @@ describe('FeedPage', () => {
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /long 2/i }));
 
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed?type=long', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith(
+      '/feed?type=long',
+      { scroll: false },
+    );
     expect(setCtFilter).toHaveBeenCalledWith('long');
   });
 
   it('renders the all tab as the bento grid by default', () => {
     render(<FeedTree />);
     // Bento cards carry their row-span; landscape spans 2 row-units.
-    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
+    const card = screen.getByRole('link', {
+      name: /job one/i,
+    }).parentElement;
 
     expect(card?.className).toContain('sm:row-span-2');
   });
 
   it('toggles the all tab to the flat list and persists the choice', () => {
     render(<FeedTree />);
-    fireEvent.click(screen.getByRole('button', { name: /list layout/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /list layout/i }),
+    );
 
     // JobCard uses an overlay link inside a styled wrapper; assert on the wrapper.
-    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
+    const card = screen.getByRole('link', {
+      name: /job one/i,
+    }).parentElement;
     expect(card?.className).toContain('px-4');
     expect(card?.className).toContain('py-3');
-    expect(window.localStorage.getItem('ownix.feed.layout')).toBe('list');
+    expect(window.localStorage.getItem('ownix.feed.layout')).toBe(
+      'list',
+    );
   });
 
   it('restores the persisted list layout on mount', () => {
     window.localStorage.setItem('ownix.feed.layout', 'list');
     render(<FeedTree />);
 
-    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
+    const card = screen.getByRole('link', {
+      name: /job one/i,
+    }).parentElement;
     expect(card?.className).toContain('px-4');
   });
 
@@ -434,14 +588,18 @@ describe('FeedPage', () => {
     setupMocks({ ctFilter: 'short' });
     render(<FeedTree />);
 
-    expect(screen.queryByRole('button', { name: /list layout/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /list layout/i }),
+    ).toBeNull();
   });
 
   it('renders the short tab as the compact shorts grid', () => {
     setupMocks({ ctFilter: 'short' });
     render(<FeedTree />);
 
-    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
+    const card = screen.getByRole('link', {
+      name: /job one/i,
+    }).parentElement;
     // Compact shorts card drops the status badge; status stays in the pills.
     expect(card?.querySelector('.font-mono')).toBeTruthy();
     expect(card?.textContent).not.toContain('done');
@@ -453,11 +611,15 @@ describe('FeedPage', () => {
     render(<FeedTree />);
     // Preview cards use a stretched overlay link; flex/p-3 and the date text live
     // on the card container, the link's parent.
-    const card = screen.getByRole('link', { name: /job one/i }).parentElement;
+    const card = screen.getByRole('link', {
+      name: /job one/i,
+    }).parentElement;
 
     expect(card?.className).toContain('flex');
     expect(card?.className).toContain('p-3');
-    expect(card?.textContent).toContain(new Date(JOBS[0].created_at).toLocaleString());
+    expect(card?.textContent).toContain(
+      new Date(JOBS[0].created_at).toLocaleString(),
+    );
   });
 
   it('renders the recovery panel from the active tab summary', async () => {
@@ -466,8 +628,14 @@ describe('FeedPage', () => {
     render(<FeedTree />);
     await openRecoveryActions();
 
-    expect(await screen.findByRole('button', { name: /retry pending \(2\)/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /retry failed \(2\)/i })).toBeTruthy();
+    expect(
+      await screen.findByRole('button', {
+        name: /retry pending \(2\)/i,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /retry failed \(2\)/i }),
+    ).toBeTruthy();
     expect(screen.getByText('1 stale in-flight')).toBeTruthy();
     expect(fetch).toHaveBeenCalledWith(
       '/api/jobs/recovery/summary?content_type=short',
@@ -481,7 +649,11 @@ describe('FeedPage', () => {
 
     render(<FeedTree />);
     await openRecoveryActions();
-    fireEvent.click(await screen.findByRole('button', { name: /retry pending \(2\)/i }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /retry pending \(2\)/i,
+      }),
+    );
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
@@ -501,7 +673,11 @@ describe('FeedPage', () => {
 
     render(<FeedTree />);
     await openRecoveryActions();
-    fireEvent.click(await screen.findByRole('button', { name: /clear failed \(1\)/i }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /clear failed \(1\)/i,
+      }),
+    );
 
     expect(confirmMock).toHaveBeenCalledWith(
       'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.',
@@ -510,8 +686,18 @@ describe('FeedPage', () => {
 
   it('reloads the feed when the error banner retry is clicked', () => {
     const reload = vi.fn();
-    setupMocks({ error: 'Failed to load jobs', jobs: [], total: 0, stats: undefined, reload });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery: vi.fn(), displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
+    setupMocks({
+      error: 'Failed to load jobs',
+      jobs: [],
+      total: 0,
+      stats: undefined,
+      reload,
+    });
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery: vi.fn(),
+      displayedJobs: [],
+    } as ReturnType<typeof useFuseSearch>);
 
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /^retry$/i }));
@@ -523,9 +709,13 @@ describe('FeedPage', () => {
     // Pass the merged feed through so optimistic rows actually render.
     mockUseFuseSearch.mockImplementation(
       (jobs: JobSummary[]) =>
-        ({ query: '', setQuery: vi.fn(), displayedJobs: jobs }) as ReturnType<typeof useFuseSearch>,
+        ({
+          query: '',
+          setQuery: vi.fn(),
+          displayedJobs: jobs,
+        }) as ReturnType<typeof useFuseSearch>,
     );
-    // reload resolves without delivering the new job — useFeedData swallows
+    // reload resolves without delivering the new job - useFeedData swallows
     // background fetch errors, so a failed refresh looks exactly like this.
     const reload = vi.fn(async () => {});
     mockUseFeedData.mockReturnValue({
@@ -540,40 +730,56 @@ describe('FeedPage', () => {
       error: null,
       reload,
     } as ReturnType<typeof useFeedData>);
-    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        return new Response(JSON.stringify({
+    server.use(
+      http.post('/api/jobs', () =>
+        HttpResponse.json({
           id: 'accepted-1',
           job_id: 'accepted-1',
           url: 'https://example.com/new',
           content_type: 'short',
           status: 'pending',
           title: null,
-        }), { status: 200 });
-      }
-      return new Response(JSON.stringify({}), { status: 200 });
-    }));
+        }),
+      ),
+    );
 
     render(<FeedTree />);
-    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
-    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
+    fireEvent.keyDown(window, {
+      ctrlKey: true,
+      key: 'K',
+      shiftKey: true,
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Submit URL\s*N/i }),
+    );
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^submit$/i }),
+    );
 
     await waitFor(() => expect(reload).toHaveBeenCalled());
     // The accepted job survives the stale refresh (title is null → card shows the URL)…
     expect(screen.getByText('https://example.com/new')).toBeTruthy();
     // …and it feeds the in-flight poll so the refresh keeps retrying.
-    const polled = vi.mocked(useInFlightPolling).mock.calls.at(-1)?.[0] ?? [];
-    expect(polled.some((j) => j.id === 'accepted-1' && j.status === 'pending')).toBe(true);
+    const polled =
+      vi.mocked(useInFlightPolling).mock.calls.at(-1)?.[0] ?? [];
+    expect(
+      polled.some(
+        (j) => j.id === 'accepted-1' && j.status === 'pending',
+      ),
+    ).toBe(true);
   });
 
   it('drops the optimistic copy once the refreshed feed carries the job', async () => {
     mockUseFuseSearch.mockImplementation(
       (jobs: JobSummary[]) =>
-        ({ query: '', setQuery: vi.fn(), displayedJobs: jobs }) as ReturnType<typeof useFuseSearch>,
+        ({
+          query: '',
+          setQuery: vi.fn(),
+          displayedJobs: jobs,
+        }) as ReturnType<typeof useFuseSearch>,
     );
     const reload = vi.fn(async () => {});
     const feedState = {
@@ -589,27 +795,38 @@ describe('FeedPage', () => {
       reload,
     } as ReturnType<typeof useFeedData>;
     mockUseFeedData.mockReturnValue(feedState);
-    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        return new Response(JSON.stringify({
+    server.use(
+      http.post('/api/jobs', () =>
+        HttpResponse.json({
           id: 'accepted-1',
           url: 'https://example.com/new',
           content_type: 'short',
           status: 'pending',
           title: null,
-        }), { status: 200 });
-      }
-      return new Response(JSON.stringify({}), { status: 200 });
-    }));
+        }),
+      ),
+    );
 
     const { rerender } = render(<FeedTree />);
-    fireEvent.keyDown(window, { ctrlKey: true, key: 'K', shiftKey: true });
-    fireEvent.click(screen.getByRole('button', { name: /Submit URL\s*N/i }));
+    fireEvent.keyDown(window, {
+      ctrlKey: true,
+      key: 'K',
+      shiftKey: true,
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /Submit URL\s*N/i }),
+    );
     fireEvent.change(screen.getByPlaceholderText(/paste a video/i), {
       target: { value: 'https://example.com/new' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /^submit$/i }));
-    await waitFor(() => expect(screen.getByText('https://example.com/new')).toBeTruthy());
+    fireEvent.click(
+      screen.getByRole('button', { name: /^submit$/i }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText('https://example.com/new'),
+      ).toBeTruthy(),
+    );
 
     // Feed catches up: the server list now carries the accepted job.
     const acceptedJob: JobSummary = {
@@ -627,22 +844,38 @@ describe('FeedPage', () => {
     } as ReturnType<typeof useFeedData>);
     rerender(<FeedTree />);
 
-    // Exactly one row — no optimistic duplicate alongside the server copy.
+    // Exactly one row - no optimistic duplicate alongside the server copy.
     await waitFor(() =>
-      expect(screen.getAllByText('https://example.com/new')).toHaveLength(1),
+      expect(
+        screen.getAllByText('https://example.com/new'),
+      ).toHaveLength(1),
     );
   });
 
   it('clears every filter from the empty-state Clear button', () => {
     const setStFilter = vi.fn();
     const setQuery = vi.fn();
-    setupMocks({ stFilter: 'error', jobs: [], total: 0, stats: undefined, setStFilter });
-    mockUseFuseSearch.mockReturnValue({ query: '', setQuery, displayedJobs: [] } as ReturnType<typeof useFuseSearch>);
+    setupMocks({
+      stFilter: 'error',
+      jobs: [],
+      total: 0,
+      stats: undefined,
+      setStFilter,
+    });
+    mockUseFuseSearch.mockReturnValue({
+      query: '',
+      setQuery,
+      displayedJobs: [],
+    } as ReturnType<typeof useFuseSearch>);
 
     render(<FeedTree />);
-    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /clear filters/i }),
+    );
 
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', { scroll: false });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
     expect(setStFilter).toHaveBeenCalledWith('');
     expect(setQuery).toHaveBeenCalledWith('');
   });

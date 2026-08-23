@@ -21,14 +21,14 @@ I had a 60-node n8n workflow that half-worked. I killed it and replaced it with 
 
 Send a URL to the Telegram bot. Get back structured intelligence.
 
-| Input | Output |
-|---|---|
-| YouTube Short / Reel / TikTok | Frame analysis + extracted tool links, verified via Brave Search |
-| Full YouTube video | Transcript `.md` → Gemini enrichment (topic, action points, tools) → Drive → optional Mini-PRD |
-| Substack / Medium / dev.to / Ghost article | Clean Markdown doc + structured analysis (topic, objective, action points, tools, promise-gap) |
-| `github.com/<owner>/<repo>` | GitHub API bundle → structured analysis (tagline, tech stack, use-cases, curriculum hooks with file pointers) |
-| PDF (upload or `.pdf` URL) | liteparse text extraction → GCS content-addressed cache → Gemini enrichment (title, author, key points, references) |
-| Screenshot(s) | Verbatim-grounded link extraction — only URLs literally visible in the image; multi-image sends auto-batched |
+| Input                                      | Output                                                                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| YouTube Short / Reel / TikTok              | Frame analysis + extracted tool links, verified via Brave Search                                                    |
+| Full YouTube video                         | Transcript `.md` → Gemini enrichment (topic, action points, tools) → Drive → optional Mini-PRD                      |
+| Substack / Medium / dev.to / Ghost article | Clean Markdown doc + structured analysis (topic, objective, action points, tools, promise-gap)                      |
+| `github.com/<owner>/<repo>`                | GitHub API bundle → structured analysis (tagline, tech stack, use-cases, curriculum hooks with file pointers)       |
+| PDF (upload or `.pdf` URL)                 | liteparse text extraction → GCS content-addressed cache → Gemini enrichment (title, author, key points, references) |
+| Screenshot(s)                              | Verbatim-grounded link extraction — only URLs literally visible in the image; multi-image sends auto-batched        |
 
 Everything feeds a **Second Brain**: a semantic link graph (Gemini embeddings, cosine similarity) that surfaces related content via `/find <query>` — and everything lands in the **web dashboard** ("The Operator's Console", Ownix design system): feed with per-type tabs and server-resolved thumbnails, brain graph, curated Spaces with export, custom prompt templates, a Doc Parser page, and dashboard job submission. Telegram Login + invite gate; a second "Ops" bot handles user/invite administration.
 
@@ -48,25 +48,25 @@ User:  ✨ Run Gemini → picks "Technical" template
 Bot:   job_A3F9:
        ✍️ Building a RAG Pipeline with LangChain
        🎫 RAG · LangChain · vector search
-       
+
        🎯 Objective
        End-to-end guide to building a retrieval-augmented generation
        system with LangChain, FAISS, and OpenAI embeddings.
-       
+
        ✅ Action Points
        • Split documents into chunks ≤ 512 tokens
        • Use FAISS for local embedding storage
        • Wrap retriever in ConversationalRetrievalChain
-       
+
        🛠 Tools
        • [library] LangChain (langchain.com): orchestration
        • [library] FAISS (github.com/facebookresearch/faiss): vector index
        • [service] OpenAI Embeddings: text-embedding-ada-002
-       
+
        =====PROMISE=GAP=====
        ❌ Unfulfilled: "production-ready" — no deployment or auth covered
        💎 Hidden value: FAISS index serialisation pattern is reusable across projects
-       
+
        [📐 Build Spec]
 ```
 
@@ -209,8 +209,8 @@ Tests:        pytest + pytest-asyncio (backend), Vitest + RTL + MSW (web)
 ## Running It
 
 ```bash
-git clone https://github.com/Leon-87-7/vig
-cd vig
+git clone https://github.com/leon-87-7/ownix
+cd ownix
 cp .env.example .env   # fill in API keys — see .env.example for all vars
 
 docker-compose up -d
@@ -230,17 +230,17 @@ Optional: `GEMINI_PAID_API_KEY`, `BRAVE_API_KEY`, `GITHUB_TOKEN`, `JINA_API_KEY`
 
 ## Bot Commands
 
-| Command | What it does |
-|---|---|
-| `/find <query>` | Semantic search across the Second Brain |
-| `/freestyle <url>` | Process any URL with a custom Gemini prompt |
-| `/force <url>` | Bypass dedup + invalidate markdown cache, reprocess from scratch |
-| `/spec <suffix> [intent]` | Generate or regenerate Mini-PRD for a job (last 4 chars of job ID) |
-| `/allowlist <domain>` | Add a domain to the article pipeline for this chat (`/unallowlist`, `/allowlist_list` to manage) |
-| `/ignore <domain>` | Block a domain from short-video link extraction |
-| `/download_md <url>` | Fetch any URL as clean Markdown via Jina (no job, no Brain ingest) |
-| `/rebuild-graph` | Recompute all Second Brain `.md` nodes |
-| `/cancel` | Clear any armed chat state (awaiting_freestyle / awaiting_intent) |
+| Command                   | What it does                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------ |
+| `/find <query>`           | Semantic search across the Second Brain                                                          |
+| `/freestyle <url>`        | Process any URL with a custom Gemini prompt                                                      |
+| `/force <url>`            | Bypass dedup + invalidate markdown cache, reprocess from scratch                                 |
+| `/spec <suffix> [intent]` | Generate or regenerate Mini-PRD for a job (last 4 chars of job ID)                               |
+| `/allowlist <domain>`     | Add a domain to the article pipeline for this chat (`/unallowlist`, `/allowlist_list` to manage) |
+| `/ignore <domain>`        | Block a domain from short-video link extraction                                                  |
+| `/download_md <url>`      | Fetch any URL as clean Markdown via Jina (no job, no Brain ingest)                               |
+| `/rebuild-graph`          | Recompute all Second Brain `.md` nodes                                                           |
+| `/cancel`                 | Clear any armed chat state (awaiting_freestyle / awaiting_intent)                                |
 
 ---
 

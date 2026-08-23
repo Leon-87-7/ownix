@@ -1,20 +1,25 @@
-"use client";
+'use client';
 
-import { useCallback, useState } from "react";
-import Link from "next/link";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import ExportModal from "@/components/ui/export-modal";
-import { useSpaceDetail } from "@/lib/hooks/useSpaceDetail";
-import { useSpaceEdit } from "@/lib/hooks/useSpaceEdit";
-import { UrlsTab } from "./UrlsTab";
-import { ContextTab } from "./ContextTab";
-import { TabBar } from "@/components/ui/tab-bar";
-import { PageShell } from "@/components/shell/page-shell";
-import { SkeletonBlock } from "@/components/feed/feed-states";
-import { IconPicker } from "@/components/spaces/icon-picker";
-import { spaceIcon } from "@/lib/space-icons";
+import { useCallback, useState } from 'react';
+import Link from 'next/link';
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation';
+import ExportModal from '@/components/ui/export-modal';
+import { useSpaceDetail } from '@/lib/hooks/useSpaceDetail';
+import { useSpaceEdit } from '@/lib/hooks/useSpaceEdit';
+import { UrlsTab } from './UrlsTab';
+import { ContextTab } from './ContextTab';
+import { TabBar } from '@/components/ui/tab-bar';
+import { PageShell } from '@/components/shell/page-shell';
+import { SkeletonBlock } from '@/components/feed/feed-states';
+import { IconPicker } from '@/components/spaces/icon-picker';
+import { spaceIcon } from '@/lib/space-icons';
 
-type ActiveTab = "urls" | "context";
+type ActiveTab = 'urls' | 'context';
 
 export default function SpaceDetailPage() {
   // Next 16 params are async on page props; useParams() resolves the route id
@@ -39,14 +44,16 @@ export default function SpaceDetailPage() {
     handleEditSave,
   } = useSpaceEdit(id, space, setSpace);
   const activeTab: ActiveTab =
-    searchParams.get("tab") === "urls" ? "urls" : "context";
+    searchParams.get('tab') === 'urls' ? 'urls' : 'context';
   const setActiveTab = useCallback(
     (tab: ActiveTab) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (tab === "urls") params.set("tab", "urls");
-      else params.delete("tab");
+      if (tab === 'urls') params.set('tab', 'urls');
+      else params.delete('tab');
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      router.replace(qs ? `${pathname}?${qs}` : pathname, {
+        scroll: false,
+      });
     },
     [pathname, router, searchParams],
   );
@@ -57,17 +64,19 @@ export default function SpaceDetailPage() {
   const handleDelete = useCallback(async () => {
     if (
       !window.confirm(
-        "Delete this collection? Saved items will not be deleted.",
+        'Delete this collection? Saved items will not be deleted.',
       )
     )
       return;
     setDeleting(true);
     setDeleteFailed(false);
     try {
-      const res = await fetch(`/api/spaces/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/spaces/${id}`, {
+        method: 'DELETE',
+      });
       if (res.ok || res.status === 204) {
-        // Navigating away — skip state updates so nothing fires mid-unmount.
-        router.push("/spaces");
+        // Navigating away - skip state updates so nothing fires mid-unmount.
+        router.push('/spaces');
         return;
       }
       setDeleteFailed(true);
@@ -77,7 +86,7 @@ export default function SpaceDetailPage() {
     setDeleting(false);
   }, [id, router]);
 
-  if (fetchState === "loading") {
+  if (fetchState === 'loading') {
     return (
       <PageShell>
         <div className="space-y-3">
@@ -87,29 +96,38 @@ export default function SpaceDetailPage() {
       </PageShell>
     );
   }
-  if (fetchState === "not_found")
+  if (fetchState === 'not_found')
     return (
       <div className="text-sm text-body">
-        Collection not found.{" "}
-        <Link href="/spaces" className="text-signal hover:underline">
+        Collection not found.{' '}
+        <Link
+          href="/spaces"
+          className="text-signal hover:underline"
+        >
           Back to collections
         </Link>
       </div>
     );
-  if (fetchState === "forbidden")
+  if (fetchState === 'forbidden')
     return (
       <div className="text-sm text-body">
-        Access denied.{" "}
-        <Link href="/spaces" className="text-signal hover:underline">
+        Access denied.{' '}
+        <Link
+          href="/spaces"
+          className="text-signal hover:underline"
+        >
           Back to collections
         </Link>
       </div>
     );
-  if (fetchState === "error" || !space)
+  if (fetchState === 'error' || !space)
     return (
       <div className="text-sm text-body">
-        Failed to load collection.{" "}
-        <Link href="/spaces" className="text-signal hover:underline">
+        Failed to load collection.{' '}
+        <Link
+          href="/spaces"
+          className="text-signal hover:underline"
+        >
           Back to collections
         </Link>
       </div>
@@ -131,7 +149,7 @@ export default function SpaceDetailPage() {
               const Icon = spaceIcon(space.icon);
               return (
                 <Icon
-                  data-testid={`space-icon-${space.icon ?? "folder"}`}
+                  data-testid={`space-icon-${space.icon ?? 'folder'}`}
                   className="h-5 w-5 flex-shrink-0"
                   style={{ color: space.color }}
                   aria-hidden="true"
@@ -161,23 +179,31 @@ export default function SpaceDetailPage() {
                 disabled={deleting}
                 className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50"
               >
-                {deleting ? "Deleting…" : "Delete"}
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
             {deleteFailed && (
               <p className="text-xs text-status-error">
-                Couldn&apos;t delete — try again.
+                Couldn&apos;t delete - try again.
               </p>
             )}
           </div>
         </div>
       ) : (
-        <form onSubmit={handleEditSave} className="space-y-4">
-          <h2 className="text-sm font-semibold text-ink">Edit Collection</h2>
+        <form
+          onSubmit={handleEditSave}
+          className="space-y-4"
+        >
+          <h2 className="text-sm font-semibold text-ink">
+            Edit Collection
+          </h2>
           {editError && (
             <p className="text-sm text-status-error">{editError}</p>
           )}
-          <IconPicker value={editIcon} onChange={setEditIcon} />
+          <IconPicker
+            value={editIcon}
+            onChange={setEditIcon}
+          />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label
@@ -216,7 +242,7 @@ export default function SpaceDetailPage() {
                 disabled={editSaving}
                 className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
               >
-                {editSaving ? "Saving…" : "Save"}
+                {editSaving ? 'Saving…' : 'Save'}
               </button>
               <button
                 type="button"
@@ -231,14 +257,14 @@ export default function SpaceDetailPage() {
       )}
 
       <TabBar
-        tabs={["context", "urls"] as const}
+        tabs={['context', 'urls'] as const}
         active={activeTab}
         onChange={setActiveTab}
-        labels={{ context: "Context", urls: "URLs" }}
+        labels={{ context: 'Context', urls: 'URLs' }}
       />
 
-      {activeTab === "context" && <ContextTab spaceId={id} />}
-      {activeTab === "urls" && <UrlsTab spaceId={id} />}
+      {activeTab === 'context' && <ContextTab spaceId={id} />}
+      {activeTab === 'urls' && <UrlsTab spaceId={id} />}
 
       {showExport && (
         <ExportModal

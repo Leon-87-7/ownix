@@ -2474,23 +2474,39 @@ async def delete_link(link_id: str, chat_id: int) -> bool:
     after their source job is removed. Legacy rows without a stored owner fall
     back through ``source_job`` and then the Operator.
 
-    # ponytail: leaves the Drive .md node orphaned, same as job deletion
-    # (delete_job's "DELETE FROM links WHERE source_job = ?"). Wire up Drive
-    # cleanup here if orphaned nodes ever show up in /find.
+    If the link owns a Drive ``.md`` node, a purge task is recorded in the same
+    transaction (the outbox job deletion already uses — src/processors/purge.py)
+    so it doesn't outlive the link the way it used to.
     """
-    return (
-        await _execute_rowcount(
-            """DELETE FROM links
-               WHERE id = ?
-                 AND COALESCE(
-                     links.chat_id,
-                     (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
-                     ?
-                 ) = ?""",
-            (link_id, settings.OPERATOR_CHAT_ID, chat_id),
-        )
-        > 0
-    )
+    async with connection() as conn:
+        row = await (
+            await conn.execute(
+                """SELECT drive_file_id,
+                       COALESCE(
+                           links.chat_id,
+                           (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+                           ?
+                       ) AS owner_chat_id
+                   FROM links WHERE id = ?""",
+                (settings.OPERATOR_CHAT_ID, link_id),
+            )
+        ).fetchone()
+        if row is None or row["owner_chat_id"] != chat_id:
+            return False
+        cursor = await conn.execute("DELETE FROM links WHERE id = ?", (link_id,))
+        if cursor.rowcount > 0 and row["drive_file_id"]:
+            purge_payload = {
+                "task": "job_purge",
+                "job_id": link_id,
+                "chat_id": chat_id,
+                "drive_file_ids": [row["drive_file_id"]],
+            }
+            await conn.execute(
+                "INSERT INTO purge_tasks (job_id, chat_id, task_payload) VALUES (?, ?, ?)",
+                (link_id, chat_id, json.dumps(purge_payload)),
+            )
+        await conn.commit()
+        return cursor.rowcount > 0
 
 
 async def list_job_tags(job_id: str) -> list[dict]:
@@ -2662,11 +2678,27 @@ async def delete_job(
     job's at once.
 
     If purge_payload is provided, it is written to the purge_tasks outbox in the same
-    transaction, ensuring durable purge acceptance before the delete commits.
+    transaction, ensuring durable purge acceptance before the delete commits. When
+    with_links also removes the job's links, their Drive .md nodes (if any) are
+    folded into that same purge task so with_links can't orphan them.
     """
     async with connection() as conn:
         cursor = await conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         if with_links:
+            if purge_payload is not None:
+                link_rows = await conn.execute(
+                    "SELECT drive_file_id FROM links WHERE source_job = ? AND drive_file_id IS NOT NULL",
+                    (job_id,),
+                )
+                link_drive_file_ids = [r["drive_file_id"] for r in await link_rows.fetchall()]
+                if link_drive_file_ids:
+                    purge_payload = {
+                        **purge_payload,
+                        "drive_file_ids": [
+                            *purge_payload.get("drive_file_ids", []),
+                            *link_drive_file_ids,
+                        ],
+                    }
             await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
         if purge_payload:
             await conn.execute(
