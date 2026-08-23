@@ -353,6 +353,11 @@ async def delete_account_route(request: Request) -> Response:
     already-finished work.
     """
     tg_id = int(request.state.user["id"])
+    if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
+        # get_user_status()/set_user_status() force the operator to "approved"
+        # (src/database.py) — the "deleting" lock above would silently no-op
+        # for this account, so refuse self-service deletion outright instead.
+        raise HTTPException(status_code=403, detail="Operator account cannot be deleted")
     await database.set_user_status(tg_id, "deleting")
 
     session_id = request.cookies.get(COOKIE_NAME)

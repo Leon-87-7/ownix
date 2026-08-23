@@ -762,6 +762,26 @@ class TestAccountDeletionLock:
 
         assert resp.status_code == 403
 
+    def test_delete_account_route_rejects_the_operator_account(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_user_status()/set_user_status() force OPERATOR_CHAT_ID to "approved"
+        (src/database.py), so the "deleting" lock would silently no-op for it —
+        self-service deletion must be refused outright instead."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 555005)
+        user = {"id": 555005, "username": "operator"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:operator-sid"] = json.dumps(user)
+
+        resp = auth_client.delete("/api/auth/me", cookies={"vig_session": "operator-sid"})
+
+        assert resp.status_code == 403
+        assert asyncio.run(database.get_user_status(555005)) == "approved"
+        assert asyncio.run(session_module.resolve("operator-sid")) == user
+
     def test_delete_account_route_locks_and_revokes_session_before_cleanup_runs(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
