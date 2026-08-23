@@ -131,30 +131,41 @@ export default function PrivacyPage() {
             <LegalList>
               <li>
                 <strong>Google (Gemini)</strong> - transcription,
-                summarization, tagging, OCR, and embeddings.
+                summarization, tagging, OCR, and embeddings, the same
+                model already doing this work everywhere else in
+                Ownix, so your content isn&apos;t routed through a
+                second AI vendor just for this.
               </li>
               <li>
                 <strong>Google (Drive, Sheets, Cloud Storage)</strong>{' '}
                 - storing your results, if you&apos;ve connected your
                 Google account (see &quot;What we collect&quot;
-                above).
+                above) - your own account, not a shared Ownix
+                datastore, so you keep the copy and the access.
               </li>
               <li>
                 <strong>Jina AI</strong> - fetching and parsing
-                article pages you submit.
+                article pages you submit, rendering JS-heavy pages and
+                stripping out ads and navigation chrome so you get the
+                article, not the page around it.
               </li>
               <li>
                 <strong>Brave Search</strong> - extra web search we
-                use while enriching some jobs.
+                use while enriching some jobs, run through an
+                independent index rather than Google&apos;s, so
+                enrichment isn&apos;t tied to the same company already
+                handling your AI processing and storage.
               </li>
               <li>
                 <strong>GitHub</strong> - reading repository content
-                for repos you submit.
+                for repos you submit, since that&apos;s where the repo
+                you linked to actually lives.
               </li>
               <li>
                 <strong>The source platform itself</strong> (YouTube,
                 TikTok, Instagram, etc.) - fetching the
-                video/transcript you linked to.
+                video/transcript you linked to, the origin of what you
+                saved.
               </li>
             </LegalList>
           </LegalSection>
