@@ -1230,15 +1230,19 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
     job_id = state["job_id"]
     pipeline = detect_pipeline(text)
     if pipeline in ("short", "long", "unsized", "article", "repo"):
-        await database.clear_chat_state(chat_id)
-        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
         url_to_store = normalize_repo_url(text) if pipeline == "repo" else text
         cached = await database.find_recent_job_by_url(chat_id, url_to_store)
         if cached:
+            await database.clear_chat_state(chat_id)
+            log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
             await send_message(chat_id, "🔄 Previous intent canceled.")
             await _reply_cached_job(chat_id, cached)
             return
+        # Rate limit before touching chat_state, so a 429 leaves the pending
+        # intent workflow intact instead of silently dropping it.
         enforce_job_rate_limit(chat_id)
+        await database.clear_chat_state(chat_id)
+        log.info("prd.chat_state.canceled_by_url", chat_id=chat_id, old_job_id=job_id)
         await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
         new_job_id = await database.create_job(
             chat_id=chat_id, url=url_to_store, content_type=pipeline
