@@ -1,11 +1,27 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobSummary } from '@/components/feed/job-card';
 import { AppHeader } from '@/components/shell/app-header';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import FeedPage from './page';
+
+const RECOVERY_SUMMARY = { stale_pending: 2, error_jobs: 1, stale_in_flight: 1 };
+
+// RecoveryPanel is always mounted (only its `active` prop changes), so its
+// GET fires on every render regardless of which view/tab a test exercises.
+const server = setupServer(
+  http.get('/api/jobs/recovery/summary', () => HttpResponse.json(RECOVERY_SUMMARY)),
+  http.post('/api/jobs/recovery/retry-pending', () => HttpResponse.json({ enqueued: 1 })),
+  http.post('/api/jobs/recovery/retry-error', () => HttpResponse.json({ enqueued: 1 })),
+  http.post('/api/jobs/recovery/clear-failed', () => HttpResponse.json({ enqueued: 1 })),
+);
+
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+afterAll(() => server.close());
 
 // FeedPage now consumes the global submit dialog + header the (dashboard)
 // layout provides; render the same tree here so both triggers stay covered.
@@ -120,6 +136,8 @@ async function openRecoveryActions() {
   );
 }
 
+let fetchSpy: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
   window.localStorage.clear();
   navigationMock.replace.mockClear();
@@ -127,25 +145,13 @@ beforeEach(() => {
   googleStatusMock.connected = null;
   mockUseFeedData.mockReset();
   mockUseFuseSearch.mockReset();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        return new Response(JSON.stringify({ enqueued: 1 }), {
-          status: 200,
-        });
-      }
-      return new Response(
-        JSON.stringify({
-          stale_pending: 2,
-          error_jobs: 1,
-          stale_in_flight: 1,
-        }),
-        { status: 200 },
-      );
-    }),
-  );
+  fetchSpy = vi.spyOn(globalThis, 'fetch');
   setupMocks();
+});
+
+afterEach(() => {
+  fetchSpy.mockRestore();
+  server.resetHandlers();
 });
 
 // extractSharedUrl unit tests live beside the helper: lib/share-target.test.ts
@@ -401,50 +407,30 @@ describe('FeedPage', () => {
   });
 
   it('renders extracted links as a first-class Feed view', async () => {
-    const fetchMock = vi.fn(
-      (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (
-          url === '/api/brain/links/view' &&
-          init?.method === 'PUT'
-        ) {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({ order: 'desc', size: 25 }),
-              { status: 200 },
-            ),
-          );
-        }
-        if (url === '/api/brain/links/view') {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({ order: 'desc', size: 25 }),
-              { status: 200 },
-            ),
-          );
-        }
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              items: [
-                {
-                  url: 'https://example.com/canonical',
-                  title: 'Canonical',
-                  topic: 'Docs',
-                  seen_count: 4,
-                  first_seen: '2026-06-28T12:00:00+00:00',
-                },
-              ],
-              limit: 25,
-              offset: 0,
-              total: 1,
-            }),
-            { status: 200 },
-          ),
-        );
-      },
+    server.use(
+      http.get('/api/brain/links/view', () =>
+        HttpResponse.json({ order: 'desc', size: 25 }),
+      ),
+      http.put('/api/brain/links/view', () =>
+        HttpResponse.json({ order: 'desc', size: 25 }),
+      ),
+      http.get('/api/brain/links', () =>
+        HttpResponse.json({
+          items: [
+            {
+              url: 'https://example.com/canonical',
+              title: 'Canonical',
+              topic: 'Docs',
+              seen_count: 4,
+              first_seen: '2026-06-28T12:00:00+00:00',
+            },
+          ],
+          limit: 25,
+          offset: 0,
+          total: 1,
+        }),
+      ),
     );
-    vi.stubGlobal('fetch', fetchMock);
 
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /links/i }));
@@ -461,25 +447,13 @@ describe('FeedPage', () => {
       { scroll: false },
     );
     expect(screen.queryByText('Jobs')).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchSpy).toHaveBeenCalledWith(
       '/api/brain/links?limit=25&offset=0&order=desc',
     );
   });
 
   it('omits the Links view and skips authenticated links fetches in restricted mode', async () => {
     navigationMock.searchParams = new URLSearchParams('view=links');
-    const fetchMock = vi.fn(
-      async (_input?: RequestInfo | URL) =>
-        new Response(
-          JSON.stringify({
-            stale_pending: 0,
-            error_jobs: 0,
-            stale_in_flight: 0,
-          }),
-          { status: 200 },
-        ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
 
     render(<FeedTree restricted />);
 
@@ -490,11 +464,11 @@ describe('FeedPage', () => {
     expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
       scroll: false,
     });
-    expect(fetchMock).not.toHaveBeenCalledWith(
+    expect(fetchSpy).not.toHaveBeenCalledWith(
       '/api/brain/links/view',
     );
     expect(
-      fetchMock.mock.calls.some(([input]) =>
+      fetchSpy.mock.calls.some(([input]) =>
         String(input).startsWith('/api/brain/links'),
       ),
     ).toBe(false);
@@ -756,24 +730,17 @@ describe('FeedPage', () => {
       error: null,
       reload,
     } as ReturnType<typeof useFeedData>);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === 'POST') {
-          return new Response(
-            JSON.stringify({
-              id: 'accepted-1',
-              job_id: 'accepted-1',
-              url: 'https://example.com/new',
-              content_type: 'short',
-              status: 'pending',
-              title: null,
-            }),
-            { status: 200 },
-          );
-        }
-        return new Response(JSON.stringify({}), { status: 200 });
-      }),
+    server.use(
+      http.post('/api/jobs', () =>
+        HttpResponse.json({
+          id: 'accepted-1',
+          job_id: 'accepted-1',
+          url: 'https://example.com/new',
+          content_type: 'short',
+          status: 'pending',
+          title: null,
+        }),
+      ),
     );
 
     render(<FeedTree />);
@@ -828,23 +795,16 @@ describe('FeedPage', () => {
       reload,
     } as ReturnType<typeof useFeedData>;
     mockUseFeedData.mockReturnValue(feedState);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === 'POST') {
-          return new Response(
-            JSON.stringify({
-              id: 'accepted-1',
-              url: 'https://example.com/new',
-              content_type: 'short',
-              status: 'pending',
-              title: null,
-            }),
-            { status: 200 },
-          );
-        }
-        return new Response(JSON.stringify({}), { status: 200 });
-      }),
+    server.use(
+      http.post('/api/jobs', () =>
+        HttpResponse.json({
+          id: 'accepted-1',
+          url: 'https://example.com/new',
+          content_type: 'short',
+          status: 'pending',
+          title: null,
+        }),
+      ),
     );
 
     const { rerender } = render(<FeedTree />);

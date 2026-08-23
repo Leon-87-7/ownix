@@ -210,7 +210,7 @@ Tests:        pytest + pytest-asyncio (backend), Vitest + RTL + MSW (web)
 
 ```bash
 git clone https://github.com/leon-87-7/ownix
-cd vig
+cd ownix
 cp .env.example .env   # fill in API keys — see .env.example for all vars
 
 docker-compose up -d

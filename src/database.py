@@ -2494,7 +2494,7 @@ async def delete_link(link_id: str, chat_id: int) -> bool:
         if row is None or row["owner_chat_id"] != chat_id:
             return False
         cursor = await conn.execute("DELETE FROM links WHERE id = ?", (link_id,))
-        if row["drive_file_id"]:
+        if cursor.rowcount > 0 and row["drive_file_id"]:
             purge_payload = {
                 "task": "job_purge",
                 "job_id": link_id,

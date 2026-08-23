@@ -380,7 +380,7 @@ function PromptsWorkspace() {
             <h2 className="mb-3 text-sm font-semibold text-ink">
               Your recipes{' '}
               <span className="font-normal text-muted">
-                (use as - name &lt;url&gt; in Telegram)
+                (use as -name &lt;url&gt; in Telegram)
               </span>
             </h2>
             <div className="mb-4 rounded-lg border border-line bg-surface p-4">

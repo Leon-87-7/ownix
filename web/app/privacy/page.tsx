@@ -62,9 +62,13 @@ export default function PrivacyPage() {
                 Google Sheets (<code>spreadsheets</code>). This lets
                 Ownix create a folder named <code>Ownix</code> and a
                 spreadsheet in your Drive and write your results
-                there. Ownix can only see or edit files it creates
-                itself - it cannot access any other file already in
-                your Drive.
+                there. <code>drive.file</code> only lets Ownix see or
+                edit files it creates itself, or files you explicitly
+                open or share with Ownix - it cannot access any other
+                file already in your Drive. Ownix currently only
+                creates files; it doesn&apos;t use file-picker or
+                &quot;open with&quot; flows to access files you didn&apos;t
+                create with it.
               </li>
             </LegalList>
           </LegalSection>
@@ -168,11 +172,12 @@ export default function PrivacyPage() {
           <LegalSection title="Deleting your data">
             <p>
               Deleting a job or a Brain link pulls it from the
-              dashboard right away and queues a background cleanup
-              that removes the underlying file from Drive, Cloud
-              Storage, and Sheets. That cleanup is best-effort: on a
-              rare provider-side failure, a cloud artifact can outlive
-              the record you deleted. There&apos;s no single
+              dashboard right away and queues a background cleanup of
+              the underlying files: a job&apos;s cleanup covers Drive,
+              Cloud Storage, and Sheets, while a Brain link&apos;s
+              cleanup covers its Drive file. That cleanup is
+              best-effort: on a rare provider-side failure, a cloud
+              artifact can outlive the record you deleted. There&apos;s no single
               &quot;delete my account&quot; button yet - delete jobs
               and links one at a time, or email me (see Contact) for a
               full account wipe.

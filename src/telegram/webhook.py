@@ -33,7 +33,12 @@ from src.services.parse import (
 from src.services.invite_notifications import notify_operator_invite
 from src.services import ops_bot
 from src.services.email import send_welcome_email
-from src.services.jobs import create_and_enqueue_job, flush_held_jobs, task_for_content_type
+from src.services.jobs import (
+    create_and_enqueue_job,
+    enforce_job_rate_limit,
+    flush_held_jobs,
+    task_for_content_type,
+)
 from src.services.repo_followup import enqueue_repo_pick
 from src.telegram.sender import (
     answer_callback_query,
@@ -422,6 +427,7 @@ async def _cb_reprocess(ctx: CallbackCtx) -> None:
         await answer_callback_query(ctx.cq_id, text="Job not found — please resend the link.")
         return
     await answer_callback_query(ctx.cq_id)
+    enforce_job_rate_limit(ctx.chat_id)
     new_job_id = await database.create_job(
         chat_id=ctx.chat_id,
         url=job["url"],
@@ -555,6 +561,7 @@ async def _handle_freestyle_url(
     chat_id: int, url: str, pipeline: str, message_id: int | None
 ) -> None:
     """Shared logic for /freestyle <url> and pending_template=freestyle URL message."""
+    enforce_job_rate_limit(chat_id)
     job_id = await database.create_job(
         chat_id=chat_id,
         url=url,
@@ -1231,6 +1238,7 @@ async def _handle_awaiting_intent(chat_id: int, text: str, state: dict) -> None:
             await send_message(chat_id, "🔄 Previous intent canceled.")
             await _reply_cached_job(chat_id, cached)
             return
+        enforce_job_rate_limit(chat_id)
         await send_message(chat_id, "🔄 Started new job; previous intent canceled.")
         new_job_id = await database.create_job(
             chat_id=chat_id, url=url_to_store, content_type=pipeline
@@ -2005,6 +2013,16 @@ async def ops_webhook(
 async def _webhook_route_callback(callback: dict) -> None:
     try:
         await _handle_callback(callback)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
+            if chat_id is not None:
+                with suppress(Exception):
+                    await send_message(chat_id, _RATE_LIMIT_MSG)
+        else:
+            log.exception("webhook_callback_error")
+        with suppress(Exception):
+            await answer_callback_query(callback.get("id", ""))
     except Exception:
         log.exception("webhook_callback_error")
         # Acknowledge so the client's inline button stops spinning even on failure.
@@ -2020,7 +2038,10 @@ def _extract_message_identity(sender: dict, chat: dict) -> dict:
     }
 
 
-_RATE_LIMIT_MSG = "🐢 Slow down — too many jobs from this chat in the last minute. Try again shortly."
+_RATE_LIMIT_MSG = (
+    "🐢 Slow down — too many jobs from this chat in the last minute. "
+    "Try again shortly."
+)
 
 
 async def _webhook_route_photo(chat_id: int, message: dict, photo: list, identity: dict) -> None:
@@ -2161,6 +2182,7 @@ async def _enqueue_document_job(
     tag_names: list[str] | None = None,
 ) -> None:
     """Store document bytes content-addressed, create + enqueue the job, ack the user."""
+    enforce_job_rate_limit(chat_id)
     sha = hashlib.sha256(data).hexdigest()
     key = storage.object_key("documents", sha, ext)
     await storage.upload(key, data, content_type_for(ext))

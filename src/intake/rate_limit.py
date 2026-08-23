@@ -1,11 +1,12 @@
 """Minimal per-key rate limiter, shared by `/api/intake/*` and job creation.
 
-No shared rate-limit helper exists yet in this repo (the only other precedent
-is `src/api/preview.py`'s in-memory sliding window, scoped to anonymous IPs
-for the public preview surface). This mirrors that shape but keys on any
-caller-supplied string — `src/api/intake.py` keys on the authenticated actor,
-`src/services/jobs.py` keys on `job_create:{chat_id}` to bound job creation
-across every ingest surface (Telegram, dashboard API, repo follow-up).
+This module provides the shared in-process rate-limit helper. The separate
+`src/api/preview.py` implementation is an in-memory sliding window scoped to
+anonymous IPs for the public preview surface. This module mirrors that shape
+but keys on any caller-supplied string — `src/api/intake.py` keys on the
+authenticated actor, `src/services/jobs.py` keys on `job_create:{chat_id}` to
+bound job creation across every ingest surface (Telegram, dashboard API,
+repo follow-up).
 """
 
 from __future__ import annotations

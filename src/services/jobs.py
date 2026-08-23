@@ -20,6 +20,21 @@ _JOB_CREATE_MAX = 20
 _JOB_CREATE_WINDOW_SECONDS = 60.0
 
 
+def enforce_job_rate_limit(chat_id: int) -> None:
+    """Rate-limit gate shared by every job-creation path (ADR-0033), including
+    callers that build the job row directly instead of going through
+    `create_and_enqueue_job` below.
+
+    Raises fastapi.HTTPException(429) if chat_id has created too many jobs in
+    the last minute.
+    """
+    _enforce_rate_limit(
+        f"job_create:{chat_id}",
+        max_requests=_JOB_CREATE_MAX,
+        window_seconds=_JOB_CREATE_WINDOW_SECONDS,
+    )
+
+
 def task_for_content_type(content_type: str | None, *, default: str | None) -> str | None:
     """Worker task name for a pipeline / content_type. short/long/unsized collapse to 'video'."""
     if content_type in {"short", "long", "unsized"}:
@@ -86,11 +101,7 @@ async def create_and_enqueue_job(
     the last minute — a bare Exception to non-HTTP callers (e.g. Telegram),
     so catch it explicitly for a specific reply there.
     """
-    _enforce_rate_limit(
-        f"job_create:{chat_id}",
-        max_requests=_JOB_CREATE_MAX,
-        window_seconds=_JOB_CREATE_WINDOW_SECONDS,
-    )
+    enforce_job_rate_limit(chat_id)
     # Explicit template/freestyle requests always run fresh — a cached
     # URL-only job would silently ignore the requested analysis. Callers
     # with template intent the arguments can't express set skip_cache.

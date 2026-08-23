@@ -70,9 +70,9 @@ export default function AccessibilityPage() {
 
           <LegalSection title="Contact">
             <p>
-              Found an accessibility barrier? Email me here,{' '}
+              Found an accessibility barrier?{' '}
               <LegalLink href="mailto:leoneidelman09@gmail.com">
-                leon
+                Email Leon about accessibility
               </LegalLink>
               , with the page and what happened, and I&apos;ll follow
               up.
