@@ -21,14 +21,14 @@ export interface JobSummary {
 }
 
 // Row cards get the PlatformBadge shell (bordered square); the grid card
-// overlays the bare icon directly on the thumbnail, where a shell would
-// fight the image. Either way the tooltip + aria-label is the text label
-// DESIGN.md requires (status never relies on color/shape alone) —
-// contrasignal-bright, not amber, since this marks a fact, not an action.
+// overlays a haloed icon directly on the thumbnail so it stays legible across
+// light, dark, and busy image pixels. Either way the tooltip + aria-label is
+// the text label DESIGN.md requires (status never relies on color/shape alone)
+// — contrasignal-bright, not amber, since this marks a fact, not an action.
 export function ChecklistBadge({ bare = false }: { bare?: boolean }) {
   const icon = (
     <BookmarkCheck
-      size={14}
+      size={bare ? 24 : 14}
       aria-hidden="true"
     />
   );
@@ -37,7 +37,7 @@ export function ChecklistBadge({ bare = false }: { bare?: boolean }) {
       <span
         className={
           bare
-            ? "inline-flex text-contrasignal-bright"
+            ? "inline-flex h-8 w-8 items-center justify-center text-contrasignal-bright [filter:drop-shadow(0_1px_1px_rgba(0,0,0,0.98))_drop-shadow(0_0_4px_rgba(0,0,0,0.92))_drop-shadow(0_0_1px_rgba(255,255,255,0.72))]"
             : "inline-flex h-6 w-6 items-center justify-center rounded border border-line bg-canvas text-contrasignal-bright"
         }
         aria-label="Checklist generated"
