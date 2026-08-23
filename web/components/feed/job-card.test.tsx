@@ -41,4 +41,12 @@ describe("JobCard", () => {
     expect(status.parentElement?.contains(tagButton)).toBe(false);
     expect(tagButton).toBeTruthy();
   });
+
+  it("shows the checklist badge only when a checklist was generated", () => {
+    render(<JobCard job={baseJob} />);
+    expect(screen.queryByLabelText("Checklist generated")).toBeNull();
+
+    render(<JobCard job={{ ...baseJob, checklists_generated_at: "2026-06-13T11:00:00.000Z" }} />);
+    expect(screen.getByLabelText("Checklist generated")).toBeTruthy();
+  });
 });

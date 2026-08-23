@@ -345,7 +345,8 @@ async def list_jobs(
 
         cur_items = await conn.execute(
             f"""
-            SELECT id, title, content_type, status, url, created_at, og_image_url, telegram_delivery
+            SELECT id, title, content_type, status, url, created_at, og_image_url, telegram_delivery,
+                   checklists_generated_at
             FROM jobs
             WHERE {where}
             ORDER BY created_at DESC, id DESC
