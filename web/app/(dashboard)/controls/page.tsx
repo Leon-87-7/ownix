@@ -466,6 +466,7 @@ function DeleteAccountSection() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete account');
       setDeleting(false);
+      throw err;
     }
   };
 
