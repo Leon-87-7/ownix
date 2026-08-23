@@ -113,6 +113,9 @@ class FakeRedis:
     async def getdel(self, key: str) -> str | None:
         return self._store.pop(key, None)
 
+    async def smembers(self, key: str) -> set[str]:
+        return self._store.get(key, set())
+
     async def close(self) -> None:
         pass
 
@@ -741,6 +744,121 @@ class TestAuthRouter:
         notify.assert_not_awaited()
 
 
+class TestAccountDeletionLock:
+    """Account deletion is exclusive (a "deleting" status locks out every other
+    account-write route, same as "pending"/"blocked") and resumable (a deletion
+    that fails partway leaves the lock in place; the next login finishes it)."""
+
+    def test_deleting_status_blocks_other_write_routes(self, auth_client: TestClient) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        asyncio.run(database.set_user_status(555001, "deleting"))
+        user = {"id": 555001, "username": "deleting_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:deleting-sid"] = json.dumps(user)
+
+        resp = auth_client.get("/api/probe", cookies={"vig_session": "deleting-sid"})
+
+        assert resp.status_code == 403
+
+    def test_delete_account_route_locks_and_revokes_session_before_cleanup_runs(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+        from src.api import auth as auth_api
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555002, username="del_user", first_name="D", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555002, "approved"))
+        user = {"id": 555002, "username": "del_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:delete-sid"] = json.dumps(user)
+
+        real_delete_account = auth_api.delete_account
+        seen_status_at_call: list[str] = []
+
+        async def spy_delete_account(chat_id: int) -> None:
+            seen_status_at_call.append(await database.get_user_status(chat_id))
+            assert await session_module.resolve("delete-sid") is None
+            await real_delete_account(chat_id)
+
+        monkeypatch.setattr(auth_api, "delete_account", spy_delete_account)
+
+        resp = auth_client.delete("/api/auth/me", cookies={"vig_session": "delete-sid"})
+
+        assert resp.status_code == 204
+        assert seen_status_at_call == ["deleting"]
+        assert asyncio.run(database.get_user(555002)) is None
+
+    def test_delete_account_route_failure_leaves_lock_for_retry(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+        from src.api import auth as auth_api
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555003, username="fail_user", first_name="F", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555003, "approved"))
+        user = {"id": 555003, "username": "fail_user"}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:fail-sid"] = json.dumps(user)
+
+        async def failing_delete_account(chat_id: int) -> None:
+            raise RuntimeError("simulated cleanup failure")
+
+        monkeypatch.setattr(auth_api, "delete_account", failing_delete_account)
+
+        with pytest.raises(RuntimeError):
+            auth_client.delete("/api/auth/me", cookies={"vig_session": "fail-sid"})
+
+        assert asyncio.run(database.get_user_status(555003)) == "deleting"
+        assert "session:fail-sid" not in fr._store
+
+    def test_login_resumes_stuck_deletion_instead_of_minting_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.TELEGRAM_BOT_TOKEN", TOKEN)
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555004, username="stuck_user", first_name="S", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555004, "deleting"))
+
+        async def _seed_leftover() -> None:
+            async with database.connection() as conn:
+                await conn.execute(
+                    "INSERT INTO jobs (id, chat_id, url, content_type, status, created_at) "
+                    "VALUES ('job_stuck', 555004, 'https://example.com/stuck', 'article', 'done', '2026-01-01')"
+                )
+                await conn.commit()
+
+        asyncio.run(_seed_leftover())
+
+        payload = _make_payload(TOKEN, id="555004", username="stuck_user")
+        resp = auth_client.post("/api/auth/telegram", json=payload)
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert resp.json() == {"ok": True, "account_deleted": True}
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+        assert asyncio.run(database.get_user(555004)) is None
+        assert (
+            asyncio.run(database._fetch_one("SELECT 1 FROM jobs WHERE chat_id = ?", (555004,)))
+            is None
+        )
+
+
 # ---------------------------------------------------------------------------
 # Telegram Mini App initData
 # ---------------------------------------------------------------------------
@@ -813,9 +931,13 @@ def test_miniapp_session_mints_same_shape_as_web_login(monkeypatch: pytest.Monke
     async def fake_upsert_user(**kwargs: object) -> None:
         upserted.update(kwargs)
 
+    async def fake_get_user_status(tg_id: int) -> str:
+        return "pending"
+
     monkeypatch.setattr(auth_api.session_store, "mint", fake_mint)
     monkeypatch.setattr(auth_api.session_store, "mint_handoff", fake_mint_handoff)
     monkeypatch.setattr(auth_api.database, "upsert_user", fake_upsert_user)
+    monkeypatch.setattr(auth_api.database, "get_user_status", fake_get_user_status)
     monkeypatch.setattr(auth_api.settings, "TELEGRAM_BOT_TOKEN", TOKEN)
     monkeypatch.setattr(auth_api.settings, "SESSION_COOKIE_SECURE", False)
 

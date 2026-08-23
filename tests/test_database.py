@@ -1427,6 +1427,13 @@ async def test_migration_creates_audit_log_and_triggers_directly(tmp_path, monke
             "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
             "UNIQUE(chat_id, name))"
         )
+        # A real DB at this version already has `users` (created at v23/S1 auth) — v43→v44 rebuilds it.
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked')))"
+        )
         await conn.execute(f"PRAGMA user_version = {target_version}")
         await conn.commit()
 
@@ -1494,6 +1501,13 @@ async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
             "CREATE TABLE tags (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, name TEXT NOT NULL, "
             "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
             "UNIQUE(chat_id, name))"
+        )
+        # A real v39 DB already has `users` (created at v23/S1 auth) — v43→v44 rebuilds it.
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked')))"
         )
         await conn.execute("PRAGMA user_version = 39")
         await conn.commit()

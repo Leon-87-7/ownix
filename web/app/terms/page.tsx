@@ -20,7 +20,7 @@ export default function TermsPage() {
         <LegalArticle>
           <LegalTitle
             title="Terms of Service - Ownix"
-            updated="Last updated: July 15, 2026"
+            updated="Last updated: August 23, 2026"
           />
 
           <p>By using Ownix, you agree to these terms.</p>

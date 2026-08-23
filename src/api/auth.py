@@ -56,6 +56,16 @@ async def _login_telegram_user(
         photo_url=payload.photo_url,
     )
 
+    # upsert_user() never touches `status`, so a row left mid-deletion (a prior
+    # /api/auth/me DELETE that failed partway through, e.g. a network blip
+    # during Google token cleanup) still reads "deleting" here. Finish it now
+    # instead of minting a session into a half-deleted account — every step in
+    # delete_account() is delete-if-exists / best-effort, so resuming is safe.
+    if await database.get_user_status(payload.id) == "deleting":
+        await delete_account(payload.id)
+        log.info("auth.resumed_account_deletion", tg_id=payload.id)
+        return {"ok": True, "account_deleted": True}
+
     session_user = {
         "id": payload.id,
         "first_name": payload.first_name,
@@ -106,6 +116,13 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
         last_name=user.get("last_name"),
         photo_url=user.get("photo_url"),
     )
+
+    # See _login_telegram_user: resume a deletion left mid-flight rather than
+    # minting a session into a half-deleted account.
+    if await database.get_user_status(chat_id) == "deleting":
+        await delete_account(chat_id)
+        log.info("auth.resumed_account_deletion", tg_id=chat_id)
+        return {"ok": True, "account_deleted": True}
 
     session_user = {
         "id": chat_id,
@@ -323,13 +340,27 @@ async def me(request: Request, response: Response) -> dict:
 @auth_router.delete("/me", status_code=204)
 async def delete_account_route(request: Request) -> Response:
     """Self-serve full account deletion: hard-deletes every job/link/credential/
-    setting owned by the caller, disconnects Google, then ends the session."""
+    setting owned by the caller, disconnects Google, then ends the session.
+
+    "deleting" status is set (and the session revoked) *before* the cleanup
+    runs, not after: every other account-write route already rejects non-
+    "approved" users (src/auth/middleware.py), so flipping status first shuts
+    out concurrent writes from other sessions/devices, and revoking this
+    session first closes the same-tab race the naive "delete then revoke"
+    order leaves open. delete_account()'s steps are all delete-if-exists /
+    best-effort, so if this call fails partway the row is left in "deleting"
+    (still locked out) and a later retry safely resumes rather than redoing
+    already-finished work.
+    """
     tg_id = int(request.state.user["id"])
-    await delete_account(tg_id)
+    await database.set_user_status(tg_id, "deleting")
 
     session_id = request.cookies.get(COOKIE_NAME)
     if session_id:
         await session_store.revoke(session_id)
+
+    await delete_account(tg_id)
+
     out = Response(status_code=204)
     out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
     out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
