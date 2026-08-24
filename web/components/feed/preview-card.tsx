@@ -2,7 +2,8 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/badges";
 import { DateTime } from "@/components/ui/date-time";
-import { ChecklistBadge, type JobSummary } from "@/components/feed/job-card";
+import { type JobSummary } from "@/components/feed/job-card";
+import { GeneratedBadge } from "@/components/ui/generated-badge";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
 import { NoPreviewRing } from "@/components/ui/no-preview-ring";
@@ -55,7 +56,7 @@ function Thumbnail({
     >
       {job.checklists_generated_at && (
         <span className="pointer-events-auto absolute bottom-1.5 right-1.5 z-10">
-          <ChecklistBadge bare />
+          <GeneratedBadge bare />
         </span>
       )}
       {showImage ? (

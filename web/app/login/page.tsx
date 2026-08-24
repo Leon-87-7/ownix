@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { MoveLeft } from 'lucide-react';
 import { AuthShell } from '@/components/shell/auth-shell';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
 
@@ -47,7 +47,7 @@ export default function LoginPage() {
           className="mt-5 rounded-md px-3 py-2 text-sm font-medium text-body transition-ui hover:bg-raised hover:text-ink focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
         >
           <span className="flex items-center gap-2">
-            <MoveLeft className="h-4 w-4" />
+            <OwnixChevronRight className="h-4 w-4 rotate-180" />
             back to Ownix home
           </span>
         </Link>

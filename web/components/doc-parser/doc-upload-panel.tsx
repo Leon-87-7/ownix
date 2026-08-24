@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronDown, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
 import {
   IntakeLinksList,

@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Check, Copy, Download, Sparkles } from 'lucide-react';
+import { Check, Copy, Download, PencilSparkles } from 'lucide-react';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { DocumentSourceChip } from '@/components/doc-parser/document-source-chip';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
@@ -154,7 +154,7 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-2 flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-signal" />
+        <PencilSparkles className="h-4 w-4 text-signal" />
         <h2 className="flex-1 text-sm font-semibold text-ink">
           {output.title || output.kind}
         </h2>
@@ -214,7 +214,10 @@ export default function DocDetail() {
   const [prompt, setPrompt] = useState(RANDOM_PROMPTS[0]);
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<'clean' | 'freestyle' | null>(
+    null,
+  );
+  const busy = action !== null;
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -245,9 +248,12 @@ export default function DocDetail() {
     };
   }, [id, reloadKey]);
 
-  async function runAction(send: () => Promise<Response>) {
+  async function runAction(
+    kind: 'clean' | 'freestyle',
+    send: () => Promise<Response>,
+  ) {
     setErr('');
-    setBusy(true);
+    setAction(kind);
     try {
       const r = await send();
       if (!r.ok) {
@@ -264,17 +270,17 @@ export default function DocDetail() {
     } catch {
       setErr('Network error. Please try again.');
     } finally {
-      setBusy(false);
+      setAction(null);
     }
   }
   async function clean() {
-    await runAction(() =>
+    await runAction('clean', () =>
       fetch(`/api/parsed/${id}/clean`, { method: 'POST' }),
     );
   }
   async function freestyle() {
     setOpen(false);
-    await runAction(() =>
+    await runAction('freestyle', () =>
       fetch(`/api/parsed/${id}/freestyle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -328,7 +334,14 @@ export default function DocDetail() {
             disabled={busy}
             className="rounded-md bg-signal px-4 py-2 text-sm text-onsignal disabled:opacity-50"
           >
-            Clean
+            {action === 'clean' ? (
+              // `.ownix-shimmer` only takes effect under
+              // prefers-reduced-motion: no-preference - otherwise it
+              // inherits the button's own text-onsignal.
+              <span className="ownix-shimmer">Cleaning…</span>
+            ) : (
+              'Clean'
+            )}
           </button>
         </Tooltip>
         <Tooltip content="Run your own custom prompt against this document">
@@ -337,7 +350,11 @@ export default function DocDetail() {
             disabled={busy}
             className="rounded-md border border-line px-4 py-2 text-sm text-ink disabled:opacity-50"
           >
-            Freestyle
+            {action === 'freestyle' ? (
+              <span className="ownix-shimmer">Running…</span>
+            ) : (
+              'Freestyle'
+            )}
           </button>
         </Tooltip>
         {rawParse && (
@@ -396,13 +413,15 @@ export default function DocDetail() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setOpen(false)}
-                  className="rounded-md px-3 py-2 text-sm text-body"
+                  disabled={busy}
+                  className="rounded-md px-3 py-2 text-sm text-body disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={freestyle}
-                  className="rounded-md bg-signal px-3 py-2 text-sm text-onsignal"
+                  disabled={busy}
+                  className="rounded-md bg-signal px-3 py-2 text-sm text-onsignal disabled:opacity-50"
                 >
                   Run
                 </button>
