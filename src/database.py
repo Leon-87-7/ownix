@@ -2802,7 +2802,7 @@ async def delete_job(
                         ],
                     }
             await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
-        if purge_payload:
+        if purge_payload and cursor.rowcount > 0:
             await conn.execute(
                 "INSERT INTO purge_tasks (job_id, chat_id, task_payload) VALUES (?, ?, ?)",
                 (purge_payload["job_id"], purge_payload["chat_id"], json.dumps(purge_payload)),

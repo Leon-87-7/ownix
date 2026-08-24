@@ -1180,6 +1180,27 @@ async def test_delete_job_with_links_true_removes_them(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_does_not_double_insert_purge_task_on_second_call(temp_db):
+    """Two calls to delete_job() for the same job (simulating a concurrent
+    account-deletion race that isn't covered by begin_account_deletion's
+    lock — e.g. a route call racing with the login-triggered resume path)
+    must not both insert a purge_tasks row — only the call that actually
+    removed the row should."""
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    payload = {"job_id": job, "chat_id": 1}
+
+    first = await db.delete_job(job, purge_payload=payload)
+    second = await db.delete_job(job, purge_payload=payload)
+
+    assert first is True
+    assert second is False
+    row = await db._fetch_one("SELECT COUNT(*) AS c FROM purge_tasks WHERE job_id = ?", (job,))
+    assert row["c"] == 1
+
+
+@pytest.mark.asyncio
 async def test_count_job_links_zero_for_unknown_job(temp_db):
     from src import database as db
 
