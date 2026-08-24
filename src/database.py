@@ -21,7 +21,7 @@ from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-UserStatus = Literal["pending", "approved", "blocked"]
+UserStatus = Literal["pending", "approved", "blocked", "deleting"]
 
 
 SCHEMA_SQL = """
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS users (
     status      TEXT NOT NULL DEFAULT 'pending',
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CHECK(status IN ('pending','approved','blocked'))
+    CHECK(status IN ('pending','approved','blocked','deleting'))
 );
 
 CREATE TABLE IF NOT EXISTS user_settings (
@@ -1374,6 +1374,59 @@ _MIGRATIONS.append([
 ])
 
 
+# v43 → v44: widen users.status CHECK to add 'deleting' — the exclusivity lock
+# self-serve account deletion holds while it runs, so every other account-write
+# route (gated on status == 'approved') rejects concurrent writes during
+# cleanup. SQLite can't ALTER a CHECK, so rebuild via selective column copy.
+#
+# The five DDL/DML statements below are wrapped in one explicit transaction:
+# without BEGIN, each DDL statement auto-commits as it runs (PRAGMA
+# user_version only advances after _run_migrations fully returns), so a
+# crash between DROP TABLE users and the RENAME, followed by a restart,
+# would rerun this migration from `DROP TABLE IF EXISTS users_v44` with the
+# original `users` table already gone — destroying every user row. SQLite
+# supports transactional DDL, so BEGIN/COMMIT/ROLLBACK make the whole
+# rebuild all-or-nothing.
+async def _migrate_v43_v44(conn: aiosqlite.Connection) -> None:
+    await conn.execute("BEGIN IMMEDIATE")
+    try:
+        await conn.execute("DROP TABLE IF EXISTS users_v44")
+        await conn.execute(
+            """
+            CREATE TABLE users_v44 (
+                tg_id       INTEGER PRIMARY KEY,
+                username    TEXT,
+                first_name  TEXT NOT NULL,
+                last_name   TEXT,
+                photo_url   TEXT,
+                email       TEXT,
+                status      TEXT NOT NULL DEFAULT 'pending',
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK(status IN ('pending','approved','blocked','deleting'))
+            )
+            """
+        )
+        await conn.execute(
+            """
+            INSERT INTO users_v44 (tg_id, username, first_name, last_name, photo_url,
+                                    email, status, created_at, updated_at)
+            SELECT tg_id, username, first_name, last_name, photo_url,
+                   email, status, created_at, updated_at
+              FROM users
+            """
+        )
+        await conn.execute("DROP TABLE users")
+        await conn.execute("ALTER TABLE users_v44 RENAME TO users")
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
+
+
+_MIGRATIONS.append(_migrate_v43_v44)
+
+
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
     cur = await conn.execute("PRAGMA user_version")
     row = await cur.fetchone()
@@ -1395,7 +1448,7 @@ async def _run_migrations(conn: aiosqlite.Connection) -> None:
 
 
 def _validate_user_status(status: str) -> UserStatus:
-    if status not in ("pending", "approved", "blocked"):
+    if status not in ("pending", "approved", "blocked", "deleting"):
         raise ValueError(f"Invalid user status: {status}")
     return cast(UserStatus, status)
 
@@ -2194,12 +2247,61 @@ async def set_user_status(tg_id: int, status: UserStatus) -> None:
     log.info("user_status_set", tg_id=tg_id, status=status)
 
 
+async def begin_account_deletion(tg_id: int) -> bool:
+    """Atomically flip status to "deleting" unless a deletion is already in
+    progress. Returns True if this call acquired the lock, False if another
+    concurrent call (a second device/tab, or a login-resume race) already
+    holds it — the caller should treat False as "nothing left to do here"
+    rather than running delete_account() a second time.
+    """
+    rowcount = await _execute_rowcount(
+        "UPDATE users SET status = 'deleting', updated_at = CURRENT_TIMESTAMP "
+        "WHERE tg_id = ? AND status != 'deleting'",
+        (tg_id,),
+    )
+    log.info("account_deletion_lock_attempted", tg_id=tg_id, acquired=rowcount > 0)
+    return rowcount > 0
+
+
 async def set_user_email(tg_id: int, email: str | None) -> None:
     """Set a user's email address, creating a pending minimal row if needed."""
     async with connection() as conn:
         await _upsert_minimal_user(conn, tg_id=tg_id, email=email, update_email=True)
         await conn.commit()
     log.info("user_email_set", tg_id=tg_id, has_email=email is not None)
+
+
+async def delete_user(tg_id: int) -> bool:
+    """Hard-delete the invite-gate row for tg_id (account deletion's last step)."""
+    deleted = await _execute_rowcount("DELETE FROM users WHERE tg_id = ?", (tg_id,)) > 0
+    log.info("user_deleted", tg_id=tg_id, deleted=deleted)
+    return deleted
+
+
+_ACCOUNT_SETTINGS_DELETE_QUERIES = (
+    "DELETE FROM tags WHERE chat_id = ?",
+    "DELETE FROM allowed_domains WHERE chat_id = ?",
+    "DELETE FROM ignored_domains WHERE chat_id = ?",
+    "DELETE FROM templates WHERE chat_id = ?",
+    "DELETE FROM user_settings WHERE chat_id = ?",
+    # spaces cascades (ON DELETE CASCADE, FK enforcement is on for this
+    # connection) to space_urls and context_blobs — delete_job() only cascades
+    # space_urls for jobs it removes, so the space itself would otherwise survive.
+    "DELETE FROM spaces WHERE chat_id = ?",
+    # Short-lived Google OAuth CSRF state (has its own expires_at), but still
+    # chat_id-scoped account data — clean it up rather than let it expire.
+    "DELETE FROM google_oauth_states WHERE chat_id = ?",
+)
+
+
+async def delete_account_settings(chat_id: int) -> None:
+    """Wipe chat_id's rows from every per-account table account deletion doesn't
+    already cover via delete_job()/delete_link() (Controls settings, Spaces,
+    pending OAuth state)."""
+    async with connection() as conn:
+        for query in _ACCOUNT_SETTINGS_DELETE_QUERIES:
+            await conn.execute(query, (chat_id,))
+        await conn.commit()
 
 
 async def list_pending_users() -> list[dict]:
@@ -2700,7 +2802,7 @@ async def delete_job(
                         ],
                     }
             await conn.execute("DELETE FROM links WHERE source_job = ?", (job_id,))
-        if purge_payload:
+        if purge_payload and cursor.rowcount > 0:
             await conn.execute(
                 "INSERT INTO purge_tasks (job_id, chat_id, task_payload) VALUES (?, ?, ?)",
                 (purge_payload["job_id"], purge_payload["chat_id"], json.dumps(purge_payload)),

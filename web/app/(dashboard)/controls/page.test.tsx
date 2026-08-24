@@ -363,4 +363,125 @@ describe('ControlsPage', () => {
       );
     });
   });
+
+  it('renders the account-deletion consequences before the delete button in DOM order', () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    // Regex, not a literal substring: the exact consequences wording is
+    // hoisted into a shared constant in a later task and may change slightly
+    // — this only needs to keep matching "roughly this sentence", not an
+    // exact string, so it doesn't go stale when that happens.
+    const consequences = zone.getByText(/deletes every job.*brain link.*domain rule/i);
+    const button = zone.getByRole('button', { name: 'Delete my account' });
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): button comes after consequences.
+    expect(
+      consequences.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows the server-provided error detail when account deletion fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ detail: 'Cannot delete: Google disconnect failed' }), { status: 502 }),
+    ));
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
+    // The error renders inside the dialog (Radix portals dialog content out
+    // of the "Danger zone" <details> subtree), so it's queried via `dialog`.
+    await waitFor(() =>
+      expect(dialog.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
+    );
+  });
+
+  it('keeps the account-delete confirm button disabled until "delete" is typed', async () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    const dialog = within(screen.getByRole('dialog'));
+    const confirmButton = dialog.getByRole('button', { name: 'Yes, delete my account' });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(confirmButton).not.toBeDisabled();
+  });
+
+  it('clears the type-to-confirm text after cancel, so reopening requires typing it again', async () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    let dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(dialog.getByRole('button', { name: 'Yes, delete my account' })).not.toBeDisabled();
+
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByLabelText('Type delete to confirm')).toHaveValue('');
+    expect(dialog.getByRole('button', { name: 'Yes, delete my account' })).toBeDisabled();
+  });
+
+  it('announces the account-delete error as an alert', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ detail: 'Cannot delete right now' }), { status: 502 }),
+    ));
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
+    // The error now renders inside the dialog itself (not a page-body
+    // sibling), so it stays in the accessible subtree while the dialog's
+    // modal overlay is open — a plain getByRole('alert') is enough.
+    await waitFor(() => expect(dialog.getByRole('alert')).toHaveTextContent('Cannot delete right now'));
+  });
+
+  it('keeps the confirm dialog open when account deletion fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ detail: 'Cannot delete: 3 jobs still processing' }), { status: 409 }),
+    ));
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
+
+    await waitFor(() =>
+      expect(dialog.getByText('Cannot delete: 3 jobs still processing')).toBeTruthy(),
+    );
+    // The dialog itself must still be mounted — a silent close would read as
+    // "nothing happened" on the highest-stakes destructive action in the app.
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Permanently delete your account?')).toBeTruthy();
+  });
+
+  it('uses the same consequences copy in the dialog description and the static paragraph', () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+    const dialogText = screen.getByRole('dialog').textContent ?? '';
+    const staticParagraph = zone.getByText(/deletes every job, brain link, tag, and domain rule/i);
+    expect(dialogText).toContain(staticParagraph.textContent);
+  });
+
+  it('gives the Danger zone section title a distinct text treatment', () => {
+    render(<ControlsPage />);
+    const title = screen.getByText('Danger zone');
+    expect(title.className).toContain('text-status-error');
+
+    const otherTitle = screen.getByText('Chrome Extension');
+    expect(otherTitle.className).not.toContain('text-status-error');
+  });
+
 });

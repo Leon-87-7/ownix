@@ -18,6 +18,7 @@ from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
+from src.services.account import delete_account
 from src.services.invite_notifications import notify_operator_invite
 from src.utils.logger import get_logger
 from src.utils.validators import normalize_email
@@ -44,6 +45,22 @@ class TelegramPayload(BaseModel):
     hash: str
 
 
+async def _resume_deletion_if_stuck(tg_id: int) -> dict | None:
+    """Finish a deletion left mid-flight instead of minting a session into a
+    half-deleted account (a prior /api/auth/me DELETE that failed partway,
+    e.g. a network blip during Google token cleanup, still reads "deleting"
+    here). Returns the response body to send back if a stuck deletion was
+    resumed, or None to mean "continue with normal login". Every step in
+    delete_account() is delete-if-exists / best-effort, so resuming is safe
+    even if a previous call finished some steps already.
+    """
+    if await database.get_user_status(tg_id) != "deleting":
+        return None
+    await delete_account(tg_id)
+    log.info("auth.resumed_account_deletion", tg_id=tg_id)
+    return {"ok": True, "account_deleted": True}
+
+
 async def _login_telegram_user(
     payload: TelegramPayload, response: Response, *, source: str | None = None
 ) -> dict:
@@ -54,6 +71,15 @@ async def _login_telegram_user(
         last_name=payload.last_name,
         photo_url=payload.photo_url,
     )
+
+    # upsert_user() never touches `status`, so a row left mid-deletion (a prior
+    # /api/auth/me DELETE that failed partway through, e.g. a network blip
+    # during Google token cleanup) still reads "deleting" here. Finish it now
+    # instead of minting a session into a half-deleted account — every step in
+    # delete_account() is delete-if-exists / best-effort, so resuming is safe.
+    resumed = await _resume_deletion_if_stuck(payload.id)
+    if resumed is not None:
+        return resumed
 
     session_user = {
         "id": payload.id,
@@ -105,6 +131,12 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
         last_name=user.get("last_name"),
         photo_url=user.get("photo_url"),
     )
+
+    # See _login_telegram_user: resume a deletion left mid-flight rather than
+    # minting a session into a half-deleted account.
+    resumed = await _resume_deletion_if_stuck(chat_id)
+    if resumed is not None:
+        return resumed
 
     session_user = {
         "id": chat_id,
@@ -177,6 +209,16 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
         raise HTTPException(status_code=401, detail="Invalid reviewer credentials")
 
     reviewer_id = settings.REVIEWER_LOGIN_USER_ID
+    # See _login_telegram_user / miniapp_session: resume a deletion left
+    # mid-flight rather than minting a session into a half-deleted account.
+    # Must run before upsert_user — otherwise upsert_user would resurrect
+    # the row before this check ever sees "deleting". A not-yet-existing
+    # reviewer row safely reads "pending" (database.get_user_status), so
+    # this is a no-op on the very first reviewer login.
+    resumed = await _resume_deletion_if_stuck(reviewer_id)
+    if resumed is not None:
+        return resumed
+
     await database.upsert_user(
         tg_id=reviewer_id,
         username="chrome_reviewer",
@@ -241,6 +283,16 @@ async def redeem_handoff_login(
     if chat_id is None:
         raise HTTPException(status_code=401, detail="This link has expired or was already used")
 
+    # See _login_telegram_user: resume a deletion left mid-flight rather than
+    # minting a session into a half-deleted account. Unlike the other two
+    # login paths, this route redirects rather than returning a session JSON
+    # body, so on resume it rejects with the same 401 the "user is None" path
+    # below already uses (delete_account() will have just made that true).
+    if await database.get_user_status(chat_id) == "deleting":
+        await delete_account(chat_id)
+        log.info("auth.resumed_account_deletion", tg_id=chat_id)
+        raise HTTPException(status_code=401, detail="Dashboard access is unavailable")
+
     user = await database.get_user(chat_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Dashboard access is unavailable")
@@ -286,6 +338,8 @@ async def dev_approve(request: Request) -> dict:
     if not settings.DEV_LOGIN_ENABLED:
         raise HTTPException(status_code=404, detail="Dev approval is disabled")
     tg_id = int(request.state.user["id"])
+    if await database.get_user_status(tg_id) == "deleting":
+        raise HTTPException(status_code=403, detail="Account deletion in progress")
     await database.set_user_status(tg_id, "approved")
     log.info("auth.dev_approve", tg_id=tg_id)
     return {"ok": True, "status": "approved"}
@@ -319,12 +373,77 @@ async def me(request: Request, response: Response) -> dict:
     }
 
 
+@auth_router.delete("/me", status_code=204)
+async def delete_account_route(request: Request) -> Response:
+    """Self-serve full account deletion: hard-deletes every job/link/credential/
+    setting owned by the caller, disconnects Google, then ends the session.
+
+    begin_account_deletion() atomically flips status to "deleting" (and every
+    session belonging to the account is revoked, not just the caller's) before
+    the cleanup runs, not after: every other account-write route already
+    rejects non-"approved" users (src/auth/middleware.py), so flipping status
+    first shuts out concurrent writes from other sessions/devices, and
+    revoking every session first closes both the same-tab race the naive
+    "delete then revoke" order leaves open, and the window where a
+    stale-but-still-valid session on another device could reach a
+    pre-approval route (e.g. PUT /api/auth/email) after the row is gone and
+    re-create it. The lock is compare-and-set (WHERE status != 'deleting'), so a
+    second concurrent call — another tab/device with a still-valid session,
+    since /api/auth/me stays reachable during deletion — short-circuits here
+    instead of running delete_account() a second time (which would otherwise
+    insert duplicate purge_tasks rows and double-revoke the Google token).
+    delete_account()'s steps are all delete-if-exists / best-effort, so if
+    this call fails partway the row is left in "deleting" (still locked out)
+    and a later retry safely resumes rather than redoing already-finished
+    work.
+    """
+    tg_id = int(request.state.user["id"])
+    if settings.OPERATOR_CHAT_ID is not None and tg_id == settings.OPERATOR_CHAT_ID:
+        # get_user_status()/set_user_status() force the operator to "approved"
+        # (src/database.py) — the "deleting" lock above would silently no-op
+        # for this account, so refuse self-service deletion outright instead.
+        raise HTTPException(status_code=403, detail="Operator account cannot be deleted")
+
+    locked = await database.begin_account_deletion(tg_id)
+    if not locked:
+        # Another concurrent call already holds the lock and owns the
+        # cleanup — the account is/will be gone either way, so report the
+        # same success the winning call's caller will also see rather than
+        # running delete_account() again. Still revoke every session for
+        # this account, though: the winner's revoke_account() call may not
+        # have run yet, and the docstring promises every DELETE /api/auth/me
+        # call ends the account's sessions rather than letting them outlive
+        # the account until their natural TTL.
+        await session_store.revoke_account(tg_id)
+        out = Response(status_code=204)
+        out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
+        out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+        return out
+
+    await session_store.revoke_account(tg_id)
+
+    await delete_account(tg_id)
+
+    out = Response(status_code=204)
+    out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
+    out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    return out
+
+
 @auth_router.put("/email")
 async def set_email(payload: EmailPayload, request: Request) -> dict:
     email = normalize_email(payload.email)
     if email is None:
         raise HTTPException(status_code=422, detail="Invalid email")
     tg_id = int(request.state.user["id"])
+    # /email is in _PRE_APPROVAL_AUTH_PATHS (middleware.py) so it bypasses the
+    # approval-status gate on purpose (pending users need it) — that means it
+    # also bypasses the "deleting" lock, and unlike DELETE /me a second call
+    # here isn't idempotent/safe, so check explicitly. A second session/device
+    # still holding a valid cookie is the only way to reach this mid-deletion:
+    # delete_account_route revokes the triggering session before cleanup runs.
+    if await database.get_user_status(tg_id) == "deleting":
+        raise HTTPException(status_code=403, detail="Account deletion in progress")
     await database.set_user_email(tg_id, email)
     status = await database.get_user_status(tg_id)
     if status == "pending":

@@ -2,11 +2,12 @@
 
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { RestrictedFacade } from '@/components/shell/restricted-facade';
+import { useRouter } from 'next/navigation';
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTagList } from '@/lib/hooks/useTagList';
 import { useDomainList } from '@/lib/hooks/useDomainList';
-import { apiPut } from '@/lib/fetch-utils';
+import { apiDelete, apiPut } from '@/lib/fetch-utils';
 import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
 import {
   Pin,
@@ -19,6 +20,7 @@ import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
@@ -449,12 +451,86 @@ function RecoveryTab() {
   );
 }
 
+const DELETE_ACCOUNT_CONSEQUENCES =
+  "This deletes every job, Brain link, tag, and domain rule you own, disconnects Google, and revokes your session. This can't be undone.";
+
+function DeleteAccountSection() {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const [confirmText, setConfirmText] = useState('');
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(undefined);
+    try {
+      await apiDelete('/api/auth/me', 'Could not delete account');
+      router.replace('/login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete account');
+      setDeleting(false);
+      throw err;
+    }
+  };
+
+  return (
+    <div className="flex items-stretch gap-4 max-[620px]:flex-col">
+      <p className="text-sm text-body">
+        {DELETE_ACCOUNT_CONSEQUENCES}
+      </p>
+      <div className="border-l border-line max-[620px]:hidden" />
+      <div className="flex-shrink-0">
+        <ConfirmDialog
+          title="Permanently delete your account?"
+          description={DELETE_ACCOUNT_CONSEQUENCES}
+          confirmLabel="Yes, delete my account"
+          pending={deleting}
+          confirmDisabled={confirmText.trim().toLowerCase() !== 'delete'}
+          onConfirm={handleDelete}
+          trigger={
+            <button
+              onClick={() => {
+                setConfirmText('');
+                setError(undefined);
+              }}
+              className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised"
+            >
+              Delete my account
+            </button>
+          }
+        >
+          <label className="flex flex-col gap-1 text-xs text-body">
+            Type <span className="font-mono font-semibold text-ink">delete</span> to confirm
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoComplete="off"
+              className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted focus:border-signal focus:outline-none"
+            />
+          </label>
+          {error && (
+            <p
+              className="mt-2 text-xs text-status-error"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
+        </ConfirmDialog>
+      </div>
+    </div>
+  );
+}
+
 function Section({
   title,
+  titleClassName,
   defaultOpen,
   children,
 }: {
   title: string;
+  titleClassName?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -474,7 +550,7 @@ function Section({
       className="group overflow-hidden rounded-lg border border-line bg-surface"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold text-ink transition-ui hover:bg-raised [&::-webkit-details-marker]:hidden">
-        {title}
+        <span className={titleClassName}>{title}</span>
         <OwnixChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
       </summary>
       <div className="border-t border-line bg-canvas p-4">
@@ -547,6 +623,12 @@ export default function ControlsPage() {
         </div>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
+        </Section>
+        <Section
+          title="Danger zone"
+          titleClassName="text-status-error"
+        >
+          <DeleteAccountSection />
         </Section>
       </div>
     </PageShell>

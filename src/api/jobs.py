@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 
 from src import database
 from src.api.deps import get_owned_job
-from src.services import drive, job_recovery
-from src.services.jobs import create_and_enqueue_job
+from src.services import job_recovery
+from src.services.jobs import build_job_purge_task, create_and_enqueue_job
 from src.templates import PROMPT_TEMPLATES
 from src.utils.logger import get_logger
 from src.utils.validators import coerce_url, detect_pipeline, normalize_repo_url
@@ -758,23 +758,7 @@ async def delete_job(job_id: str, request: Request, with_links: bool = False) ->
     passed — a bookmark import card owns hundreds of them, and there is no undo.
     """
     job = await get_owned_job(job_id, request)
-    outputs = await database.list_document_outputs(job_id)
-    purge_task = {
-        "task": "job_purge",
-        "job_id": job_id,
-        "chat_id": job["chat_id"],
-        "drive_file_ids": [
-            file_id
-            for file_id in (
-                drive.file_id_from_url(job.get("drive_url")),
-                job.get("prd_auto_drive_file_id"),
-                job.get("prd_intent_drive_file_id"),
-            )
-            if file_id
-        ],
-        "gcs_keys": [output["gcs_key"] for output in outputs if output.get("gcs_key")],
-        "url": job.get("url"),
-    }
+    purge_task = await build_job_purge_task(job)
     # Atomically delete the job and record the purge task in the outbox.
     await database.delete_job(job_id, purge_payload=purge_task, with_links=with_links)
     return Response(status_code=204)

@@ -1180,6 +1180,27 @@ async def test_delete_job_with_links_true_removes_them(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_does_not_double_insert_purge_task_on_second_call(temp_db):
+    """Two calls to delete_job() for the same job (simulating a concurrent
+    account-deletion race that isn't covered by begin_account_deletion's
+    lock — e.g. a route call racing with the login-triggered resume path)
+    must not both insert a purge_tasks row — only the call that actually
+    removed the row should."""
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    payload = {"job_id": job, "chat_id": 1}
+
+    first = await db.delete_job(job, purge_payload=payload)
+    second = await db.delete_job(job, purge_payload=payload)
+
+    assert first is True
+    assert second is False
+    row = await db._fetch_one("SELECT COUNT(*) AS c FROM purge_tasks WHERE job_id = ?", (job,))
+    assert row["c"] == 1
+
+
+@pytest.mark.asyncio
 async def test_count_job_links_zero_for_unknown_job(temp_db):
     from src import database as db
 
@@ -1427,6 +1448,13 @@ async def test_migration_creates_audit_log_and_triggers_directly(tmp_path, monke
             "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
             "UNIQUE(chat_id, name))"
         )
+        # A real DB at this version already has `users` (created at v23/S1 auth) — v43→v44 rebuilds it.
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked')))"
+        )
         await conn.execute(f"PRAGMA user_version = {target_version}")
         await conn.commit()
 
@@ -1495,6 +1523,13 @@ async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
             "meaning TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '#8b5cf6', icon TEXT, "
             "UNIQUE(chat_id, name))"
         )
+        # A real v39 DB already has `users` (created at v23/S1 auth) — v43→v44 rebuilds it.
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked')))"
+        )
         await conn.execute("PRAGMA user_version = 39")
         await conn.commit()
         await database._run_migrations(conn)
@@ -1502,3 +1537,113 @@ async def test_checklists_columns_are_added_to_v39_database(tmp_path) -> None:
         columns = {row[1] for row in await cur.fetchall()}
 
     assert {"checklists_md", "checklists_generated_at"} <= columns
+
+
+@pytest.mark.asyncio
+async def test_begin_account_deletion_is_exclusive(tmp_path, monkeypatch) -> None:
+    """Only the first caller wins the lock; a second call on an already-
+    'deleting' row must report False instead of re-flipping the status
+    (finding #2: two concurrent DELETE /api/auth/me calls must not both
+    run delete_account())."""
+    from src import database
+
+    db_file = str(tmp_path / "lock_test.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await database.init_db()
+    await database.upsert_user(tg_id=1, username="u", first_name="U", last_name=None, photo_url=None)
+    await database.set_user_status(1, "approved")
+
+    first = await database.begin_account_deletion(1)
+    second = await database.begin_account_deletion(1)
+
+    assert first is True
+    assert second is False
+    assert await database.get_user_status(1) == "deleting"
+
+
+@pytest.mark.asyncio
+async def test_migrate_v43_v44_rolls_back_atomically_on_failure(tmp_path, monkeypatch) -> None:
+    """A crash between DROP TABLE users and the RENAME must not destroy the
+    only surviving copy of every user row — the whole rebuild is one
+    transaction, so a failure leaves the original `users` table intact for a
+    safe retry on the next startup."""
+    from src import database
+
+    db_file = str(tmp_path / "v43_crash.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT NOT NULL, "
+            "last_name TEXT, photo_url TEXT, email TEXT, status TEXT NOT NULL DEFAULT 'pending', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "CHECK(status IN ('pending','approved','blocked'))"
+            ")"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, first_name, status) VALUES (1, 'Alice', 'approved')"
+        )
+        await conn.commit()
+
+        # Fail the RENAME step, simulating a crash after DROP TABLE users.
+        real_execute = conn.execute
+
+        async def failing_execute(sql, *args, **kwargs):
+            if "RENAME TO users" in sql:
+                raise RuntimeError("simulated crash")
+            return await real_execute(sql, *args, **kwargs)
+
+        monkeypatch.setattr(conn, "execute", failing_execute)
+
+        with pytest.raises(RuntimeError):
+            await database._migrate_v43_v44(conn)
+
+        monkeypatch.setattr(conn, "execute", real_execute)
+
+        # The original users table (and Alice's row) must have survived —
+        # not a half-renamed users_v44 shell.
+        cur = await conn.execute("SELECT tg_id, first_name FROM users")
+        rows = await cur.fetchall()
+        assert [tuple(r) for r in rows] == [(1, "Alice")]
+
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users_v44'"
+        )
+        assert await cur.fetchone() is None, "the failed rebuild must not leave a stray users_v44 table"
+
+    # A retry from the same starting state must still succeed cleanly.
+    async with aiosqlite.connect(db_file) as conn2:
+        await database._migrate_v43_v44(conn2)
+        cur = await conn2.execute("PRAGMA table_info(users)")
+        cols = {row[1] for row in await cur.fetchall()}
+        assert "status" in cols
+        cur = await conn2.execute("SELECT tg_id, first_name, status FROM users")
+        assert await cur.fetchone() == (1, "Alice", "approved")
+
+
+@pytest.mark.asyncio
+async def test_delete_user_logs_deleted_flag_when_row_is_missing(tmp_path, monkeypatch) -> None:
+    """delete_user's log line must report whether a row was actually
+    removed, not fire the same unconditional message either way."""
+    from src import database
+
+    db_file = str(tmp_path / "delete_user_log.db")
+    monkeypatch.setattr("src.config.settings.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.settings.DB_PATH", db_file)
+    await database.init_db()
+
+    logged: dict = {}
+
+    def fake_info(event, **kwargs):
+        logged["event"] = event
+        logged["kwargs"] = kwargs
+
+    monkeypatch.setattr(database.log, "info", fake_info)
+
+    result = await database.delete_user(999999)
+
+    assert result is False
+    assert logged["event"] == "user_deleted"
+    assert logged["kwargs"].get("deleted") is False

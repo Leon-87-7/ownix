@@ -6,6 +6,7 @@ from typing import Any
 
 from src import database, queue
 from src.intake.rate_limit import enforce as _enforce_rate_limit
+from src.services import drive
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -42,6 +43,31 @@ def task_for_content_type(content_type: str | None, *, default: str | None) -> s
     if content_type in {"article", "repo", "document", "link"}:
         return content_type
     return default
+
+
+async def build_job_purge_task(job: dict[str, Any]) -> dict[str, Any]:
+    """Purge-task payload for a job delete: its Drive files, GCS outputs, and Sheets row.
+
+    Shared by the single-job delete route and full-account deletion so both
+    queue identical cleanup (src/processors/purge.py).
+    """
+    outputs = await database.list_document_outputs(job["id"])
+    return {
+        "task": "job_purge",
+        "job_id": job["id"],
+        "chat_id": job["chat_id"],
+        "drive_file_ids": [
+            file_id
+            for file_id in (
+                drive.file_id_from_url(job.get("drive_url")),
+                job.get("prd_auto_drive_file_id"),
+                job.get("prd_intent_drive_file_id"),
+            )
+            if file_id
+        ],
+        "gcs_keys": [output["gcs_key"] for output in outputs if output.get("gcs_key")],
+        "url": job.get("url"),
+    }
 
 
 async def flush_held_jobs(chat_id: int) -> int:

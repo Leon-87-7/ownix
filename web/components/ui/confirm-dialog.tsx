@@ -16,6 +16,9 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel: string;
   pending?: boolean;
+  /** Disable the confirm button independent of `pending` — e.g. a
+   * type-to-confirm field that hasn't matched yet. */
+  confirmDisabled?: boolean;
   onConfirm: () => void | Promise<void>;
   /** Extra interactive content (e.g. an opt-in checkbox) between the
    * description and the action buttons. */
@@ -28,6 +31,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   pending = false,
+  confirmDisabled = false,
   onConfirm,
   children,
 }: ConfirmDialogProps) {
@@ -60,10 +64,15 @@ export function ConfirmDialog({
           </RadixDialog.Close>
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || confirmDisabled}
             onClick={async () => {
-              await onConfirm();
-              setOpen(false);
+              try {
+                await onConfirm();
+                setOpen(false);
+              } catch (err) {
+                // onConfirm failed — error is displayed in component state,
+                // dialog stays open. Catch here to prevent unhandled rejection.
+              }
             }}
             className="h-8 rounded-md bg-status-error px-3 text-button font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
           >
