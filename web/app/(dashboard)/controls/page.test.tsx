@@ -389,8 +389,10 @@ describe('ControlsPage', () => {
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
+    // The error renders inside the dialog (Radix portals dialog content out
+    // of the "Danger zone" <details> subtree), so it's queried via `dialog`.
     await waitFor(() =>
-      expect(zone.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
+      expect(dialog.getByText('Cannot delete: Google disconnect failed')).toBeTruthy(),
     );
   });
 
@@ -418,10 +420,10 @@ describe('ControlsPage', () => {
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.change(dialog.getByLabelText('Type delete to confirm'), { target: { value: 'delete' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
-    // Use hidden: true to work around test isolation leak from Radix Dialog aria-hidden state
-    // not fully clearing between tests. This still validates the role="alert" is present,
-    // catching regressions where the role genuinely disappears.
-    await waitFor(() => expect(zone.getByRole('alert', { hidden: true })).toHaveTextContent('Cannot delete right now'));
+    // The error now renders inside the dialog itself (not a page-body
+    // sibling), so it stays in the accessible subtree while the dialog's
+    // modal overlay is open — a plain getByRole('alert') is enough.
+    await waitFor(() => expect(dialog.getByRole('alert')).toHaveTextContent('Cannot delete right now'));
   });
 
   it('keeps the confirm dialog open when account deletion fails', async () => {
@@ -436,7 +438,7 @@ describe('ControlsPage', () => {
     fireEvent.click(dialog.getByRole('button', { name: 'Yes, delete my account' }));
 
     await waitFor(() =>
-      expect(zone.getByText('Cannot delete: 3 jobs still processing')).toBeTruthy(),
+      expect(dialog.getByText('Cannot delete: 3 jobs still processing')).toBeTruthy(),
     );
     // The dialog itself must still be mounted — a silent close would read as
     // "nothing happened" on the highest-stakes destructive action in the app.

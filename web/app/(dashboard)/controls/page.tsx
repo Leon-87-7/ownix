@@ -503,15 +503,15 @@ function DeleteAccountSection() {
               className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted focus:border-signal focus:outline-none"
             />
           </label>
+          {error && (
+            <p
+              className="mt-2 text-xs text-status-error"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
         </ConfirmDialog>
-        {error && (
-          <p
-            className="mt-2 text-xs text-status-error"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
       </div>
     </div>
   );
