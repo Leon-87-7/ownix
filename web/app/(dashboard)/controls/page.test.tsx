@@ -410,6 +410,26 @@ describe('ControlsPage', () => {
     });
     expect(confirmButton).not.toBeDisabled();
   });
+
+  it('clears the type-to-confirm text after cancel, so reopening requires typing it again', async () => {
+    render(<ControlsPage />);
+    const zone = section('Danger zone');
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    let dialog = within(screen.getByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Type delete to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(dialog.getByRole('button', { name: 'Yes, delete my account' })).not.toBeDisabled();
+
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(zone.getByRole('button', { name: 'Delete my account' }));
+
+    dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByLabelText('Type delete to confirm')).toHaveValue('');
+    expect(dialog.getByRole('button', { name: 'Yes, delete my account' })).toBeDisabled();
+  });
+
   it('announces the account-delete error as an alert', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ detail: 'Cannot delete right now' }), { status: 502 }),

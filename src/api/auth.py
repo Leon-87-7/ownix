@@ -378,13 +378,16 @@ async def delete_account_route(request: Request) -> Response:
     """Self-serve full account deletion: hard-deletes every job/link/credential/
     setting owned by the caller, disconnects Google, then ends the session.
 
-    begin_account_deletion() atomically flips status to "deleting" (and the
-    session is revoked) *before* the cleanup runs, not after: every other
-    account-write route already rejects non-"approved" users
-    (src/auth/middleware.py), so flipping status first shuts out concurrent
-    writes from other sessions/devices, and revoking this session first
-    closes the same-tab race the naive "delete then revoke" order leaves
-    open. The lock is compare-and-set (WHERE status != 'deleting'), so a
+    begin_account_deletion() atomically flips status to "deleting" (and every
+    session belonging to the account is revoked, not just the caller's) before
+    the cleanup runs, not after: every other account-write route already
+    rejects non-"approved" users (src/auth/middleware.py), so flipping status
+    first shuts out concurrent writes from other sessions/devices, and
+    revoking every session first closes both the same-tab race the naive
+    "delete then revoke" order leaves open, and the window where a
+    stale-but-still-valid session on another device could reach a
+    pre-approval route (e.g. PUT /api/auth/email) after the row is gone and
+    re-create it. The lock is compare-and-set (WHERE status != 'deleting'), so a
     second concurrent call — another tab/device with a still-valid session,
     since /api/auth/me stays reachable during deletion — short-circuits here
     instead of running delete_account() a second time (which would otherwise
@@ -406,21 +409,18 @@ async def delete_account_route(request: Request) -> Response:
         # Another concurrent call already holds the lock and owns the
         # cleanup — the account is/will be gone either way, so report the
         # same success the winning call's caller will also see rather than
-        # running delete_account() again. Still revoke *this* caller's own
-        # session, though: the docstring promises every DELETE /api/auth/me
-        # call ends its session, and leaving this one alive would let it
-        # outlive the account it belonged to until its natural TTL.
-        losing_session_id = request.cookies.get(COOKIE_NAME)
-        if losing_session_id:
-            await session_store.revoke(losing_session_id)
+        # running delete_account() again. Still revoke every session for
+        # this account, though: the winner's revoke_account() call may not
+        # have run yet, and the docstring promises every DELETE /api/auth/me
+        # call ends the account's sessions rather than letting them outlive
+        # the account until their natural TTL.
+        await session_store.revoke_account(tg_id)
         out = Response(status_code=204)
         out.delete_cookie(COOKIE_NAME, path="/", secure=settings.SESSION_COOKIE_SECURE)
         out.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
         return out
 
-    session_id = request.cookies.get(COOKIE_NAME)
-    if session_id:
-        await session_store.revoke(session_id)
+    await session_store.revoke_account(tg_id)
 
     await delete_account(tg_id)
 

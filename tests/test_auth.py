@@ -125,6 +125,9 @@ class FakeRedis:
     async def smembers(self, key: str) -> set[str]:
         return set(self._sets.get(key, ()))
 
+    async def expire(self, key: str, seconds: int) -> bool:
+        return key in self._store or key in self._sets
+
     async def close(self) -> None:
         pass
 
@@ -846,6 +849,7 @@ class TestAccountDeletionLock:
         user = {"id": 555009, "username": "race_loser"}
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:race-loser-sid"] = json.dumps(user)
+        fr._sets["account_sessions:555009"] = {"race-loser-sid"}
 
         async def spy_delete_account(chat_id: int) -> None:
             pass
@@ -873,6 +877,7 @@ class TestAccountDeletionLock:
         user = {"id": 555002, "username": "del_user"}
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:delete-sid"] = json.dumps(user)
+        fr._sets["account_sessions:555002"] = {"delete-sid"}
 
         real_delete_account = auth_api.delete_account
         seen_status_at_call: list[str] = []
@@ -890,6 +895,43 @@ class TestAccountDeletionLock:
         assert seen_status_at_call == ["deleting"]
         assert asyncio.run(database.get_user(555002)) is None
 
+    def test_delete_account_route_revokes_every_device_session(
+        self, auth_client: TestClient
+    ) -> None:
+        """A stale-but-still-valid session on a second device must not survive
+        deletion: left alive, it could reach PUT /api/auth/email (a
+        pre-approval route) after the row is gone and re-create the account
+        via _upsert_minimal_user()."""
+        import src.auth.session as session_module
+        from src import database
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555010,
+                username="multi_device",
+                first_name="M",
+                last_name=None,
+                photo_url=None,
+            )
+        )
+        asyncio.run(database.set_user_status(555010, "approved"))
+        user = {"id": 555010, "username": "multi_device"}
+        sid_a = asyncio.run(session_module.mint(user))
+        sid_b = asyncio.run(session_module.mint(user))
+
+        resp = auth_client.delete("/api/auth/me", cookies={"vig_session": sid_a})
+        assert resp.status_code == 204
+
+        assert asyncio.run(session_module.resolve(sid_b)) is None
+
+        resurrect = auth_client.put(
+            "/api/auth/email",
+            cookies={"vig_session": sid_b},
+            json={"email": "resurrected@example.com"},
+        )
+        assert resurrect.status_code == 401
+        assert asyncio.run(database.get_user(555010)) is None
+
     def test_delete_account_route_failure_leaves_lock_for_retry(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -906,6 +948,7 @@ class TestAccountDeletionLock:
         user = {"id": 555003, "username": "fail_user"}
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:fail-sid"] = json.dumps(user)
+        fr._sets["account_sessions:555003"] = {"fail-sid"}
 
         async def failing_delete_account(chat_id: int) -> None:
             raise RuntimeError("simulated cleanup failure")

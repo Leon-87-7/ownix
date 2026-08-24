@@ -488,7 +488,13 @@ function DeleteAccountSection() {
           confirmDisabled={confirmText.trim().toLowerCase() !== 'delete'}
           onConfirm={handleDelete}
           trigger={
-            <button className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised">
+            <button
+              onClick={() => {
+                setConfirmText('');
+                setError(undefined);
+              }}
+              className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised"
+            >
               Delete my account
             </button>
           }

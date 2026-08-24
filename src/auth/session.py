@@ -22,8 +22,18 @@ _HANDOFF_TTL_SECONDS = 60
 
 _DASHBOARD_HANDOFF_PREFIX = "dashboard_handoff:"
 
+# Per-account index of minted session ids, so account deletion can invalidate
+# every device's session (not just the one that triggered deletion) — closes
+# the window where a stale second-device session could resurrect a just-deleted
+# account via a pre-approval route like PUT /api/auth/email.
+_ACCOUNT_SESSIONS_PREFIX = "account_sessions:"
+
 _redis: redis.Redis | None = None
 _memory: dict[str, tuple[str, float | None]] = {}
+# ponytail: memory backend is local-dev only (Redis backs prod) — no TTL on
+# this index, since dev processes restart often enough that unbounded growth
+# never matters in practice.
+_memory_account_sessions: dict[int, set[str]] = {}
 
 
 def _client() -> redis.Redis:
@@ -65,11 +75,19 @@ async def mint(user: dict[str, Any]) -> str:
     """Create a new session for user and return the opaque session_id."""
     session_id = secrets.token_urlsafe(32)
     key = f"{_SESSION_PREFIX}{session_id}"
+    tg_id = user.get("id")
     if _use_memory():
         _memory_set(key, json.dumps(user), ex=_TTL_SECONDS)
+        if tg_id is not None:
+            _memory_account_sessions.setdefault(int(tg_id), set()).add(session_id)
     else:
-        await _client().set(key, json.dumps(user), ex=_TTL_SECONDS)
-    log.info("session_minted", tg_id=user.get("id"))
+        client = _client()
+        await client.set(key, json.dumps(user), ex=_TTL_SECONDS)
+        if tg_id is not None:
+            index_key = f"{_ACCOUNT_SESSIONS_PREFIX}{tg_id}"
+            await client.sadd(index_key, session_id)
+            await client.expire(index_key, _TTL_SECONDS)
+    log.info("session_minted", tg_id=tg_id)
     return session_id
 
 
@@ -94,6 +112,27 @@ async def revoke(session_id: str) -> None:
     else:
         await _client().delete(key)
     log.info("session_revoked")
+
+
+async def revoke_account(tg_id: int) -> None:
+    """Revoke every session ever minted for tg_id, across all devices.
+
+    Used by account deletion: revoking only the triggering session leaves a
+    stale-but-valid session on another device able to reach pre-approval
+    routes (e.g. PUT /api/auth/email) and re-create the just-deleted account.
+    """
+    if _use_memory():
+        session_ids = _memory_account_sessions.pop(int(tg_id), set())
+        for session_id in session_ids:
+            _memory.pop(f"{_SESSION_PREFIX}{session_id}", None)
+    else:
+        client = _client()
+        index_key = f"{_ACCOUNT_SESSIONS_PREFIX}{tg_id}"
+        session_ids = await client.smembers(index_key)
+        if session_ids:
+            await client.delete(*(f"{_SESSION_PREFIX}{sid}" for sid in session_ids))
+        await client.delete(index_key)
+    log.info("account_sessions_revoked", tg_id=tg_id)
 
 
 async def _mint_token(prefix: str, value: str, ttl: int) -> str:
