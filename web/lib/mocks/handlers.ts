@@ -43,6 +43,10 @@ function mockDocumentJob(id: string): Job {
   };
 }
 
+// Outputs created via the clean/freestyle actions below, keyed by job ID —
+// so a reload after the action still shows the generated card.
+const generatedOutputs = new Map<string, DocumentOutput[]>();
+
 function mockDocumentOutputs(jobId: string): DocumentOutput[] {
   const outputs: DocumentOutput[] = [
     {
@@ -74,6 +78,7 @@ function mockDocumentOutputs(jobId: string): DocumentOutput[] {
       created_at: '2026-07-08T09:00:00Z',
     });
   }
+  outputs.push(...(generatedOutputs.get(jobId) ?? []));
   return outputs;
 }
 
@@ -141,17 +146,19 @@ return [
       return new HttpResponse(null, { status: 404 });
     }
     job.document_enriched_at = new Date().toISOString();
-    return HttpResponse.json(
-      {
-        id: 'mock-clean',
-        kind: 'clean',
-        title: 'Clean version',
-        preview: 'Cleaned Markdown version of the mocked parsed document.',
-        content_url: `/api/parsed/${params.id}/outputs/mock-clean`,
-        created_at: new Date().toISOString(),
-      },
-      { status: 201 },
-    );
+    const output: DocumentOutput = {
+      id: 'mock-clean',
+      kind: 'clean',
+      title: 'Clean version',
+      preview: 'Cleaned Markdown version of the mocked parsed document.',
+      content_url: `/api/parsed/${params.id}/outputs/mock-clean`,
+      created_at: new Date().toISOString(),
+    };
+    generatedOutputs.set(params.id as string, [
+      ...(generatedOutputs.get(params.id as string) ?? []).filter((o) => o.kind !== 'clean'),
+      output,
+    ]);
+    return HttpResponse.json(output, { status: 201 });
   }),
 
   http.post('/api/parsed/:id/freestyle', ({ params }) => {
@@ -160,17 +167,19 @@ return [
       return new HttpResponse(null, { status: 404 });
     }
     job.document_enriched_at = new Date().toISOString();
-    return HttpResponse.json(
-      {
-        id: 'mock-freestyle',
-        kind: 'freestyle',
-        title: 'Freestyle',
-        preview: 'Freestyle response for the mocked parsed document.',
-        content_url: `/api/parsed/${params.id}/outputs/mock-freestyle`,
-        created_at: new Date().toISOString(),
-      },
-      { status: 201 },
-    );
+    const output: DocumentOutput = {
+      id: 'mock-freestyle',
+      kind: 'freestyle',
+      title: 'Freestyle',
+      preview: 'Freestyle response for the mocked parsed document.',
+      content_url: `/api/parsed/${params.id}/outputs/mock-freestyle`,
+      created_at: new Date().toISOString(),
+    };
+    generatedOutputs.set(params.id as string, [
+      ...(generatedOutputs.get(params.id as string) ?? []).filter((o) => o.kind !== 'freestyle'),
+      output,
+    ]);
+    return HttpResponse.json(output, { status: 201 });
   }),
 
   http.get('/api/jobs/stats', ({ request }) => {
