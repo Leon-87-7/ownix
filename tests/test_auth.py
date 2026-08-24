@@ -953,6 +953,37 @@ class TestAccountDeletionLock:
             is None
         )
 
+    def test_reviewer_login_resumes_stuck_deletion_instead_of_minting_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """reviewer_login is a fourth session-minting login path (alongside
+        _login_telegram_user, miniapp_session, and redeem_handoff_login) —
+        it must not mint a session into, or resurrect via upsert_user, an
+        account whose row is mid-deletion."""
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_EMAIL", "reviewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_PASSWORD", "correct-horse")
+        monkeypatch.setattr("src.api.auth.settings.REVIEWER_LOGIN_USER_ID", 555005)
+
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555005, username="chrome_reviewer", first_name="R", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555005, "deleting"))
+
+        resp = auth_client.post(
+            "/api/auth/reviewer-login",
+            json={"email": "reviewer@example.com", "password": "correct-horse"},
+        )
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert resp.json() == {"ok": True, "account_deleted": True}
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+        assert asyncio.run(database.get_user(555005)) is None
+
     def test_set_email_rejected_during_deletion(self, auth_client: TestClient) -> None:
         """/email is pre-approval-reachable by design (middleware.py), so it
         bypasses the "deleting" lock too — a second session/device still

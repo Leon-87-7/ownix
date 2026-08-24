@@ -209,6 +209,16 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
         raise HTTPException(status_code=401, detail="Invalid reviewer credentials")
 
     reviewer_id = settings.REVIEWER_LOGIN_USER_ID
+    # See _login_telegram_user / miniapp_session: resume a deletion left
+    # mid-flight rather than minting a session into a half-deleted account.
+    # Must run before upsert_user — otherwise upsert_user would resurrect
+    # the row before this check ever sees "deleting". A not-yet-existing
+    # reviewer row safely reads "pending" (database.get_user_status), so
+    # this is a no-op on the very first reviewer login.
+    resumed = await _resume_deletion_if_stuck(reviewer_id)
+    if resumed is not None:
+        return resumed
+
     await database.upsert_user(
         tg_id=reviewer_id,
         username="chrome_reviewer",
