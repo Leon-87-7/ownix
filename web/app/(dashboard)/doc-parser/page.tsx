@@ -11,11 +11,9 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  FileCode2,
-  Sparkles,
-} from 'lucide-react';
+import { FileCode2, PencilSparkles } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badges';
+import { GeneratedBadge } from '@/components/ui/generated-badge';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
 import { FilterBar } from '@/components/ui/filter-bar';
@@ -32,6 +30,7 @@ type Job = {
   status: string;
   created_at: string;
   telegram_delivery?: 'off' | 'on' | 'retroactive';
+  document_enriched_at?: string | null;
 };
 
 const DOC_FORMAT_TABS = [
@@ -52,7 +51,9 @@ const FORMAT_BUCKETS: Record<string, readonly string[]> = {
 };
 
 function jobFormat(url: string): string {
-  const ext = url.includes('.') ? url.split('.').pop()!.toLowerCase() : '';
+  const ext = url.includes('.')
+    ? url.split('.').pop()!.toLowerCase()
+    : '';
   for (const [bucket, exts] of Object.entries(FORMAT_BUCKETS)) {
     if (exts.includes(ext)) return bucket;
   }
@@ -61,7 +62,17 @@ function jobFormat(url: string): string {
 
 export default function DocParserPage() {
   const { restricted } = useRestrictedMode();
-  if (restricted) return <RestrictedFacade icon={FileCode2} title="Docs">Docs ingestion turns PDFs and other files into parsed source material. Uploads and Telegram delivery toggles are locked in this read-only preview.</RestrictedFacade>;
+  if (restricted)
+    return (
+      <RestrictedFacade
+        icon={FileCode2}
+        title="Docs"
+      >
+        Docs ingestion turns PDFs and other files into parsed source
+        material. Uploads and Telegram delivery toggles are locked in
+        this read-only preview.
+      </RestrictedFacade>
+    );
   return <DocParserWorkspace />;
 }
 
@@ -79,7 +90,8 @@ function DocParserWorkspace() {
       const r = await fetch(
         `/api/jobs?content_type=document&limit=100${status ? `&status=${status}` : ''}`,
       );
-      if (!r.ok) throw new Error(`Documents request failed (${r.status})`);
+      if (!r.ok)
+        throw new Error(`Documents request failed (${r.status})`);
       const d = await r.json();
       setJobs(d.items ?? []);
     } catch {
@@ -110,7 +122,9 @@ function DocParserWorkspace() {
     () =>
       jobs.filter(
         (j) =>
-          (j.title || j.url).toLowerCase().includes(q.toLowerCase()) &&
+          (j.title || j.url)
+            .toLowerCase()
+            .includes(q.toLowerCase()) &&
           (!format || jobFormat(j.url) === format),
       ),
     [jobs, q, format],
@@ -123,7 +137,7 @@ function DocParserWorkspace() {
     }, {});
     return DOC_FORMAT_TABS.map((t) => ({
       ...t,
-      count: t.value === '' ? jobs.length : counts[t.value] ?? 0,
+      count: t.value === '' ? jobs.length : (counts[t.value] ?? 0),
     }));
   }, [jobs]);
 
@@ -192,7 +206,12 @@ function DocParserWorkspace() {
                   >
                     {j.title || j.url}
                   </Link>
-                  <Sparkles className="h-4 w-4 text-muted" />
+                  {j.document_enriched_at && (
+                    <GeneratedBadge
+                      icon={PencilSparkles}
+                      label="Enriched"
+                    />
+                  )}
                   <StatusBadge label={j.status} />
                   <TelegramToggle
                     jobId={j.id}

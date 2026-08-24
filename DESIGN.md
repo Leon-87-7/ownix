@@ -421,6 +421,21 @@ float. Overlays do.
 - **Active:** Raised plate + Index Amber text. This marks current location as the active place to continue.
 - **Mobile:** Collapse to a top bar or disclosure drawer. Keep styling identical across viewports.
 
+### Iconography
+
+- **Directional glyph:** `OwnixChevronRight` / `OwnixChevronDown` (`web/components/svg/ownix-chevron-*.tsx`) — the arrow stroke cut from the Ownix wordmark's "X", isolated and reused as the chevron. This is the one directional glyph in the system; it replaces generic arrow/chevron icons (e.g. vendor icon-library `ArrowRight`, `ChevronDown`, `MoveLeft`) everywhere a control points, opens, or navigates.
+- **Base directions:** Right is the base "forward" orientation, Down is the base "open/expand" orientation. Reverse either with a plain `rotate-180` transform — left is Right rotated, up is Down rotated. Never import a separate left/up glyph.
+- **Where it applies:** back links, next/back and step controls, disclosure/expand toggles, reorder controls, "scroll to top" — any control whose job is to point the user somewhere or toggle open/closed.
+- **Where it doesn't:** icons that aren't wayfinding — status/action glyphs (check, copy, trash), a keycap glyph inside a keyboard-shortcut hint, or a data-direction indicator (e.g. ascending/descending sort) stay on the vendor icon library.
+- **Rendering:** `fill="currentColor"`, sized via `h-*/w-*` on the instance (typically `h-3.5 w-3.5` to `h-5 w-5`) — the component carries no hardcoded dimensions.
+
+### Shimmer (in-flight acknowledgement)
+
+- **Rule:** Whenever a user action kicks off enrichment — Gemini generating, a job moving through the intake pipeline, a repo follow-up queued for analysis — the busy label carries `.ownix-shimmer` (`web/app/globals.css`): an animated gradient text-clip cycling signal → contrasignal. This is Ownix's acknowledgement that the request landed and is being worked, distinct from status color — the shimmer says _alive_, a `StatusBadge` beside it (if present) says _where_.
+- **Scope:** Any label whose whole job is "the system heard you and is working on it" — an in-flight intake status line, a "Generating…" / "Gemini is enriching…" button label, a "Queued: …" confirmation. Not a substitute for a stepper or percentage — nothing in the system measures enrichment progress, so a shimmering label states liveness, not completion fraction.
+- **Not the same as `.ownix-shimmer-bg` / `.ownix-shimmer-slow`:** the background-painted, ping-pong variant is a slower *resting* affordance ("there's something to look at here" — e.g. a tappable error strip), not an enrichment acknowledgement. Keep the two treatments semantically separate even though they share a gradient.
+- **Fallback:** `.ownix-shimmer` only fires under `prefers-reduced-motion: no-preference` (it works via `color: transparent` + background-clip); always let the element fall back to its own solid text color, never leave it unstyled under reduced motion.
+
 ### Summary Tiles
 
 Summary tiles answer “what changed in my Index?” without becoming hero metrics.
@@ -450,6 +465,8 @@ vocabulary. If the gradient animates, it must freeze to a static wash under
 - **Do** keep meta text at `#948e84` or lighter-on-dark so it remains WCAG AA.
 - **Do** provide full states for interactive components: default, hover, focus, active, disabled, loading, and error.
 - **Do** provide `prefers-reduced-motion: reduce` fallbacks for every animation.
+- **Do** use `OwnixChevronRight` / `OwnixChevronDown` (rotated as needed) for every wayfinding arrow — back, next, disclosure, reorder, scroll-to-top.
+- **Do** shimmer (`.ownix-shimmer`) the busy label whenever a user action triggers enrichment — the response should always read as acknowledged, never as a silently vanished button.
 
 ### Don't:
 
@@ -463,4 +480,5 @@ vocabulary. If the gradient animates, it must freeze to a static wash under
 - **Don't** lay out identical icon + heading + text card grids unless the content truly needs repeated cards.
 - **Don't** put tracked-uppercase eyebrows above sections. Uppercase mono is permitted only inside badges and table headers.
 - **Don't** exceed font weight 600, use display type in UI labels, or float resting cards on shadows.
+- **Don't** reach for a vendor icon library's arrow/chevron (`ArrowRight`, `ChevronDown`, `MoveLeft`, …) for a wayfinding control — that's what `OwnixChevron` is for.
 - **Don't** reach for a modal first. Prefer inline and progressive disclosure when it keeps the user in flow.

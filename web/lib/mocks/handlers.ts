@@ -21,6 +21,11 @@ const MOCK_DOCUMENT_JOB_IDS = new Set([
   '20260707_232015_218BFDA4',
 ]);
 
+// One of the two demo documents already has a 'clean' output, so the list's
+// GeneratedBadge (mirrors the real /api/jobs `document_enriched_at` subquery)
+// has something real to show.
+const MOCK_ENRICHED_DOCUMENT_JOB_ID = '20260707_232015_218BFDA4';
+
 function mockDocumentJob(id: string): Job {
   return {
     id,
@@ -33,11 +38,17 @@ function mockDocumentJob(id: string): Job {
     created_at: '2026-07-07 23:20:15',
     updated_at: '2026-07-07 23:22:10',
     completed_at: '2026-07-07T23:22:10Z',
+    document_enriched_at:
+      id === MOCK_ENRICHED_DOCUMENT_JOB_ID ? '2026-07-08T09:00:00Z' : null,
   };
 }
 
+// Outputs created via the clean/freestyle actions below, keyed by job ID —
+// so a reload after the action still shows the generated card.
+const generatedOutputs = new Map<string, DocumentOutput[]>();
+
 function mockDocumentOutputs(jobId: string): DocumentOutput[] {
-  return [
+  const outputs: DocumentOutput[] = [
     {
       id: 'mock-summary',
       kind: 'summary',
@@ -57,6 +68,18 @@ function mockDocumentOutputs(jobId: string): DocumentOutput[] {
       created_at: '2026-07-07T23:22:10Z',
     },
   ];
+  if (jobId === MOCK_ENRICHED_DOCUMENT_JOB_ID) {
+    outputs.push({
+      id: 'mock-clean',
+      kind: 'clean',
+      title: 'Clean version',
+      preview: 'Cleaned Markdown version of the mocked parsed document.',
+      content_url: `/api/parsed/${jobId}/outputs/mock-clean`,
+      created_at: '2026-07-08T09:00:00Z',
+    });
+  }
+  outputs.push(...(generatedOutputs.get(jobId) ?? []));
+  return outputs;
 }
 
 function mockDocumentOutputBody(outputId: string): string {
@@ -118,37 +141,45 @@ return [
   }),
 
   http.post('/api/parsed/:id/clean', ({ params }) => {
-    if (!canServeParsedDocument(params.id as string)) {
+    const job = findJob(params.id as string);
+    if (!job || job.content_type !== 'document') {
       return new HttpResponse(null, { status: 404 });
     }
-    return HttpResponse.json(
-      {
-        id: 'mock-clean',
-        kind: 'clean',
-        title: 'Clean version',
-        preview: 'Cleaned Markdown version of the mocked parsed document.',
-        content_url: `/api/parsed/${params.id}/outputs/mock-clean`,
-        created_at: new Date().toISOString(),
-      },
-      { status: 201 },
-    );
+    job.document_enriched_at = new Date().toISOString();
+    const output: DocumentOutput = {
+      id: 'mock-clean',
+      kind: 'clean',
+      title: 'Clean version',
+      preview: 'Cleaned Markdown version of the mocked parsed document.',
+      content_url: `/api/parsed/${params.id}/outputs/mock-clean`,
+      created_at: new Date().toISOString(),
+    };
+    generatedOutputs.set(params.id as string, [
+      ...(generatedOutputs.get(params.id as string) ?? []).filter((o) => o.kind !== 'clean'),
+      output,
+    ]);
+    return HttpResponse.json(output, { status: 201 });
   }),
 
   http.post('/api/parsed/:id/freestyle', ({ params }) => {
-    if (!canServeParsedDocument(params.id as string)) {
+    const job = findJob(params.id as string);
+    if (!job || job.content_type !== 'document') {
       return new HttpResponse(null, { status: 404 });
     }
-    return HttpResponse.json(
-      {
-        id: 'mock-freestyle',
-        kind: 'freestyle',
-        title: 'Freestyle',
-        preview: 'Freestyle response for the mocked parsed document.',
-        content_url: `/api/parsed/${params.id}/outputs/mock-freestyle`,
-        created_at: new Date().toISOString(),
-      },
-      { status: 201 },
-    );
+    job.document_enriched_at = new Date().toISOString();
+    const output: DocumentOutput = {
+      id: 'mock-freestyle',
+      kind: 'freestyle',
+      title: 'Freestyle',
+      preview: 'Freestyle response for the mocked parsed document.',
+      content_url: `/api/parsed/${params.id}/outputs/mock-freestyle`,
+      created_at: new Date().toISOString(),
+    };
+    generatedOutputs.set(params.id as string, [
+      ...(generatedOutputs.get(params.id as string) ?? []).filter((o) => o.kind !== 'freestyle'),
+      output,
+    ]);
+    return HttpResponse.json(output, { status: 201 });
   }),
 
   http.get('/api/jobs/stats', ({ request }) => {

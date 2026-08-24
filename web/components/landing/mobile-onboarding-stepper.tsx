@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { STEPS } from './onboarding-stepper';
 import { WordmarkMarquee } from './wordmark-marquee';
 import { GhostButton } from '@/components/ui/ghost-button';
@@ -166,9 +166,9 @@ export function MobileOnboardingStepper() {
               disabled={isFirst}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line bg-transparent px-4 text-button font-medium leading-none text-ink transition-ui hover:bg-raised active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted motion-reduce:active:scale-100"
             >
-              <ArrowLeft
+              <OwnixChevronRight
                 aria-hidden="true"
-                className="h-4 w-4"
+                className="h-4 w-4 rotate-180"
               />
               Back
             </button>
@@ -187,7 +187,7 @@ export function MobileOnboardingStepper() {
               className="group inline-flex h-11 items-center justify-center gap-2 rounded-md bg-signal px-4 text-button font-medium leading-none text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep active:scale-[0.96] motion-reduce:active:scale-100"
             >
               {isLast ? 'Review again' : 'Next'}
-              <ArrowRight
+              <OwnixChevronRight
                 aria-hidden="true"
                 className="h-4 w-4 transition-transform duration-200 ease-out-quart group-active:translate-x-1 motion-reduce:transition-none motion-reduce:group-active:translate-x-0"
               />

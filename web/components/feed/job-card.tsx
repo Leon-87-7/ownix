@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { BookmarkCheck } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badges";
 import { PlatformBadge } from "@/components/ui/platform-icon";
 import { DateTime } from "@/components/ui/date-time";
+import { GeneratedBadge } from "@/components/ui/generated-badge";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
-import { Tooltip } from "@/components/ui/tooltip";
 import { buildJobHref } from "@/lib/job-detail-utils";
 
 export interface JobSummary {
@@ -18,34 +17,6 @@ export interface JobSummary {
   thumbnail_url?: string | null;
   thumbnail_kind?: "landscape" | "portrait" | null;
   checklists_generated_at?: string | null;
-}
-
-// Row cards get the PlatformBadge shell (bordered square); the grid card
-// overlays a haloed icon directly on the thumbnail so it stays legible across
-// light, dark, and busy image pixels. Either way the tooltip + aria-label is
-// the text label DESIGN.md requires (status never relies on color/shape alone)
-// — contrasignal-bright, not amber, since this marks a fact, not an action.
-export function ChecklistBadge({ bare = false }: { bare?: boolean }) {
-  const icon = (
-    <BookmarkCheck
-      size={bare ? 24 : 14}
-      aria-hidden="true"
-    />
-  );
-  return (
-    <Tooltip content="Checklist generated">
-      <span
-        className={
-          bare
-            ? "inline-flex h-8 w-8 items-center justify-center text-contrasignal-bright [filter:drop-shadow(0_1px_1px_rgba(0,0,0,0.98))_drop-shadow(0_0_4px_rgba(0,0,0,0.92))_drop-shadow(0_0_1px_rgba(255,255,255,0.72))]"
-            : "inline-flex h-6 w-6 items-center justify-center rounded border border-line bg-canvas text-contrasignal-bright"
-        }
-        aria-label="Checklist generated"
-      >
-        {icon}
-      </span>
-    </Tooltip>
-  );
 }
 
 interface JobCardProps {
@@ -78,7 +49,7 @@ export function JobCard({ job, contentType, status }: JobCardProps) {
           <PlatformBadge url={job.url} contentType={job.content_type} />
           {job.checklists_generated_at && (
             <span className="pointer-events-auto">
-              <ChecklistBadge />
+              <GeneratedBadge />
             </span>
           )}
         </div>
