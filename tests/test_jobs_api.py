@@ -496,7 +496,9 @@ def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         await database.init_db()
         await database.set_user_status(USER_A["id"], "approved")
         await database.set_user_status(USER_B["id"], "approved")
-        return await session_module.mint(USER_A), await session_module.mint(USER_B)
+        session_a = await session_module.mint(USER_A)
+        session_b = await session_module.mint(USER_B)
+        return session_a, session_b
 
     from src.api.jobs import jobs_router
     from src.auth.middleware import SessionMiddleware

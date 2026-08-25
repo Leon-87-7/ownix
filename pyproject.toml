@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers --timeout=60"
 markers = [
     "integration: tests that hit real external APIs (gated behind RUN_INTEGRATION=1)",
 ]

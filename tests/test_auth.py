@@ -573,6 +573,10 @@ class TestSessionMiddleware:
         monkeypatch.setattr("src.api.auth.settings.DEV_LOGIN_ENABLED", True)
         monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
         monkeypatch.setattr("src.api.auth.random.randint", lambda _start, _end: 123456791)
+        # Secure=True (the default — see SESSION_COOKIE_SECURE in src/config.py) means
+        # httpx's cookie jar won't resend the login cookie on this test's second, plain
+        # http://testserver request, so the /email PUT below would look unauthenticated.
+        monkeypatch.setattr("src.api.auth.settings.SESSION_COOKIE_SECURE", False)
 
         login = auth_client.post("/api/auth/dev-login")
         assert login.status_code == 200
