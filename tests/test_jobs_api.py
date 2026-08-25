@@ -496,7 +496,16 @@ def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         await database.init_db()
         await database.set_user_status(USER_A["id"], "approved")
         await database.set_user_status(USER_B["id"], "approved")
-        return await session_module.mint(USER_A), await session_module.mint(USER_B)
+        session_a = await session_module.mint(USER_A)
+        session_b = await session_module.mint(USER_B)
+        # mint() may lazily create a real redis client bound to *this*
+        # asyncio.run() loop, which closes the moment _setup() returns. Drop
+        # it now (not session_module.close(): that also clears the in-memory
+        # store) so this test's own TestClient requests — running in a third,
+        # separate event loop via starlette's anyio portal — create their own
+        # fresh, correctly-scoped client instead of reusing a dead one.
+        session_module._redis = None
+        return session_a, session_b
 
     from src.api.jobs import jobs_router
     from src.auth.middleware import SessionMiddleware
