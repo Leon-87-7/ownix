@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import secrets
 import time
@@ -37,9 +38,26 @@ _memory_account_sessions: dict[int, set[str]] = {}
 
 
 def _client() -> redis.Redis:
+    """Return the module-level Redis client, recreating it if the event loop
+    that owns it has moved on. A client is a set of sockets bound to the loop
+    running when it was first created; reusing it after that loop closes
+    raises `RuntimeError: Event loop is closed`. Long-running processes (the
+    API, the worker) run one loop for their whole lifetime so this never
+    triggers there, but anything that opens a new loop per call — notably
+    starlette's TestClient, which spins up a fresh loop per request when not
+    used as a context manager — needs the client re-bound each time.
+
+    The owning loop is tagged on the client instance itself (not a
+    module-level side-channel) so a client swapped in directly — e.g. tests
+    monkeypatching `_redis` to a fake — is never second-guessed here: it
+    carries no tag, so it's returned as-is.
+    """
     global _redis
-    if _redis is None:
+    loop = asyncio.get_running_loop()
+    owning_loop = getattr(_redis, "_vig_owning_loop", None) if _redis is not None else None
+    if _redis is None or (owning_loop is not None and owning_loop is not loop):
         _redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        _redis._vig_owning_loop = loop
     return _redis
 
 
