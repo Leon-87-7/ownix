@@ -27,7 +27,10 @@ let vocabularyPromise: Promise<TagSummary[]> | null = null;
 export function fetchVocabulary(force = false): Promise<TagSummary[]> {
   if (force || !vocabularyPromise) {
     vocabularyPromise = fetch('/api/controls/tags', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to fetch tag vocabulary (${r.status})`);
+        return r.json();
+      })
       .then(asTags)
       .catch(() => {
         vocabularyPromise = null;

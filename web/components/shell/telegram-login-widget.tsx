@@ -167,6 +167,7 @@ export function TelegramLoginWidget({
             ? 'Reviewer access is disabled.'
             : 'Reviewer sign-in failed. Check the email and code.',
       }),
+      false,
     );
   }
 

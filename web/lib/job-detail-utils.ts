@@ -147,7 +147,8 @@ export function objectToMarkdown(obj: Record<string, unknown>, level: number): s
 export function templateAnalysisToMarkdown(raw: string): string {
   let parsed: unknown
   try { parsed = JSON.parse(raw) } catch { return raw }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return String(parsed)
+  if (Array.isArray(parsed)) return arrayToMarkdown(parsed)
+  if (parsed === null || typeof parsed !== 'object') return String(parsed)
   return objectToMarkdown(parsed as Record<string, unknown>, 3)
 }
 
