@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { startPolling } from '@/lib/polling';
+import { IN_FLIGHT_STATUSES, startPolling } from '@/lib/polling';
 import type { JobSummary } from '@/components/feed/job-card';
 import type { IntakeResponseShape } from '@/lib/hooks/useIntake';
-
-/** Statuses that mean "still working" — mirrors `useInFlightPolling`. */
-const IN_FLIGHT = new Set(['pending', 'queued', 'processing', 'transcript_done', 'enriching']);
 
 const STORAGE_KEY = 'ownix.intake.thread';
 
@@ -127,7 +124,7 @@ export function useIntakeThread() {
         if (!i.response.job_id) return true;
         // `undefined` means "not resolved yet" — keep polling until it is.
         if (i.job === undefined) return false;
-        return i.job === null || !IN_FLIGHT.has(i.job.status);
+        return i.job === null || !IN_FLIGHT_STATUSES.has(i.job.status);
       });
     return startPolling(refresh, isIdle, 10_000);
   }, [hydrated, refresh]);

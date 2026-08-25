@@ -1,15 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { startPolling } from '@/lib/polling';
+import { IN_FLIGHT_STATUSES, startPolling } from '@/lib/polling';
 import type { JobSummary } from '@/components/feed/job-card';
-
-const IN_FLIGHT_STATUSES = new Set([
-  'pending',
-  'processing',
-  'enriching',
-  'transcript_done',
-]);
 
 export function useInFlightPolling(jobs: JobSummary[], reload: () => Promise<void>) {
   const jobsRef = useRef(jobs);

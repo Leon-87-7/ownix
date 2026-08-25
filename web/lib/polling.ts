@@ -1,3 +1,12 @@
+/** Job statuses that mean "still working" — the single source of truth for in-flight polling. */
+export const IN_FLIGHT_STATUSES = new Set([
+  'pending',
+  'queued',
+  'processing',
+  'transcript_done',
+  'enriching',
+]);
+
 /**
  * startPolling — calls fetchFn on a fixed interval.
  * Automatically stops when isIdleFn() returns true.

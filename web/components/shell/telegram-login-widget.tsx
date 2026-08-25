@@ -50,47 +50,77 @@ export function TelegramLoginWidget({
     process.env.NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED === '1' ||
     process.env.NEXT_PUBLIC_REVIEWER_LOGIN_ENABLED === 'true';
 
-  const authenticate = useCallback(async (user: TelegramUser) => {
-    lastAuthUser.current = user;
-    setAuthState('pending');
-    setAuthError(null);
-    setCanRetry(false);
+  /**
+   * Owns the pending/error state transitions shared by all three sign-in
+   * paths below. `catchNetworkRetryable` preserves each path's original
+   * behavior on a network failure (dev login never offered Retry there).
+   */
+  const runAuthAttempt = useCallback(
+    async (
+      doFetch: () => Promise<Response>,
+      onSuccess: () => void,
+      statusToError: (status: number) => { message: string; retryable: boolean },
+      catchNetworkRetryable = true,
+    ) => {
+      setAuthState('pending');
+      setAuthError(null);
+      setCanRetry(false);
 
-    try {
-      const res = await fetch('/api/auth/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(user),
-      });
-
-      if (res.ok) {
-        // Hard nav, not router.replace: the (dashboard) layout's restricted
-        // flag is derived from cookies server-side, and a soft nav can reuse
-        // the Router Cache entry seeded by an earlier anonymous/restricted
-        // visit to /feed, landing back on the stale pre-login render.
-        window.location.href = consumePostLoginRedirect();
-        return;
+      try {
+        const res = await doFetch();
+        if (res.ok) {
+          onSuccess();
+          return;
+        }
+        const { message, retryable } = statusToError(res.status);
+        setAuthState('error');
+        setCanRetry(retryable);
+        setAuthError(message);
+      } catch {
+        setAuthState('error');
+        setCanRetry(catchNetworkRetryable);
+        setAuthError(
+          'We could not reach the login service. Check your connection and try again.',
+        );
       }
+    },
+    [],
+  );
 
-      const retryable = res.status >= 500;
-      if (!retryable) lastAuthUser.current = null;
-      setAuthState('error');
-      setCanRetry(retryable);
-      setAuthError(
-        res.status === 401
-          ? 'Telegram could not verify this sign-in. Use the Telegram button again.'
-          : retryable
-            ? 'We could not complete sign-in. Try again.'
-            : 'We could not complete sign-in. Use the Telegram button again.',
+  const authenticate = useCallback(
+    (user: TelegramUser) => {
+      lastAuthUser.current = user;
+      return runAuthAttempt(
+        () =>
+          fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(user),
+          }),
+        () => {
+          // Hard nav, not router.replace: the (dashboard) layout's restricted
+          // flag is derived from cookies server-side, and a soft nav can reuse
+          // the Router Cache entry seeded by an earlier anonymous/restricted
+          // visit to /feed, landing back on the stale pre-login render.
+          window.location.href = consumePostLoginRedirect();
+        },
+        (status) => {
+          const retryable = status >= 500;
+          if (!retryable) lastAuthUser.current = null;
+          return {
+            retryable,
+            message:
+              status === 401
+                ? 'Telegram could not verify this sign-in. Use the Telegram button again.'
+                : retryable
+                  ? 'We could not complete sign-in. Try again.'
+                  : 'We could not complete sign-in. Use the Telegram button again.',
+          };
+        },
       );
-    } catch {
-      setAuthState('error');
-      setCanRetry(true);
-      setAuthError(
-        'We could not reach the login service. Check your connection and try again.',
-      );
-    }
-  }, []);
+    },
+    [runAuthAttempt],
+  );
 
   function retryAuth() {
     if (lastAuthUser.current) {
@@ -98,62 +128,47 @@ export function TelegramLoginWidget({
     }
   }
 
-  async function devLogin() {
-    setAuthState('pending');
-    setAuthError(null);
-    setCanRetry(false);
-
-    try {
-      const res = await fetch('/api/auth/dev-login', { method: 'POST' });
-      if (res.ok) {
+  function devLogin() {
+    return runAuthAttempt(
+      () => fetch('/api/auth/dev-login', { method: 'POST' }),
+      () => {
         window.location.href = '/feed';
-        return;
-      }
-      setAuthState('error');
-      setAuthError(
-        res.status === 404
-          ? 'Dev login is disabled. Set DEV_LOGIN_ENABLED=true in the backend .env.local and restart uvicorn.'
-          : 'Dev login failed. Check the backend log and try again.',
-      );
-    } catch {
-      setAuthState('error');
-      setAuthError(
-        'We could not reach the login service. Check your connection and try again.',
-      );
-    }
+      },
+      (status) => ({
+        retryable: false,
+        message:
+          status === 404
+            ? 'Dev login is disabled. Set DEV_LOGIN_ENABLED=true in the backend .env.local and restart uvicorn.'
+            : 'Dev login failed. Check the backend log and try again.',
+      }),
+      false,
+    );
   }
 
-  async function reviewerLogin(event: FormEvent<HTMLFormElement>) {
+  function reviewerLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAuthState('pending');
-    setAuthError(null);
-    setCanRetry(false);
-
-    try {
-      const res = await fetch('/api/auth/reviewer-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: reviewerEmail,
-          password: reviewerPassword,
+    return runAuthAttempt(
+      () =>
+        fetch('/api/auth/reviewer-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: reviewerEmail,
+            password: reviewerPassword,
+          }),
         }),
-      });
-      if (res.ok) {
+      () => {
         window.location.href = consumePostLoginRedirect();
-        return;
-      }
-      setAuthState('error');
-      setAuthError(
-        res.status === 404
-          ? 'Reviewer access is disabled.'
-          : 'Reviewer sign-in failed. Check the email and code.',
-      );
-    } catch {
-      setAuthState('error');
-      setAuthError(
-        'We could not reach the login service. Check your connection and try again.',
-      );
-    }
+      },
+      (status) => ({
+        retryable: false,
+        message:
+          status === 404
+            ? 'Reviewer access is disabled.'
+            : 'Reviewer sign-in failed. Check the email and code.',
+      }),
+      false,
+    );
   }
 
   useEffect(() => {

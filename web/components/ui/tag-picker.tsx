@@ -25,6 +25,7 @@ import {
 import type { TagFormState } from '@/lib/hooks/useTagList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { TagForm } from '@/components/ui/tag-form';
 
 interface TagSummary {
   id: string;
@@ -258,7 +259,7 @@ export function TagMenu({
   );
 }
 
-/** Dense create-tag modal with a preset-swatch color picker. */
+/** Create-tag modal — reuses the same editor as the Controls page and Intake console. */
 function CreateTagModal({
   onCreate,
   onClose,
@@ -266,34 +267,6 @@ function CreateTagModal({
   onCreate: (values: TagFormState) => Promise<void>;
   onClose: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [meaning, setMeaning] = useState('');
-  const [color, setColor] = useState(DEFAULT_COLOR);
-  const [icon, setIcon] = useState<string>('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(undefined);
-    try {
-      await onCreate({
-        name,
-        meaning,
-        color,
-        icon: icon || undefined,
-      });
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSubmitting(false);
-    }
-  }
-
-  const inputCls =
-    'w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none';
-
   return (
     <Dialog
       open
@@ -301,92 +274,17 @@ function CreateTagModal({
     >
       <DialogContent>
         <DialogTitle>Create tag</DialogTitle>
-        <form
-          onSubmit={handleSubmit}
-          className="mt-4 space-y-3"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex flex-1 flex-col gap-1">
-              <label className="text-xs font-medium text-body">
-                Name
-              </label>
-              {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-              <input
-                autoFocus
-                type="text"
-                required
-                maxLength={80}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Tag name"
-                className={inputCls}
-              />
-            </div>
-            <div className="flex flex-[1.4] flex-col gap-1">
-              <label className="text-xs font-medium text-body">
-                Meaning
-              </label>
-              <input
-                type="text"
-                maxLength={500}
-                value={meaning}
-                onChange={(e) => setMeaning(e.target.value)}
-                placeholder="What this tag means…"
-                className={inputCls}
-              />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-body">
-              Color
-            </label>
-            <div className="mx-auto grid w-fit grid-cols-6 gap-1.5 p-2 sm:grid-cols-9">
-              {PRESET_COLORS.map((c) => {
-                const selected = c === color;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    aria-label={`Color ${c}`}
-                    aria-pressed={selected}
-                    className={`h-5 w-5 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-1 ring-offset-surface' : 'hover:scale-110'}`}
-                    style={{ backgroundColor: c }}
-                  />
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-body">
-              Icon (optional)
-            </label>
-            <IconPicker
-              value={icon}
-              color={color}
-              onSelect={(next) => setIcon(next ?? '')}
-            />
-          </div>
-          {error && (
-            <p className="text-xs text-status-error">{error}</p>
-          )}
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-8 rounded-md px-3.5 text-button font-medium text-muted transition-ui hover:bg-raised hover:text-ink"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
-            >
-              {submitting ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
+        <div className="mt-4">
+          <TagForm
+            initial={{ name: '', meaning: '', color: DEFAULT_COLOR }}
+            onSubmit={async (values) => {
+              await onCreate(values);
+              onClose();
+            }}
+            onCancel={onClose}
+            submitLabel="Create"
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -19,7 +19,7 @@ export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; ren
   { key: 'ai_action_points', label: 'Action Points', render: 'list' },
   { key: 'ai_tools', label: 'Tools', render: 'list' },
   { key: 'ai_market_data', label: 'Market Data', render: 'text' },
-  { key: 'promise_gap', label: 'Promise Gap', render: 'text' },
+  { key: 'promise_gap', label: 'Promise Gap', render: 'json' },
   { key: 'template_analysis', label: 'Template Analysis', render: 'json' },
 ]
 
@@ -147,7 +147,8 @@ export function objectToMarkdown(obj: Record<string, unknown>, level: number): s
 export function templateAnalysisToMarkdown(raw: string): string {
   let parsed: unknown
   try { parsed = JSON.parse(raw) } catch { return raw }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return String(parsed)
+  if (Array.isArray(parsed)) return arrayToMarkdown(parsed)
+  if (parsed === null || typeof parsed !== 'object') return String(parsed)
   return objectToMarkdown(parsed as Record<string, unknown>, 3)
 }
 

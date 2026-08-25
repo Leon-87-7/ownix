@@ -24,10 +24,13 @@ function linkTagsPath(linkId: string, tagId?: string): string {
 // mounts 100 clusters across the two responsive branches). Invalidated on
 // tag creation so new tags appear everywhere.
 let vocabularyPromise: Promise<TagSummary[]> | null = null;
-function fetchVocabulary(force = false): Promise<TagSummary[]> {
+export function fetchVocabulary(force = false): Promise<TagSummary[]> {
   if (force || !vocabularyPromise) {
     vocabularyPromise = fetch('/api/controls/tags', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to fetch tag vocabulary (${r.status})`);
+        return r.json();
+      })
       .then(asTags)
       .catch(() => {
         vocabularyPromise = null;

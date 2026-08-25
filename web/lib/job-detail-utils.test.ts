@@ -183,8 +183,16 @@ describe('templateAnalysisToMarkdown', () => {
     expect(templateAnalysisToMarkdown('null')).toBe('null')
   })
 
-  it('returns String(parsed) for a JSON array', () => {
-    expect(templateAnalysisToMarkdown('["a","b"]')).toBe('a,b')
+  it('renders a JSON array as markdown', () => {
+    expect(templateAnalysisToMarkdown('["a","b"]')).toBe('- a\n- b')
+  })
+
+  it('renders a top-level object array without stringifying the objects', () => {
+    const result = templateAnalysisToMarkdown(
+      JSON.stringify([{ tool: 'hammer' }, { tool: 'saw' }]),
+    )
+    expect(result).toBe('1. Tool: hammer\n2. Tool: saw')
+    expect(result).not.toContain('[object Object]')
   })
 })
 

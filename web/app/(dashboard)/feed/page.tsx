@@ -257,10 +257,6 @@ function FeedPageContent() {
     setOauthResult,
   ]);
 
-  const refreshFeed = useCallback(async () => {
-    await reload();
-  }, [reload]);
-
   useEffect(() => {
     setCtFilter(urlContentType);
   }, [urlContentType, setCtFilter]);
@@ -540,7 +536,7 @@ function FeedPageContent() {
         recoveryPanel={
           <RecoveryPanel
             contentType={ctFilter}
-            onRecovered={refreshFeed}
+            onRecovered={reload}
             active={!showingLinks}
           />
         }

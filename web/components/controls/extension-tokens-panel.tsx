@@ -3,17 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { CopyButton } from '@/components/ui/copy-button';
+import { DateTime } from '@/components/ui/date-time';
 import {
   createPairingCode,
   listExtensionTokens,
   revokeExtensionToken,
   type ExtensionToken,
 } from '@/lib/hooks/useExtensionTokens';
-
-function formatTimestamp(seconds: number | null): string {
-  if (seconds == null) return 'Never';
-  return new Date(seconds * 1000).toLocaleString();
-}
 
 /** Chrome extension pairing + active-token management (issue #479). */
 export function ExtensionTokensPanel() {
@@ -135,7 +131,11 @@ export function ExtensionTokensPanel() {
               >
                 <span className="text-body">
                   {token.label ?? 'Unnamed device'} — last used:{' '}
-                  {formatTimestamp(token.last_used_at)}
+                  {token.last_used_at == null ? (
+                    'Never'
+                  ) : (
+                    <DateTime iso={new Date(token.last_used_at * 1000).toISOString()} />
+                  )}
                 </span>
                 <button
                   type="button"
