@@ -577,10 +577,11 @@ async def test_allowed_domains_migration_idempotent(tmp_path, monkeypatch) -> No
 async def test_migration_adds_allowed_domains_to_existing_db(tmp_path, monkeypatch) -> None:
     """A DB at the previous user_version must gain allowed_domains after migration."""
     db_file = str(tmp_path / "pre_allow.db")
-    # Build a DB pinned at user_version = N-1 (the version just before this migration).
     from src import database
 
-    target_version = len(database._MIGRATIONS) - 1
+    # allowed_domains is added by the v3->v4 migration (fixed index — NOT
+    # len(_MIGRATIONS) - 1, which drifts as later migrations are appended).
+    target_version = 3
     async with aiosqlite.connect(db_file) as conn:
         await conn.execute(
             "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "

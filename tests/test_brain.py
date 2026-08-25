@@ -210,10 +210,11 @@ async def test_soft_dedup_seen_count():
                 """
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
+                    chat_id INTEGER,
                     url TEXT,
                     drive_url TEXT
                 );
-                INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_001', 1, 'https://yt.com/watch?v=1', NULL);
                 """
             )
             await conn.commit()
@@ -278,10 +279,11 @@ async def test_touch_existing_link_updates_drive_file_in_place():
                 """
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
+                    chat_id INTEGER,
                     url TEXT,
                     drive_url TEXT
                 );
-                INSERT INTO jobs (id, url, drive_url) VALUES ('job_001', 'https://yt.com/watch?v=1', NULL);
+                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_001', 1, 'https://yt.com/watch?v=1', NULL);
                 """
             )
             await conn.commit()
@@ -407,8 +409,8 @@ async def test_normalized_url_dedup_variants():
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
             await conn.executescript("""
-                CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT);
-                INSERT INTO jobs (id, url, drive_url) VALUES ('job_norm', 'https://yt.com/watch?v=1', NULL);
+                CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id INTEGER, url TEXT, drive_url TEXT);
+                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_norm', 1, 'https://yt.com/watch?v=1', NULL);
             """)
             await conn.commit()
 

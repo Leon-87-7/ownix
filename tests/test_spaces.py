@@ -69,6 +69,10 @@ def spaces_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient
     # Fake the session store so the middleware resolves cookies without Redis.
     import src.auth.session as session_module
 
+    # resolve() reads the in-process _memory dict instead of _redis when
+    # SESSION_BACKEND=memory (this machine's local-dev default) — force the
+    # redis-backed path so the FakeRedis seeded below is actually consulted.
+    monkeypatch.setattr(session_module.settings, "SESSION_BACKEND", "redis")
     fr = FakeRedis()
     monkeypatch.setattr(session_module, "_redis", fr)
 
