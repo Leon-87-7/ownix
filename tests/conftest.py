@@ -54,6 +54,23 @@ def _reset_rate_limit():
     rate_limit.reset()
 
 
+@pytest.fixture(autouse=True)
+def _reset_session_redis_client():
+    """A real `redis.asyncio.Redis` client is bound to the event loop that
+    created it. `src.auth.session._redis` is a bare module-level singleton
+    with no per-test teardown, so a client created via a real
+    SESSION_BACKEND=redis path in one test (CI's default — there's no local
+    `.env` there to override it to "memory") silently persists into the next
+    test's own event loop and crashes with `RuntimeError: Event loop is
+    closed` the moment it's next used. Drop the reference after every test
+    rather than closing it gracefully — closing it from an unrelated loop
+    hits the exact same "loop is closed" trap it's meant to avoid."""
+    yield
+    import src.auth.session as session_module
+
+    session_module._redis = None
+
+
 @pytest.fixture
 def tiny_pdf() -> bytes:
     """A minimal valid one-page PDF containing the text 'Hello Vig'."""
