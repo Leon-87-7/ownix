@@ -496,7 +496,15 @@ def jobs_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         await database.init_db()
         await database.set_user_status(USER_A["id"], "approved")
         await database.set_user_status(USER_B["id"], "approved")
-        return await session_module.mint(USER_A), await session_module.mint(USER_B)
+        session_a = await session_module.mint(USER_A)
+        session_b = await session_module.mint(USER_B)
+        # When SESSION_BACKEND=redis (CI's default with no local .env), mint()
+        # lazily creates a real client bound to *this* asyncio.run() loop, which
+        # closes when _setup() returns. Close it here so the module-level
+        # singleton doesn't outlive its loop — the test body's own event loop
+        # then lazily creates a fresh, correctly-scoped client on first use.
+        await session_module.close()
+        return session_a, session_b
 
     from src.api.jobs import jobs_router
     from src.auth.middleware import SessionMiddleware
