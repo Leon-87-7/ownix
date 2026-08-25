@@ -19,7 +19,7 @@ export const ENRICHMENT_FIELDS: Array<{ key: keyof JobDetail; label: string; ren
   { key: 'ai_action_points', label: 'Action Points', render: 'list' },
   { key: 'ai_tools', label: 'Tools', render: 'list' },
   { key: 'ai_market_data', label: 'Market Data', render: 'text' },
-  { key: 'promise_gap', label: 'Promise Gap', render: 'text' },
+  { key: 'promise_gap', label: 'Promise Gap', render: 'json' },
   { key: 'template_analysis', label: 'Template Analysis', render: 'json' },
 ]
 

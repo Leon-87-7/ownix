@@ -710,6 +710,22 @@ function CardDownloadButton({
   );
 }
 
+function CardOpenButton({ href, label }: { href: string; label: string }) {
+  return (
+    <Tooltip content={label}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={label}
+        className={CARD_ACTION_BUTTON}
+      >
+        <OwnixShareIcon className="h-4 w-4" aria-hidden="true" />
+      </a>
+    </Tooltip>
+  );
+}
+
 // Transcript preview card - mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
@@ -736,6 +752,9 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           }
           label="Download transcript"
         />
+        {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
+          <CardOpenButton href={job.drive_url} label="Open in Drive" />
+        )}
       </div>
       <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
         {transcript}
@@ -794,6 +813,9 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
                 }
                 label="Download checklist"
               />
+              {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
+                <CardOpenButton href={job.drive_url} label="Open in Drive" />
+              )}
             </>
           )}
           <button
