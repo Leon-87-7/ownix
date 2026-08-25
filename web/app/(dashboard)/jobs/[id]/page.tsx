@@ -37,6 +37,7 @@ import {
   parseLinks,
   jobScopeQuery,
   downloadMarkdownFile,
+  isSafeHttpUrl,
 } from '@/lib/job-detail-utils';
 import { useChecklists } from '@/lib/hooks/useChecklists';
 import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
@@ -752,7 +753,7 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           }
           label="Download transcript"
         />
-        {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
+        {job.drive_url && isSafeHttpUrl(job.drive_url) && (
           <CardOpenButton href={job.drive_url} label="Open in Drive" />
         )}
       </div>
@@ -813,9 +814,6 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
                 }
                 label="Download checklist"
               />
-              {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
-                <CardOpenButton href={job.drive_url} label="Open in Drive" />
-              )}
             </>
           )}
           <button
