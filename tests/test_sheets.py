@@ -69,7 +69,7 @@ def test_append_sync_builds_tab_qualified_range(monkeypatch) -> None:
     mock_values.append.assert_called_once()
     call_kwargs = mock_values.append.call_args.kwargs
     assert call_kwargs["spreadsheetId"] == "wb-123"
-    assert call_kwargs["range"] == "My Tab!A1"
+    assert call_kwargs["range"] == "'My Tab'!A1"
     assert call_kwargs["body"] == {"values": [["a", "b", "c"]]}
 
 
@@ -103,7 +103,7 @@ async def test_append_prd_row_routes_to_mini_prd_tab(monkeypatch) -> None:
     mock_values.append.assert_called_once()
     call_kwargs = mock_values.append.call_args.kwargs
     assert call_kwargs["spreadsheetId"] == "wb-123"
-    assert call_kwargs["range"] == "mini PRD!A1"
+    assert call_kwargs["range"] == "'mini PRD'!A1"
 
 
 @pytest.mark.asyncio
@@ -113,7 +113,7 @@ async def test_append_short_row_routes_to_short_tab(monkeypatch) -> None:
 
     captured: list = []
 
-    def fake_append_sync(tab_name, values):
+    def fake_append_sync(tab_name, values, chat_id=None):
         captured.append((tab_name, values))
 
     with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
@@ -131,7 +131,7 @@ async def test_append_long_row_routes_to_long_tab(monkeypatch) -> None:
 
     captured: list = []
 
-    def fake_append_sync(tab_name, values):
+    def fake_append_sync(tab_name, values, chat_id=None):
         captured.append((tab_name, values))
 
     with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
@@ -202,7 +202,7 @@ async def test_append_repo_row_produces_20_columns() -> None:
     async def patched_to_thread(fn, *args):
         return fn(*args)
 
-    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+    with _patch("src.services.sheets._append_sync", lambda t, v, c=None: (rows.append(v), 5)[1]), \
          _patch("asyncio.to_thread", patched_to_thread):
         await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
 
@@ -217,7 +217,7 @@ async def test_append_repo_row_tech_stack_newline_joined() -> None:
     async def patched_to_thread(fn, *args):
         return fn(*args)
 
-    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+    with _patch("src.services.sheets._append_sync", lambda t, v, c=None: (rows.append(v), 5)[1]), \
          _patch("asyncio.to_thread", patched_to_thread):
         await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
 
@@ -234,7 +234,7 @@ async def test_append_repo_row_curriculum_hooks_serialization() -> None:
     async def patched_to_thread(fn, *args):
         return fn(*args)
 
-    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+    with _patch("src.services.sheets._append_sync", lambda t, v, c=None: (rows.append(v), 5)[1]), \
          _patch("asyncio.to_thread", patched_to_thread):
         await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, _SHEETS_BUNDLE)
 
@@ -252,7 +252,7 @@ async def test_append_repo_row_archived_is_TRUE_FALSE_string() -> None:
     async def patched_to_thread(fn, *args):
         return fn(*args)
 
-    with _patch("src.services.sheets._append_sync", lambda t, v: (rows.append(v), 5)[1]), \
+    with _patch("src.services.sheets._append_sync", lambda t, v, c=None: (rows.append(v), 5)[1]), \
          _patch("asyncio.to_thread", patched_to_thread):
         await append_repo_row(_SHEETS_JOB, _SHEETS_ANALYSIS, bundle)
 

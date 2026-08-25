@@ -154,7 +154,8 @@ async def test_sheets_append_short_row(monkeypatch) -> None:
     mock_service = MagicMock()
     mock_service.spreadsheets.return_value = mock_spreadsheets
 
-    with patch("src.services.sheets._build_service", return_value=mock_service):
+    with patch("src.services.sheets._build_service", return_value=mock_service), \
+         patch("src.config.Settings.export_blocked", new=AsyncMock(return_value=False)):
         await sheets_svc.append_short_row(
             {
                 "id": "job1",
@@ -171,7 +172,7 @@ async def test_sheets_append_short_row(monkeypatch) -> None:
     mock_values.append.assert_called_once()
     call_kwargs = mock_values.append.call_args.kwargs
     assert call_kwargs["spreadsheetId"] == "consolidated-sheet-id"
-    assert call_kwargs["range"] == "Short Video Analysis!A1"
+    assert call_kwargs["range"] == "'Short Video Analysis'!A1"
 
 
 # ---------------------------------------------------------------------------
