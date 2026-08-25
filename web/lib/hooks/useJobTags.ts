@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FetchState } from '@/lib/fetch-utils';
 import { useTagAttachment } from '@/lib/hooks/useTagAttachment';
-
-interface TagSummary {
-  id: string;
-  name: string;
-  color: string;
-  meaning: string;
-}
+import { fetchVocabulary, type TagSummary } from '@/lib/hooks/useLinkTags';
 
 // Coerce to array — the UI maps over these, so a non-array body must not crash render.
 const asTags = (d: unknown): TagSummary[] => (Array.isArray(d) ? d : []);
@@ -25,11 +19,10 @@ export function useJobTags(jobId: string, fetchState: FetchState, disabled = fal
       .catch(() => {});
   }, [jobId]);
 
-  const refetchAll = useCallback(() => {
-    fetch('/api/controls/tags', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => setAllTags(asTags(d)))
-      .catch(() => {});
+  // Vocabulary loads through the module-level cache shared with useLinkTags —
+  // a feed of N job cards must not fire N identical /api/controls/tags requests.
+  const refetchAll = useCallback((force = false) => {
+    void fetchVocabulary(force).then(setAllTags);
   }, []);
 
   useEffect(() => {

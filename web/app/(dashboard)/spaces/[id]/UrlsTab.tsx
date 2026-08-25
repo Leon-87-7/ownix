@@ -8,6 +8,7 @@ import { SkeletonLine } from "@/components/feed/feed-states";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReorderButtons } from "@/components/ui/reorder-buttons";
 import { useAddSearch, type AddSearchResult } from "@/lib/hooks/useAddSearch";
+import { apiPost } from "@/lib/fetch-utils";
 
 export function UrlsTab({ spaceId }: { spaceId: string }) {
   const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } =
@@ -26,19 +27,14 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
     try {
       let jobId = result.jobId;
       if (!jobId) {
-        const response = await fetch("/api/jobs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: result.url }),
-        });
-        const data = (await response.json().catch(() => ({}))) as {
-          job_id?: string;
-          id?: string;
-          detail?: string;
-        };
-        jobId = data.job_id || data.id;
-        if (!response.ok || !jobId)
-          throw new Error(data.detail || "Could not save this URL.");
+        const posted = await apiPost<{ job_id?: string; id?: string }>(
+          "/api/jobs",
+          { url: result.url },
+          "Could not save this URL.",
+        );
+        if (!posted.ok) throw new Error(posted.detail);
+        jobId = posted.data.job_id || posted.data.id;
+        if (!jobId) throw new Error("Could not save this URL.");
       }
       await addJob(jobId);
     } catch (error) {

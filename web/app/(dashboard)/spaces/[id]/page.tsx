@@ -18,6 +18,7 @@ import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { IconPicker } from '@/components/spaces/icon-picker';
 import { spaceIcon } from '@/lib/space-icons';
+import { apiDelete } from '@/lib/fetch-utils';
 
 type ActiveTab = 'urls' | 'context';
 
@@ -71,15 +72,10 @@ export default function SpaceDetailPage() {
     setDeleting(true);
     setDeleteFailed(false);
     try {
-      const res = await fetch(`/api/spaces/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok || res.status === 204) {
-        // Navigating away - skip state updates so nothing fires mid-unmount.
-        router.push('/spaces');
-        return;
-      }
-      setDeleteFailed(true);
+      await apiDelete(`/api/spaces/${id}`);
+      // Navigating away - skip state updates so nothing fires mid-unmount.
+      router.push('/spaces');
+      return;
     } catch {
       setDeleteFailed(true);
     }

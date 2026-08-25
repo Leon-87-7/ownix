@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { Check, Copy, Link2 } from 'lucide-react';
+import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
 
 /** One extracted link as it arrives in an `action_ack` artifact. */
 export interface IntakeLink {
@@ -55,22 +55,10 @@ export function extractLinks(artifacts: Array<Record<string, unknown>>): IntakeL
  * plain-links message). Without this the intake only reported a count.
  */
 export function IntakeLinksList({ links }: { links: IntakeLink[] }) {
-  const [copied, setCopied] = useState(false);
+  const plainList = links.map((l) => l.url).join('\n');
+  const { copied, copy: handleCopy } = useCopyFeedback(plainList);
 
   if (links.length === 0) return null;
-
-  const plainList = links.map((l) => l.url).join('\n');
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(plainList);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard blocked (insecure context / denied). The URLs stay
-      // selectable text, so copying by hand still works.
-    }
-  };
 
   return (
     <div className="mt-3 rounded-md border border-line bg-canvas">

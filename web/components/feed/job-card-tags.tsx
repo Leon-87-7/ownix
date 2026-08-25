@@ -5,7 +5,9 @@ import { useJobTags } from '@/lib/hooks/useJobTags';
 
 // Attached tag badges + compact dropdown for a feed card. Eager so existing
 // tags show without opening the menu.
-// ponytail: N feed cards = N tag fetches. If it bites, fold tags into /api/jobs.
+// ponytail: N feed cards still fire N per-job tag fetches (the shared vocabulary
+// fetch is deduped via useJobTags -> fetchVocabulary). If per-job also bites, fold
+// tags into /api/jobs.
 export function JobCardTags({ jobId, countOnly = false }: { jobId: string; countOnly?: boolean }) {
   const { jobTags, allTags, toggleTag, createTag } = useJobTags(jobId, 'ok');
   return (

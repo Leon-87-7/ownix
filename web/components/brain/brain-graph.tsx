@@ -129,8 +129,14 @@ export function BrainGraph({ results, searchState }: { results: SearchResult[]; 
     (node: RenderNode): boolean => isNodeVisible(node) && hasMatches && matchedIds.has(node.url),
     [isNodeVisible, hasMatches, matchedIds],
   );
-  const visibleMatchCount = graph.nodes.filter((node) => !hiddenTopics.has(topicKey(node.topic)) && matchedIds.has(node.url)).length;
-  const visibleTopicCount = topics.filter((topic) => !hiddenTopics.has(topic)).length;
+  const visibleMatchCount = useMemo(
+    () => graph.nodes.filter((node) => !hiddenTopics.has(topicKey(node.topic)) && matchedIds.has(node.url)).length,
+    [graph.nodes, hiddenTopics, matchedIds],
+  );
+  const visibleTopicCount = useMemo(
+    () => topics.filter((topic) => !hiddenTopics.has(topic)).length,
+    [topics, hiddenTopics],
+  );
 
   // Identity tracks visibleMatchCount/transitionMs/isVisibleMatch, so the auto-focus effect re-runs
   // whenever the match set changes - even when its size stays the same.

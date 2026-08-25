@@ -1,13 +1,5 @@
 import { StatusBadge } from '@/components/ui/badges';
-
-/** Statuses that mean "still working" — mirrors `useIntakeThread`. */
-const IN_FLIGHT = new Set([
-  'pending',
-  'queued',
-  'processing',
-  'transcript_done',
-  'enriching',
-]);
+import { IN_FLIGHT_STATUSES } from '@/lib/polling';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Queued',
@@ -31,7 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
  * "Intake console".
  */
 export function IntakeStatusLine({ status }: { status: string }) {
-  const inFlight = IN_FLIGHT.has(status);
+  const inFlight = IN_FLIGHT_STATUSES.has(status);
   const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ');
 
   return (

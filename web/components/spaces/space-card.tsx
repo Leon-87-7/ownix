@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { spaceIcon } from "@/lib/space-icons";
 import { DateTime } from "@/components/ui/date-time";
+import { apiDelete } from "@/lib/fetch-utils";
 
 // SQLite's CURRENT_TIMESTAMP has no timezone marker; without one, Date parses it
 // as local time instead of UTC. Mark it explicitly so DateTime shows the right instant.
@@ -42,15 +43,11 @@ export function SpaceCard({
     setDeleting(true);
     setFailed(false);
     try {
-      const res = await fetch(`/api/spaces/${space.id}`, { method: "DELETE" });
-      if (res.ok) {
-        setDeleting(false);
-        setConfirming(false);
-        onDeleted?.();
-        return;
-      }
-      setFailed(true);
+      await apiDelete(`/api/spaces/${space.id}`);
       setDeleting(false);
+      setConfirming(false);
+      onDeleted?.();
+      return;
     } catch {
       setFailed(true);
       setDeleting(false);

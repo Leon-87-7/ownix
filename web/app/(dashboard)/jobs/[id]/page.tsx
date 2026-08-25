@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -51,7 +50,8 @@ import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FolderTagForm } from '@/components/feed/folder-tag-form';
-import { apiPost } from '@/lib/fetch-utils';
+import { apiPost, apiPut } from '@/lib/fetch-utils';
+import { DateTime } from '@/components/ui/date-time';
 import { startPolling } from '@/lib/polling';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
 import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
@@ -172,10 +172,14 @@ function JsonObject({
 }
 
 function TemplateAnalysis({ raw }: { raw: string }) {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
+  const parsed = useMemo<unknown>(() => {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }, [raw]);
+  if (parsed === undefined) {
     return (
       <p className="whitespace-pre-wrap break-words text-sm text-ink">
         {raw}
@@ -382,13 +386,11 @@ function JobHeader({
     setTitleSaving(true);
     setTitleError(undefined);
     try {
-      const res = await fetch(`/api/jobs/${job.id}/title`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: next }),
-      });
-      if (!res.ok) throw new Error('Could not save title');
-      const data: { title: string | null } = await res.json();
+      const data = await apiPut<{ title: string | null }>(
+        `/api/jobs/${job.id}/title`,
+        { title: next },
+        'Could not save title',
+      );
       onTitleSaved(data.title);
       setEditingTitle(false);
     } catch {
@@ -550,7 +552,7 @@ function JobHeader({
       </div>
       {/* URL, then the tag row stacked below it (not squeezed beside a wrapping URL). */}
       <div className="mt-1 flex flex-col items-start gap-2">
-        {/^https?:\/\//i.test(job.url) ? (
+        {isSafeHttpUrl(job.url) ? (
           <Tooltip
             content={job.url}
             mono
@@ -617,7 +619,7 @@ function JobActionsBar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        {job.drive_url && /^https?:\/\//i.test(job.drive_url) && (
+        {job.drive_url && isSafeHttpUrl(job.drive_url) && (
           <a
             href={job.drive_url}
             target="_blank"
@@ -794,7 +796,7 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
           </h2>
           {generatedAt && (
             <p className="mt-1 font-mono text-label text-muted">
-              Generated {new Date(generatedAt).toLocaleString()}
+              Generated <DateTime iso={generatedAt} />
             </p>
           )}
         </div>
@@ -1072,17 +1074,14 @@ export default function JobDetailPage() {
   useEffect(() => {
     jobRef.current = job;
   }, [job]);
-  const reloadJob = useCallback(async () => {
-    await reload();
-  }, [reload]);
   useEffect(() => {
     if (job?.status !== 'enriching') return;
     return startPolling(
-      reloadJob,
+      reload,
       () => jobRef.current?.status !== 'enriching',
       10_000,
     );
-  }, [job?.status, reloadJob]);
+  }, [job?.status, reload]);
   const { annotation, loaded, handleSave } = useJobAnnotation(
     id,
     fetchState,

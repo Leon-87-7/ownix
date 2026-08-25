@@ -31,6 +31,15 @@ import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
 import { GoToLinksPanel } from '@/components/feed/goto-links-panel';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { parseBatchLinkInput } from '@/lib/parse-batch-links';
+import { apiPost } from '@/lib/fetch-utils';
+
+/** POST /api/jobs response shape, as loosely typed as the JSON it actually returns. */
+interface SubmittedJob {
+  id?: string;
+  title?: string;
+  content_type?: string;
+  status?: string;
+}
 
 /** The job the API accepted, timestamped so consumers can react to repeats. */
 interface AcceptedJob {
@@ -281,70 +290,59 @@ function CommandAction({
  * pages that care about the outcome (Feed's optimistic rows) watch
  * lastAccepted instead of owning the mutation themselves.
  */
+/** A dialog-open flag that refuses to flip on (with a sign-in toast) in restricted mode. */
+function useGatedOpen(
+  restricted: boolean,
+  showRestrictedToast: (message: string) => void,
+  message: string,
+  onOpen?: () => void,
+): [boolean, (next: boolean) => void] {
+  const [value, setValue] = useState(false);
+  const setGated = useCallback(
+    (next: boolean) => {
+      if (next && restricted) {
+        showRestrictedToast(message);
+        return;
+      }
+      if (next) onOpen?.();
+      setValue(next);
+    },
+    [restricted, showRestrictedToast, message, onOpen],
+  );
+  return [value, setGated];
+}
+
 export function SubmitJobProvider({
   children,
 }: {
   children: ReactNode;
 }) {
   const { restricted, showRestrictedToast } = useRestrictedMode();
-  const [open, setOpenRaw] = useState(false);
-  const [docsOpenRaw, setDocsOpenRaw] = useState(false);
-  const [addLinkOpenRaw, setAddLinkOpenRaw] = useState(false);
+  const [open, setOpen] = useGatedOpen(
+    restricted,
+    showRestrictedToast,
+    'Sign in to submit URLs to your own Index.',
+  );
+  const [docsOpen, setDocsOpen] = useGatedOpen(
+    restricted,
+    showRestrictedToast,
+    'Sign in to parse documents into your own Index.',
+  );
   const [batchResults, setBatchResults] = useState<BatchLinkResult[]>(
     [],
   );
+  const clearBatchResults = useCallback(() => setBatchResults([]), []);
+  const [addLinkOpen, setAddLinkOpen] = useGatedOpen(
+    restricted,
+    showRestrictedToast,
+    'Sign in to add links to your own Index.',
+    clearBatchResults,
+  );
   const [intakeOpen, setIntakeOpen] = useState(false);
-  const setOpen = useCallback(
-    (next: boolean) => {
-      if (next && restricted) {
-        showRestrictedToast(
-          'Sign in to submit URLs to your own Index.',
-        );
-        return;
-      }
-      setOpenRaw(next);
-    },
-    [restricted, showRestrictedToast],
-  );
-  const setDocsOpen = useCallback(
-    (next: boolean) => {
-      if (next && restricted) {
-        showRestrictedToast(
-          'Sign in to parse documents into your own Index.',
-        );
-        return;
-      }
-      setDocsOpenRaw(next);
-    },
-    [restricted, showRestrictedToast],
-  );
-  const setAddLinkOpen = useCallback(
-    (next: boolean) => {
-      if (next && restricted) {
-        showRestrictedToast(
-          'Sign in to add links to your own Index.',
-        );
-        return;
-      }
-      if (next) setBatchResults([]);
-      setAddLinkOpenRaw(next);
-    },
-    [restricted, showRestrictedToast],
-  );
-  const docsOpen = docsOpenRaw;
-  const addLinkOpen = addLinkOpenRaw;
-  const [commandOpen, setCommandOpenRaw] = useState(false);
-  const setCommandOpen = useCallback(
-    (next: boolean) => {
-      if (next && restricted) {
-        showRestrictedToast(
-          'Sign in to run commands on your own Index.',
-        );
-        return;
-      }
-      setCommandOpenRaw(next);
-    },
-    [restricted, showRestrictedToast],
+  const [commandOpen, setCommandOpen] = useGatedOpen(
+    restricted,
+    showRestrictedToast,
+    'Sign in to run commands on your own Index.',
   );
   // GoTo quick-jump — links carrying one of the user's pinned tags. Read-only
   // view of the user's own data, so unlike the dialogs above it isn't gated
@@ -465,14 +463,13 @@ export function SubmitJobProvider({
         };
         if (template === 'freestyle')
           payload.freestyle_prompt = freestylePrompt.trim();
-        const res = await fetch('/api/jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok)
-          throw new Error(data.detail || 'Could not submit job');
+        const result = await apiPost<SubmittedJob>(
+          '/api/jobs',
+          payload,
+          'Could not submit job',
+        );
+        if (!result.ok) throw new Error(result.detail);
+        const data = result.data;
         setLastAccepted({
           id: typeof data.id === 'string' && data.id ? data.id : null,
           url: trimmed,
@@ -505,24 +502,20 @@ export function SubmitJobProvider({
   const submitOneLink = useCallback(
     async (token: string, index: number): Promise<boolean> => {
       try {
-        const res = await fetch('/api/jobs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: token, content_type: 'link' }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const message =
-            typeof data.detail === 'string'
-              ? data.detail
-              : 'Could not add link';
+        const result = await apiPost<SubmittedJob>(
+          '/api/jobs',
+          { url: token, content_type: 'link' },
+          'Could not add link',
+        );
+        if (!result.ok) {
           setBatchResults((current) =>
             current.map((row, i) =>
-              i === index ? { ...row, status: 'error', message } : row,
+              i === index ? { ...row, status: 'error', message: result.detail } : row,
             ),
           );
           return false;
         }
+        const data = result.data;
         setLastAccepted({
           id: typeof data.id === 'string' && data.id ? data.id : null,
           url: token,
@@ -608,10 +601,10 @@ export function SubmitJobProvider({
     [setCommandOpen],
   );
   const go = useCallback((href: string) => {
-    setCommandOpenRaw(false);
-    setDocsOpenRaw(false);
+    setCommandOpen(false);
+    setDocsOpen(false);
     window.location.assign(href);
-  }, []);
+  }, [setCommandOpen, setDocsOpen]);
 
   const launchIntakeAction = useCallback(
     (key: IntakeActionKey, closeSurface: () => void) => {
