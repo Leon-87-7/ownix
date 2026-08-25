@@ -10,6 +10,14 @@ Run backend first, then frontend — they compete for the same machine's memory 
 together (a real crash was hit doing this: see Gotchas below), and mutmut's Python-side
 run is the slower of the two.
 
+**Current status (2026-08-26): backend is blocked, frontend works.** mutmut cannot run
+against this repo's actual code — see "mutmut cannot run against this repo's package
+layout" in Gotchas below; it's a hard upstream limitation, not a config problem, and has
+no known workaround short of an invasive repo-wide import change. StrykerJS's full run
+against the current 5-file scope: **81.41% mutation score** (357 killed, 2 timeout, 72
+survived, 10 no coverage, 0 errors, 54m23s cold) — see `web/reports/mutation/mutation.html`
+for the full report, or the survivor list inline in that run's log.
+
 ## Prerequisites
 
 - **Backend (mutmut)**: needs OS `fork()` support, so on Windows it only runs inside
@@ -60,6 +68,22 @@ A `reports/` directory (HTML report + `stryker-incremental.json`) and a
 
 ## Gotchas hit setting this up (read before re-scoping)
 
+- **mutmut cannot run against this repo's package layout — hard upstream limitation,
+  not a config problem.** mutmut hardcodes the assumption that `src/` is a *build
+  layout* directory whose contents become top-level importable modules (`import
+  validators`, not `import src.utils.validators`) — see mutmut's own
+  `setup_source_paths()`, which inserts `mutants/src` onto `sys.path` and strips
+  `./src` from it, and `get_mutant_name()`, which unconditionally strips a `src.`
+  prefix off every mutant name. This repo's actual convention is the opposite:
+  `src/__init__.py` makes `src` a real importable package, and every test imports
+  absolutely (`from src.utils.validators import ...`). The moment a mutated
+  function actually runs, mutmut's own `record_trampoline_hit()` hits a hardcoded
+  `assert not name.startswith("src.")` and crashes — confirmed via mutmut's GitHub
+  source, not a guess. There is no `pyproject.toml` setting that fixes this; the
+  only paths forward are an upstream mutmut fix, or rewriting every import in the
+  codebase to drop the `src.` prefix (a massive, invasive, repo-wide change — not
+  attempted). Until one of those happens, **the backend half of this runbook does
+  not produce results**, regardless of how source_paths/also_copy are configured.
 - **mutmut only copies `source_paths` into its isolated `mutants/` workspace.**
   Any cross-module import the mutated files need has to be listed in `also_copy`
   too, unmutated — traced transitively. For this repo, mutating `src/services/jobs.py`
@@ -98,6 +122,14 @@ A `reports/` directory (HTML report + `stryker-incremental.json`) and a
   pool and Stryker's 4 Node worker processes together exhausted memory during setup
   — Stryker crashed with a Windows access violation (`0xC0000005`) at 95% complete.
   Run backend to completion, then frontend.
+- **A lone Stryker run can still hit a transient worker-thread crash**
+  (`[vitest-pool]: Failed to start threads worker...`) partway through, unrelated to
+  the concurrent-tools issue above — this happened even on a solo run, likely from
+  general resource pressure after a long session with many prior node/WSL processes.
+  It's not reproducible on demand: `rm -rf web/.stryker-tmp` and simply rerunning
+  `npx stryker run` succeeded on the very next attempt, running clean end-to-end
+  (441/441 mutants, 54m23s). Don't over-diagnose a one-off crash — retry once before
+  assuming something's actually broken.
 - **mutmut on Windows is slow for a structural reason, not a config one**: it runs
   inside WSL2 against the repo mounted from Windows (`/mnt/c/...`), and every file
   write crosses the WSL2↔Windows filesystem bridge (9P protocol) — confirmed via
