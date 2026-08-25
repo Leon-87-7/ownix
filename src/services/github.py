@@ -154,7 +154,7 @@ async def fetch_repo_bundle(owner: str, repo: str, token: str | None) -> dict:
     Cache key: github_repo_bundle:v3:{owner}/{repo}, TTL 7 days.
     Raises FileNotFoundError on 404, requests.HTTPError on 403/5xx.
     """
-    from src import queue
+    from src import job_queue as queue
 
     cache_key = f"github_repo_bundle:v3:{owner}/{repo}"
     client = queue._client()
@@ -243,7 +243,7 @@ async def enrich_repo(owner: str, repo: str, token: str) -> dict | None:
     Cache key: github_meta:{owner}/{repo}
     """
     import asyncio
-    from src import queue  # lazy import — Redis client lives here
+    from src import job_queue as queue  # lazy import — Redis client lives here
 
     cache_key = f"github_meta:{owner}/{repo}"
     client = queue._client()

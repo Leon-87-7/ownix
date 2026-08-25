@@ -8,7 +8,7 @@ import json
 import secrets
 from dataclasses import dataclass
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.config import settings
 from src.services.email import send_welcome_email
 from src.services.jobs import flush_held_jobs

@@ -9,7 +9,7 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     globals: true,
     unstubGlobals: true,
-    exclude: ['**/node_modules/**', '**/.next/**'],
+    exclude: ['**/node_modules/**', '**/.next/**', '**/.stryker-tmp/**'],
   },
   resolve: {
     alias: {

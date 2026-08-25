@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-import src.queue as queue_module
+import src.job_queue as queue_module
 
 
 class FakeRedis:

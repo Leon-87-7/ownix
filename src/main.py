@@ -7,7 +7,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.intake.rate_limit import enforce as _enforce_rate_limit
 from src.services import drive
 from src.utils.logger import get_logger

@@ -135,7 +135,7 @@ async def force_command(
     through as plain data rather than widening this into a Telegram-aware
     function — the dashboard simply omits it.
     """
-    from src import database, queue
+    from src import database, job_queue as queue
     from src.intake import tag_tokens
     from src.services.jobs import task_for_content_type
     from src.utils.validators import detect_pipeline, normalize_repo_url
@@ -219,7 +219,7 @@ async def freestyle_command(
     the exact state `IntakeStateBanner` already renders — the dashboard could
     see the flow but never arm it before this.
     """
-    from src import database, queue
+    from src import database, job_queue as queue
     from src.utils.validators import detect_pipeline, normalize_repo_url
 
     if len(parts) < 2:

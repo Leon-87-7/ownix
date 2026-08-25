@@ -15,3 +15,70 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mutmut]
+# Narrow scope on purpose (docs/plans/2026-08-25-mutation-testing-research.md): pure-logic,
+# already-well-tested modules first, not all of src/. Needs WSL on Windows (mutmut requires
+# OS fork() support) — see the same doc for why.
+source_paths = ["src/utils/validators.py", "src/services/jobs.py"]
+# mutmut copies only source_paths into its isolated mutants/ workspace. Cross-module
+# imports need copying in too — unmutated, via also_copy. tests/test_jobs_api.py turned
+# out to exercise create_and_enqueue_job() only through the full FastAPI app (src.api.jobs
+# et al.), not a narrow unit path, so the actual import closure is most of src/ — hence
+# "every top-level src/ item except the two dirs holding a mutated file, and within those
+# two dirs, every file except the mutated one itself". also_copy runs *after* mutation, so
+# never list source_paths' own files here — that would silently clobber the mutation.
+also_copy = [
+    "src/__init__.py",
+    "src/api/",
+    "src/auth/",
+    "src/brain.py",
+    "src/channels/",
+    "src/config.py",
+    "src/database.py",
+    "src/intake/",
+    "src/job_queue.py",
+    "src/main.py",
+    "src/processors/",
+    "src/telegram/",
+    "src/templates.py",
+    "src/worker.py",
+    "src/utils/__init__.py",
+    "src/utils/background_tasks.py",
+    "src/utils/bookmarks_html.py",
+    "src/utils/document_formats.py",
+    "src/utils/google_token_crypto.py",
+    "src/utils/logger.py",
+    "src/utils/markdown.py",
+    "src/utils/og_image.py",
+    "src/utils/public_html.py",
+    "src/utils/ssrf.py",
+    "src/services/__init__.py",
+    "src/services/account.py",
+    "src/services/brave.py",
+    "src/services/document_intake.py",
+    "src/services/drive.py",
+    "src/services/email.py",
+    "src/services/frames.py",
+    "src/services/gemini.py",
+    "src/services/github.py",
+    "src/services/google_auth.py",
+    "src/services/google_tokens.py",
+    "src/services/google_workspace.py",
+    "src/services/invite_notifications.py",
+    "src/services/jina.py",
+    "src/services/job_recovery.py",
+    "src/services/ops_bot.py",
+    "src/services/parse.py",
+    "src/services/pdf_intake.py",
+    "src/services/repo_followup.py",
+    "src/services/sheets.py",
+    "src/services/space_export.py",
+    "src/services/storage.py",
+    "src/services/transcript.py",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/test_validators.py",
+    "tests/test_jobs_api.py",
+]
+mutate_only_covered_lines = true
