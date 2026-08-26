@@ -64,7 +64,7 @@ async def test_enrich_repo_cache_hit(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = FakeRedis()
     fake_redis._store["github_meta:octocat/Hello-World"] = json.dumps(_SAMPLE_META)
 
-    import src.queue as queue_module
+    import src.job_queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync") as mock_fetch:
@@ -83,7 +83,7 @@ async def test_enrich_repo_cache_miss_api_success(monkeypatch: pytest.MonkeyPatc
     """On cache miss, _fetch_bundle_meta_sync is called, result is stored in Redis and returned."""
     fake_redis = FakeRedis()
 
-    import src.queue as queue_module
+    import src.job_queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync", return_value=_SAMPLE_META):
@@ -108,7 +108,7 @@ async def test_enrich_repo_cache_miss_404(monkeypatch: pytest.MonkeyPatch) -> No
     """When _fetch_bundle_meta_sync returns None (404), enrich_repo returns None without caching."""
     fake_redis = FakeRedis()
 
-    import src.queue as queue_module
+    import src.job_queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync", return_value=None):
@@ -128,7 +128,7 @@ async def test_enrich_repo_network_error_returns_none(monkeypatch: pytest.Monkey
     """When _fetch_bundle_meta_sync raises, enrich_repo must return None and not propagate."""
     fake_redis = FakeRedis()
 
-    import src.queue as queue_module
+    import src.job_queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync", side_effect=ConnectionError("timeout")):
@@ -204,7 +204,7 @@ def test_detect_sub_readmes_capped_at_4() -> None:
 async def test_fetch_repo_bundle_includes_sub_readmes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Monorepo sub-READMEs land in bundle['sub_readmes'], truncated and preprocessed."""
     fake_redis = FakeRedis()
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     meta = {"stars": 5, "forks": 1, "language": "Go", "pushed_at": None,
@@ -226,7 +226,7 @@ async def test_fetch_repo_bundle_includes_sub_readmes(monkeypatch: pytest.Monkey
 async def test_fetch_repo_bundle_survives_optional_fetch_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """A transient error on a sub-README (or manifest) fetch must not abort the bundle."""
     fake_redis = FakeRedis()
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     meta = {"stars": 5, "forks": 1, "language": "Go", "pushed_at": None,
@@ -343,7 +343,7 @@ async def test_fetch_repo_bundle_cache_hit_no_api_calls(monkeypatch: pytest.Monk
     fake_redis = TrackingRedis()
     fake_redis._store["github_repo_bundle:v3:octocat/Hello-World"] = json.dumps(_SAMPLE_BUNDLE)
 
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync") as mock_meta:
@@ -359,7 +359,7 @@ async def test_fetch_repo_bundle_cold_cache_written_with_7day_ttl(monkeypatch: p
     """Cache miss: bundle assembled, written to Redis with 7-day TTL."""
     fake_redis = TrackingRedis()
 
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     meta = {"stars": 5, "forks": 1, "language": "Go", "pushed_at": "2026-01-01T00:00:00Z",
@@ -383,7 +383,7 @@ async def test_fetch_repo_bundle_cold_cache_written_with_7day_ttl(monkeypatch: p
 async def test_fetch_repo_bundle_no_readme_sets_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     """When README is 404, bundle has no_readme=True and empty readme string."""
     fake_redis = TrackingRedis()
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     meta = {"stars": 0, "forks": 0, "language": None, "pushed_at": None,
@@ -406,7 +406,7 @@ async def test_fetch_repo_bundle_no_readme_sets_flag(monkeypatch: pytest.MonkeyP
 async def test_fetch_repo_bundle_404_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """When metadata call returns None (404), fetch_repo_bundle raises FileNotFoundError."""
     fake_redis = TrackingRedis()
-    import src.queue as q
+    import src.job_queue as q
     monkeypatch.setattr(q, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync", return_value=None):
@@ -477,7 +477,7 @@ async def test_fetch_repo_bundle_uses_v3_cache_key(monkeypatch: pytest.MonkeyPat
     }
     fake_redis._store["github_repo_bundle:v3:owner/repo"] = json.dumps(bundle_data)
 
-    import src.queue as queue_module
+    import src.job_queue as queue_module
     monkeypatch.setattr(queue_module, "_redis", fake_redis)
 
     with patch("src.services.github._fetch_bundle_meta_sync") as mock_meta:

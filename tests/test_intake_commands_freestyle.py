@@ -35,7 +35,7 @@ def _enqueue_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_enqueue(_payload: dict) -> None:
         return None
 
-    monkeypatch.setattr("src.queue.enqueue", _fake_enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", _fake_enqueue)
 
 
 class TestFreestyleCommand:
@@ -80,7 +80,7 @@ class TestFreestyleCommand:
         async def _spy_enqueue(payload: dict) -> None:
             enq.append(payload)
 
-        monkeypatch.setattr("src.queue.enqueue", _spy_enqueue)
+        monkeypatch.setattr("src.job_queue.enqueue", _spy_enqueue)
 
         resp = asyncio.run(
             commands.SHARED_COMMANDS["/freestyle"].handler(

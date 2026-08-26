@@ -702,7 +702,7 @@ async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> d
         raise HTTPException(status_code=409, detail="Job enrichment was already claimed")
 
     try:
-        from src import queue
+        from src import job_queue as queue
 
         await queue.enqueue({"task": "enrichment", "job_id": job_id})
     except Exception as exc:
@@ -717,7 +717,7 @@ async def get_repo_followups(job_id: str, request: Request) -> list[dict]:
     pipelines) — the dashboard-facing read side of `offer_repo_followups`
     (`src/services/repo_followup.py`), which until now only reached Telegram."""
     await get_owned_job(job_id, request)
-    from src import queue
+    from src import job_queue as queue
 
     raw = await queue._client().get(f"repo_pick:{job_id}")
     return json.loads(raw) if raw else []

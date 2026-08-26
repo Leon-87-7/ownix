@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from fastapi import APIRouter, Header, HTTPException, Request
 
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.config import settings
 from src.services import storage
 from src.services.parse import (

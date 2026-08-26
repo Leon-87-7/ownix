@@ -62,7 +62,7 @@ def test_successfully_claims_and_enqueues(client: TestClient, monkeypatch: pytes
     async def enqueue(payload: dict) -> None:
         queued.append(payload)
 
-    monkeypatch.setattr("src.queue.enqueue", enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", enqueue)
     response = client.post("/api/jobs/job_abcd/enrich", json={"template": "summary", "freestyle_prompt": "stale"})
     assert response.status_code == 202
     assert queued == [{"task": "enrichment", "job_id": "job_abcd"}]
@@ -78,7 +78,7 @@ def test_persists_freestyle_prompt(client: TestClient, monkeypatch: pytest.Monke
     async def enqueue(_payload: dict) -> None:
         pass
 
-    monkeypatch.setattr("src.queue.enqueue", enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", enqueue)
     response = client.post("/api/jobs/job_abcd/enrich", json={"template": "freestyle", "freestyle_prompt": "Compare the tradeoffs"})
     assert response.status_code == 202
     assert read_job()["freestyle_prompt"] == "Compare the tradeoffs"
@@ -96,7 +96,7 @@ def test_rejects_invalid_template(
     async def should_not_enqueue(_payload: dict) -> None:
         raise AssertionError("must not enqueue")
 
-    monkeypatch.setattr("src.queue.enqueue", should_not_enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", should_not_enqueue)
     assert client.post("/api/jobs/job_abcd/enrich", json=body).status_code == 422
     assert read_job()["status"] == "transcript_done"
 
@@ -124,7 +124,7 @@ def test_second_claim_returns_conflict_without_enqueuing_again(
     async def enqueue(payload: dict) -> None:
         queued.append(payload)
 
-    monkeypatch.setattr("src.queue.enqueue", enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", enqueue)
 
     first = client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"})
     second = client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"})
@@ -141,7 +141,7 @@ def test_enqueue_failure_releases_claim(client: TestClient, monkeypatch: pytest.
     async def fail(_payload: dict) -> None:
         raise RuntimeError("redis unavailable")
 
-    monkeypatch.setattr("src.queue.enqueue", fail)
+    monkeypatch.setattr("src.job_queue.enqueue", fail)
     response = client.post("/api/jobs/job_abcd/enrich", json={"template": "summary"})
     assert response.status_code == 503
     assert read_job()["status"] == "transcript_done"

@@ -35,7 +35,7 @@ def _enqueue_noop(monkeypatch: pytest.MonkeyPatch) -> None:
         return None
 
     monkeypatch.setattr("src.services.jobs.queue.enqueue", _fake_enqueue)
-    monkeypatch.setattr("src.queue.enqueue", _fake_enqueue)
+    monkeypatch.setattr("src.job_queue.enqueue", _fake_enqueue)
 
 
 class TestForceCommand:

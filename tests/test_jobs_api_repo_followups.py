@@ -69,7 +69,7 @@ def test_no_cached_candidates_returns_empty_list(client: TestClient, monkeypatch
     seed_job()
     login(client)
     fake = FakeRedis()
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
 
     response = client.get("/api/jobs/job_repo1/repo-followups")
     assert response.status_code == 200
@@ -82,7 +82,7 @@ def test_returns_cached_candidates(client: TestClient, monkeypatch: pytest.Monke
     fake = FakeRedis()
     candidates = [{"url": "https://github.com/octocat/hello-world", "name": "octocat/hello-world"}]
     asyncio.run(fake.set("repo_pick:job_repo1", json.dumps(candidates)))
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
 
     response = client.get("/api/jobs/job_repo1/repo-followups")
     assert response.status_code == 200
@@ -93,7 +93,7 @@ def test_other_users_job_is_forbidden(client: TestClient, monkeypatch: pytest.Mo
     seed_job(chat_id=CHAT_ID + 1)
     login(client)
     fake = FakeRedis()
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
 
     response = client.get("/api/jobs/job_repo1/repo-followups")
     assert response.status_code == 403
@@ -105,7 +105,7 @@ def test_pick_enqueues_a_new_repo_job(client: TestClient, monkeypatch: pytest.Mo
     fake = FakeRedis()
     candidates = [{"url": "https://github.com/octocat/hello-world", "name": "octocat/hello-world"}]
     asyncio.run(fake.set("repo_pick:job_repo1", json.dumps(candidates)))
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
     monkeypatch.setattr("src.services.repo_followup.queue._client", lambda: fake)
 
     queued: list[dict] = []
@@ -126,7 +126,7 @@ def test_pick_missing_candidate_is_404(client: TestClient, monkeypatch: pytest.M
     seed_job()
     login(client)
     fake = FakeRedis()
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
 
     response = client.post("/api/jobs/job_repo1/repo-followups/0")
     assert response.status_code == 404
@@ -138,7 +138,7 @@ def test_pick_negative_idx_is_404(client: TestClient, monkeypatch: pytest.Monkey
     fake = FakeRedis()
     candidates = [{"url": "https://github.com/octocat/hello-world", "name": "octocat/hello-world"}]
     asyncio.run(fake.set("repo_pick:job_repo1", json.dumps(candidates)))
-    monkeypatch.setattr("src.queue._client", lambda: fake)
+    monkeypatch.setattr("src.job_queue._client", lambda: fake)
 
     queued: list[dict] = []
 

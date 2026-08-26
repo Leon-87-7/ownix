@@ -24,7 +24,7 @@ import importlib
 import time
 from urllib.parse import urlparse
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.utils import job_tag
 from src.utils.logger import configure_logging, get_logger
 
