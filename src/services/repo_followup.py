@@ -6,7 +6,7 @@ import json
 from typing import Any
 from urllib.parse import urlparse
 
-from src import database, queue
+from src import database, job_queue as queue
 from src.services.jobs import create_and_enqueue_job
 from src.telegram.sender import send_inline_keyboard
 from src.utils import job_tag

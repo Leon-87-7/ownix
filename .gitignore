@@ -42,6 +42,10 @@ Thumbs.db
 # pyscn — generated analysis snapshots
 .pyscn/
 
+# mutmut — isolated mutant-testing workspace, regenerated per run
+mutants/
+.mutmut-cache
+
 # folders
 
 docs/images/*
