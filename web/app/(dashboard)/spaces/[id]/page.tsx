@@ -17,7 +17,7 @@ import { TabBar } from '@/components/ui/tab-bar';
 import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { IconPicker } from '@/components/spaces/icon-picker';
-import { spaceIcon } from '@/lib/space-icons';
+import { DEFAULT_SPACE_ICON, SPACE_ICON_BY_NAME } from '@/lib/space-icons';
 import { apiDelete } from '@/lib/fetch-utils';
 
 type ActiveTab = 'urls' | 'context';
@@ -129,6 +129,11 @@ export default function SpaceDetailPage() {
       </div>
     );
 
+  // Plain lookup, not a spaceIcon() call: react-hooks/static-components flags
+  // a component variable assigned from a CallExpression as "created during
+  // render" (see lib/space-icons.ts).
+  const Icon = (space.icon && SPACE_ICON_BY_NAME[space.icon]) || DEFAULT_SPACE_ICON;
+
   return (
     <PageShell>
       <Link
@@ -141,17 +146,12 @@ export default function SpaceDetailPage() {
       {!editing ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            {(() => {
-              const Icon = spaceIcon(space.icon);
-              return (
-                <Icon
-                  data-testid={`space-icon-${space.icon ?? 'folder'}`}
-                  className="h-5 w-5 flex-shrink-0"
-                  style={{ color: space.color }}
-                  aria-hidden="true"
-                />
-              );
-            })()}
+            <Icon
+              data-testid={`space-icon-${space.icon ?? 'folder'}`}
+              className="h-5 w-5 flex-shrink-0"
+              style={{ color: space.color }}
+              aria-hidden="true"
+            />
             <h1 className="text-2xl font-semibold tracking-tight text-ink">
               {space.name}
             </h1>

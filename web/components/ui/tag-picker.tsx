@@ -14,10 +14,10 @@ import {
   type LucideIcon,
   Cog,
   HatGlasses,
-  PawPrint,
-  ChessPawn,
-  Anvil,
-  Brush,
+  Heart,
+  BookOpen,
+  Wrench,
+  Video,
   Paintbrush,
   Container,
   PackageOpen,
@@ -42,7 +42,6 @@ export const PRESET_COLORS = [
   '#fb923c', // orange
   '#facc15', // yellow
   '#4ade80', // green
-  '#2dd4bf', // cyan-green
   '#22d3ee', // cyan
   '#60a5fa', // blue
   '#8b5cf6', // purple
@@ -64,11 +63,11 @@ const TAG_ICONS: Record<string, LucideIcon> = {
   Link2,
   Cog,
   HatGlasses,
-  PawPrint,
+  Heart,
   Paintbrush,
-  ChessPawn,
-  Anvil,
-  Brush,
+  BookOpen,
+  Wrench,
+  Video,
   Container,
 };
 export const TAG_ICON_NAMES = Object.keys(TAG_ICONS);

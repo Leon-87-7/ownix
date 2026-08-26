@@ -338,6 +338,35 @@
   }
 }
 
+/* Monochrome loading-skeleton sweep (feed cards) — deliberately grayscale,
+   distinct from .ownix-shimmer-bg's brand gradient which is reserved for
+   actual in-flight/alive states, not idle placeholder content. */
+@keyframes skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+
+  to {
+    background-position: -150% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-color: theme("colors.raised");
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-shimmer {
+    background-image: linear-gradient(90deg,
+        transparent,
+        theme("colors.line.strong"),
+        transparent);
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: skeleton-sweep 1.6s ease-in-out infinite;
+  }
+}
+
 /* Intake console in-flight label (#481). Two channels carry the state: this
    shimmer says *alive*, the StatusBadge beside it says *where*. Colour stops
    are ownix-logo-cycle's, so the console's motion reads as the same brand

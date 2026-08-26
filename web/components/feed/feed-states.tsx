@@ -2,27 +2,33 @@ function SkeletonRow() {
   return (
     <div className="rounded-lg border border-line bg-surface px-4 py-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="h-4 w-2/3 animate-pulse rounded bg-raised" />
+        <div className="h-4 w-2/3 skeleton-shimmer rounded" />
         <div className="flex shrink-0 gap-1.5">
-          <div className="h-4 w-12 animate-pulse rounded bg-raised" />
-          <div className="h-4 w-12 animate-pulse rounded bg-raised" />
+          <div className="h-4 w-12 skeleton-shimmer rounded" />
+          <div className="h-4 w-12 skeleton-shimmer rounded" />
         </div>
       </div>
-      <div className="mt-2 h-3 w-36 animate-pulse rounded bg-raised" />
+      <div className="mt-2 h-3 w-36 skeleton-shimmer rounded" />
     </div>
   );
 }
 
+/* Mirrors PreviewCard's actual structure: icon square + single title line +
+   badge on row one, timestamp + tags on row two (not the generic two-line
+   title block this used to show). */
 function SkeletonPreviewCard() {
   return (
     <div className="rounded-lg border border-line bg-surface p-3">
-      <div className="aspect-video animate-pulse rounded-md border border-line bg-raised" />
-      <div className="mt-3 space-y-2">
-        <div className="h-4 w-5/6 animate-pulse rounded bg-raised" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-raised" />
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="h-3 w-24 animate-pulse rounded bg-raised" />
-          <div className="h-4 w-14 animate-pulse rounded bg-raised" />
+      <div className="aspect-video skeleton-shimmer rounded-md border border-line" />
+      <div className="mt-3 flex flex-col gap-2">
+        <div className="flex items-start gap-2">
+          <div className="h-5 w-5 shrink-0 skeleton-shimmer rounded-md" />
+          <div className="h-4 flex-1 skeleton-shimmer rounded" />
+          <div className="h-4 w-10 shrink-0 skeleton-shimmer rounded" />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="h-3 w-20 skeleton-shimmer rounded" />
+          <div className="h-4 w-8 skeleton-shimmer rounded" />
         </div>
       </div>
     </div>

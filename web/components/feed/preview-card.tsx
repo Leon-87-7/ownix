@@ -104,7 +104,7 @@ export function PreviewCard({
   const compact = variant === "compact";
   const glyph =
     platformGlyph ??
-    (job.content_type === "short" && !compact ? (
+    (!compact ? (
       <PlatformGlyph
         url={job.url}
         contentType={job.content_type}

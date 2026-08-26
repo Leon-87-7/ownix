@@ -18,6 +18,14 @@ describe('SpaceCard', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/spaces/s1');
     expect(screen.getByRole('button', { name: 'Delete Research' })).toBeInTheDocument();
   });
+  it('still shows the space icon, tinted with the space color, when a first note is present', () => {
+    render(
+      <SpaceCard space={{ ...base, first_note: { name: 'Brief', snippet: 'Preview', updated_at: '2024-01-01T00:00:00Z' } }} />,
+    );
+    const icon = screen.getByTestId('space-icon-folder');
+    expect(icon).toBeInTheDocument();
+    expect(icon).toHaveStyle({ color: '#123456' });
+  });
   it('treats a timezone-less SQLite timestamp as UTC', () => {
     const { container } = render(<SpaceCard space={{ ...base, first_note: { name: 'Brief', snippet: 'Preview', updated_at: '2024-01-01 00:00:00' } }} />);
     expect(container.querySelector('time')).toHaveAttribute('dateTime', '2024-01-01T00:00:00Z');

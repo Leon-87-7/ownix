@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { spaceIcon } from "@/lib/space-icons";
+import { DEFAULT_SPACE_ICON, SPACE_ICON_BY_NAME } from "@/lib/space-icons";
 import { DateTime } from "@/components/ui/date-time";
 import { apiDelete } from "@/lib/fetch-utils";
 
@@ -37,7 +37,7 @@ export function SpaceCard({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [failed, setFailed] = useState(false);
-  const Icon = spaceIcon(space.icon);
+  const Icon = (space.icon && SPACE_ICON_BY_NAME[space.icon]) || DEFAULT_SPACE_ICON;
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -108,6 +108,12 @@ export function SpaceCard({
         href={`/spaces/${space.id}`}
         className="relative flex h-full min-h-[100px] flex-col justify-center gap-2 p-4"
       >
+        <Icon
+          data-testid={`space-icon-${space.icon ?? "folder"}`}
+          className="h-6 w-6 flex-shrink-0"
+          style={{ color: space.color }}
+          aria-hidden="true"
+        />
         {space.first_note ? (
           <>
             <span className="truncate text-sm font-medium text-ink">
@@ -122,12 +128,9 @@ export function SpaceCard({
             </span>
           </>
         ) : (
-          <>
-            <Icon className="h-6 w-6 text-ink" aria-hidden="true" />
-            <span className="truncate text-sm font-medium text-ink">
-              {space.name}
-            </span>
-          </>
+          <span className="truncate text-sm font-medium text-ink">
+            {space.name}
+          </span>
         )}
       </Link>
     </div>
