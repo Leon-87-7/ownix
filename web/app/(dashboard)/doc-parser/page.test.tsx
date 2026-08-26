@@ -75,7 +75,7 @@ describe('DocParserPage', () => {
 
     const { container } = render(<DocParserPage />);
 
-    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.skeleton-shimmer').length).toBeGreaterThan(0);
     await waitFor(() => expect(resolveJobs).toBeTypeOf('function'));
     await act(async () => {
       resolveJobs?.(HttpResponse.json({ items: [] }));
