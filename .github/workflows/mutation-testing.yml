@@ -1,0 +1,76 @@
+name: Mutation Testing
+
+# Informational only, not a required check — see "Why not just gate every PR today" in
+# docs/ops/mutation-testing-runbook.md. Promote to required once real CI runtime and
+# reliability are proven, the way `test.yml`'s backend/frontend jobs were.
+on:
+  pull_request:
+    paths:
+      - "src/utils/validators.py"
+      - "src/services/jobs.py"
+      - "web/lib/feed-thumbnail-preload.ts"
+      - "web/lib/job-detail-utils.ts"
+      - "web/lib/parse-batch-links.ts"
+      - "web/lib/polling.ts"
+      - "web/lib/share-target.ts"
+      - "cosmic-ray.toml"
+      - "web/stryker.config.mjs"
+
+jobs:
+  backend-mutation:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # cr-filter-git diffs against the `main` branch set in cosmic-ray.toml — needs
+          # that branch's full history present, not the default shallow clone.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt cosmic-ray
+      - run: cosmic-ray init cosmic-ray.toml session.sqlite
+      - run: cr-filter-git --config cosmic-ray.toml session.sqlite
+      - run: cosmic-ray exec cosmic-ray.toml session.sqlite
+      - run: cr-report session.sqlite | tee cosmic-ray-report.txt
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cosmic-ray-report
+          path: cosmic-ray-report.txt
+
+  frontend-mutation:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: web/reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.base_ref }}
+          restore-keys: stryker-incremental-
+      - run: npx stryker run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stryker-report
+          path: web/reports/mutation/

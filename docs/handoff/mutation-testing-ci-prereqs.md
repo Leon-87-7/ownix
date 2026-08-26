@@ -93,6 +93,7 @@ jobs:
 - **`web/package.json` script name.** Confirm the non-watch test script is
   actually called `test:run` (per root `CLAUDE.md`) before merging the
   frontend job.
-- Once green, this workflow is also where mutmut/Stryker would eventually run
+- Once green, this workflow is also where cosmic-ray/Stryker would eventually run
   (on a schedule or `workflow_dispatch`, not every push — both are too slow
-  for per-commit CI per the research doc).
+  for per-commit CI per the research doc). Backend tool is cosmic-ray, not mutmut
+  — see ADR-0052.
