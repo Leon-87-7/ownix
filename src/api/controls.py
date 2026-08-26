@@ -19,6 +19,10 @@ controls_router = APIRouter(prefix="/api/controls", tags=["controls"])
 TagIcon = Literal[
     "Brain", "Code2", "Database", "PackageOpen", "FileText", "Globe", "Lightbulb", "Link2",
     "Cog", "HatGlasses", "Heart", "Paintbrush", "BookOpen", "Wrench", "Video", "Container",
+    # Retired from the icon picker (web/components/ui/tag-picker.tsx) but still
+    # accepted so a tag created with one of these keeps validating on update —
+    # editing name/color shouldn't 422 just because the icon field wasn't touched.
+    "PawPrint", "ChessPawn", "Anvil", "Brush",
 ]
 
 
