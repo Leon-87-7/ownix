@@ -14,13 +14,17 @@ import {
   type LucideIcon,
   Cog,
   HatGlasses,
+  Heart,
+  BookOpen,
+  Wrench,
+  Video,
+  Paintbrush,
+  Container,
+  PackageOpen,
   PawPrint,
   ChessPawn,
   Anvil,
   Brush,
-  Paintbrush,
-  Container,
-  PackageOpen,
 } from 'lucide-react';
 import type { TagFormState } from '@/lib/hooks/useTagList';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -42,7 +46,6 @@ export const PRESET_COLORS = [
   '#fb923c', // orange
   '#facc15', // yellow
   '#4ade80', // green
-  '#2dd4bf', // cyan-green
   '#22d3ee', // cyan
   '#60a5fa', // blue
   '#8b5cf6', // purple
@@ -53,7 +56,8 @@ export const PRESET_COLORS = [
 ];
 const DEFAULT_COLOR = '#8b5cf6';
 
-const TAG_ICONS: Record<string, LucideIcon> = {
+// Selectable in the icon picker — keep in sync with TagIcon in src/api/controls.py.
+const CURRENT_TAG_ICONS: Record<string, LucideIcon> = {
   Brain,
   Code2,
   Database,
@@ -64,14 +68,28 @@ const TAG_ICONS: Record<string, LucideIcon> = {
   Link2,
   Cog,
   HatGlasses,
-  PawPrint,
+  Heart,
   Paintbrush,
+  BookOpen,
+  Wrench,
+  Video,
+  Container,
+};
+
+// No longer offered in the picker (replaced by clearer icons), but a tag
+// created before that change may still carry one of these — keep them
+// renderable so existing tags don't lose their icon, without resurrecting
+// them as picker choices. src/api/controls.py's TagIcon accepts them too,
+// so editing such a tag without touching its icon still validates.
+const LEGACY_TAG_ICONS: Record<string, LucideIcon> = {
+  PawPrint,
   ChessPawn,
   Anvil,
   Brush,
-  Container,
 };
-export const TAG_ICON_NAMES = Object.keys(TAG_ICONS);
+
+const TAG_ICONS: Record<string, LucideIcon> = { ...CURRENT_TAG_ICONS, ...LEGACY_TAG_ICONS };
+export const TAG_ICON_NAMES = Object.keys(CURRENT_TAG_ICONS);
 
 export function TagMark({
   tag,

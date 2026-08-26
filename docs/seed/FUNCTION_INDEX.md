@@ -833,10 +833,10 @@ Redis-backed task queue (`video_jobs` list) — the handoff between the API/webh
 **Called from:** `useInFlightPolling` in `web/lib/hooks/useInFlightPolling.ts`.
 **Usage:** `const cancel = startPolling(reload, () => allDone, 10_000); // later: cancel()`
 
-#### `spaceIcon(name: string | undefined): IconCmp`
-**Does:** Resolves a stored icon-name string (e.g. `"folder"`, `"rocket"`) to its Lucide icon component, falling back to `Folder` for an unknown/missing name. Also exports `SPACE_ICONS` (the full curated list of 20 name+Icon pairs), the single source of truth shared by the icon picker and the space card — must be kept in sync with the backend's `SpaceIcon` Literal in `src/api/spaces.py`.
-**Called from:** `SpaceCard` in `web/components/spaces/space-card.tsx` (2 usages).
-**Usage:** `const Icon = spaceIcon(space.icon); <Icon className="h-4 w-4" />`
+#### `SPACE_ICON_BY_NAME` / `DEFAULT_SPACE_ICON` (`web/lib/space-icons.ts`)
+**Does:** Resolves a stored icon-name string (e.g. `"folder"`, `"rocket"`) to its Lucide icon component via a plain object lookup — `SPACE_ICON_BY_NAME[name] ?? DEFAULT_SPACE_ICON` — falling back to `Folder` for an unknown/missing name. A plain lookup rather than a resolver function so the result can be assigned straight to a JSX tag without tripping `react-hooks/static-components` (which flags a component variable assigned from a CallExpression as "created during render"). Also exports `SPACE_ICONS` (the full curated list of 20 name+Icon pairs), the single source of truth shared by the icon picker and the space card — must be kept in sync with the backend's `SpaceIcon` Literal in `src/api/spaces.py`.
+**Called from:** `SpaceCard` in `web/components/spaces/space-card.tsx` and `SpaceDetailPage` in `web/app/(dashboard)/spaces/[id]/page.tsx`.
+**Usage:** `const Icon = (space.icon && SPACE_ICON_BY_NAME[space.icon]) || DEFAULT_SPACE_ICON; <Icon className="h-4 w-4" />`
 
 #### `job-detail-utils.ts` — job-detail field rendering/copy/markdown helpers
 **Does (as a group):** Defines which fields render for which job content-type (`ENRICHMENT_FIELDS` for long/article/repo, `SHORT_FIELDS` for short-pipeline jobs) and how to turn each field's raw value into copy-pasteable text or a full Markdown export of the job.

@@ -6,6 +6,11 @@ import { http, HttpResponse } from 'msw';
 interface Job { id: string; content_type: string; status: string; [k: string]: unknown }
 interface Tag { id: string; name: string; meaning: string; color: string; pinned?: boolean }
 interface Template { id: string; name: string; description: string; extra_instructions: string; is_builtin: boolean; created_at?: string; updated_at?: string }
+interface Space {
+  id: string; chat_id: number; name: string; color: string; icon: string;
+  created_at: string; updated_at: string;
+  first_note?: { name: string; snippet: string; updated_at: string; truncated?: boolean };
+}
 interface DocumentOutput { id: string; kind: string; title: string; preview: string; content_url: string; created_at: string }
 export interface Seed {
   jobs: Job[];
@@ -107,6 +112,32 @@ const templates: Template[] = [
 const annotations = new Map<string, { notes: string; updated_at: string | null }>(
   seed.annotations.map((a) => [a.job_id, { notes: a.notes, updated_at: a.updated_at }]),
 );
+// Not seed-derived (seed.json has no spaces snapshot): static fixtures covering
+// the icon+color cases — with and without a first_note, so the Collections
+// list and detail page both render outside a real backend.
+const spaces: Space[] = [
+  {
+    id: 'mock-space-1', chat_id: 1, name: 'Systems & Software Design',
+    color: '#22d3ee', icon: 'anchor',
+    created_at: '2026-08-20T20:09:14Z', updated_at: '2026-08-20T20:09:14Z',
+  },
+  {
+    id: 'mock-space-2', chat_id: 1, name: "adding a 'how to' page for the extension",
+    color: '#f87171', icon: 'rocket',
+    created_at: '2026-08-25T18:15:23Z', updated_at: '2026-08-25T18:15:23Z',
+    first_note: {
+      name: "adding a 'how to' page for the extension",
+      snippet: 'When a user first downloads the extension a page should open with the full explanation of the basic',
+      updated_at: '2026-08-25T18:15:23Z',
+      truncated: true,
+    },
+  },
+  {
+    id: 'mock-space-3', chat_id: 1, name: 'this is the SQL self learning space',
+    color: '#a78bfa', icon: 'code',
+    created_at: '2026-08-10T21:59:26Z', updated_at: '2026-08-10T21:59:26Z',
+  },
+];
 const findJob = (id: string) => jobs.find((j) => j.id === id);
 const canServeParsedDocument = (id: string) =>
   findJob(id)?.content_type === 'document';
@@ -309,6 +340,28 @@ return [
     const i = templates.findIndex((x) => x.name === params.name && !x.is_builtin);
     if (i >= 0) templates.splice(i, 1);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  // List/get/create only — no delete or urls/context tabs (unmocked, not
+  // needed to render the Collections list or a space's header).
+  http.get('/api/spaces', () => HttpResponse.json(spaces)),
+  http.get('/api/spaces/:id', ({ params }) => {
+    const s = spaces.find((x) => x.id === params.id);
+    return s ? HttpResponse.json(s) : new HttpResponse(null, { status: 404 });
+  }),
+  http.post('/api/spaces', async ({ request }) => {
+    const body = (await request.json()) as { name: string; color?: string; icon?: string };
+    if (spaces.some((s) => s.name.toLowerCase() === body.name.toLowerCase())) {
+      return HttpResponse.json({ detail: 'A space with that name already exists.' }, { status: 409 });
+    }
+    const now = new Date().toISOString();
+    const s: Space = {
+      id: `mock-space-${Date.now()}`, chat_id: 1, name: body.name,
+      color: body.color ?? '#6366f1', icon: body.icon ?? 'folder',
+      created_at: now, updated_at: now,
+    };
+    spaces.push(s);
+    return HttpResponse.json(s, { status: 201 });
   }),
 ];
 }

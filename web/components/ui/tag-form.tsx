@@ -9,7 +9,7 @@
 import { useState } from 'react';
 
 import { PRESET_COLORS, IconPicker } from '@/components/ui/tag-picker';
-import { TagX } from 'lucide-react';
+import { Pipette, TagX } from 'lucide-react';
 import type { TagFormState } from '@/lib/hooks/useTagList';
 
 export const DEFAULT_COLOR = '#8b5cf6';
@@ -30,6 +30,7 @@ export function TagForm({
   const [values, setValues] = useState<TagFormState>(initial);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | undefined>();
+  const isCustomColor = !PRESET_COLORS.includes(values.color);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +47,10 @@ export function TagForm({
 
   const inputCls =
     'w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none';
+  // Shared with the custom-color swatch below so the two selected/idle looks can't drift apart.
+  const swatchBase = 'h-6 w-6 rounded-full transition-ui';
+  const swatchSelected = 'ring-2 ring-signal ring-offset-2 ring-offset-surface';
+  const swatchIdle = 'hover:scale-110';
 
   return (
     <form
@@ -96,7 +101,7 @@ export function TagForm({
           <label className="text-xs font-medium text-body">
             Color
           </label>
-          <div className="grid w-fit grid-cols-6 gap-2 sm:grid-cols-9">
+          <div className="grid w-fit grid-cols-6 gap-2">
             {PRESET_COLORS.map((c) => {
               const selected = c === values.color;
               return (
@@ -108,11 +113,34 @@ export function TagForm({
                   }
                   aria-label={`Color ${c}`}
                   aria-pressed={selected}
-                  className={`h-6 w-6 rounded-full transition-ui ${selected ? 'ring-2 ring-signal ring-offset-2 ring-offset-surface' : 'hover:scale-110'}`}
+                  className={`${swatchBase} ${selected ? swatchSelected : swatchIdle}`}
                   style={{ backgroundColor: c }}
                 />
               );
             })}
+            {/* Native color input: opens the OS picker for any color outside the
+                presets. Fills the grid's last slot, styled to match the swatches. */}
+            <label
+              title="Custom color"
+              className={`relative flex cursor-pointer items-center justify-center border ${swatchBase} ${isCustomColor ? `border-transparent ${swatchSelected}` : `border-line-strong ${swatchIdle}`}`}
+              style={isCustomColor ? { backgroundColor: values.color } : undefined}
+            >
+              {!isCustomColor && (
+                <Pipette
+                  className="h-3.5 w-3.5 text-muted"
+                  aria-hidden="true"
+                />
+              )}
+              <input
+                type="color"
+                value={values.color}
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, color: e.target.value }))
+                }
+                aria-label="Custom color"
+                className="sr-only"
+              />
+            </label>
           </div>
         </div>
       </div>

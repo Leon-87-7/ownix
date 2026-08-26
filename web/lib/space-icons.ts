@@ -31,11 +31,12 @@ export const SPACE_ICONS: { name: string; Icon: IconCmp }[] = [
   { name: "lightbulb", Icon: Lightbulb },
 ];
 
-const BY_NAME: Record<string, IconCmp> = Object.fromEntries(
+export const DEFAULT_SPACE_ICON: IconCmp = Folder;
+
+// Resolve `<Icon />` via SPACE_ICON_BY_NAME[name] ?? DEFAULT_SPACE_ICON, not a
+// function call — react-hooks/static-components flags a component variable
+// assigned from a CallExpression as "created during render", even when (as
+// here) the lookup is pure and reference-stable.
+export const SPACE_ICON_BY_NAME: Record<string, IconCmp> = Object.fromEntries(
   SPACE_ICONS.map(({ name, Icon }) => [name, Icon]),
 );
-
-/** Resolve an icon name to its component, falling back to Folder. */
-export function spaceIcon(name: string | undefined): IconCmp {
-  return (name && BY_NAME[name]) || Folder;
-}
