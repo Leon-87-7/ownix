@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobDetail } from '@/lib/hooks/useJobDetail'
 import {
   splitPipes,
@@ -12,7 +12,86 @@ import {
   buildMarkdown,
   parseLinks,
   linksToMarkdown,
+  isSafeHttpUrl,
+  downloadMarkdownFile,
+  ENRICHMENT_FIELDS,
+  SHORT_FIELDS,
 } from '@/lib/job-detail-utils'
+
+// --- downloadMarkdownFile ---
+
+describe('downloadMarkdownFile', () => {
+  beforeEach(() => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('creates an object URL, clicks a download anchor with the given filename, then revokes it', () => {
+    downloadMarkdownFile('job-notes.md', '# Notes')
+
+    expect(URL.createObjectURL).toHaveBeenCalledOnce()
+    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0] as Blob
+    expect(blob.type).toBe('text/markdown;charset=utf-8')
+
+    const clickMock = vi.mocked(HTMLAnchorElement.prototype.click)
+    expect(clickMock).toHaveBeenCalledOnce()
+    const anchor = clickMock.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('job-notes.md')
+    expect(anchor.href).toContain('blob:download')
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:download')
+  })
+})
+
+// --- field config ---
+
+describe('ENRICHMENT_FIELDS / SHORT_FIELDS', () => {
+  it('has the exact key/label/render shape long-form jobs render', () => {
+    expect(ENRICHMENT_FIELDS).toEqual([
+      { key: 'transcript', label: 'Transcript', render: 'text' },
+      { key: 'links', label: 'Links Found', render: 'links' },
+      { key: 'ai_topic', label: 'Topic', render: 'text' },
+      { key: 'ai_objective', label: 'Objective', render: 'text' },
+      { key: 'ai_action_points', label: 'Action Points', render: 'list' },
+      { key: 'ai_tools', label: 'Tools', render: 'list' },
+      { key: 'ai_market_data', label: 'Market Data', render: 'text' },
+      { key: 'promise_gap', label: 'Promise Gap', render: 'json' },
+      { key: 'template_analysis', label: 'Template Analysis', render: 'json' },
+    ])
+  })
+
+  it('has the exact key/label/render shape short-pipeline jobs render', () => {
+    expect(SHORT_FIELDS).toEqual([
+      { key: 'summary', label: 'Summary', render: 'text' },
+      { key: 'transcript', label: 'Transcript', render: 'text' },
+      { key: 'code', label: 'Code', render: 'code' },
+      { key: 'links', label: 'Links Found', render: 'links' },
+    ])
+  })
+})
+
+// --- isSafeHttpUrl ---
+
+describe('isSafeHttpUrl', () => {
+  it('accepts an http URL', () => expect(isSafeHttpUrl('http://example.com')).toBe(true))
+  it('accepts an https URL', () => expect(isSafeHttpUrl('https://example.com')).toBe(true))
+  it('accepts an uppercase scheme (case-insensitive)', () =>
+    expect(isSafeHttpUrl('HTTPS://example.com')).toBe(true))
+  it('rejects javascript: URLs', () => expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false))
+  it('rejects data: URLs', () => expect(isSafeHttpUrl('data:text/html,<script>')).toBe(false))
+  it('rejects a scheme-less string', () => expect(isSafeHttpUrl('example.com')).toBe(false))
+  it('rejects ftp URLs', () => expect(isSafeHttpUrl('ftp://example.com')).toBe(false))
+  it('rejects a dangerous scheme even when "http://" appears later in the string', () => {
+    // Guards against a regex missing its ^ anchor: a javascript: URL that merely
+    // *contains* "http://" must not be treated as safe.
+    expect(isSafeHttpUrl('javascript:alert(1)//http://evil.com')).toBe(false)
+  })
+})
 
 // --- splitPipes ---
 
@@ -50,6 +129,14 @@ describe('splitPipes', () => {
 
   it('ignores a JSON array with items containing pipes', () => {
     expect(splitPipes('["a | b"]')).toEqual(['a | b'])
+  })
+
+  it('trims surrounding whitespace before detecting a JSON array', () => {
+    expect(splitPipes('  ["a", "b"]  ')).toEqual(['a', 'b'])
+  })
+
+  it('trims and drops blank items inside a JSON array', () => {
+    expect(splitPipes('[" a ", "", "b "]')).toEqual(['a', 'b'])
   })
 })
 
@@ -126,6 +213,11 @@ describe('arrayToMarkdown', () => {
     const result = arrayToMarkdown([{ tool: 'hammer' }, { tool: 'saw' }])
     expect(result).toBe('1. Tool: hammer\n2. Tool: saw')
   })
+
+  it('treats a mixed scalar/object array as an object array once any item is an object', () => {
+    const result = arrayToMarkdown([42, { tool: 'hammer' }])
+    expect(result).toBe('1. \n2. Tool: hammer')
+  })
 })
 
 // --- objectToMarkdown ---
@@ -194,6 +286,11 @@ describe('templateAnalysisToMarkdown', () => {
     expect(result).toBe('1. Tool: hammer\n2. Tool: saw')
     expect(result).not.toContain('[object Object]')
   })
+
+  it('stringifies a top-level JSON primitive (not null, not object, not array)', () => {
+    expect(templateAnalysisToMarkdown('42')).toBe('42')
+    expect(templateAnalysisToMarkdown('"just text"')).toBe('just text')
+  })
 })
 
 // --- fieldCopyText ---
@@ -225,6 +322,21 @@ describe('fieldCopyText', () => {
   it('falls back to the raw value when json render produces empty markdown', () => {
     expect(fieldCopyText('plain text', 'json')).toBe('plain text')
   })
+
+  it('falls back to the raw value when an empty JSON object renders to blank markdown', () => {
+    expect(fieldCopyText('{}', 'json')).toBe('{}')
+  })
+
+  it('falls back to the raw value when a JSON string primitive is whitespace-only', () => {
+    // templateAnalysisToMarkdown('"   "') returns the 3-space string itself (via
+    // String(parsed)), which is truthy-but-blank — distinct from a genuinely empty
+    // markdown result, so this exercises md.trim() rather than plain truthiness.
+    expect(fieldCopyText('"   "', 'json')).toBe('"   "')
+  })
+
+  it('falls back to the raw value when render is "links" and no links parse out', () => {
+    expect(fieldCopyText('[]', 'links')).toBe('[]')
+  })
 })
 
 
@@ -248,6 +360,64 @@ describe('links helpers', () => {
 
   it('returns an empty array for invalid JSON', () => {
     expect(parseLinks('not json')).toEqual([])
+  })
+
+  it('returns an empty array when the top-level JSON value is not an array', () => {
+    expect(parseLinks('{}')).toEqual([])
+  })
+
+  it('drops null, array, and non-object items from the list', () => {
+    const withJunk = JSON.stringify([
+      null,
+      ['nested', 'array'],
+      { url: 'https://example.com/kept' },
+    ])
+    expect(parseLinks(withJunk)).toEqual([{ url: 'https://example.com/kept' }])
+  })
+
+  it('defaults non-string url/label/description fields', () => {
+    const oddTypes = JSON.stringify([{ url: 123, label: 456, description: true }])
+    expect(parseLinks(oddTypes)).toEqual([])
+  })
+
+  it('accepts an uppercase-scheme URL (case-insensitive match)', () => {
+    const upper = JSON.stringify([{ url: 'HTTPS://example.com/caps' }])
+    expect(parseLinks(upper)).toEqual([{ url: 'HTTPS://example.com/caps' }])
+  })
+
+  it('accepts a plain http (non-s) URL', () => {
+    const plainHttp = JSON.stringify([{ url: 'http://example.com/plain' }])
+    expect(parseLinks(plainHttp)).toEqual([{ url: 'http://example.com/plain' }])
+  })
+
+  it('rejects a link whose url merely contains "http://" without starting with it', () => {
+    // Same anchor-regex guard as isSafeHttpUrl, duplicated in this file's own filter.
+    const sneaky = JSON.stringify([{ url: 'javascript:alert(1)//http://evil.com' }])
+    expect(parseLinks(sneaky)).toEqual([])
+  })
+
+  it('trims whitespace around url/label/description', () => {
+    const padded = JSON.stringify([
+      { url: '  https://example.com/pad  ', label: '  Padded  ', description: '  desc  ' },
+    ])
+    expect(parseLinks(padded)).toEqual([
+      { url: 'https://example.com/pad', label: 'Padded', description: 'desc' },
+    ])
+  })
+
+  it('renders a link with no description on a single line', () => {
+    const noDescription = JSON.stringify([{ url: 'https://example.com/x', label: 'X' }])
+    expect(linksToMarkdown(noDescription)).toBe('- [X](https://example.com/x)')
+  })
+
+  it('joins multiple links with a newline', () => {
+    const two = JSON.stringify([
+      { url: 'https://example.com/a', label: 'A' },
+      { url: 'https://example.com/b', label: 'B' },
+    ])
+    expect(linksToMarkdown(two)).toBe(
+      '- [A](https://example.com/a)\n- [B](https://example.com/b)',
+    )
   })
 
   it('copies link fields as markdown', () => {
@@ -314,5 +484,20 @@ describe('buildMarkdown', () => {
     const md = buildMarkdown(baseJob)
     expect(md).not.toContain('## Tools')
     expect(md).not.toContain('## Market Data')
+  })
+
+  it('omits a field whose value is whitespace-only', () => {
+    const md = buildMarkdown({ ...baseJob, ai_topic: '   ' })
+    expect(md).not.toContain('## Topic')
+  })
+
+  it('omits a field whose value is undefined', () => {
+    const md = buildMarkdown({ ...baseJob, ai_topic: undefined } as JobDetail)
+    expect(md).not.toContain('## Topic')
+  })
+
+  it('joins sections with a blank line between them', () => {
+    const md = buildMarkdown(baseJob)
+    expect(md).toContain('## Topic\nFinance\n\n## Objective\nLearn investing')
   })
 })
