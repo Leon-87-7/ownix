@@ -91,3 +91,14 @@ async def test_fifo_order() -> None:
     second = await queue_module.dequeue()
     assert first["job_id"] == "A"
     assert second["job_id"] == "B"
+
+
+def test_client_socket_timeout_exceeds_dequeue_timeout(monkeypatch) -> None:  # noqa: ANN001
+    """socket_timeout must stay above the blocking BRPOP window, or redis-py's
+    client-side read timeout fires before the server's own timeout does."""
+    monkeypatch.setattr(queue_module, "_redis", None)
+    client = queue_module._client()
+    try:
+        assert client.get_connection_kwargs()["socket_timeout"] > queue_module._DEQUEUE_TIMEOUT_SECONDS
+    finally:
+        monkeypatch.setattr(queue_module, "_redis", None)

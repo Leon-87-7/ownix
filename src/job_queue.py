@@ -34,7 +34,16 @@ _redis: redis.Redis | None = None
 def _client() -> redis.Redis:
     global _redis
     if _redis is None:
-        _redis = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        # redis-py's default socket_timeout (5s) is shorter than our blocking BRPOP
+        # window, so it would raise RedisTimeoutError well before the server's own
+        # timeout — turning every idle cycle into a spurious "timeout" masked below.
+        # Keep it above _DEQUEUE_TIMEOUT_SECONDS so only real idle/connectivity
+        # issues surface as a timeout.
+        _redis = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_timeout=_DEQUEUE_TIMEOUT_SECONDS + 5,
+        )
     return _redis
 
 
