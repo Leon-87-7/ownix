@@ -72,6 +72,9 @@
 | [#506](https://github.com/Leon-87-7/ownix/issues/506) | Telegram /checklists command delivery | Telegram | — |
 | [#507](https://github.com/Leon-87-7/ownix/issues/507) | Dashboard job detail: generate & display checklists | Web / Jobs | #505 |
 | [#508](https://github.com/Leon-87-7/ownix/issues/508) | Intake response card: copy button for checklists results | Web / Intake | #505 |
+| [#561](https://github.com/Leon-87-7/ownix/issues/561) | feat(tags): merge job tags into link tags for content_type=link | Jobs / Tags | — |
+| [#562](https://github.com/Leon-87-7/ownix/issues/562) | feat(tags): extend job/link tag merge to article jobs with not-yet-linked fallback | Jobs / Tags | #561 |
+| [#563](https://github.com/Leon-87-7/ownix/issues/563) | feat(tags): extend job/link tag merge to repo jobs | Jobs / Tags | #562 |
 
 ---
 
@@ -629,6 +632,12 @@ Extension capture commands (source: extension routing grill, 2026-08-13)
     └── #525 Background extension capture shortcuts
         └── #526 Popup shortcut discovery
 Critical path: #523 → #524 → #525 → #526
+
+Job/Link tag unification (docs/plans/2026-08-27-job-link-tag-unification.md — /ux-fix-loop → brand-lens → /mattpocock-skills:grill-with-docs 2026-08-27)
+#561 merge job tags into link tags for content_type=link (root, unblocked)
+└── #562 extend merge to article jobs with not-yet-linked fallback ◄── #561
+    └── #563 extend merge to repo jobs ◄── #562
+Critical path: #561 → #562 → #563
 ```
 
 ---
