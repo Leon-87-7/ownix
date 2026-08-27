@@ -27,6 +27,7 @@ const linkState = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(useJobTags).mockReturnValue(jobState);
   vi.mocked(useLinkTags).mockReturnValue(linkState);
 });
@@ -43,10 +44,12 @@ describe('JobCardTags', () => {
     render(<JobCardTags jobId="job-1" contentType={contentType} />);
     expect(screen.getByText('Job tag')).toBeInTheDocument();
     expect(useJobTags).toHaveBeenCalledWith('job-1', 'ok', false);
+    expect(useLinkTags).toHaveBeenCalledWith('', [], true, true);
   });
 
   it.each(['short', 'long', 'photo', 'document'])('leaves %s job tags unchanged', (contentType) => {
     render(<JobCardTags jobId="job-1" contentType={contentType} linkId="link-1" />);
     expect(screen.getByText('Job tag')).toBeInTheDocument();
+    expect(useLinkTags).toHaveBeenCalledWith('link-1', [], true, true);
   });
 });

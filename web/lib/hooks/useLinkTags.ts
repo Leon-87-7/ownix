@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTagAttachment } from '@/lib/hooks/useTagAttachment';
 
 export interface TagSummary {
@@ -48,12 +48,16 @@ export function useLinkTags(
 ) {
   const [linkTags, setLinkTags] = useState<TagSummary[]>(initialTags);
   const [allTags, setAllTags] = useState<TagSummary[]>([]);
+  const latestTagRequest = useRef(0);
 
   const refetchTags = useCallback(() => {
+    const requestId = ++latestTagRequest.current;
     // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
     fetch(linkTagsPath(linkId), { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
-      .then((d) => setLinkTags(asTags(d)))
+      .then((d) => {
+        if (requestId === latestTagRequest.current) setLinkTags(asTags(d));
+      })
       .catch(() => {});
   }, [linkId]);
 
@@ -69,6 +73,9 @@ export function useLinkTags(
     if (disabled) return;
     if (fetchTags) refetchTags();
     refetchAll();
+    return () => {
+      latestTagRequest.current += 1;
+    };
   }, [disabled, fetchTags, refetchAll, refetchTags]);
 
   // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath

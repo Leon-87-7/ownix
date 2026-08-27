@@ -163,6 +163,7 @@ describe('JobDetailPage', () => {
     setupMocks({ job: { ...JOB, content_type: contentType } });
     render(<JobDetailPage />);
     expect(mockUseJobTags).toHaveBeenCalledWith('j1', 'ok', false);
+    expect(mockUseLinkTags).toHaveBeenCalledWith('', [], true, true);
   });
 
   it('shows the Copy all action for populated job fields', () => {
