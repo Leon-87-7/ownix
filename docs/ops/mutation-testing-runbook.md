@@ -213,14 +213,16 @@ See `.github/workflows/mutation-testing.yml` for the actual wired-up job.
 
 `web/stryker.config.mjs` already has `incremental: true`, which diffs against the
 previous run's `reports/stryker-incremental.json`. Cache that one file across CI runs
-the same way:
+the same way — the key folds in `package-lock.json`'s hash because incremental mode
+only tracks mutated/test files, not dependency changes, so a lockfile bump needs to
+invalidate the cache rather than restore stale incremental state from before it:
 
 ```yaml
 - uses: actions/cache@v4
   with:
     path: web/reports/stryker-incremental.json
-    key: stryker-incremental-${{ github.base_ref }}-${{ github.sha }}
-    restore-keys: stryker-incremental-${{ github.base_ref }}-
+    key: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-${{ github.sha }}
+    restore-keys: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-
 - run: cd web && npx stryker run
 ```
 
