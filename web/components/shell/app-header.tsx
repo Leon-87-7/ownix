@@ -65,7 +65,7 @@ export function AppHeader() {
               Recall.
             </span>
             <span className="font-mono text-mono-label tracking-wide text-contrasignal-bright">
-              Index.
+              Intake.
             </span>
             <span className="font-mono text-mono-label tracking-wide text-contrasignal-bright">
               Feed.
