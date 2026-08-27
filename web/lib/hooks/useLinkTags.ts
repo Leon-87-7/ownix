@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTagAttachment } from '@/lib/hooks/useTagAttachment';
 
 export interface TagSummary {
@@ -40,15 +40,24 @@ export function fetchVocabulary(force = false): Promise<TagSummary[]> {
   return vocabularyPromise;
 }
 
-export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
+export function useLinkTags(
+  linkId: string,
+  initialTags: TagSummary[] = [],
+  disabled = false,
+  fetchTags = false,
+) {
   const [linkTags, setLinkTags] = useState<TagSummary[]>(initialTags);
   const [allTags, setAllTags] = useState<TagSummary[]>([]);
+  const latestTagRequest = useRef(0);
 
   const refetchTags = useCallback(() => {
+    const requestId = ++latestTagRequest.current;
     // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
     fetch(linkTagsPath(linkId), { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
-      .then((d) => setLinkTags(asTags(d)))
+      .then((d) => {
+        if (requestId === latestTagRequest.current) setLinkTags(asTags(d));
+      })
       .catch(() => {});
   }, [linkId]);
 
@@ -61,8 +70,13 @@ export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
   // `link.tags ?? []` makes a fresh array per render, which would loop
   // setState forever.
   useEffect(() => {
+    if (disabled) return;
+    if (fetchTags) refetchTags();
     refetchAll();
-  }, [refetchAll]);
+    return () => {
+      latestTagRequest.current += 1;
+    };
+  }, [disabled, fetchTags, refetchAll, refetchTags]);
 
   // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
   const { toggleTag, createTag } = useTagAttachment({
@@ -70,6 +84,7 @@ export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
     itemLabel: 'link',
     refetchTags,
     refetchAll,
+    disabled,
   });
 
   return { linkTags, allTags, toggleTag, createTag };

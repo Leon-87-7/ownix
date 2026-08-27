@@ -178,6 +178,8 @@ function LinkTagCluster({ link }: { link: LinkRow }) {
   const { linkTags, allTags, toggleTag, createTag } = useLinkTags(
     link.id,
     link.tags ?? [],
+    false,
+    true,
   );
   const trigger = (
     <button

@@ -1592,13 +1592,19 @@ async def _insert_returning(
         return dict(row)  # type: ignore[arg-type]
 
 
-async def _fetch_in(sql_template: str, ids: list[str]) -> list[dict]:
-    """Run *sql_template* (containing ``{placeholders}``) with an expanded IN list."""
+async def _fetch_in(sql_template: str, ids: list[str], *extra_params) -> list[dict]:
+    """Run *sql_template* (containing ``{placeholders}``) with an expanded IN list.
+
+    *extra_params* bind before the IN list, for a template like
+    ``"... WHERE chat_id = ? AND url IN ({placeholders})"``.
+    """
     if not ids:
         return []
     placeholders = ",".join("?" * len(ids))
     async with connection() as conn:
-        cur = await conn.execute(sql_template.format(placeholders=placeholders), tuple(ids))
+        cur = await conn.execute(
+            sql_template.format(placeholders=placeholders), (*extra_params, *ids)
+        )
         return [dict(r) for r in await cur.fetchall()]
 
 
@@ -2569,6 +2575,19 @@ async def detach_link_tag(link_id: str, tag_id: str) -> bool:
     )
 
 
+async def resolve_link_ids(chat_id: int, urls: list[str]) -> dict[str, str]:
+    """Return normalized URL -> link ID for one user's URLs in one query."""
+    unique_urls = list(dict.fromkeys(urls))
+    if not unique_urls:
+        return {}
+    rows = await _fetch_in(
+        "SELECT url, id FROM links WHERE chat_id = ? AND url IN ({placeholders})",
+        unique_urls,
+        chat_id,
+    )
+    return {row["url"]: row["id"] for row in rows}
+
+
 async def delete_link(link_id: str, chat_id: int) -> bool:
     """Delete a Brain link owned by *chat_id*; its link_tags cascade.
 
@@ -2673,6 +2692,27 @@ async def detach_job_tag(job_id: str, tag_id: str) -> bool:
         )
         > 0
     )
+
+
+async def job_ids_with_tags(job_ids: list[str]) -> set[str]:
+    """Return the subset of *job_ids* that still have job_tags rows.
+
+    Lets callers skip a per-job sweep query for jobs already swept — most
+    requests, once a job has been swept once.
+    """
+    if not job_ids:
+        return set()
+    rows = await _fetch_in(
+        "SELECT DISTINCT job_id FROM job_tags WHERE job_id IN ({placeholders})", job_ids
+    )
+    return {row["job_id"] for row in rows}
+
+
+async def sweep_job_tags_to_link(job_id: str, link_id: str) -> None:
+    """Union a job's tag attachments onto a link, then remove the job copies."""
+    for tag in await list_job_tags(job_id):
+        await attach_link_tag(link_id, tag["id"])
+        await detach_job_tag(job_id, tag["id"])
 
 
 # ---------------------------------------------------------------------------

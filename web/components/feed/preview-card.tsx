@@ -173,7 +173,12 @@ export function PreviewCard({
             <DateTime iso={job.created_at} />
           </span>
           <span className="pointer-events-auto relative z-10 shrink-0">
-            <JobCardTags jobId={job.id} countOnly />
+            <JobCardTags
+              jobId={job.id}
+              contentType={job.content_type}
+              linkId={job.link_id}
+              countOnly
+            />
           </span>
         </div>
       </div>

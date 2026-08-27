@@ -17,6 +17,7 @@ export interface JobSummary {
   thumbnail_url?: string | null;
   thumbnail_kind?: "landscape" | "portrait" | null;
   checklists_generated_at?: string | null;
+  link_id?: string;
 }
 
 interface JobCardProps {
@@ -60,7 +61,7 @@ export function JobCard({ job, contentType, status }: JobCardProps) {
           <DateTime iso={job.created_at} />
         </p>
         <div className="pointer-events-auto relative z-10">
-          <JobCardTags jobId={job.id} />
+          <JobCardTags jobId={job.id} contentType={job.content_type} linkId={job.link_id} />
         </div>
       </div>
     </div>

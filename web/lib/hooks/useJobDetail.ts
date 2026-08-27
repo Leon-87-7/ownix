@@ -19,6 +19,7 @@ export interface JobDetail {
   // the delete-confirm checkbox (ADR-0046). Optional so fixtures elsewhere
   // in the test suite don't all need updating for a field only one UI reads.
   link_count?: number;
+  link_id?: string;
   // Long/article/repo enrichment fields
   ai_topic: string | null;
   ai_objective: string | null;
