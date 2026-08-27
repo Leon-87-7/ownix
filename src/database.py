@@ -1592,13 +1592,19 @@ async def _insert_returning(
         return dict(row)  # type: ignore[arg-type]
 
 
-async def _fetch_in(sql_template: str, ids: list[str]) -> list[dict]:
-    """Run *sql_template* (containing ``{placeholders}``) with an expanded IN list."""
+async def _fetch_in(sql_template: str, ids: list[str], *extra_params) -> list[dict]:
+    """Run *sql_template* (containing ``{placeholders}``) with an expanded IN list.
+
+    *extra_params* bind before the IN list, for a template like
+    ``"... WHERE chat_id = ? AND url IN ({placeholders})"``.
+    """
     if not ids:
         return []
     placeholders = ",".join("?" * len(ids))
     async with connection() as conn:
-        cur = await conn.execute(sql_template.format(placeholders=placeholders), tuple(ids))
+        cur = await conn.execute(
+            sql_template.format(placeholders=placeholders), (*extra_params, *ids)
+        )
         return [dict(r) for r in await cur.fetchall()]
 
 
@@ -2574,10 +2580,10 @@ async def resolve_link_ids(chat_id: int, urls: list[str]) -> dict[str, str]:
     unique_urls = list(dict.fromkeys(urls))
     if not unique_urls:
         return {}
-    placeholders = ",".join("?" * len(unique_urls))
-    rows = await _fetch_dicts(
-        f"SELECT url, id FROM links WHERE chat_id = ? AND url IN ({placeholders})",
-        (chat_id, *unique_urls),
+    rows = await _fetch_in(
+        "SELECT url, id FROM links WHERE chat_id = ? AND url IN ({placeholders})",
+        unique_urls,
+        chat_id,
     )
     return {row["url"]: row["id"] for row in rows}
 
@@ -2696,10 +2702,8 @@ async def job_ids_with_tags(job_ids: list[str]) -> set[str]:
     """
     if not job_ids:
         return set()
-    placeholders = ",".join("?" * len(job_ids))
-    rows = await _fetch_dicts(
-        f"SELECT DISTINCT job_id FROM job_tags WHERE job_id IN ({placeholders})",
-        tuple(job_ids),
+    rows = await _fetch_in(
+        "SELECT DISTINCT job_id FROM job_tags WHERE job_id IN ({placeholders})", job_ids
     )
     return {row["job_id"] for row in rows}
 
