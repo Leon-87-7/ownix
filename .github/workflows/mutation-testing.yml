@@ -26,12 +26,21 @@ on:
       - "requirements-dev.txt"
       - "web/package.json"
       - "web/package-lock.json"
+  # Weekly full-scope baseline sweep, unfiltered (ignores the paths list above — schedule/
+  # workflow_dispatch always run the whole configured module-path/mutate scope) — feeds
+  # docs/ops/mutation-score-history.md, which rabbitloop reads to flag regressions.
+  # Cron is UTC-only, no DST: 00:00 UTC = 3am Israel Daylight Time (IDT); drifts to 2am
+  # during Israel Standard Time (winter) since GitHub Actions can't express a tz-aware cron.
+  schedule:
+    - cron: "0 0 * * 5"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
 jobs:
   backend-mutation:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     continue-on-error: true
     services:
@@ -84,6 +93,7 @@ jobs:
           path: cosmic-ray-report.txt
 
   frontend-mutation:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     continue-on-error: true
     defaults:
@@ -105,9 +115,100 @@ jobs:
           # fresh baseline instead of restoring stale incremental state from before the bump.
           key: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-${{ github.sha }}
           restore-keys: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-
-      - run: npx stryker run
+      # clear-text reporter prints a `| All files | <score> | ... |` row to stdout — the only
+      # place Stryker exposes the aggregate score without hand-computing it from mutation.json's
+      # raw per-mutant records. Capture it so rabbitloop can read the score on a passing run too,
+      # not just dig through the report when the gate fails.
+      - run: |
+          set -o pipefail
+          npx stryker run 2>&1 | tee stryker-run.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: stryker-report
-          path: web/reports/mutation/
+          path: |
+            web/reports/mutation/
+            web/stryker-run.log
+
+  # Weekly full-scope snapshot (Fridays ~3am Israel time) or a manual workflow_dispatch run.
+  # One job, backend steps then frontend steps in order — not the parallel PR jobs above —
+  # because this run's purpose is a single coherent history-file row for both, not fast PR
+  # feedback (the two PR jobs above already run in parallel; splitting isolated GH-hosted
+  # runners doesn't actually contend for memory the way running both on one dev machine does
+  # — see the runbook's "don't run both tools at once" gotcha, which is about that machine,
+  # not CI). No cr-filter-git and no Stryker incremental cache here: this snapshot exists to
+  # score the whole configured scope from scratch, not to diff against a base branch.
+  weekly-mutation-history:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        # No persist-credentials: false here, unlike the PR jobs above — this job commits the
+        # history file back to main and needs the default authenticated remote to push.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt cosmic-ray
+      - run: cosmic-ray init cosmic-ray.toml session.sqlite
+      - run: cosmic-ray exec cosmic-ray.toml session.sqlite
+      - run: cr-report session.sqlite | tee cosmic-ray-report.txt
+      - id: backend-score
+        run: |
+          TOTAL=$(grep -oP 'total jobs: \K\d+' cosmic-ray-report.txt)
+          SURVIVED=$(grep -oP 'surviving mutants: \K\d+' cosmic-ray-report.txt)
+          KILLED=$((TOTAL - SURVIVED))
+          SCORE=$(awk -v k="$KILLED" -v t="$TOTAL" 'BEGIN { printf "%.2f", (t > 0 ? k / t * 100 : 0) }')
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "killed=$KILLED" >> "$GITHUB_OUTPUT"
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # @stryker-mutator/core ^10 requires Node >=22
+      - working-directory: web
+        run: npm ci
+      - id: frontend-score
+        working-directory: web
+        run: |
+          set -o pipefail
+          npx stryker run 2>&1 | tee stryker-run.log
+          # clear-text score table row: File | % score | # killed | # timeout | # survived | # no cov | # error
+          LINE=$(grep -m1 '^All files' stryker-run.log)
+          SCORE=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$2); print $2}')
+          KILLED=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$3); print $3}')
+          TIMEOUT=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$4); print $4}')
+          SURVIVED=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$5); print $5}')
+          NOCOV=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$6); print $6}')
+          TOTAL=$((KILLED + TIMEOUT + SURVIVED + NOCOV))
+          echo "score=$SCORE" >> "$GITHUB_OUTPUT"
+          echo "killed=$KILLED" >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-mutation-reports
+          path: |
+            cosmic-ray-report.txt
+            web/reports/mutation/
+            web/stryker-run.log
+      - run: |
+          DATE=$(date -u +%Y-%m-%d)
+          SHA=$(git rev-parse --short HEAD)
+          ROW="| $DATE | $SHA | ${{ steps.backend-score.outputs.score }}% | ${{ steps.backend-score.outputs.killed }}/${{ steps.backend-score.outputs.total }} | ${{ steps.frontend-score.outputs.score }}% | ${{ steps.frontend-score.outputs.killed }}/${{ steps.frontend-score.outputs.total }} |"
+          echo "$ROW" >> docs/ops/mutation-score-history.md
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ops/mutation-score-history.md
+          git commit -m "chore: record weekly mutation score ($DATE)"
+          git push

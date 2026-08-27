@@ -30,8 +30,8 @@ mutation-testing check runs (`frontend-mutation`, `backend-mutation`) conclude `
 | ------------------- | ------------------------------------------------ | ---------------------------------------------------------- | -------------- |
 | CodeRabbit          | `coderabbitai[bot]`                              | Commit status context `CodeRabbit`; PR review whose body starts `Actionable comments posted: N` | `Actionable comments posted: 0` and no unresolved inline threads |
 | Codacy              | `codacy-production[bot]`                         | Check run `Codacy Static Code Analysis` completes; AI Reviewer posts a PR review whose body starts `### Pull Request Overview` | Check conclusion `success` and no unresolved inline threads |
-| Mutation — frontend | check run `frontend-mutation` (workflow "Mutation Testing") | Check run completes (Stryker on `web/`)         | Check conclusion `success` — no surviving mutants in the `stryker-report` artifact |
-| Mutation — backend  | check run `backend-mutation` (workflow "Mutation Testing")  | Check run completes (cosmic-ray on `src/`)      | Check conclusion `success` — no surviving mutants in the `cosmic-ray-report` artifact |
+| Mutation — frontend | check run `frontend-mutation` (workflow "Mutation Testing") | Check run completes (Stryker on `web/`)         | Check conclusion `success` — mutation score at or above Stryker's `break: 50` threshold (`web/stryker.config.mjs`), **not** zero survivors |
+| Mutation — backend  | check run `backend-mutation` (workflow "Mutation Testing")  | Check run completes (cosmic-ray on `src/`)      | Check conclusion `success` — `cosmic-ray exec` finished without crashing; **there is no score threshold wired up for backend at all**, so this passes even with a high survival rate |
 
 Codacy has **two channels** under the same bot: the static-analysis **check run** (the gate) and an
 **AI Reviewer** that submits a PR review with risk-tagged inline comments (`🔴 HIGH RISK` /
@@ -175,8 +175,8 @@ gh api --paginate "repos/{owner}/{repo}/pulls/<PR_NUMBER>/comments" \
   --jq '.[] | select(.user.login | test("coderabbit|codacy"; "i")) | {user: .user.login, path, line, body}'
 ```
 
-**Mutation testing** — a failing check run means surviving mutants; the check-run output has no
-body, so pull the uploaded report from the matching workflow run:
+**Mutation testing** — download the uploaded report regardless of pass or fail (the check-run
+output itself has no body):
 
 ```bash
 RUN_ID=$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$HEAD_SHA" \
@@ -185,9 +185,46 @@ gh run download "$RUN_ID" -n cosmic-ray-report -D /tmp/cosmic-ray   # backend
 gh run download "$RUN_ID" -n stryker-report -D /tmp/stryker         # frontend
 ```
 
-Read `/tmp/cosmic-ray/cosmic-ray-report.txt` and the JSON/HTML under `/tmp/stryker/mutation/` for
-mutants marked survived/not-killed — each surviving mutant is a finding: the code path it touches
-has no test that would catch that mutation.
+On a **failing** run, read `/tmp/cosmic-ray/cosmic-ray-report.txt` and `/tmp/stryker/stryker-run.log`
+for mutants marked survived/not-killed — each surviving mutant is a finding: the code path it
+touches has no test that would catch that mutation.
+
+On **any** run, pass or fail, pull out the score — same two lines the CI job itself parses (see
+`weekly-mutation-history` in `.github/workflows/mutation-testing.yml`), so the numbers agree with
+what gets recorded in history:
+
+```bash
+# backend: last lines of cosmic-ray-report.txt are `total jobs: N` / `surviving mutants: N (P%)`
+BE_TOTAL=$(grep -oP 'total jobs: \K\d+' /tmp/cosmic-ray/cosmic-ray-report.txt)
+BE_SURVIVED=$(grep -oP 'surviving mutants: \K\d+' /tmp/cosmic-ray/cosmic-ray-report.txt)
+# frontend: clear-text score table's "All files" row in stryker-run.log
+FE_LINE=$(grep -m1 '^All files' /tmp/stryker/stryker-run.log)
+FE_SCORE=$(echo "$FE_LINE" | awk -F'|' '{gsub(/ /,"",$2); print $2}')
+```
+
+**Baseline comparison (informational only — this never blocks the loop or the exit conditions
+below; it only shapes what the final report says).** Fetch the last row of the weekly baseline:
+
+```bash
+BASELINE=$(git show origin/main:docs/ops/mutation-score-history.md | grep '^|' | tail -1)
+```
+
+That row's `total` is a **full, unfiltered** scan of the configured scope (see the file's own
+header). This PR's `cosmic-ray-report.txt` total usually isn't — `cr-filter-git` narrows a PR run
+to only mutants on changed lines, so its total is often a small subset of the baseline's. Compare
+totals before comparing scores:
+
+- Backend total (`BE_TOTAL` above) matches the baseline row's backend total → it was an unfiltered
+  run (e.g. the PR touched no cosmic-ray source files, so `cr-filter-git` was skipped — see the
+  `source-changed` step in the workflow). Only then is `BE_SURVIVED`/`BE_TOTAL` diffable against the
+  baseline's backend killed/total: report **regression** if survival rate rose, **improvement** if
+  it fell, otherwise flat.
+- Backend total is smaller → this was a filtered, partial run. Report the PR's own numbers in the
+  final report, but do **not** claim a regression or improvement against the baseline — a smaller
+  denominator makes the comparison meaningless.
+- Frontend's score is always comparable: Stryker's incremental mode still reports the full
+  configured `mutate` scope's score in its summary table even when most mutants were skipped via
+  the incremental cache, so `FE_SCORE` diffs directly against the baseline row's frontend score.
 
 #### D. Check exit conditions
 
@@ -273,13 +310,16 @@ After exiting the loop, summarize:
 | Iterations               | N                                             |
 | CodeRabbit actionable    | N remaining (or n/a if not installed)         |
 | Codacy check             | success / failure (or n/a if not installed)   |
-| Mutation — frontend      | success / failure (or n/a if not installed)   |
-| Mutation — backend       | success / failure (or n/a if not installed)   |
+| Mutation — frontend      | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
+| Mutation — backend       | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
 | Comments resolved        | N                                             |
 | Remaining comments       | N (if any)                                    |
 
 If the loop exited due to max iterations, list any remaining unresolved comments (noting which
-gate raised each) and suggest next steps.
+gate raised each) and suggest next steps. The score/baseline comparison is reporting only — a
+regression there does not stop the loop or withhold the merge offer below; both mutation gates
+already conclude on their own CI-defined pass condition (§ How each gate signals), and this just
+adds the trend on top of that.
 
 ### 4. Offer to merge on a full pass
 
@@ -302,8 +342,8 @@ Rabbitloop complete.
   Iterations:      2
   CodeRabbit:      0 actionable
   Codacy:          success
-  Mutation (fe):   success
-  Mutation (be):   success
+  Mutation (fe):   success — 82.10% (baseline 78.57%, improvement)
+  Mutation (be):   success — 53.10% (not comparable — filtered run, 40/612 mutants tested)
   Resolved:        7 comments
   Remaining:       0
 ```
@@ -314,7 +354,7 @@ If not fully resolved:
 Rabbitloop stopped after 5 iterations.
   CodeRabbit:      2 actionable
   Codacy:          failure
-  Mutation (fe):   success
+  Mutation (fe):   success — 61.20% (baseline 78.57%, regression)
   Mutation (be):   failure
   Resolved:        12 comments
   Remaining:       3
