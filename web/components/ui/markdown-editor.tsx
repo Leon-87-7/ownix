@@ -80,7 +80,7 @@ export default function MarkdownEditor({ initialMarkdown, onSave }: MarkdownEdit
       </span>
       <div
         ref={mountRef}
-        className="milkdown-editor prose prose-invert min-h-[6rem] max-w-none text-sm text-ink"
+        className="milkdown-editor prose prose-invert min-h-[6rem] max-w-none text-sm text-ink [&_.milkdown_.ProseMirror]:py-4 [&_.milkdown_.ProseMirror]:pl-14 [&_.milkdown_.ProseMirror]:pr-3 sm:[&_.milkdown_.ProseMirror]:px-[120px] sm:[&_.milkdown_.ProseMirror]:py-[60px]"
       />
     </div>
   )
