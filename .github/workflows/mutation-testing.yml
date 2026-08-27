@@ -141,6 +141,12 @@ jobs:
   weekly-mutation-history:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # A manual workflow_dispatch overlapping the Friday schedule (or two manual runs) would
+    # otherwise race to commit+push docs/ops/mutation-score-history.md — queue instead of
+    # canceling, since each run's ~30min of real mutation-testing work shouldn't be thrown away.
+    concurrency:
+      group: weekly-mutation-history
+      cancel-in-progress: false
     permissions:
       contents: write
     services:
@@ -155,8 +161,12 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
-        # No persist-credentials: false here, unlike the PR jobs above — this job commits the
-        # history file back to main and needs the default authenticated remote to push.
+        with:
+          # Explicit ref, not github.ref: a workflow_dispatch run started from any other branch
+          # must still snapshot and commit against main, never that branch. No persist-credentials:
+          # false here, unlike the PR jobs above — this job needs the default authenticated remote
+          # to push the history commit back.
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -181,10 +191,21 @@ jobs:
       - id: frontend-score
         working-directory: web
         run: |
-          set -o pipefail
+          # This snapshot's whole job is recording the score, low or high — a below-threshold
+          # score must not abort the script before it's parsed and appended. bash's default -e
+          # (GitHub Actions runs steps as `bash -e`) would otherwise kill the script the instant
+          # `npx stryker run` exits non-zero, skipping every line below including the history
+          # commit. Capture the exit status without acting on it; only a missing score table
+          # (Stryker crashed before producing one) is treated as a real failure.
+          set +e
           npx stryker run 2>&1 | tee stryker-run.log
+          set -e
           # clear-text score table row: File | % score | # killed | # timeout | # survived | # no cov | # error
           LINE=$(grep -m1 '^All files' stryker-run.log)
+          if [ -z "$LINE" ]; then
+            echo "No score table in stryker-run.log — Stryker crashed, not just a low score." >&2
+            exit 1
+          fi
           SCORE=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$2); print $2}')
           KILLED=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$3); print $3}')
           TIMEOUT=$(echo "$LINE" | awk -F'|' '{gsub(/ /,"",$4); print $4}')
@@ -203,6 +224,12 @@ jobs:
             web/reports/mutation/
             web/stryker-run.log
       - run: |
+          # The mutation runs above take ~30min — re-sync with whatever main has become in the
+          # meantime before appending, so the push below is against a fresh tip instead of racing
+          # a stale one (the concurrency group above only serializes overlapping runs of this job,
+          # it doesn't protect against main moving from an unrelated push).
+          git fetch origin main
+          git reset --hard origin/main
           DATE=$(date -u +%Y-%m-%d)
           SHA=$(git rev-parse --short HEAD)
           ROW="| $DATE | $SHA | ${{ steps.backend-score.outputs.score }}% | ${{ steps.backend-score.outputs.killed }}/${{ steps.backend-score.outputs.total }} | ${{ steps.frontend-score.outputs.score }}% | ${{ steps.frontend-score.outputs.killed }}/${{ steps.frontend-score.outputs.total }} |"
@@ -211,4 +238,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/ops/mutation-score-history.md
           git commit -m "chore: record weekly mutation score ($DATE)"
-          git push
+          git push origin HEAD:main

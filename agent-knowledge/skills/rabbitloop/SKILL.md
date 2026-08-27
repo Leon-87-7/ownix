@@ -206,8 +206,13 @@ FE_SCORE=$(echo "$FE_LINE" | awk -F'|' '{gsub(/ /,"",$2); print $2}')
 below; it only shapes what the final report says).** Fetch the last row of the weekly baseline:
 
 ```bash
-BASELINE=$(git show origin/main:docs/ops/mutation-score-history.md | grep '^|' | tail -1)
+# grep for a leading ISO date, not just `^|` — that also matches the header and separator rows,
+# and tail -1 would silently pick the separator row when no weekly snapshot has landed yet.
+BASELINE=$(git show origin/main:docs/ops/mutation-score-history.md | grep -P '^\| \d{4}-\d{2}-\d{2} ' | tail -1)
 ```
+
+Empty `$BASELINE` means no weekly snapshot has run yet — report the PR's own scores with no
+baseline comparison at all rather than diffing against nothing.
 
 That row's `total` is a **full, unfiltered** scan of the configured scope (see the file's own
 header). This PR's `cosmic-ray-report.txt` total usually isn't — `cr-filter-git` narrows a PR run
@@ -232,13 +237,17 @@ Stop the loop if **any** of these are true:
 
 - **All** gates pass: CodeRabbit reports **`Actionable comments posted: 0`** with **zero unresolved
   inline threads**; the Codacy check concluded **`success`** with **zero unresolved inline
-  threads**; and both mutation check runs concluded **`success`** (no surviving mutants). (Skip
-  whichever gate is not installed — an absent gate does not block the exit.)
+  threads**; both mutation check runs concluded **`success`** — per their own CI-defined pass
+  condition (§ How each gate signals): frontend at/above Stryker's `break: 50` floor, backend just
+  `cosmic-ray exec` finishing without crashing, regardless of survivors. (Skip whichever gate is
+  not installed — an absent gate does not block the exit.)
 - Max iterations reached (report current state).
 
-Do **not** exit while any gate is still unhappy: e.g. a green Codacy check, zero CodeRabbit
-comments, and a passing frontend mutation run don't matter if the backend mutation run still has
-surviving mutants — keep looping.
+Do **not** exit while any gate's check run is still non-`success` (or, for CodeRabbit/Codacy,
+still has unresolved threads) — e.g. a green Codacy check and zero CodeRabbit comments don't matter
+if `frontend-mutation` is still below the break threshold. But once a mutation check run itself
+concludes `success`, it counts — don't keep looping on it because survivors remain; survivor counts
+only feed the informational baseline comparison above, never this exit check.
 
 #### E. Fix actionable comments
 
