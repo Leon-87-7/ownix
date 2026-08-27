@@ -38,6 +38,9 @@ vi.mock('@/lib/hooks/useJobAnnotation', () => ({
 vi.mock('@/lib/hooks/useJobTags', () => ({
   useJobTags: vi.fn(),
 }));
+vi.mock('@/lib/hooks/useLinkTags', () => ({
+  useLinkTags: vi.fn(),
+}));
 vi.mock('@/lib/polling', () => ({ startPolling: vi.fn(() => vi.fn()) }));
 vi.mock('@/lib/restricted/context', () => ({
   useRestrictedMode: vi.fn(() => ({ restricted: false, showRestrictedToast: vi.fn() })),
@@ -60,12 +63,14 @@ vi.mock('next/dynamic', () => ({
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
 import { useJobTags } from '@/lib/hooks/useJobTags';
+import { useLinkTags } from '@/lib/hooks/useLinkTags';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { startPolling } from '@/lib/polling';
 
 const mockUseJobDetail = vi.mocked(useJobDetail);
 const mockUseJobAnnotation = vi.mocked(useJobAnnotation);
 const mockUseJobTags = vi.mocked(useJobTags);
+const mockUseLinkTags = vi.mocked(useLinkTags);
 const mockUseRestrictedMode = vi.mocked(useRestrictedMode);
 const mockStartPolling = vi.mocked(startPolling);
 
@@ -126,6 +131,12 @@ function setupMocks(
     createTag: vi.fn(),
     ...tagsOverrides,
   } as ReturnType<typeof useJobTags>);
+  mockUseLinkTags.mockReturnValue({
+    linkTags: [],
+    allTags: [],
+    toggleTag: vi.fn(),
+    createTag: vi.fn(),
+  } as ReturnType<typeof useLinkTags>);
 }
 
 beforeEach(() => {
@@ -141,6 +152,19 @@ beforeEach(() => {
 });
 
 describe('JobDetailPage', () => {
+  it.each(['link', 'article', 'repo'])('uses link tags for a resolved %s job', (contentType) => {
+    setupMocks({ job: { ...JOB, content_type: contentType, link_id: 'link-1' } });
+    render(<JobDetailPage />);
+    expect(mockUseJobTags).toHaveBeenCalledWith('j1', 'ok', true);
+    expect(mockUseLinkTags).toHaveBeenCalledWith('link-1', [], false, true);
+  });
+
+  it.each(['article', 'repo'])('uses editable job tags while an %s link is absent', (contentType) => {
+    setupMocks({ job: { ...JOB, content_type: contentType } });
+    render(<JobDetailPage />);
+    expect(mockUseJobTags).toHaveBeenCalledWith('j1', 'ok', false);
+  });
+
   it('shows the Copy all action for populated job fields', () => {
     render(<JobDetailPage />);
     expect(screen.getByRole('button', { name: /copy all fields/i })).toBeInTheDocument();

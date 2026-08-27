@@ -21,7 +21,7 @@ import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
-import { useJobTags } from '@/lib/hooks/useJobTags';
+import { useMergedTags } from '@/lib/hooks/useMergedTags';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
 import {
   type RenderType,
@@ -1087,8 +1087,10 @@ export default function JobDetailPage() {
     fetchState,
     restricted,
   );
-  const { jobTags, allTags, toggleTag, createTag } = useJobTags(
+  const { jobTags, allTags, toggleTag, createTag } = useMergedTags(
     id,
+    job?.content_type ?? '',
+    job?.link_id,
     fetchState,
     restricted,
   );

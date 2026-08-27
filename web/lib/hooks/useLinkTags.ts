@@ -40,7 +40,12 @@ export function fetchVocabulary(force = false): Promise<TagSummary[]> {
   return vocabularyPromise;
 }
 
-export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
+export function useLinkTags(
+  linkId: string,
+  initialTags: TagSummary[] = [],
+  disabled = false,
+  fetchTags = false,
+) {
   const [linkTags, setLinkTags] = useState<TagSummary[]>(initialTags);
   const [allTags, setAllTags] = useState<TagSummary[]>([]);
 
@@ -61,8 +66,10 @@ export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
   // `link.tags ?? []` makes a fresh array per render, which would loop
   // setState forever.
   useEffect(() => {
+    if (disabled) return;
+    if (fetchTags) refetchTags();
     refetchAll();
-  }, [refetchAll]);
+  }, [disabled, fetchTags, refetchAll, refetchTags]);
 
   // nosemgrep -- same-origin relative API path; segments are server-issued IDs, URI-encoded in linkTagsPath
   const { toggleTag, createTag } = useTagAttachment({
@@ -70,6 +77,7 @@ export function useLinkTags(linkId: string, initialTags: TagSummary[] = []) {
     itemLabel: 'link',
     refetchTags,
     refetchAll,
+    disabled,
   });
 
   return { linkTags, allTags, toggleTag, createTag };

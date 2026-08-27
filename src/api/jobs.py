@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from src import database
+from src.brain import normalize_url
 from src.api.deps import get_owned_job
 from src.services import job_recovery
 from src.services.jobs import build_job_purge_task, create_and_enqueue_job
@@ -25,6 +26,21 @@ jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 ThumbnailKind = Literal["landscape", "portrait"]
 RecoveryContentType = Literal["short", "long", "article", "repo"]
+LINK_BACKED_CONTENT_TYPES = {"link", "article", "repo"}
+
+
+async def _add_link_ids(items: list[dict], chat_id: int) -> None:
+    """Resolve and sweep link-backed jobs without changing carrier jobs."""
+    candidates = [item for item in items if item.get("content_type") in LINK_BACKED_CONTENT_TYPES]
+    normalized_by_job = {item["id"]: normalize_url(item["url"]) for item in candidates}
+    links_by_url = await database.resolve_link_ids(chat_id, list(normalized_by_job.values()))
+    resolved = [item for item in candidates if normalized_by_job[item["id"]] in links_by_url]
+    # Most requests hit already-swept jobs — skip the per-job sweep query for those.
+    sweepable = await database.job_ids_with_tags([item["id"] for item in resolved])
+    for item in resolved:
+        item["link_id"] = links_by_url[normalized_by_job[item["id"]]]
+        if item["id"] in sweepable:
+            await database.sweep_job_tags_to_link(item["id"], item["link_id"])
 
 
 class RecoveryRequest(BaseModel):
@@ -370,6 +386,7 @@ async def list_jobs(
         item = dict(row)
         item["thumbnail_url"], item["thumbnail_kind"] = await resolve_thumbnail(item, stored_ids)
         items.append(item)
+    await _add_link_ids(items, chat_id)
 
     return {
         "items": items,
@@ -639,6 +656,7 @@ async def get_job(job_id: str, request: Request) -> dict:
 
     fields = detail_fields_for(job.get("content_type", ""))
     detail = {k: job.get(k) for k in fields}
+    await _add_link_ids([detail], request.state.user["id"])
     # Not a job column — one COUNT query, only consumed by the delete-confirm
     # checkbox (ADR-0046), so it rides outside the content-type field filter.
     detail["link_count"] = await database.count_job_links(job_id)

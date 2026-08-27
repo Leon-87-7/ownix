@@ -2569,6 +2569,19 @@ async def detach_link_tag(link_id: str, tag_id: str) -> bool:
     )
 
 
+async def resolve_link_ids(chat_id: int, urls: list[str]) -> dict[str, str]:
+    """Return normalized URL -> link ID for one user's URLs in one query."""
+    unique_urls = list(dict.fromkeys(urls))
+    if not unique_urls:
+        return {}
+    placeholders = ",".join("?" * len(unique_urls))
+    rows = await _fetch_dicts(
+        f"SELECT url, id FROM links WHERE chat_id = ? AND url IN ({placeholders})",
+        (chat_id, *unique_urls),
+    )
+    return {row["url"]: row["id"] for row in rows}
+
+
 async def delete_link(link_id: str, chat_id: int) -> bool:
     """Delete a Brain link owned by *chat_id*; its link_tags cascade.
 
@@ -2673,6 +2686,29 @@ async def detach_job_tag(job_id: str, tag_id: str) -> bool:
         )
         > 0
     )
+
+
+async def job_ids_with_tags(job_ids: list[str]) -> set[str]:
+    """Return the subset of *job_ids* that still have job_tags rows.
+
+    Lets callers skip a per-job sweep query for jobs already swept — most
+    requests, once a job has been swept once.
+    """
+    if not job_ids:
+        return set()
+    placeholders = ",".join("?" * len(job_ids))
+    rows = await _fetch_dicts(
+        f"SELECT DISTINCT job_id FROM job_tags WHERE job_id IN ({placeholders})",
+        tuple(job_ids),
+    )
+    return {row["job_id"] for row in rows}
+
+
+async def sweep_job_tags_to_link(job_id: str, link_id: str) -> None:
+    """Union a job's tag attachments onto a link, then remove the job copies."""
+    for tag in await list_job_tags(job_id):
+        await attach_link_tag(link_id, tag["id"])
+        await detach_job_tag(job_id, tag["id"])
 
 
 # ---------------------------------------------------------------------------
