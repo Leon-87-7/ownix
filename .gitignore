@@ -42,9 +42,7 @@ Thumbs.db
 # pyscn — generated analysis snapshots
 .pyscn/
 
-# mutmut — isolated mutant-testing workspace, regenerated per run
-mutants/
-.mutmut-cache
+# cosmic-ray — session DB already covered by *.sqlite above
 
 # folders
 

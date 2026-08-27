@@ -1,0 +1,23 @@
+# Cosmic Ray config — replaces mutmut for the Python backend (see docs/adr/0052-cosmic-ray-not-mutmut-for-backend-mutation-testing.md).
+# Not [tool.cosmic-ray] in pyproject.toml — cosmic-ray needs its own TOML file, no pyproject support.
+#
+# Narrow scope on purpose (docs/plans/2026-08-25-mutation-testing-research.md): pure-logic,
+# already-well-tested modules first, not all of src/.
+#
+# Unlike mutmut, cosmic-ray mutates the file on disk in place and restores it after each
+# work item — no isolated mutants/ workspace, no sys.path rewriting, so no also_copy
+# equivalent is needed here regardless of how much of src/ the test run actually imports.
+[cosmic-ray]
+module-path = ["src/utils/validators.py", "src/services/jobs.py"]
+timeout = 60.0
+excluded-modules = []
+test-command = "python3 -m pytest tests/test_validators.py tests/test_jobs_api.py"
+
+[cosmic-ray.distributor]
+name = "local"
+
+# cr-filter-git: run between `init` and `exec` to skip mutants on lines unchanged vs.
+# `branch` — this repo's incremental-per-PR mechanism (see docs/ops/mutation-testing-runbook.md).
+# Needs the branch's full history present locally (CI: actions/checkout fetch-depth: 0).
+[cosmic-ray.filters.git-filter]
+branch = "main"

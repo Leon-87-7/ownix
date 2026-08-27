@@ -1,0 +1,113 @@
+name: Mutation Testing
+
+# Informational only, not a required check — see "Why not just gate every PR today" in
+# docs/ops/mutation-testing-runbook.md. Promote to required once real CI runtime and
+# reliability are proven, the way `test.yml`'s backend/frontend jobs were.
+on:
+  pull_request:
+    paths:
+      - "src/utils/validators.py"
+      - "src/services/jobs.py"
+      - "tests/test_validators.py"
+      - "tests/test_jobs_api.py"
+      - "web/lib/feed-thumbnail-preload.ts"
+      - "web/lib/job-detail-utils.ts"
+      - "web/lib/parse-batch-links.ts"
+      - "web/lib/polling.ts"
+      - "web/lib/share-target.ts"
+      - "web/lib/feed-thumbnail-preload.test.ts"
+      - "web/lib/job-detail-utils.test.ts"
+      - "web/lib/parse-batch-links.test.ts"
+      - "web/lib/polling.test.ts"
+      - "web/lib/share-target.test.ts"
+      - "web/vitest.config.ts"
+      - "cosmic-ray.toml"
+      - "web/stryker.config.mjs"
+      - "requirements-dev.txt"
+      - "web/package.json"
+      - "web/package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  backend-mutation:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # cr-filter-git diffs against the `main` branch set in cosmic-ray.toml — needs
+          # that branch's full history present, not the default shallow clone.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt cosmic-ray
+      # checkout only leaves the PR ref locally — cr-filter-git needs a `main` ref it can diff
+      # against. persist-credentials: false above means an unauthenticated fetch, which is fine
+      # for this public repo but would fail on a private one — embed the job token in the fetch
+      # URL so this keeps working if the repo's visibility ever changes.
+      - run: |
+          git fetch "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" main:main
+      # cr-filter-git skips mutants on lines unchanged vs. main, so a change that only touches
+      # tests/test_validators.py / tests/test_jobs_api.py (no module-path source edits) would
+      # otherwise get every mutant marked skipped and produce no real result — run unfiltered then.
+      - id: source-changed
+        run: |
+          if git diff --name-only main...HEAD -- src/utils/validators.py src/services/jobs.py | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - run: cosmic-ray init cosmic-ray.toml session.sqlite
+      - run: cr-filter-git --config cosmic-ray.toml session.sqlite
+        if: steps.source-changed.outputs.changed == 'true'
+      - run: cosmic-ray exec cosmic-ray.toml session.sqlite
+      - run: cr-report session.sqlite | tee cosmic-ray-report.txt
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cosmic-ray-report
+          path: cosmic-ray-report.txt
+
+  frontend-mutation:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # @stryker-mutator/core ^10 requires Node >=22
+      - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: web/reports/stryker-incremental.json
+          # Incremental mode only tracks mutated/test files, not dependency or config changes
+          # (Stryker docs), so the key folds in package-lock's hash — a lockfile bump forces a
+          # fresh baseline instead of restoring stale incremental state from before the bump.
+          key: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-${{ github.sha }}
+          restore-keys: stryker-incremental-${{ github.base_ref }}-${{ hashFiles('web/package-lock.json') }}-
+      - run: npx stryker run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stryker-report
+          path: web/reports/mutation/

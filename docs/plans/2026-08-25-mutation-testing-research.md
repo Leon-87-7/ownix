@@ -1,5 +1,12 @@
 # Mutation Testing — Research & Adoption Path
 
+> **Superseded (2026-08-27) for the Python side:** mutmut turned out to be structurally
+> incompatible with this repo's `src.`-prefixed package layout and never produced a backend
+> result. Replaced with cosmic-ray — see ADR-0052
+> (`docs/adr/0052-cosmic-ray-not-mutmut-for-backend-mutation-testing.md`) for why, and
+> `docs/ops/mutation-testing-runbook.md` for the current runbook. The StrykerJS
+> recommendation below (§1, §2.3, §3.2) is unaffected and still current.
+
 **Date:** 2026-08-25
 **Scope:** Evaluate mutation testing tools for the Python backend (`src/`, pytest 8.x /
 pytest-asyncio, 76 test files under `tests/`) and the Next.js dashboard (`web/`, Vitest 4 +
