@@ -16,7 +16,10 @@ violates — it crashed on every mutation attempt and never produced a backend r
 ADR-0052 (`docs/adr/0052-cosmic-ray-not-mutmut-for-backend-mutation-testing.md`) for the
 full story. cosmic-ray was spot-checked directly against this repo instead of taken on
 faith from its docs: `cosmic-ray init` generated 613 real work items against
-`src/utils/validators.py` + `src/services/jobs.py` with no error, and `cosmic-ray exec`
+`src/utils/validators.py` + `src/services/jobs.py` with no error (ADR-0052's own spot-check
+of the same two files, run separately, recorded 612 — a one-mutant difference expected
+between independent `cosmic-ray init` runs as the source under test changes between them,
+not a discrepancy to reconcile), and `cosmic-ray exec`
 produced genuine `KILLED`/`TestOutcome` verdicts running the actual
 `from src.utils.validators import ...`-style test suite — no crash, no equivalent of
 mutmut's `src.`-stripping wall. **A full 613-mutant run was not completed** — see
@@ -97,8 +100,12 @@ A `reports/` directory (HTML report + `stryker-incremental.json`) and a
   used to stop a background sample run left `src/utils/validators.py` with two live,
   uncommitted mutations (`and` flipped to `or`, an index expression corrupted) that
   `git status` then showed as a real diff. Always run `git status`/`git diff` on the
-  `module-path` files immediately after stopping any run early, and `git checkout --
-  <file>` to restore before doing anything else.
+  `module-path` files immediately after stopping any run early. If that diff is *only*
+  the mutation (matches what cosmic-ray would apply, no legitimate edits mixed in),
+  `git checkout -- <file>` to restore it — but if the worktree had unstaged changes to
+  that file before the run, `git checkout --` discards those too; unmix the mutation
+  from your own edits by hand (or `git stash` your edits before running cosmic-ray next
+  time) rather than blindly reverting the whole file.
 
 - **mutmut was tried first and abandoned — see ADR-0052, not repeated here.** The short
   version: it hardcodes a `src.`-prefix-stripping assumption this repo's package layout
@@ -212,8 +219,8 @@ the same way:
 - uses: actions/cache@v4
   with:
     path: web/reports/stryker-incremental.json
-    key: stryker-incremental-${{ github.base_ref }}
-    restore-keys: stryker-incremental-
+    key: stryker-incremental-${{ github.base_ref }}-${{ github.sha }}
+    restore-keys: stryker-incremental-${{ github.base_ref }}-
 - run: cd web && npx stryker run
 ```
 

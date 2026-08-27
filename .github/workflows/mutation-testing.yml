@@ -8,13 +8,24 @@ on:
     paths:
       - "src/utils/validators.py"
       - "src/services/jobs.py"
+      - "tests/test_validators.py"
+      - "tests/test_jobs_api.py"
       - "web/lib/feed-thumbnail-preload.ts"
       - "web/lib/job-detail-utils.ts"
       - "web/lib/parse-batch-links.ts"
       - "web/lib/polling.ts"
       - "web/lib/share-target.ts"
+      - "web/lib/feed-thumbnail-preload.test.ts"
+      - "web/lib/job-detail-utils.test.ts"
+      - "web/lib/parse-batch-links.test.ts"
+      - "web/lib/polling.test.ts"
+      - "web/lib/share-target.test.ts"
+      - "web/vitest.config.ts"
       - "cosmic-ray.toml"
       - "web/stryker.config.mjs"
+
+permissions:
+  contents: read
 
 jobs:
   backend-mutation:
@@ -36,6 +47,7 @@ jobs:
           # cr-filter-git diffs against the `main` branch set in cosmic-ray.toml — needs
           # that branch's full history present, not the default shallow clone.
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -61,6 +73,8 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22 # @stryker-mutator/core ^10 requires Node >=22
@@ -68,8 +82,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: web/reports/stryker-incremental.json
-          key: stryker-incremental-${{ github.base_ref }}
-          restore-keys: stryker-incremental-
+          key: stryker-incremental-${{ github.base_ref }}-${{ github.sha }}
+          restore-keys: stryker-incremental-${{ github.base_ref }}-
       - run: npx stryker run
       - uses: actions/upload-artifact@v4
         if: always()
