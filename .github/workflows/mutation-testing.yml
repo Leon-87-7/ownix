@@ -40,6 +40,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt cosmic-ray
+      # checkout only leaves the PR ref locally — cr-filter-git needs a `main` ref it can diff against.
+      - run: git fetch origin main:main
       - run: cosmic-ray init cosmic-ray.toml session.sqlite
       - run: cr-filter-git --config cosmic-ray.toml session.sqlite
       - run: cosmic-ray exec cosmic-ray.toml session.sqlite
@@ -61,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # @stryker-mutator/core ^10 requires Node >=22
       - run: npm ci
       - uses: actions/cache@v4
         with:
