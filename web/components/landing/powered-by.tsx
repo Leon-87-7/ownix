@@ -1,4 +1,5 @@
 import { BraveIcon } from '@/components/svg/brave-icon';
+import { FirecrawlIcon } from '@/components/svg/firecrawl-icon';
 import { GeminiIcon } from '@/components/svg/gemini-icon';
 import { GitHubIcon } from '@/components/svg/github-icon';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
@@ -14,14 +15,16 @@ const stack: {
   { name: 'Jina', Icon: JinaIcon },
   { name: 'Brave', Icon: BraveIcon },
   { name: 'LiteParse', Icon: LiteParseIcon, iconClassName: 'text-muted' },
+  { name: 'Firecrawl', Icon: FirecrawlIcon },
   { name: 'GitHub', Icon: GitHubIcon, iconClassName: 'text-ink' },
   { name: 'Google Drive', Icon: GoogleDriveIcon },
 ];
 
 /** Trust bar naming the real services under the hood - Gemini for
- * enrichment, Jina/Brave/LiteParse for article, link, and PDF ingestion,
- * GitHub for repo analysis, Drive for storage. Sits between the hero and
- * the onboarding section so it doesn't grow the hero's fixed-height fold. */
+ * enrichment, Jina/Brave for article and link ingestion, LiteParse/Firecrawl
+ * (anydoc) for PDF and office-document parsing, GitHub for repo analysis,
+ * Drive for storage. Sits between the hero and the onboarding section so it
+ * doesn't grow the hero's fixed-height fold. */
 export function PoweredBy() {
   return (
     <div
