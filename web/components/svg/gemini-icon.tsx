@@ -85,19 +85,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="18"
-          />
+          <feGaussianBlur stdDeviation="18" />
         </filter>
         <filter
           id="gemini-icon-filter-c"
@@ -108,19 +96,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
         <filter
           id="gemini-icon-filter-d"
@@ -131,19 +107,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
         <filter
           id="gemini-icon-filter-e"
@@ -154,19 +118,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
         <filter
           id="gemini-icon-filter-f"
@@ -177,19 +129,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
         <filter
           id="gemini-icon-filter-g"
@@ -200,19 +140,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
         <filter
           id="gemini-icon-filter-h"
@@ -223,19 +151,7 @@ export function GeminiIcon(props: React.SVGProps<SVGSVGElement>) {
           colorInterpolationFilters="sRGB"
           filterUnits="userSpaceOnUse"
         >
-          <feFlood
-            floodOpacity="0"
-            result="BackgroundImageFix"
-          />
-          <feBlend
-            in="SourceGraphic"
-            in2="BackgroundImageFix"
-            result="shape"
-          />
-          <feGaussianBlur
-            result="effect1_foregroundBlur_69_17998"
-            stdDeviation="32"
-          />
+          <feGaussianBlur stdDeviation="32" />
         </filter>
       </defs>
     </svg>

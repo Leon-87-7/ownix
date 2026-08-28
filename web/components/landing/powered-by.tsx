@@ -13,7 +13,6 @@ const stack: {
   name: string;
   by?: string;
   Icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
-  iconClassName?: string;
   tooltip: string;
 }[] = [
   {
@@ -46,7 +45,6 @@ const stack: {
   {
     name: 'GitHub',
     Icon: GitHubIcon,
-    iconClassName: 'text-ink',
     tooltip: "Reads a repo's README and structure into a plain-language breakdown.",
   },
   {
@@ -75,15 +73,15 @@ export function PoweredBy() {
       </span>
       <TooltipProvider>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 sm:gap-x-8">
-          {stack.map(({ name, by, Icon, iconClassName, tooltip }) => (
+          {stack.map(({ name, by, Icon, tooltip }) => (
             <Tooltip
               key={name}
               content={tooltip}
             >
-              <span className="flex shrink-0 items-center gap-2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
-                <Icon className={`h-5 w-auto shrink-0 ${iconClassName ?? ''}`} />
+              <span className="flex shrink-0 items-center gap-2 rounded-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
+                <Icon className="h-5 w-auto shrink-0" />
                 <span className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium text-ink">{name}</span>
+                  <span className="text-sm font-medium">{name}</span>
                   {by && (
                     <span className="font-mono text-[10px] uppercase tracking-[0.4px] text-muted">
                       by {by}
