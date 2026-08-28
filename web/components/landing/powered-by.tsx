@@ -36,7 +36,7 @@ export function PoweredBy() {
           key={name}
           className="flex shrink-0 items-center gap-2 text-sm font-medium text-ink"
         >
-          <Icon className={`h-5 w-5 shrink-0 ${iconClassName ?? ''}`} />
+          <Icon className={`h-5 w-auto shrink-0 ${iconClassName ?? ''}`} />
           {name}
         </span>
       ))}
