@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
-import type { ComponentPropsWithoutRef, ReactNode } from 'react';
-import { useVisualViewport } from '@/lib/hooks/useVisualViewport';
+import * as RadixDialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useVisualViewport } from "@/lib/hooks/useVisualViewport";
 
 export const Dialog = RadixDialog.Root;
 export const DialogTrigger = RadixDialog.Trigger;
@@ -14,7 +15,7 @@ const VIEWPORT_PADDING_Y = 32;
 
 export function DialogContent({
   children,
-  className = '',
+  className = "",
   style,
   hideClose = false,
   ...props
@@ -23,6 +24,7 @@ export function DialogContent({
    * block Escape/outside-click, so no dead control invites a tap. */
   hideClose?: boolean;
 }) {
+  const pressFeedback = usePressFeedback();
   // RadixDialog.Content is only mounted while the dialog is open, so tracking
   // the visual viewport here follows the keyboard for the open dialog only.
   const { centerY, height } = useVisualViewport(true);
@@ -48,11 +50,11 @@ export function DialogContent({
       >
         {children}
         {!hideClose && (
-          <RadixDialog.Close className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100">
-            <X
-              className="h-4 w-4"
-              aria-hidden="true"
-            />
+          <RadixDialog.Close
+            {...pressFeedback}
+            className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink motion-reduce:transition-none"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">Close</span>
           </RadixDialog.Close>
         )}
@@ -62,7 +64,7 @@ export function DialogContent({
 }
 
 export function DialogTitle({
-  className = '',
+  className = "",
   ...props
 }: ComponentPropsWithoutRef<typeof RadixDialog.Title>) {
   return (
@@ -73,11 +75,7 @@ export function DialogTitle({
   );
 }
 
-export function DialogDescription({
-  children,
-}: {
-  children?: ReactNode;
-}) {
+export function DialogDescription({ children }: { children?: ReactNode }) {
   if (!children) return null;
   return (
     <RadixDialog.Description className="mt-1 text-sm text-body">

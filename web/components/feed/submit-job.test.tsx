@@ -3,6 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INTAKE_ACTIONS, SubmitJobProvider, useSubmitJob } from './submit-job';
 
+vi.mock('@/lib/hooks/usePressFeedback', () => ({
+  usePressFeedback: () => ({}),
+}));
+
 function ShortcutProbe() {
   const { open } = useSubmitJob();
   return <span>{open ? 'submit open' : 'submit closed'}</span>;

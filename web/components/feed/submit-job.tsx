@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   createContext,
@@ -8,11 +8,11 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import type { FormEvent, ReactNode } from 'react';
-import { SubmitUrlForm } from '@/components/feed/submit-url-form';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { GhostButton } from '@/components/ui/ghost-button';
+} from "react";
+import type { FormEvent, ReactNode } from "react";
+import { SubmitUrlForm } from "@/components/feed/submit-url-form";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { GhostButton } from "@/components/ui/ghost-button";
 import {
   FileCode2,
   Link2,
@@ -21,17 +21,14 @@ import {
   Search,
   Trash2,
   Waypoints,
-} from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
-import { GoToLinksPanel } from '@/components/feed/goto-links-panel';
-import { useRestrictedMode } from '@/lib/restricted/context';
-import { parseBatchLinkInput } from '@/lib/parse-batch-links';
-import { apiPost } from '@/lib/fetch-utils';
+} from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { DocUploadPanel } from "@/components/doc-parser/doc-upload-panel";
+import { GoToLinksPanel } from "@/components/feed/goto-links-panel";
+import { useRestrictedMode } from "@/lib/restricted/context";
+import { parseBatchLinkInput } from "@/lib/parse-batch-links";
+import { apiPost } from "@/lib/fetch-utils";
+import { useHapticFeedback } from "@/lib/hooks/useHapticFeedback";
 
 /** POST /api/jobs response shape, as loosely typed as the JSON it actually returns. */
 interface SubmittedJob {
@@ -52,7 +49,7 @@ interface AcceptedJob {
 }
 
 const CLEAR_FAILED_CONFIRM =
-  'Clear failed jobs in this tab? This marks them cancelled; it does not delete them.';
+  "Clear failed jobs in this tab? This marks them cancelled; it does not delete them.";
 
 // Window for the "G then T" GoTo chord — a 't' after this long is a fresh,
 // unrelated keystroke, not the second half of the chord.
@@ -87,14 +84,12 @@ interface SubmitJobContextValue {
   registerFeedSearch: (cmds: FeedSearchCommands | null) => void;
 }
 
-const SubmitJobContext = createContext<SubmitJobContextValue | null>(
-  null,
-);
+const SubmitJobContext = createContext<SubmitJobContextValue | null>(null);
 
 /** One row of live batch-paste progress (CONTEXT.md "Batch link paste"). */
 interface BatchLinkResult {
   token: string;
-  status: 'pending' | 'success' | 'error';
+  status: "pending" | "success" | "error";
   message?: string;
 }
 
@@ -127,8 +122,8 @@ function hasActiveDialog() {
     document.querySelectorAll<HTMLElement>('[role="dialog"]'),
   ).some(
     (dialog) =>
-      dialog.getAttribute('aria-hidden') !== 'true' &&
-      dialog.dataset.state !== 'closed',
+      dialog.getAttribute("aria-hidden") !== "true" &&
+      dialog.dataset.state !== "closed",
   );
 }
 
@@ -137,9 +132,9 @@ function shouldIgnoreGlobalShortcut(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
   return (
-    tag === 'input' ||
-    tag === 'textarea' ||
-    tag === 'select' ||
+    tag === "input" ||
+    tag === "textarea" ||
+    tag === "select" ||
     target.isContentEditable ||
     Boolean(target.closest('[role="dialog"]'))
   );
@@ -148,7 +143,7 @@ function shouldIgnoreGlobalShortcut(target: EventTarget | null) {
 function inferContentTypeFromUrl(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     const path = parsed.pathname.toLowerCase();
 
     // Match the exact apex or a dot-separated subdomain so lookalike hosts
@@ -156,28 +151,23 @@ function inferContentTypeFromUrl(rawUrl: string): string {
     const isHost = (domain: string) =>
       host === domain || host.endsWith(`.${domain}`);
 
-    if (host === 'github.com') return 'repo';
-    if (isHost('youtube.com') && path === '/watch') return 'long';
-    if (host === 'youtu.be') return 'long';
-    if (isHost('youtube.com') && path.startsWith('/shorts/'))
-      return 'short';
-    if (isHost('instagram.com') && path.startsWith('/reel/'))
-      return 'short';
-    if (isHost('tiktok.com') && path.includes('/video/'))
-      return 'short';
+    if (host === "github.com") return "repo";
+    if (isHost("youtube.com") && path === "/watch") return "long";
+    if (host === "youtu.be") return "long";
+    if (isHost("youtube.com") && path.startsWith("/shorts/")) return "short";
+    if (isHost("instagram.com") && path.startsWith("/reel/")) return "short";
+    if (isHost("tiktok.com") && path.includes("/video/")) return "short";
   } catch {
-    return 'article';
+    return "article";
   }
 
-  return 'article';
+  return "article";
 }
 
 export function useSubmitJob(): SubmitJobContextValue {
   const ctx = useContext(SubmitJobContext);
   if (!ctx)
-    throw new Error(
-      'useSubmitJob must be used within SubmitJobProvider',
-    );
+    throw new Error("useSubmitJob must be used within SubmitJobProvider");
   return ctx;
 }
 
@@ -190,7 +180,7 @@ export function useSubmitJobOptional(): SubmitJobContextValue | null {
 // Space-separated keys render as individual right-aligned kbd chips so a
 // chord like "R P" reads as two keys.
 
-export type IntakeActionKey = 'submit' | 'docs' | 'link';
+export type IntakeActionKey = "submit" | "docs" | "link";
 
 export const INTAKE_ACTIONS: ReadonlyArray<{
   key: IntakeActionKey;
@@ -200,32 +190,32 @@ export const INTAKE_ACTIONS: ReadonlyArray<{
   shortcut: string;
 }> = [
   {
-    key: 'submit',
+    key: "submit",
     icon: Plus,
-    label: 'Submit URL',
-    description: 'Paste a URL - auto-detects the pipeline.',
-    shortcut: 'N',
+    label: "Submit URL",
+    description: "Paste a URL - auto-detects the pipeline.",
+    shortcut: "N",
   },
   {
-    key: 'docs',
+    key: "docs",
     icon: FileCode2,
-    label: 'Ingest Docs',
-    description: 'Upload a PDF or document to parse.',
-    shortcut: 'D',
+    label: "Ingest Docs",
+    description: "Upload a PDF or document to parse.",
+    shortcut: "D",
   },
   {
-    key: 'link',
+    key: "link",
     icon: Waypoints,
-    label: 'Ingest Link',
-    description: 'Save a link as-is to your Brain - no processing.',
-    shortcut: 'U',
+    label: "Ingest Link",
+    description: "Save a link as-is to your Brain - no processing.",
+    shortcut: "U",
   },
 ];
 
 function CommandShortcut({ keys }: { keys: string }) {
   return (
     <span className="ml-auto flex items-center gap-1">
-      {keys.split(' ').map((key, i) => (
+      {keys.split(" ").map((key, i) => (
         <kbd
           key={i}
           className="rounded border border-line bg-canvas px-1.5 py-0.5 font-mono text-micro uppercase tracking-wide text-contrasignal-deep"
@@ -274,10 +264,7 @@ function CommandAction({
       disabled={disabled}
       className="flex w-full items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm text-ink transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal disabled:cursor-not-allowed disabled:text-muted disabled:hover:bg-surface"
     >
-      <Icon
-        className="h-4 w-4 text-contrasignal-deep"
-        aria-hidden="true"
-      />
+      <Icon className="h-4 w-4 text-contrasignal-deep" aria-hidden="true" />
       <span>{label}</span>
       <CommandShortcut keys={shortcut} />
     </button>
@@ -299,7 +286,7 @@ function SheetActionButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] motion-reduce:active:scale-100"
+      className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal"
     >
       <Icon
         className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"
@@ -343,58 +330,51 @@ function useGatedOpen(
   return [value, setGated];
 }
 
-export function SubmitJobProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function SubmitJobProvider({ children }: { children: ReactNode }) {
+  const haptic = useHapticFeedback();
+
   const { restricted, showRestrictedToast } = useRestrictedMode();
   const [open, setOpen] = useGatedOpen(
     restricted,
     showRestrictedToast,
-    'Sign in to submit URLs to your own Index.',
+    "Sign in to submit URLs to your own Index.",
   );
   const [docsOpen, setDocsOpen] = useGatedOpen(
     restricted,
     showRestrictedToast,
-    'Sign in to parse documents into your own Index.',
+    "Sign in to parse documents into your own Index.",
   );
-  const [batchResults, setBatchResults] = useState<BatchLinkResult[]>(
-    [],
-  );
+  const [batchResults, setBatchResults] = useState<BatchLinkResult[]>([]);
   const clearBatchResults = useCallback(() => setBatchResults([]), []);
   const [addLinkOpen, setAddLinkOpen] = useGatedOpen(
     restricted,
     showRestrictedToast,
-    'Sign in to add links to your own Index.',
+    "Sign in to add links to your own Index.",
     clearBatchResults,
   );
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useGatedOpen(
     restricted,
     showRestrictedToast,
-    'Sign in to run commands on your own Index.',
+    "Sign in to run commands on your own Index.",
   );
   // GoTo quick-jump — links carrying one of the user's pinned tags. Read-only
   // view of the user's own data, so unlike the dialogs above it isn't gated
   // behind restricted mode (same as the Navigate group's "Open Links").
   const [goToOpen, setGoToOpen] = useState(false);
-  const [url, setUrl] = useState('');
-  const [addLinkUrl, setAddLinkUrl] = useState('');
-  const [addLinkError, setAddLinkError] = useState<string | null>(
-    null,
-  );
+  const [url, setUrl] = useState("");
+  const [addLinkUrl, setAddLinkUrl] = useState("");
+  const [addLinkError, setAddLinkError] = useState<string | null>(null);
   const [addLinkSubmitting, setAddLinkSubmitting] = useState(false);
-  const [template, setTemplate] = useState('summary');
-  const [freestylePrompt, setFreestylePrompt] = useState('');
+  const [template, setTemplate] = useState("summary");
+  const [freestylePrompt, setFreestylePrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [lastAccepted, setLastAccepted] =
-    useState<AcceptedJob | null>(null);
-  const [feedRecovery, setFeedRecovery] =
-    useState<FeedRecoveryCommands | null>(null);
-  const [feedSearch, setFeedSearch] =
-    useState<FeedSearchCommands | null>(null);
+  const [lastAccepted, setLastAccepted] = useState<AcceptedJob | null>(null);
+  const [feedRecovery, setFeedRecovery] = useState<FeedRecoveryCommands | null>(
+    null,
+  );
+  const [feedSearch, setFeedSearch] = useState<FeedSearchCommands | null>(null);
   const registerFeedRecovery = useCallback(
     (cmds: FeedRecoveryCommands | null) => setFeedRecovery(cmds),
     [],
@@ -421,14 +401,18 @@ export function SubmitJobProvider({
       n: () => setOpen(true),
       d: () => setDocsOpen(true),
       u: () => setAddLinkOpen(true),
-      l: () => window.location.assign('/feed?view=links'),
+      l: () => window.location.assign("/feed?view=links"),
       c: () => {
         const recovery = feedRecoveryRef.current;
-        if (!restricted && recovery?.canClearFailed && window.confirm(CLEAR_FAILED_CONFIRM))
+        if (
+          !restricted &&
+          recovery?.canClearFailed &&
+          window.confirm(CLEAR_FAILED_CONFIRM)
+        )
           recovery.clearFailed();
       },
-      '/': () => feedSearchRef.current?.focusSearch(),
-      '*': () => feedSearchRef.current?.focusLinkSearch(),
+      "/": () => feedSearchRef.current?.focusSearch(),
+      "*": () => feedSearchRef.current?.focusLinkSearch(),
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -441,15 +425,25 @@ export function SubmitJobProvider({
       // clears a pending 'g' instead of leaving it live for a later, unrelated 't'.
       const canFireGoTo = noMods && !shouldIgnoreGlobalShortcut(event.target);
       const pendingG = goToChordRef.current;
-      if (canFireGoTo && key === 't' && pendingG !== null && Date.now() - pendingG < GOTO_CHORD_TIMEOUT_MS) {
+      if (
+        canFireGoTo &&
+        key === "t" &&
+        pendingG !== null &&
+        Date.now() - pendingG < GOTO_CHORD_TIMEOUT_MS
+      ) {
         goToChordRef.current = null;
         event.preventDefault();
         setGoToOpen(true);
         return;
       }
-      goToChordRef.current = canFireGoTo && key === 'g' ? Date.now() : null;
+      goToChordRef.current = canFireGoTo && key === "g" ? Date.now() : null;
 
-      if (key === 'k' && (event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey) {
+      if (
+        key === "k" &&
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        !event.altKey
+      ) {
         if (!shouldIgnoreGlobalShortcut(event.target)) {
           event.preventDefault();
           setCommandOpen(true);
@@ -463,8 +457,8 @@ export function SubmitJobProvider({
         handler();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     restricted,
     setAddLinkOpen,
@@ -481,8 +475,8 @@ export function SubmitJobProvider({
       if (!trimmed || submitting) return;
       setError(null);
 
-      if (template === 'freestyle' && !freestylePrompt.trim()) {
-        setError('Freestyle prompt cannot be empty');
+      if (template === "freestyle" && !freestylePrompt.trim()) {
+        setError("Freestyle prompt cannot be empty");
         return;
       }
 
@@ -492,39 +486,38 @@ export function SubmitJobProvider({
           url: trimmed,
           template,
         };
-        if (template === 'freestyle')
+        if (template === "freestyle")
           payload.freestyle_prompt = freestylePrompt.trim();
         const result = await apiPost<SubmittedJob>(
-          '/api/jobs',
+          "/api/jobs",
           payload,
-          'Could not submit job',
+          "Could not submit job",
         );
         if (!result.ok) throw new Error(result.detail);
         const data = result.data;
         setLastAccepted({
-          id: typeof data.id === 'string' && data.id ? data.id : null,
+          id: typeof data.id === "string" && data.id ? data.id : null,
           url: trimmed,
-          title: typeof data.title === 'string' ? data.title : null,
+          title: typeof data.title === "string" ? data.title : null,
           content_type:
-            typeof data.content_type === 'string'
+            typeof data.content_type === "string"
               ? data.content_type
               : inferContentTypeFromUrl(trimmed),
-          status:
-            typeof data.status === 'string' ? data.status : 'pending',
+          status: typeof data.status === "string" ? data.status : "pending",
           at: Date.now(),
         });
-        setUrl('');
-        setFreestylePrompt('');
+        setUrl("");
+        setFreestylePrompt("");
         setOpen(false);
+        haptic("success");
       } catch (e) {
-        setError(
-          e instanceof Error ? e.message : 'Could not submit job',
-        );
+        setError(e instanceof Error ? e.message : "Could not submit job");
+        haptic("error");
       } finally {
         setSubmitting(false);
       }
     },
-    [freestylePrompt, submitting, template, url],
+    [freestylePrompt, haptic, submitting, template, url],
   );
 
   /** Submits one already-parsed token, updating its row in batchResults.
@@ -534,46 +527,49 @@ export function SubmitJobProvider({
     async (token: string, index: number): Promise<boolean> => {
       try {
         const result = await apiPost<SubmittedJob>(
-          '/api/jobs',
-          { url: token, content_type: 'link' },
-          'Could not add link',
+          "/api/jobs",
+          { url: token, content_type: "link" },
+          "Could not add link",
         );
         if (!result.ok) {
           setBatchResults((current) =>
             current.map((row, i) =>
-              i === index ? { ...row, status: 'error', message: result.detail } : row,
+              i === index
+                ? { ...row, status: "error", message: result.detail }
+                : row,
             ),
           );
+          haptic("error");
           return false;
         }
         const data = result.data;
         setLastAccepted({
-          id: typeof data.id === 'string' && data.id ? data.id : null,
+          id: typeof data.id === "string" && data.id ? data.id : null,
           url: token,
-          title: typeof data.title === 'string' ? data.title : null,
-          content_type: 'link',
-          status:
-            typeof data.status === 'string' ? data.status : 'pending',
+          title: typeof data.title === "string" ? data.title : null,
+          content_type: "link",
+          status: typeof data.status === "string" ? data.status : "pending",
           at: Date.now(),
         });
         setBatchResults((current) =>
           current.map((row, i) =>
-            i === index ? { ...row, status: 'success' } : row,
+            i === index ? { ...row, status: "success" } : row,
           ),
         );
+        haptic("success");
         return true;
       } catch (e) {
-        const message =
-          e instanceof Error ? e.message : 'Could not add link';
+        const message = e instanceof Error ? e.message : "Could not add link";
         setBatchResults((current) =>
           current.map((row, i) =>
-            i === index ? { ...row, status: 'error', message } : row,
+            i === index ? { ...row, status: "error", message } : row,
           ),
         );
+        haptic("error");
         return false;
       }
     },
-    [setBatchResults, setLastAccepted],
+    [haptic, setBatchResults, setLastAccepted],
   );
 
   const submitAddLink = useCallback(
@@ -584,7 +580,7 @@ export function SubmitJobProvider({
       setAddLinkError(null);
       setAddLinkSubmitting(true);
       setBatchResults(
-        tokens.map((token) => ({ token, status: 'pending' as const })),
+        tokens.map((token) => ({ token, status: "pending" as const })),
       );
 
       const results = await runWithConcurrency(
@@ -596,7 +592,7 @@ export function SubmitJobProvider({
 
       setAddLinkSubmitting(false);
       if (failures === 0) {
-        setAddLinkUrl('');
+        setAddLinkUrl("");
         setAddLinkOpen(false);
         setBatchResults([]);
       }
@@ -622,32 +618,29 @@ export function SubmitJobProvider({
     },
     [restricted, setOpen, setUrl],
   );
-  const openDocs = useCallback(
-    () => setDocsOpen(true),
-    [setDocsOpen],
-  );
+  const openDocs = useCallback(() => setDocsOpen(true), [setDocsOpen]);
   const openIntake = useCallback(() => setIntakeOpen(true), []);
-  const openCommand = useCallback(
-    () => setCommandOpen(true),
-    [setCommandOpen],
+  const openCommand = useCallback(() => setCommandOpen(true), [setCommandOpen]);
+  const go = useCallback(
+    (href: string) => {
+      setCommandOpen(false);
+      setDocsOpen(false);
+      window.location.assign(href);
+    },
+    [setCommandOpen, setDocsOpen],
   );
-  const go = useCallback((href: string) => {
-    setCommandOpen(false);
-    setDocsOpen(false);
-    window.location.assign(href);
-  }, [setCommandOpen, setDocsOpen]);
 
   const launchIntakeAction = useCallback(
     (key: IntakeActionKey, closeSurface: () => void) => {
       closeSurface();
       switch (key) {
-        case 'submit':
+        case "submit":
           setOpen(true);
           break;
-        case 'docs':
+        case "docs":
           setDocsOpen(true);
           break;
-        case 'link':
+        case "link":
           setAddLinkOpen(true);
           break;
       }
@@ -660,10 +653,10 @@ export function SubmitJobProvider({
     [addLinkUrl],
   );
   const addLinkButtonLabel = addLinkSubmitting
-    ? `Ingesting ${batchResults.filter((r) => r.status !== 'pending').length}/${batchResults.length}…`
+    ? `Ingesting ${batchResults.filter((r) => r.status !== "pending").length}/${batchResults.length}…`
     : addLinkTokenCount > 1
       ? `Ingest ${addLinkTokenCount} Links`
-      : 'Ingest Link';
+      : "Ingest Link";
 
   const value = useMemo(
     () => ({
@@ -696,10 +689,7 @@ export function SubmitJobProvider({
   return (
     <SubmitJobContext.Provider value={value}>
       {children}
-      <Dialog
-        open={open}
-        onOpenChange={setOpen}
-      >
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogTitle>Submit URL</DialogTitle>
           <div className="mt-4">
@@ -717,37 +707,27 @@ export function SubmitJobProvider({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={addLinkOpen}
-        onOpenChange={setAddLinkOpen}
-      >
+      <Dialog open={addLinkOpen} onOpenChange={setAddLinkOpen}>
         <DialogContent>
           <DialogTitle>Ingest Link</DialogTitle>
-          <form
-            onSubmit={submitAddLink}
-            className="mt-4 space-y-4"
-          >
+          <form onSubmit={submitAddLink} className="mt-4 space-y-4">
             <label className="block text-sm font-medium text-ink">
               URL
               <textarea
                 value={addLinkUrl}
-                onChange={(event) =>
-                  setAddLinkUrl(event.target.value)
-                }
+                onChange={(event) => setAddLinkUrl(event.target.value)}
                 rows={4}
                 placeholder={
-                  'https://example.com\nhttps://example.com/two\n…one per line, or paste a whole list'
+                  "https://example.com\nhttps://example.com/two\n…one per line, or paste a whole list"
                 }
-                aria-describedby={
-                  addLinkError ? 'add-link-error' : undefined
-                }
+                aria-describedby={addLinkError ? "add-link-error" : undefined}
                 className="mt-2 w-full resize-y rounded-md border border-line bg-canvas px-3 py-2 font-mono text-sm text-ink outline-none transition-ui placeholder:font-sans placeholder:text-muted focus:border-signal focus:ring-1 focus:ring-signal"
               />
             </label>
             <p className="text-xs text-muted">
-              Ingest Link saves each link as-is; it does not process
-              them through the pipeline-detection flow. Paste as many
-              as you like — one job per link.
+              Ingest Link saves each link as-is; it does not process them
+              through the pipeline-detection flow. Paste as many as you like —
+              one job per link.
             </p>
             {addLinkError && (
               <p
@@ -768,18 +748,18 @@ export function SubmitJobProvider({
                     <span
                       aria-hidden="true"
                       className={
-                        row.status === 'success'
-                          ? 'text-status-done'
-                          : row.status === 'error'
-                            ? 'text-status-error'
-                            : 'text-muted'
+                        row.status === "success"
+                          ? "text-status-done"
+                          : row.status === "error"
+                            ? "text-status-error"
+                            : "text-muted"
                       }
                     >
-                      {row.status === 'success'
-                        ? '✓'
-                        : row.status === 'error'
-                          ? '✕'
-                          : '…'}
+                      {row.status === "success"
+                        ? "✓"
+                        : row.status === "error"
+                          ? "✕"
+                          : "…"}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-body">
                       {row.token}
@@ -804,25 +784,19 @@ export function SubmitJobProvider({
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={docsOpen}
-        onOpenChange={setDocsOpen}
-      >
+      <Dialog open={docsOpen} onOpenChange={setDocsOpen}>
         <DialogContent className="shadow-none">
           <DialogTitle>Ingest Docs</DialogTitle>
           <DocUploadPanel
             flat
             onUploaded={(jobId) =>
-              go(jobId ? `/doc-parser/${jobId}` : '/doc-parser')
+              go(jobId ? `/doc-parser/${jobId}` : "/doc-parser")
             }
           />
         </DialogContent>
       </Dialog>
 
-      <Sheet
-        open={intakeOpen}
-        onOpenChange={setIntakeOpen}
-      >
+      <Sheet open={intakeOpen} onOpenChange={setIntakeOpen}>
         <SheetContent aria-describedby={undefined}>
           <SheetTitle>Add to your Index</SheetTitle>
           <div className="mt-5 space-y-2">
@@ -833,9 +807,7 @@ export function SubmitJobProvider({
                 label={action.label}
                 description={action.description}
                 onClick={() =>
-                  launchIntakeAction(action.key, () =>
-                    setIntakeOpen(false),
-                  )
+                  launchIntakeAction(action.key, () => setIntakeOpen(false))
                 }
               />
             ))}
@@ -855,10 +827,7 @@ export function SubmitJobProvider({
           </div>
         </SheetContent>
       </Sheet>
-      <Dialog
-        open={commandOpen}
-        onOpenChange={setCommandOpen}
-      >
+      <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
         <DialogContent>
           <DialogTitle>Command launcher</DialogTitle>
           <div className="mt-4 space-y-4">
@@ -870,9 +839,7 @@ export function SubmitJobProvider({
                   label={action.label}
                   shortcut={action.shortcut}
                   onSelect={() =>
-                    launchIntakeAction(action.key, () =>
-                      setCommandOpen(false),
-                    )
+                    launchIntakeAction(action.key, () => setCommandOpen(false))
                   }
                 />
               ))}
@@ -882,7 +849,7 @@ export function SubmitJobProvider({
                 icon={Link2}
                 label="Open Links"
                 shortcut="L"
-                onSelect={() => go('/feed?view=links')}
+                onSelect={() => go("/feed?view=links")}
               />
               <CommandAction
                 icon={Pin}
@@ -928,9 +895,7 @@ export function SubmitJobProvider({
                   onSelect={() => {
                     const search = feedSearch;
                     setCommandOpen(false);
-                    requestAnimationFrame(() =>
-                      search.focusLinkSearch(),
-                    );
+                    requestAnimationFrame(() => search.focusLinkSearch());
                   }}
                 />
               </CommandGroup>
@@ -939,10 +904,7 @@ export function SubmitJobProvider({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={goToOpen}
-        onOpenChange={setGoToOpen}
-      >
+      <Dialog open={goToOpen} onOpenChange={setGoToOpen}>
         <DialogContent>
           <DialogTitle>GoTo</DialogTitle>
           <div className="mt-4">

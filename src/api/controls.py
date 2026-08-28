@@ -48,6 +48,11 @@ class RecoverySettingsIn(BaseModel):
     telegram_notifications: bool
 
 
+class AccessibilitySettingsIn(BaseModel):
+    visual_motion: bool
+    haptic_motion: bool
+
+
 def _normalize_domain(raw: str) -> str:
     """Strip to hostname, lowercase, drop www. prefix."""
     s = raw.strip()
@@ -196,3 +201,21 @@ async def update_recovery_settings(body: RecoverySettingsIn, request: Request) -
         chat_id, body.telegram_notifications
     )
     return {"telegram_notifications": body.telegram_notifications}
+
+
+@controls_router.get("/accessibility-settings")
+async def get_accessibility_settings(request: Request) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    return await database.get_accessibility_settings(chat_id)
+
+
+@controls_router.put("/accessibility-settings")
+async def update_accessibility_settings(
+    body: AccessibilitySettingsIn, request: Request
+) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    return await database.set_accessibility_settings(
+        chat_id,
+        visual_motion=body.visual_motion,
+        haptic_motion=body.haptic_motion,
+    )

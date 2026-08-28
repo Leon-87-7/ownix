@@ -1014,7 +1014,6 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
         "order": "desc",
         "size": 25,
     }
-
     saved = await database.set_brain_links_view(42, order="asc", size=100)
     assert saved == {"order": "asc", "size": 100}
     assert await database.get_brain_links_view(42) == saved
@@ -1029,12 +1028,31 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
         "order": "desc",
         "size": 25,
     }
-
     await database.set_user_setting(42, "brain_links_view", "{not-json")
     assert await database.get_brain_links_view(42) == {
         "order": "desc",
         "size": 25,
     }
+
+@pytest.mark.asyncio
+async def test_accessibility_settings_roundtrip_and_normalize_invalid_values(
+    tmp_path, monkeypatch
+):
+    from src import database
+
+    db_path = tmp_path / "accessibility-settings.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+
+    defaults = {"visual_motion": True, "haptic_motion": True}
+    assert await database.get_accessibility_settings(42) == defaults
+    saved = await database.set_accessibility_settings(
+        42, visual_motion=False, haptic_motion=True
+    )
+    assert await database.get_accessibility_settings(42) == saved
+
+    await database.set_user_setting(42, "dashboard_accessibility_settings", "{not-json")
+    assert await database.get_accessibility_settings(42) == defaults
 
 
 # ---------------------------------------------------------------------------
@@ -1648,3 +1666,22 @@ async def test_delete_user_logs_deleted_flag_when_row_is_missing(tmp_path, monke
     assert result is False
     assert logged["event"] == "user_deleted"
     assert logged["kwargs"].get("deleted") is False
+
+@pytest.mark.asyncio
+async def test_accessibility_settings_roundtrip_and_normalizes_invalid_values(
+    tmp_path, monkeypatch
+):
+    from src import database
+
+    db_path = tmp_path / "accessibility-settings.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    defaults = {"visual_motion": True, "haptic_motion": True}
+    assert await database.get_accessibility_settings(42) == defaults
+    saved = await database.set_accessibility_settings(
+        42, visual_motion=False, haptic_motion=True
+    )
+    assert await database.get_accessibility_settings(42) == saved
+    for malformed in ('{"visual_motion":false}', '{"visual_motion":"no"}', "{not-json"):
+        await database.set_user_setting(42, "dashboard_accessibility_settings", malformed)
+        assert await database.get_accessibility_settings(42) == defaults
