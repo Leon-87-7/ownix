@@ -8,23 +8,25 @@ import { LlamaIndexIcon } from '@/components/svg/llamaindex-icon';
 
 const stack: {
   name: string;
+  by?: string;
   Icon: (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element;
   iconClassName?: string;
 }[] = [
   { name: 'Gemini', Icon: GeminiIcon },
   { name: 'Jina', Icon: JinaIcon },
   { name: 'Brave', Icon: BraveIcon },
-  { name: 'LlamaIndex', Icon: LlamaIndexIcon },
-  { name: 'Firecrawl', Icon: FirecrawlIcon },
+  { name: 'LiteParse', by: 'LlamaIndex', Icon: LlamaIndexIcon },
+  { name: 'Anydoc', by: 'Firecrawl', Icon: FirecrawlIcon },
   { name: 'GitHub', Icon: GitHubIcon, iconClassName: 'text-ink' },
   { name: 'Google Drive', Icon: GoogleDriveIcon },
 ];
 
 /** Trust bar naming the real services under the hood - Gemini for
- * enrichment, Jina/Brave for article and link ingestion, LlamaIndex's
- * LiteParse/Firecrawl's anydoc for PDF and office-document parsing, GitHub
- * for repo analysis, Drive for storage. Sits between the hero and the
- * onboarding section so it doesn't grow the hero's fixed-height fold. */
+ * enrichment, Jina/Brave for article and link ingestion, LiteParse (by
+ * LlamaIndex) and Anydoc (by Firecrawl) for PDF and office-document
+ * parsing, GitHub for repo analysis, Drive for storage. Sits between the
+ * hero and the onboarding section so it doesn't grow the hero's
+ * fixed-height fold. */
 export function PoweredBy() {
   return (
     <div
@@ -34,13 +36,20 @@ export function PoweredBy() {
       <span className="font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
         Powered by
       </span>
-      {stack.map(({ name, Icon, iconClassName }) => (
+      {stack.map(({ name, by, Icon, iconClassName }) => (
         <span
           key={name}
-          className="flex shrink-0 items-center gap-2 text-sm font-medium text-ink"
+          className="flex shrink-0 items-center gap-2"
         >
           <Icon className={`h-5 w-auto shrink-0 ${iconClassName ?? ''}`} />
-          {name}
+          <span className="flex flex-col leading-tight">
+            <span className="text-sm font-medium text-ink">{name}</span>
+            {by && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.4px] text-muted">
+                by {by}
+              </span>
+            )}
+          </span>
         </span>
       ))}
     </div>
