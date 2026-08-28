@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Link2 } from 'lucide-react';
 import type { LinkRow } from '@/lib/hooks/useLinksTable';
+import { PlatformGlyph } from '@/components/ui/platform-icon';
 import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
 import { safeUrl } from '@/lib/url-utils';
@@ -61,9 +61,10 @@ export function GoToLinksPanel() {
             key={link.id}
             className="flex items-center gap-2 rounded-md px-2 py-1.5 transition-ui hover:bg-raised"
           >
-            <Link2
-              className="h-3.5 w-3.5 shrink-0 text-muted"
-              aria-hidden="true"
+            <PlatformGlyph
+              url={link.url}
+              size={14}
+              className="shrink-0 text-muted"
             />
             {href ? (
               <a
