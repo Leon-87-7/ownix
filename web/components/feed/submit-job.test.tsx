@@ -493,4 +493,22 @@ describe('Ingest Link — batch paste (#494)', () => {
       screen.getByRole('button', { name: /GoTo Links\s*G\s*T/i }),
     ).toBeTruthy();
   });
+
+  it('opens GoTo from the intake sheet Navigate section, closing the sheet', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items: [] }))));
+
+    render(
+      <SubmitJobProvider>
+        <OpenIntakeButton />
+      </SubmitJobProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open intake' }));
+    fireEvent.click(screen.getByRole('button', { name: /GoTo Links\s*Jump to links/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'GoTo' })).toBeTruthy(),
+    );
+    expect(screen.queryByText('Add to your Index')).toBeNull();
+  });
 });
