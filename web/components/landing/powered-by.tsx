@@ -25,8 +25,8 @@ const stack: {
  * enrichment, Jina/Brave for article and link ingestion, LiteParse (by
  * LlamaIndex) and Anydoc (by Firecrawl) for PDF and office-document
  * parsing, GitHub for repo analysis, Drive for storage. Leads the features
- * section: a 4-col grid puts the 7 tools in two rows on desktop and a
- * single wrapped column on mobile. */
+ * section: a 4-col grid puts the 7 tools in two rows on desktop, 2 columns
+ * on mobile. */
 export function PoweredBy() {
   return (
     <div
@@ -36,7 +36,7 @@ export function PoweredBy() {
       <span className="mb-4 block font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
         Powered by
       </span>
-      <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4 sm:gap-x-8">
         {stack.map(({ name, by, Icon, iconClassName }) => (
           <span
             key={name}
