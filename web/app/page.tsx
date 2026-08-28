@@ -282,12 +282,6 @@ export default async function LandingPage() {
           </a>
         </header>
 
-        <div className="border-t border-line py-6">
-          <div className="mx-auto max-w-[960px] px-6">
-            <PoweredBy />
-          </div>
-        </div>
-
         <section
           aria-labelledby="onboarding"
           className="border-t border-line py-6"
@@ -591,6 +585,7 @@ export default async function LandingPage() {
           className="border-t border-line bg-canvas-gradient py-16 sm:bg-canvas"
         >
           <div className="mx-auto max-w-[960px] px-6">
+            <PoweredBy />
             <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
               <div>
                 {/* <span className="mb-2 block font-mono text-mono-label font-medium tracking-[0.4px] text-contrasignal">

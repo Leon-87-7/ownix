@@ -21,37 +21,39 @@ const stack: {
   { name: 'Google Drive', Icon: GoogleDriveIcon },
 ];
 
-/** Trust bar naming the real services under the hood - Gemini for
+/** Trust block naming the real services under the hood - Gemini for
  * enrichment, Jina/Brave for article and link ingestion, LiteParse (by
  * LlamaIndex) and Anydoc (by Firecrawl) for PDF and office-document
- * parsing, GitHub for repo analysis, Drive for storage. Sits between the
- * hero and the onboarding section so it doesn't grow the hero's
- * fixed-height fold. */
+ * parsing, GitHub for repo analysis, Drive for storage. Leads the features
+ * section: a 4-col grid puts the 7 tools in two rows on desktop and a
+ * single wrapped column on mobile. */
 export function PoweredBy() {
   return (
     <div
       aria-label="Powered by"
-      className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 rounded-lg border border-line bg-surface px-6 py-5"
+      className="mb-8 rounded-lg border border-line bg-surface px-6 py-5"
     >
-      <span className="font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
+      <span className="mb-4 block font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
         Powered by
       </span>
-      {stack.map(({ name, by, Icon, iconClassName }) => (
-        <span
-          key={name}
-          className="flex shrink-0 items-center gap-2"
-        >
-          <Icon className={`h-5 w-auto shrink-0 ${iconClassName ?? ''}`} />
-          <span className="flex flex-col leading-tight">
-            <span className="text-sm font-medium text-ink">{name}</span>
-            {by && (
-              <span className="font-mono text-[10px] uppercase tracking-[0.4px] text-muted">
-                by {by}
-              </span>
-            )}
+      <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-4">
+        {stack.map(({ name, by, Icon, iconClassName }) => (
+          <span
+            key={name}
+            className="flex shrink-0 items-center gap-2"
+          >
+            <Icon className={`h-5 w-auto shrink-0 ${iconClassName ?? ''}`} />
+            <span className="flex flex-col leading-tight">
+              <span className="text-sm font-medium text-ink">{name}</span>
+              {by && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.4px] text-muted">
+                  by {by}
+                </span>
+              )}
+            </span>
           </span>
-        </span>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
