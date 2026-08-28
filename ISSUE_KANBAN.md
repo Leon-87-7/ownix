@@ -9,22 +9,20 @@
 
 |                                                    # | Title                                                              | Area              | Notes                          |
 | ----------------------------------------------------: | ------------------------------------------------------------------- | ------------------ | ------------------------------- |
-| [#441](https://github.com/Leon-87-7/ownix/issues/441) | feat(web): eager-load the first 10 feed preview cards               | Web / Feed         | Merged; PR #447; closed on GH  |
-| [#442](https://github.com/Leon-87-7/ownix/issues/442) | feat(web): thumbnail preload SSR head start for the Feed            | Web / Feed         | Merged; PR #447; closed on GH  |
-| [#443](https://github.com/Leon-87-7/ownix/issues/443) | fix(api): extend stored thumbnail cache to 30 days                  | API / Thumbnails   | Merged; PR #447; closed on GH  |
-| [#449](https://github.com/Leon-87-7/ownix/issues/449) | feat(jobs): hold a pending user's links as un-enqueued 'held' jobs  | Jobs / Invite      | Merged; PR #453; closed on GH  |
-| [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth        | Merged; PR #453; closed on GH  |
-| [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval         | Jobs / Ops         | Merged; PR #453; closed on GH  |
-| [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved    | Telegram / Copy    | Merged; PR #453; closed on GH  |
-| [#317](https://github.com/Leon-87-7/ownix/issues/317) | fix(telegram): .md documents preview as mojibake — send UTF-8 BOM + strip Gemini em-dashes | Telegram / Gemini | Merged; PR #470; closed on GH |
-| [#457](https://github.com/Leon-87-7/ownix/issues/457) | refactor(brain): links.chat_id + backfill + owner-scoped ingest (per-tenant Second Brain) | Brain / Schema | closed on GH |
-| [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | closed on GH |
-| [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | closed on GH |
-| [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | closed on GH |
-| [#528](https://github.com/Leon-87-7/ownix/issues/528) | Long-pipeline job pages show their transcript | — | Merged; PR #532; closed on GH |
-| [#529](https://github.com/Leon-87-7/ownix/issues/529) | Backend: POST /api/jobs/{job_id}/enrich enqueues enrichment for an existing job | — | Merged; PR #532; closed on GH |
-| [#530](https://github.com/Leon-87-7/ownix/issues/530) | Dashboard: Run Gemini button + inline recipe picker with poll-to-completion | — | Merged; PR #532; closed on GH |
-| [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | Merged; PR #532; closed on GH |
+| [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | closed on GH |
+| [#484](https://github.com/Leon-87-7/ownix/issues/484) | Slash-command palette with argument hints | Intake / Commands | closed on GH |
+| [#485](https://github.com/Leon-87-7/ownix/issues/485) | Migrate /find to shared intake commands | Intake / Commands | closed on GH |
+| [#486](https://github.com/Leon-87-7/ownix/issues/486) | Migrate /force to shared intake commands | Intake / Commands | closed on GH |
+| [#487](https://github.com/Leon-87-7/ownix/issues/487) | Migrate /freestyle to shared intake commands | Intake / Commands | closed on GH |
+| [#511](https://github.com/Leon-87-7/ownix/issues/511) | feat(tags): canonical token vocabulary and collision safety | Tags | Merged; PR #521; closed on GH |
+| [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | Merged; PR #521; closed on GH |
+| [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | Merged; PR #521; closed on GH |
+| [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | Merged; PR #521; closed on GH |
+| [#523](https://github.com/Leon-87-7/ownix/issues/523) | Route document URLs through shared intake | — | Merged; PR #527; closed on GH |
+| [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | Merged; PR #527; closed on GH |
+| [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | Merged; PR #527; closed on GH |
+| [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | Merged; PR #527; closed on GH |
+| [#554](https://github.com/Leon-87-7/ownix/issues/554) | Add CI test workflow + pytest-timeout default | CI / Tests | Merged; PR #555; closed on GH |
 
 ---
 
@@ -53,11 +51,6 @@
 | [#459](https://github.com/Leon-87-7/ownix/issues/459) | feat(telegram): scope /find and /rebuild-graph to the sender's own Brain | Telegram / Brain | #457 |
 | [#481](https://github.com/Leon-87-7/ownix/issues/481) | Live intake card — poll job state and render it walking the FSM | Intake / Console | — |
 | [#482](https://github.com/Leon-87-7/ownix/issues/482) | Parse #tag tokens in the intake router and attach existing tags | Intake / Router | — |
-| [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | — |
-| [#484](https://github.com/Leon-87-7/ownix/issues/484) | Slash-command palette with argument hints | Intake / Commands | — |
-| [#485](https://github.com/Leon-87-7/ownix/issues/485) | Migrate /find to shared intake commands | Intake / Commands | — |
-| [#486](https://github.com/Leon-87-7/ownix/issues/486) | Migrate /force to shared intake commands | Intake / Commands | — |
-| [#487](https://github.com/Leon-87-7/ownix/issues/487) | Migrate /freestyle to shared intake commands | Intake / Commands | — |
 | [#488](https://github.com/Leon-87-7/ownix/issues/488) | Persist the intake thread in sessionStorage | Intake / Console | #481 |
 | [#489](https://github.com/Leon-87-7/ownix/issues/489) | Offer inline tag creation when a #tag token is unknown | Intake / Tags | #482 |
 | [#490](https://github.com/Leon-87-7/ownix/issues/490) | Tighten is_fetchable_url and add coerce_url | Links / Validators | — |
@@ -75,6 +68,7 @@
 | [#561](https://github.com/Leon-87-7/ownix/issues/561) | feat(tags): merge job tags into link tags for content_type=link | Jobs / Tags | — |
 | [#562](https://github.com/Leon-87-7/ownix/issues/562) | feat(tags): extend job/link tag merge to article jobs with not-yet-linked fallback | Jobs / Tags | #561 |
 | [#563](https://github.com/Leon-87-7/ownix/issues/563) | feat(tags): extend job/link tag merge to repo jobs | Jobs / Tags | #562 |
+| [#560](https://github.com/Leon-87-7/ownix/issues/560) | ci(mutation): fail backend-mutation below an 85% mutation score | CI / Mutation | — |
 
 ---
 
@@ -97,20 +91,17 @@ Ordered by unblocked-first, then dependency chain.
 | [#477](https://github.com/Leon-87-7/ownix/issues/477) | Refactor Telegram webhook into an intake-router adapter | Telegram / Intake | #473 |
 | [#478](https://github.com/Leon-87-7/ownix/issues/478) | Chrome extension MVP — capture current tab / context-menu links into Ownix Intake | Extension | #472 |
 | [#479](https://github.com/Leon-87-7/ownix/issues/479) | Production-safe Chrome extension auth via one-time pairing tokens | Extension / Auth | #478 |
-| [#511](https://github.com/Leon-87-7/ownix/issues/511) | feat(tags): canonical token vocabulary and collision safety | Intake / Tags | — |
-| [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | #511 |
-| [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | #511 |
-| [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | #511, #512 |
 | [#515](https://github.com/Leon-87-7/ownix/issues/515) | Auto-snapshot the DB before running migrations | DB / Migrations | — |
 | [#516](https://github.com/Leon-87-7/ownix/issues/516) | CI dry-run of migrations against a sanitized prod snapshot | CI / Migrations | — |
 | [#517](https://github.com/Leon-87-7/ownix/issues/517) | DB restore script + ops-runbook backup/rollback section | DB / Ops | #515 |
 | [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | #515 |
 | [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | #515 |
 | [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | #516 |
-| [#523](https://github.com/Leon-87-7/ownix/issues/523) | Route document URLs through shared intake | — | — |
-| [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | #523 |
-| [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | #524 |
-| [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | #525 |
+| [#540](https://github.com/Leon-87-7/ownix/issues/540) | Spaces redesign: preview cards, icon-aware detail page, merged add-search | — | — |
+| [#568](https://github.com/Leon-87-7/ownix/issues/568) | Mobile haptic button feel across the Ownix dashboard | — | — |
+| [#569](https://github.com/Leon-87-7/ownix/issues/569) | Accessibility settings — storage, API, and Settings UI toggle | — | — |
+| [#570](https://github.com/Leon-87-7/ownix/issues/570) | Visual press-feedback hook + v1 rollout | — | #569 |
+| [#571](https://github.com/Leon-87-7/ownix/issues/571) | Real vibration on outcome-bearing actions | — | #569, #570 |
 
 ---
 
@@ -447,7 +438,7 @@ Critical path: #318 → {#319, #321}; #319 → #320; #321 → {#322, #323} (all 
 Public landing page (grill 2026-07-06 — task #14 from docs/TASK.md)
 #329 Routing cutover — Feed→/feed, / public + auth-redirect (root, unblocked) ✅-Done
 └── #331 BrandBackground extraction + full marketing landing + /login back-link ◄── #329 ✅-Done
-    └── #332 staged dashboard screenshots ◄── #331
+    └── #332 staged dashboard screenshots ◄── #331 ✅-Done
 #330 Limited Use disclosure on /privacy (independent) ✅-Done
 Critical path: #329 → #331 → #332; #330 parallel
 
@@ -593,11 +584,11 @@ Intake console makeover — conversational + informing (grill 2026-08-06; CONTEX
 └── #488 Persist the intake thread in sessionStorage (restore path needs #481's polling to resolve real status)
 #482 Parse #tag tokens in the intake router; attach existing tags (root, unblocked)
 └── #489 Offer inline tag creation when a #tag token is unknown (ADR-0047 — action envelope, not chat_state)
-#483 Render the retry action on retryable intake errors (root, unblocked — retry_job already exists in actions.py)
-#484 Slash-command palette with argument hints (root, unblocked — derives its list from SHARED_COMMANDS)
-├── #485 Migrate /find to shared intake commands
-├── #486 Migrate /force to shared intake commands
-└── #487 Migrate /freestyle to shared intake commands
+#483 Render the retry action on retryable intake errors (root, unblocked — retry_job already exists in actions.py) ✅-Done
+#484 Slash-command palette with argument hints (root, unblocked — derives its list from SHARED_COMMANDS) ✅-Done
+├── #485 Migrate /find to shared intake commands ✅-Done
+├── #486 Migrate /force to shared intake commands ✅-Done
+└── #487 Migrate /freestyle to shared intake commands ✅-Done
 Critical path: none — four independent roots (#481, #482, #483, #484). #488 off #481; #489 off #482.
 Note: #485/#486/#487 are drawn under #484 as *content*, not as blockers — the palette derives its list from SHARED_COMMANDS, so each migration lights up its own entry on landing and all four can proceed in parallel. Builds on the shipped intake-channels batch (#472–#479). Deliberately excluded: the other eleven Telegram commands, SSE, /undo, per-flow pending state, and ?tag= feed filtering (the last is in docs/TASK.md Inbox — #489's bare-token warning links nowhere until it exists).
 
@@ -610,11 +601,11 @@ Critical path: #505 → {#507, #508}; #506 fully parallel
 Note: the shared checklists_command core (SHARED_COMMANDS handler, DB columns, Gemini prompt/schema, run_checklists) already shipped directly on branch worktree-checklists-command (plan Tasks 1-5) — these four issues cover only the remaining Telegram and dashboard delivery surfaces.
 
 Telegram tagged URL submission (grill-with-docs 2026-08-12; ADR-0049; CONTEXT.md `Tag token` / `Tagged URL submission` / `/taglist command`)
-#511 Canonical tag-token vocabulary + collision safety (root, unblocked — shared codec and catalog invariant)
-├── #512 Tagged /force with document-safe reprocessing
-│   └── #513 Telegram tagged URL submission via /tag + plain intake ◄── also #511
-└── #514 Telegram /taglist vocabulary view
-Critical path: #511 → #512 → #513; #514 parallel after #511
+#511 Canonical tag-token vocabulary + collision safety (root, unblocked — shared codec and catalog invariant) ✅-Done (PR #521)
+├── #512 Tagged /force with document-safe reprocessing ✅-Done (PR #521)
+│   └── #513 Telegram tagged URL submission via /tag + plain intake ◄── also #511 ✅-Done (PR #521)
+└── #514 Telegram /taglist vocabulary view ✅-Done (PR #521)
+Critical path: #511 → #512 → #513; #514 parallel after #511 (all ✅-Done)
 
 DB migration safety (docs/plans/2026-08-12-database-migration-strategy-audit.md — spec-to-kanban 2026-08-12; ADR-0001)
 #515 Auto-snapshot the DB before running migrations (root, unblocked — the pre-migration rollback artifact)
@@ -627,17 +618,24 @@ Critical path: #515 → {#517, #518, #519}; #516 → #520
 Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/rollback + test-rehearsal safety, not a Postgres migration. #520 (staging tier) carries an owner deploy-cadence decision as its first acceptance gate.
 
 Extension capture commands (source: extension routing grill, 2026-08-13)
-#523 Shared document-URL routing (root, unblocked)
-└── #524 Explicit Article / Link / Document fallback intents
-    └── #525 Background extension capture shortcuts
-        └── #526 Popup shortcut discovery
-Critical path: #523 → #524 → #525 → #526
+#523 Shared document-URL routing (root, unblocked) ✅-Done (PR #527)
+└── #524 Explicit Article / Link / Document fallback intents ✅-Done (PR #527)
+    └── #525 Background extension capture shortcuts ✅-Done (PR #527)
+        └── #526 Popup shortcut discovery ✅-Done (PR #527)
+Critical path: #523 → #524 → #525 → #526 (all ✅-Done)
 
 Job/Link tag unification (docs/plans/2026-08-27-job-link-tag-unification.md — /ux-fix-loop → brand-lens → /mattpocock-skills:grill-with-docs 2026-08-27)
 #561 merge job tags into link tags for content_type=link (root, unblocked)
 └── #562 extend merge to article jobs with not-yet-linked fallback ◄── #561
     └── #563 extend merge to repo jobs ◄── #562
 Critical path: #561 → #562 → #563
+
+Mobile haptic button feel (PRD #568 — ADR-0053; grill-with-search-docs 2026-08-28)
+#569 Accessibility settings — storage, API, and Settings UI toggle (root, unblocked)
+└── #570 Visual press-feedback hook + v1 rollout ◄── #569
+    └── #571 Real vibration on outcome-bearing actions ◄── also #569
+Critical path: #569 → #570 → #571
+Note: #568 is the parent PRD spec issue (not a build slice) — see docs/adr/0053-mobile-haptic-button-feel.md.
 ```
 
 ---
@@ -646,13 +644,12 @@ Critical path: #561 → #562 → #563
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
-| [#349](https://github.com/Leon-87-7/ownix/pull/349) | Add and harden ntfy operator alerts | claude/ntfy-vig-integration-7y8dw6→main | #339–#348 | 🔄 Open |
 
 ## Closed PRs
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
-| [#521](https://github.com/Leon-87-7/ownix/pull/521) | feat(tags): canonical tag tokens and Telegram tagged intake (#511-514) | fix/tag-token-routing-511-514→main | — | ✅ Merged |
-| [#522](https://github.com/Leon-87-7/ownix/pull/522) | feat(ui): CSS clip-path segmented tabs, prototype skill docs, formatting | feat/segmented-tabs-clip-path-and-prototype-docs→main | — | ✅ Merged |
-| [#527](https://github.com/Leon-87-7/ownix/pull/527) | Add extension capture commands and refresh landing | agent/extension-capture-and-landing→main | — | ✅ Merged |
-| [#532](https://github.com/Leon-87-7/ownix/pull/532) | Add dashboard Run Gemini recipe picker | agent/run-gemini-recipe-picker→main | #528–#531 | ✅ Merged |
+| [#567](https://github.com/Leon-87-7/ownix/pull/567) | Add "Powered by" trust bar to landing page | claude/landing-powered-by-section-5ehlx3→main | — | ✅ Merged |
+| [#566](https://github.com/Leon-87-7/ownix/pull/566) | Show real favicons in GoTo links panel instead of generic icon | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
+| [#565](https://github.com/Leon-87-7/ownix/pull/565) | Add mobile entry point for GoTo Links | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
+| [#564](https://github.com/Leon-87-7/ownix/pull/564) | Unify job/link tags for link, article, and repo jobs (#561-563) | feat/job-link-tags-561-563→main | #561, #562, #563 | ✅ Merged |

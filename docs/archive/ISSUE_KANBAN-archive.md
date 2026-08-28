@@ -287,6 +287,24 @@
 | [#423](https://github.com/Leon-87-7/ownix/issues/423) | feat(web): share-target intake — manifest share_target prefills the Submit URL dialog | Web / Feed | Merged; PR #424; closed on GH |
 | [#365](https://github.com/Leon-87-7/ownix/issues/365) | Next.js 16 core upgrade: deps + Turbopack SVGR config | Web / Next16 | Merged; PR #463 (#365-368); closed on GH |
 | [#436](https://github.com/Leon-87-7/ownix/issues/436) | fix(api): cache job thumbnail responses (ETag + Cache-Control) | API | Merged; PR #437; closed on GH |
+| [#441](https://github.com/Leon-87-7/ownix/issues/441) | feat(web): eager-load the first 10 feed preview cards               | Web / Feed         | Merged; PR #447; closed on GH  |
+| [#442](https://github.com/Leon-87-7/ownix/issues/442) | feat(web): thumbnail preload SSR head start for the Feed            | Web / Feed         | Merged; PR #447; closed on GH  |
+| [#443](https://github.com/Leon-87-7/ownix/issues/443) | fix(api): extend stored thumbnail cache to 30 days                  | API / Thumbnails   | Merged; PR #447; closed on GH  |
+| [#449](https://github.com/Leon-87-7/ownix/issues/449) | feat(jobs): hold a pending user's links as un-enqueued 'held' jobs  | Jobs / Invite      | Merged; PR #453; closed on GH  |
+| [#450](https://github.com/Leon-87-7/ownix/issues/450) | feat(web): pending sessions get the preview dashboard + queue banner | Web / Auth        | Merged; PR #453; closed on GH  |
+| [#451](https://github.com/Leon-87-7/ownix/issues/451) | feat(jobs): flush held jobs to the queue on invite approval         | Jobs / Ops         | Merged; PR #453; closed on GH  |
+| [#452](https://github.com/Leon-87-7/ownix/issues/452) | fix(telegram): invite waiting copy says links sent now are saved    | Telegram / Copy    | Merged; PR #453; closed on GH  |
+| [#317](https://github.com/Leon-87-7/ownix/issues/317) | fix(telegram): .md documents preview as mojibake — send UTF-8 BOM + strip Gemini em-dashes | Telegram / Gemini | Merged; PR #470; closed on GH |
+| [#457](https://github.com/Leon-87-7/ownix/issues/457) | refactor(brain): links.chat_id + backfill + owner-scoped ingest (per-tenant Second Brain) | Brain / Schema | closed on GH |
+| [#458](https://github.com/Leon-87-7/ownix/issues/458) | feat(api): viewer-scoped Second Brain reads on the dashboard | API / Brain | closed on GH |
+| [#460](https://github.com/Leon-87-7/ownix/issues/460) | fix(brain): Brain Drive writes bypass the ADR-0030 Operator export gate | Brain / Drive | closed on GH |
+| [#461](https://github.com/Leon-87-7/ownix/issues/461) | feat(web): restricted-mode Brain reads the Operator graph | Web / Restricted | closed on GH |
+| [#528](https://github.com/Leon-87-7/ownix/issues/528) | Long-pipeline job pages show their transcript | — | Merged; PR #532; closed on GH |
+| [#529](https://github.com/Leon-87-7/ownix/issues/529) | Backend: POST /api/jobs/{job_id}/enrich enqueues enrichment for an existing job | — | Merged; PR #532; closed on GH |
+| [#530](https://github.com/Leon-87-7/ownix/issues/530) | Dashboard: Run Gemini button + inline recipe picker with poll-to-completion | — | Merged; PR #532; closed on GH |
+| [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | Merged; PR #532; closed on GH |
+| [#265](https://github.com/Leon-87-7/ownix/issues/265) | docs: reconcile TASK.md with fable-TASK.md (merge briefs 14–15 back) | Docs | closed on GH |
+| [#332](https://github.com/Leon-87-7/ownix/issues/332) | Public landing — staged dashboard screenshots from a seeded demo account | — | closed on GH |
 
 ---
 
@@ -462,3 +480,33 @@
 | [#504](https://github.com/Leon-87-7/ownix/pull/504) | feat(web): rework landing page capture section and copy | claude/landing-page-copy-and-icons→main | — | ✅ Merged |
 | [#509](https://github.com/Leon-87-7/ownix/pull/509) | feat(checklists): /checklists command delivery (Telegram, dashboard, job detail) | worktree-checklists-command→main | #505–#508 | ✅ Merged |
 | [#503](https://github.com/Leon-87-7/ownix/pull/503) | spike: route non-PDF documents through anydoc, keep PDF on liteparse | claude/anydoc-docs-parser-eval-jii4ro→main | — | ✅ Merged |
+| [#559](https://github.com/Leon-87-7/ownix/pull/559) | Track mutation score history and flag regressions in rabbitloop | chore/mutation-score-history→main | — | ✅ Merged |
+| [#558](https://github.com/Leon-87-7/ownix/pull/558) | Switch backend mutation testing to cosmic-ray, wire up CI | chore/cosmic-ray-mutation-testing-ci→main | — | ✅ Merged |
+| [#557](https://github.com/Leon-87-7/ownix/pull/557) | Fix feed card icons/skeleton, tag color picker, and space icon visibility | worktree-ux-fix-feed-tagmodal→main | — | ✅ Merged |
+| [#556](https://github.com/Leon-87-7/ownix/pull/556) | Wire up mutation testing (mutmut + StrykerJS) and ops runbook | chore/mutation-testing-setup→main | — | ✅ Merged |
+| [#555](https://github.com/Leon-87-7/ownix/pull/555) | Add CI test workflow + pytest-timeout default | ci/test-workflow-pytest-timeout→main | #554 | ✅ Merged |
+| [#553](https://github.com/Leon-87-7/ownix/pull/553) | Fix all 25 pre-existing pytest failures; research mutation testing adoption | chore/pytest-failures-and-mutation-testing-research→main | — | ✅ Merged |
+| [#552](https://github.com/Leon-87-7/ownix/pull/552) | Fix Promise Gap raw-JSON dump, add Open in Drive to transcript card | fix/promise-gap-and-drive-buttons→main | — | ✅ Merged |
+| [#551](https://github.com/Leon-87-7/ownix/pull/551) | Fix ScrollToTop flicker, adopt OwnixChevron/shimmer, polish doc-parser enrichment UX | polish/scroll-shimmer-doc-parser-icons→main | — | ✅ Merged |
+| [#550](https://github.com/Leon-87-7/ownix/pull/550) | Add self-serve account deletion, rewrite privacy policy for compliance | privacy-policy-rewrite-and-account-deletion→main | — | ✅ Merged |
+| [#549](https://github.com/Leon-87-7/ownix/pull/549) | Close legal/compliance gaps, consolidate public nav | fix/legal-compliance-and-nav-polish→main | — | ✅ Merged |
+| [#548](https://github.com/Leon-87-7/ownix/pull/548) | feat(dashboard): show a checklist-generated indicator on job cards | feat/checklist-generated-badge→main | — | ✅ Merged |
+| [#547](https://github.com/Leon-87-7/ownix/pull/547) | fix(repo-followup): raise GitHub follow-up cap from 5 to 15 links | claude/repo-followup-cap-fix→main | — | ✅ Merged |
+| [#546](https://github.com/Leon-87-7/ownix/pull/546) | fix(dashboard): stop ScrollToTop from blocking the Settings page toggle | fix/scroll-to-top-overlap→main | — | ✅ Merged |
+| [#545](https://github.com/Leon-87-7/ownix/pull/545) | feat(dashboard): GoTo quick-jump command + pinnable tags | feat/goto-quick-jump→main | — | ✅ Merged |
+| [#544](https://github.com/Leon-87-7/ownix/pull/544) | feat(dashboard): make job title editable on the detail page | feat/editable-job-title→main | — | ✅ Merged |
+| [#543](https://github.com/Leon-87-7/ownix/pull/543) | fix(intake): route youtube.com/live/{id} to the long pipeline | fix/youtube-live-long-pipeline→main | — | ✅ Merged |
+| [#542](https://github.com/Leon-87-7/ownix/pull/542) | fix(intake): persist thread history, add manual clear | fix/intake-history-clear→main | — | ✅ Merged |
+| [#541](https://github.com/Leon-87-7/ownix/pull/541) | feat(spaces): preview cards, icon-aware detail page, merged add-search | feat/540-spaces-redesign→main | #540 | ✅ Merged |
+| [#539](https://github.com/Leon-87-7/ownix/pull/539) | chore(code-health): pyscn green + fallow dead-code/dupes fixed | chore/code-health-pyscn-fallow-green→main | — | ✅ Merged |
+| [#538](https://github.com/Leon-87-7/ownix/pull/538) | fix: close silent background-task failures + webhook type guards | fix/spawn-background-and-enrichment-status-reset→main | — | ✅ Merged |
+| [#537](https://github.com/Leon-87-7/ownix/pull/537) | Reject automatic bookmark capture (ADR-0051), upgrade Ctrl+Shift+1 triage instead | claude/back-to-feed-label-q2hzzg→main | — | ✅ Merged |
+| [#536](https://github.com/Leon-87-7/ownix/pull/536) | Fix job detail back nav and add intake recipe palette | codex/intake-palette-back-nav→main | — | ✅ Merged |
+| [#535](https://github.com/Leon-87-7/ownix/pull/535) | chore: add ruff/credentials hooks, security-reviewer + code-health-triager agents, codegraph MCP | chore/automation-setup→main | — | ✅ Merged |
+| [#534](https://github.com/Leon-87-7/ownix/pull/534) | fix: block invite on undeliverable email, polish landing hero | fix/welcome-email-mx-check-and-landing-polish→main | — | ✅ Merged |
+| [#533](https://github.com/Leon-87-7/ownix/pull/533) | fix(intake,enrichment): dashboard -name shortcut, freestyle output, repo follow-up parity | fix/intake-shortcut-freestyle-repo-followups→main | — | ✅ Merged |
+| [#521](https://github.com/Leon-87-7/ownix/pull/521) | feat(tags): canonical tag tokens and Telegram tagged intake (#511-514) | fix/tag-token-routing-511-514→main | #511, #512, #513, #514 | ✅ Merged |
+| [#522](https://github.com/Leon-87-7/ownix/pull/522) | feat(ui): CSS clip-path segmented tabs, prototype skill docs, formatting | feat/segmented-tabs-clip-path-and-prototype-docs→main | — | ✅ Merged |
+| [#527](https://github.com/Leon-87-7/ownix/pull/527) | Add extension capture commands and refresh landing | agent/extension-capture-and-landing→main | #523, #524, #525, #526 | ✅ Merged |
+| [#532](https://github.com/Leon-87-7/ownix/pull/532) | Add dashboard Run Gemini recipe picker | agent/run-gemini-recipe-picker→main | #528–#531 | ✅ Merged |
+| [#349](https://github.com/Leon-87-7/ownix/pull/349) | Add and harden ntfy operator alerts | claude/ntfy-vig-integration-7y8dw6→main | #339–#348 | ❌ Closed |
