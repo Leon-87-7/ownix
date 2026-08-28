@@ -10,6 +10,7 @@ import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
 import { MobileOnboardingStepper } from '@/components/landing/mobile-onboarding-stepper';
 import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
+import { PoweredBy } from '@/components/landing/powered-by';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
@@ -280,6 +281,12 @@ export default async function LandingPage() {
             </span>
           </a>
         </header>
+
+        <div className="border-t border-line py-6">
+          <div className="mx-auto max-w-[960px] px-6">
+            <PoweredBy />
+          </div>
+        </div>
 
         <section
           aria-labelledby="onboarding"
