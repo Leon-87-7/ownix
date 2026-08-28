@@ -284,6 +284,37 @@ function CommandAction({
   );
 }
 
+function SheetActionButton({
+  icon: Icon,
+  label,
+  description,
+  onClick,
+}: {
+  icon: typeof Plus;
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] motion-reduce:active:scale-100"
+    >
+      <Icon
+        className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"
+        aria-hidden="true"
+      />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-body">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 /**
  * Owns the one Submit URL dialog for the whole dashboard. Triggers anywhere
  * (global header on sm+, the Feed's tabs-row button below sm) call setOpen;
@@ -795,34 +826,32 @@ export function SubmitJobProvider({
         <SheetContent aria-describedby={undefined}>
           <SheetTitle>Add to your Index</SheetTitle>
           <div className="mt-5 space-y-2">
-            {INTAKE_ACTIONS.map((action) => {
-              const Icon = action.icon;
-              return (
-                <button
-                  key={action.key}
-                  type="button"
-                  onClick={() =>
-                    launchIntakeAction(action.key, () =>
-                      setIntakeOpen(false),
-                    )
-                  }
-                  className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] motion-reduce:active:scale-100"
-                >
-                  <Icon
-                    className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-ink">
-                      {action.label}
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-5 text-body">
-                      {action.description}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+            {INTAKE_ACTIONS.map((action) => (
+              <SheetActionButton
+                key={action.key}
+                icon={action.icon}
+                label={action.label}
+                description={action.description}
+                onClick={() =>
+                  launchIntakeAction(action.key, () =>
+                    setIntakeOpen(false),
+                  )
+                }
+              />
+            ))}
+          </div>
+          <div className="mt-5">
+            <CommandGroup label="Navigate">
+              <SheetActionButton
+                icon={Pin}
+                label="GoTo Links"
+                description="Jump to links carrying one of your pinned tags."
+                onClick={() => {
+                  setIntakeOpen(false);
+                  setGoToOpen(true);
+                }}
+              />
+            </CommandGroup>
           </div>
         </SheetContent>
       </Sheet>
