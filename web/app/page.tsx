@@ -10,6 +10,7 @@ import { CountUp } from '@/components/landing/count-up';
 import { DemoVideo } from '@/components/landing/demo-video';
 import { MobileOnboardingStepper } from '@/components/landing/mobile-onboarding-stepper';
 import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
+import { PoweredBy } from '@/components/landing/powered-by';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
@@ -584,6 +585,7 @@ export default async function LandingPage() {
           className="border-t border-line bg-canvas-gradient py-16 sm:bg-canvas"
         >
           <div className="mx-auto max-w-[960px] px-6">
+            <PoweredBy />
             <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-start">
               <div>
                 {/* <span className="mb-2 block font-mono text-mono-label font-medium tracking-[0.4px] text-contrasignal">
