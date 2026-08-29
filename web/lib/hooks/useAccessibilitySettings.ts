@@ -7,6 +7,12 @@ export interface AccessibilitySettings {
   haptic_motion: boolean;
 }
 
+export interface AccessibilitySettingsState extends AccessibilitySettings {
+  /** False until a real (loaded or saved) preference exists — before that,
+   * visual_motion/haptic_motion are just OS-seeded/hardcoded placeholders. */
+  loaded: boolean;
+}
+
 const listeners = new Set<() => void>();
 let stored: AccessibilitySettings | null = null;
 let loading: Promise<void> | null = null;
@@ -58,20 +64,25 @@ export function resetAccessibilitySettingsForTests() {
 
 function load() {
   if (stored || loading || typeof window === "undefined") return;
+  // Snapshot the generation so a save that lands while this GET is still in
+  // flight isn't clobbered by a now-stale response arriving afterward.
+  const generation = requestGeneration;
   loading = fetch("/api/controls/accessibility-settings")
     .then((response) => {
       if (!response.ok)
         throw new Error("Failed to load accessibility settings");
       return response.json() as Promise<AccessibilitySettings>;
     })
-    .then(publishAccessibilitySettings)
+    .then((value) => {
+      if (generation === requestGeneration) publishAccessibilitySettings(value);
+    })
     .catch(() => undefined)
     .finally(() => {
       loading = null;
     });
 }
 
-export function useAccessibilitySettings(): AccessibilitySettings {
+export function useAccessibilitySettings(): AccessibilitySettingsState {
   const [reducedMotion, setReducedMotion] = useState(true);
   const [, rerender] = useState(0);
 
@@ -89,5 +100,8 @@ export function useAccessibilitySettings(): AccessibilitySettings {
     };
   }, []);
 
-  return stored ?? { visual_motion: !reducedMotion, haptic_motion: true };
+  return {
+    ...(stored ?? { visual_motion: !reducedMotion, haptic_motion: true }),
+    loaded: stored !== null,
+  };
 }

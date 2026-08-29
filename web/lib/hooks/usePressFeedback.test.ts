@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   publishAccessibilitySettings,
@@ -8,6 +8,12 @@ import {
 import { usePressFeedback } from "./usePressFeedback";
 
 afterEach(() => {
+  // Unmount before resetting the shared accessibility-settings store — it
+  // notifies subscribed React state setters, and afterEach hooks run in
+  // reverse-registration (LIFO) order, so RTL's own auto-cleanup afterEach
+  // (registered first, via the `@testing-library/react` import) would
+  // otherwise run *after* this one and unmount too late.
+  cleanup();
   resetAccessibilitySettingsForTests();
   vi.restoreAllMocks();
 });
@@ -67,9 +73,19 @@ describe("usePressFeedback", () => {
     expect(animate).not.toHaveBeenCalled();
   });
 
-  it("lets the live OS reduced-motion preference override an enabled setting", () => {
+  it("lets an explicit stored preference override the live OS reduced-motion default", () => {
     installMedia(true, true);
     publishAccessibilitySettings({ visual_motion: true, haptic_motion: true });
+    const animate = vi.fn();
+    const { result } = renderHook(() => usePressFeedback());
+    act(() =>
+      result.current.onTouchStart({ currentTarget: { animate } } as never),
+    );
+    expect(animate).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the live OS reduced-motion default when no preference is stored yet", () => {
+    installMedia(true, true);
     const animate = vi.fn();
     const { result } = renderHook(() => usePressFeedback());
     act(() =>

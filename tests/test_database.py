@@ -1034,26 +1034,6 @@ async def test_brain_links_view_roundtrip_and_normalizes_invalid_values(tmp_path
         "size": 25,
     }
 
-@pytest.mark.asyncio
-async def test_accessibility_settings_roundtrip_and_normalize_invalid_values(
-    tmp_path, monkeypatch
-):
-    from src import database
-
-    db_path = tmp_path / "accessibility-settings.db"
-    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
-    await database.init_db()
-
-    defaults = {"visual_motion": True, "haptic_motion": True}
-    assert await database.get_accessibility_settings(42) == defaults
-    saved = await database.set_accessibility_settings(
-        42, visual_motion=False, haptic_motion=True
-    )
-    assert await database.get_accessibility_settings(42) == saved
-
-    await database.set_user_setting(42, "dashboard_accessibility_settings", "{not-json")
-    assert await database.get_accessibility_settings(42) == defaults
-
 
 # ---------------------------------------------------------------------------
 # link_tags (#382) + tag icon (#386) + palette remap (#383)

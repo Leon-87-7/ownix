@@ -3,7 +3,6 @@
 import type { PointerEventHandler, TouchEventHandler } from "react";
 import { useCallback, useRef } from "react";
 import { useAccessibilitySettings } from "./useAccessibilitySettings";
-import { useReducedMotion } from "./useReducedMotion";
 
 const PRESS_KEYFRAMES = [
   { transform: "scale(0.96)" },
@@ -14,21 +13,23 @@ export function usePressFeedback(): {
   onPointerDown: PointerEventHandler<HTMLElement>;
   onTouchStart: TouchEventHandler<HTMLElement>;
 } {
+  // useAccessibilitySettings() already layers this correctly on its own: it
+  // seeds visual_motion from the live prefers-reduced-motion query until a
+  // stored preference exists, then the stored value is authoritative — see
+  // ADR-0053's "Stored preference vs. live OS query: layered (stored wins
+  // once set)" decision. Don't re-gate on the OS query here too, or an
+  // explicit stored "on" can never override a reduced-motion OS default.
   const { visual_motion: visualMotion } = useAccessibilitySettings();
-  // Layered with the live OS preference so a stale "on" default (the backend
-  // can't know prefers-reduced-motion) never survives past the first paint —
-  // see ADR-0053's "Stored preference vs. live OS query: layered" decision.
-  const reducedMotion = useReducedMotion();
   const pointerTouchAt = useRef(0);
   const press = useCallback(
     (element: HTMLElement) => {
-      if (!visualMotion || reducedMotion) return;
+      if (!visualMotion) return;
       element.animate?.(PRESS_KEYFRAMES, {
         duration: 140,
         easing: "cubic-bezier(0.25, 1, 0.5, 1)",
       });
     },
-    [visualMotion, reducedMotion],
+    [visualMotion],
   );
   return {
     onPointerDown: (event) => {

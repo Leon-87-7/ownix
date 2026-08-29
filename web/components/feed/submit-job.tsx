@@ -29,6 +29,7 @@ import { useRestrictedMode } from "@/lib/restricted/context";
 import { parseBatchLinkInput } from "@/lib/parse-batch-links";
 import { apiPost } from "@/lib/fetch-utils";
 import { useHapticFeedback } from "@/lib/hooks/useHapticFeedback";
+import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
 
 /** POST /api/jobs response shape, as loosely typed as the JSON it actually returns. */
 interface SubmittedJob {
@@ -282,11 +283,13 @@ function SheetActionButton({
   description: string;
   onClick: () => void;
 }) {
+  const pressFeedback = usePressFeedback();
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex min-h-12 w-full items-start gap-3 rounded-lg border border-line bg-surface px-3 py-3 text-left transition-ui hover:bg-raised focus:outline-none focus:ring-1 focus:ring-signal"
+      {...pressFeedback}
     >
       <Icon
         className="mt-0.5 h-4 w-4 shrink-0 text-contrasignal-deep"

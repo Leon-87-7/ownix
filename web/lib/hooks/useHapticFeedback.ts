@@ -19,9 +19,11 @@ export function vibrateOutcome(
 }
 
 export function useHapticFeedback() {
-  const { haptic_motion: enabled } = useAccessibilitySettings();
+  const { haptic_motion: enabled, loaded } = useAccessibilitySettings();
   return useCallback(
-    (outcome: HapticOutcome) => vibrateOutcome(enabled, outcome),
-    [enabled],
+    // haptic_motion defaults to true until the stored preference loads, so
+    // an action fired in that window could vibrate past a saved opt-out.
+    (outcome: HapticOutcome) => (loaded ? vibrateOutcome(enabled, outcome) : false),
+    [enabled, loaded],
   );
 }

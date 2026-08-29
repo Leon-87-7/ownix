@@ -52,6 +52,7 @@ import { startPolling } from "@/lib/polling";
 import { useTemplateList } from "@/lib/hooks/useTemplateList";
 import { RepoFollowupPanel } from "@/components/ui/repo-followup-panel";
 import { useHapticFeedback } from "@/lib/hooks/useHapticFeedback";
+import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
 
 const MarkdownEditor = dynamic(
   () => import("@/components/ui/markdown-editor"),
@@ -591,6 +592,7 @@ const CARD_ACTION_BUTTON =
 
 function CardCopyButton({ value, label }: { value: string; label: string }) {
   const { copied, copy } = useCopyFeedback(value);
+  const pressFeedback = usePressFeedback();
 
   return (
     <Tooltip content={copied ? "Copied" : label}>
@@ -599,6 +601,7 @@ function CardCopyButton({ value, label }: { value: string; label: string }) {
         onClick={copy}
         aria-label={label}
         className={CARD_ACTION_BUTTON}
+        {...pressFeedback}
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </button>
@@ -613,6 +616,7 @@ function CardDownloadButton({
   onDownload: () => void;
   label: string;
 }) {
+  const pressFeedback = usePressFeedback();
   return (
     <Tooltip content={label}>
       <button
@@ -620,6 +624,7 @@ function CardDownloadButton({
         onClick={onDownload}
         aria-label={label}
         className={CARD_ACTION_BUTTON}
+        {...pressFeedback}
       >
         <Download className="h-4 w-4" />
       </button>
@@ -628,6 +633,7 @@ function CardDownloadButton({
 }
 
 function CardOpenButton({ href, label }: { href: string; label: string }) {
+  const pressFeedback = usePressFeedback();
   return (
     <Tooltip content={label}>
       <a
@@ -636,6 +642,7 @@ function CardOpenButton({ href, label }: { href: string; label: string }) {
         rel="noopener noreferrer"
         aria-label={label}
         className={CARD_ACTION_BUTTON}
+        {...pressFeedback}
       >
         <OwnixShareIcon className="h-4 w-4" aria-hidden="true" />
       </a>
@@ -859,9 +866,11 @@ function EnrichmentStatusCard() {
 function RunGeminiSection({
   job,
   onClaim,
+  onError,
 }: {
   job: JobDetail;
   onClaim: () => void;
+  onError: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
@@ -879,6 +888,7 @@ function RunGeminiSection({
     );
     if (!result.ok) {
       setError(result.detail);
+      onError();
       return;
     }
     onClaim();
@@ -1109,6 +1119,7 @@ export default function JobDetailPage() {
                 current ? { ...current, status: "enriching" } : current,
               );
             }}
+            onError={() => haptic("error")}
           />
         )}
       {!restricted &&

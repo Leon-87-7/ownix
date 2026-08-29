@@ -396,7 +396,10 @@ function AccessibilitySection() {
     visual_motion: true,
     haptic_motion: true,
   });
-  const [loading, setLoading] = useState(true);
+  // Only true once a real GET response has applied, so a failed initial
+  // load can't leave the checkboxes editable against the hardcoded
+  // { true, true } placeholder above.
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const pressFeedback = usePressFeedback();
@@ -413,6 +416,7 @@ function AccessibilitySection() {
         if (!controller.signal.aborted) {
           setSettings(value);
           publishAccessibilitySettings(value);
+          setLoaded(true);
         }
       })
       .catch((caught) => {
@@ -426,9 +430,6 @@ function AccessibilitySection() {
             ? caught.message
             : "Failed to load accessibility settings",
         );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
   }, []);
@@ -483,7 +484,7 @@ function AccessibilitySection() {
               {...pressFeedback}
               type="checkbox"
               checked={settings[key]}
-              disabled={loading || saving}
+              disabled={!loaded || saving}
               onChange={(event) => void toggle(key, event.target.checked)}
               className="h-4 w-4 accent-signal active:scale-[0.96] motion-reduce:active:scale-100"
             />

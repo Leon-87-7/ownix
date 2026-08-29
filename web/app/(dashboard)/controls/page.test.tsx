@@ -58,6 +58,9 @@ beforeEach(() => {
   setupDomainsMock();
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input).includes('accessibility-settings')) {
+      if (init?.method === 'PUT') {
+        return new Response(init.body as string, { status: 200 });
+      }
       return new Response(JSON.stringify({
         visual_motion: true,
         haptic_motion: true,

@@ -54,6 +54,47 @@ describe('accessibility settings', () => {
     expect(result.current).toEqual({
       visual_motion: false,
       haptic_motion: false,
+      loaded: true,
+    });
+  });
+
+  it('does not let a slow initial load overwrite a save that completed first', async () => {
+    const load = deferredResponse();
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(load.promise)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ visual_motion: false, haptic_motion: true }),
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const settingsModule = await import('./useAccessibilitySettings');
+    const { result } = renderHook(() => settingsModule.useAccessibilitySettings());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await settingsModule.saveAccessibilitySetting('visual_motion', false);
+    });
+    expect(result.current).toEqual({
+      visual_motion: false,
+      haptic_motion: true,
+      loaded: true,
+    });
+
+    await act(async () => {
+      load.resolve(
+        new Response(
+          JSON.stringify({ visual_motion: true, haptic_motion: true }),
+        ),
+      );
+      await load.promise;
+    });
+
+    expect(result.current).toEqual({
+      visual_motion: false,
+      haptic_motion: true,
+      loaded: true,
     });
   });
 });

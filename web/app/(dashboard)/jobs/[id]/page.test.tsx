@@ -429,10 +429,20 @@ describe('JobDetailPage', () => {
     expect(body).toEqual({ template: 'summary', freestyle_prompt: null });
   });
 
-  it('requires Freestyle text and surfaces an API error inline', async () => {
+  it('requires Freestyle text and surfaces an API error inline, with an error haptic', async () => {
+    const vibrate = vi.fn(() => true);
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
-    server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', () => HttpResponse.json({ detail: 'Already claimed' }, { status: 409 })));
+    server.use(
+      http.get('/api/templates', () => HttpResponse.json([])),
+      http.post('/api/jobs/:id/enrich', () => HttpResponse.json({ detail: 'Already claimed' }, { status: 409 })),
+      http.get('/api/controls/accessibility-settings', () => HttpResponse.json({ visual_motion: true, haptic_motion: true })),
+    );
     render(<JobDetailPage />);
+    // Let the accessibility-settings GET (fired on mount) resolve before
+    // interacting, so useHapticFeedback's readiness gate is open in time
+    // for the error haptic assertion below.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
     fireEvent.click(screen.getByRole('button', { name: 'Freestyle' }));
     const submit = screen.getByRole('button', { name: 'Run Freestyle' });
@@ -440,6 +450,8 @@ describe('JobDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Freestyle instructions'), { target: { value: 'Find risks' } });
     fireEvent.click(submit);
     expect(await screen.findByRole('alert')).toHaveTextContent('Already claimed');
+    await waitFor(() => expect(vibrate).toHaveBeenCalledWith([40, 30, 40]));
+    Reflect.deleteProperty(navigator, 'vibrate');
   });
 
   it('uses the desktop slide panel with built-in descriptions', async () => {
