@@ -548,8 +548,15 @@ function JobActionsBar({
 
   if (!job.drive_url && !hasFields && !folderUrl) return null;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-start gap-2">
+      {hasFields && (
+        <CopyButton
+          value={buildMarkdown(job)}
+          ariaLabel="Copy all fields as Markdown"
+          label="Copy all"
+        />
+      )}
+      <div className="ml-auto flex flex-col items-end gap-2">
         {job.drive_url && isSafeHttpUrl(job.drive_url) && (
           <a
             href={job.drive_url}
@@ -574,13 +581,6 @@ function JobActionsBar({
           </a>
         )}
       </div>
-      {hasFields && (
-        <CopyButton
-          value={buildMarkdown(job)}
-          ariaLabel="Copy all fields as Markdown"
-          label="Copy all"
-        />
-      )}
     </div>
   );
 }
