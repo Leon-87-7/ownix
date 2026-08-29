@@ -1,29 +1,29 @@
-'use client';
+"use client";
 
-import { useRestrictedMode } from '@/lib/restricted/context';
-import { RestrictedFacade } from '@/components/shell/restricted-facade';
-import { useRouter } from 'next/navigation';
+import { useRestrictedMode } from "@/lib/restricted/context";
+import { RestrictedFacade } from "@/components/shell/restricted-facade";
+import { useRouter } from "next/navigation";
 
-import { useEffect, useId, useRef, useState } from 'react';
-import { useTagList } from '@/lib/hooks/useTagList';
-import { useDomainList } from '@/lib/hooks/useDomainList';
-import { apiDelete, apiPut } from '@/lib/fetch-utils';
-import type { Tag, TagFormState } from '@/lib/hooks/useTagList';
+import { useEffect, useId, useRef, useState } from "react";
+import { useTagList } from "@/lib/hooks/useTagList";
+import { useDomainList } from "@/lib/hooks/useDomainList";
+import { apiDelete, apiPut } from "@/lib/fetch-utils";
+import type { Tag, TagFormState } from "@/lib/hooks/useTagList";
+import { Pin, PinOff, SlidersHorizontal, TagPlus } from "lucide-react";
+import { OwnixChevronDown } from "@/components/svg/ownix-chevron-down";
+import { TagMark } from "@/components/ui/tag-picker";
+import { Tooltip } from "@/components/ui/tooltip";
+import { PageShell, PageHeader } from "@/components/shell/page-shell";
+import { ExtensionTokensPanel } from "@/components/controls/extension-tokens-panel";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+
+import { TagForm, DEFAULT_COLOR } from "@/components/ui/tag-form";
+import { useReducedMotion } from "@/lib/hooks/useReducedMotion";
+import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
 import {
-  Pin,
-  PinOff,
-  SlidersHorizontal,
-  TagPlus,
-} from 'lucide-react';
-import { OwnixChevronDown } from '@/components/svg/ownix-chevron-down';
-import { TagMark } from '@/components/ui/tag-picker';
-import { Tooltip } from '@/components/ui/tooltip';
-import { PageShell, PageHeader } from '@/components/shell/page-shell';
-import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-
-import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
-import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+  publishAccessibilitySettings,
+  type AccessibilitySettings,
+} from "@/lib/hooks/useAccessibilitySettings";
 
 function TagPill({
   tag,
@@ -38,7 +38,7 @@ function TagPill({
 }) {
   return (
     <li
-      className={`inline-flex items-center gap-0.5 rounded-full border bg-raised pr-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
+      className={`inline-flex items-center gap-0.5 rounded-full border bg-raised pr-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? "border-line ring-1 ring-signal-deep" : "border-line"}`}
     >
       <Tooltip content={tag.meaning || undefined}>
         <button
@@ -48,16 +48,11 @@ function TagPill({
           aria-label={`Edit ${tag.name}`}
           className="inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-1.5"
         >
-          <TagMark
-            tag={tag}
-            className="h-3 w-3"
-          />
+          <TagMark tag={tag} className="h-3 w-3" />
           {tag.name}
         </button>
       </Tooltip>
-      <Tooltip
-        content={tag.pinned ? 'Unpin from GoTo' : 'Pin for GoTo'}
-      >
+      <Tooltip content={tag.pinned ? "Unpin from GoTo" : "Pin for GoTo"}>
         <button
           type="button"
           onClick={onTogglePin}
@@ -67,18 +62,12 @@ function TagPill({
               ? `Unpin ${tag.name} from GoTo`
               : `Pin ${tag.name} for GoTo`
           }
-          className={`rounded-full p-1 transition-ui hover:bg-surface ${tag.pinned ? 'text-signal' : 'text-muted'}`}
+          className={`rounded-full p-1 transition-ui hover:bg-surface ${tag.pinned ? "text-signal" : "text-muted"}`}
         >
           {tag.pinned ? (
-            <Pin
-              className="h-3 w-3"
-              aria-hidden="true"
-            />
+            <Pin className="h-3 w-3" aria-hidden="true" />
           ) : (
-            <PinOff
-              className="h-3 w-3"
-              aria-hidden="true"
-            />
+            <PinOff className="h-3 w-3" aria-hidden="true" />
           )}
         </button>
       </Tooltip>
@@ -97,9 +86,7 @@ function TagsTab() {
     toggleTagPinned,
   } = useTagList();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<
-    string | undefined
-  >();
+  const [deleteError, setDeleteError] = useState<string | undefined>();
   const [pinError, setPinError] = useState<string | undefined>();
   const editingTag = tags.find((t) => t.id === editingId) ?? null;
   const editPanelRef = useRef<HTMLDivElement>(null);
@@ -110,8 +97,8 @@ function TagsTab() {
     if (editingTag) {
       // jsdom doesn't implement scrollIntoView (undefined in tests).
       editPanelRef.current?.scrollIntoView?.({
-        behavior: 'smooth',
-        block: 'nearest',
+        behavior: "smooth",
+        block: "nearest",
       });
     }
   }, [editingTag]);
@@ -135,9 +122,7 @@ function TagsTab() {
       await deleteTag(editingTag.id);
       setEditingId(null);
     } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Delete failed',
-      );
+      setDeleteError(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
@@ -146,7 +131,7 @@ function TagsTab() {
     try {
       await toggleTagPinned(tag.id, !tag.pinned);
     } catch (err) {
-      setPinError(err instanceof Error ? err.message : 'Pin failed');
+      setPinError(err instanceof Error ? err.message : "Pin failed");
     }
   };
 
@@ -154,20 +139,14 @@ function TagsTab() {
     <div className="space-y-4">
       {/* ponytail: native <details>, open by default. Mobile = collapsible
           "Create tag" disclosure; desktop hides the summary entirely → plain card. */}
-      <details
-        open
-        className="group"
-      >
+      <details open className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden sm:hidden">
           Create tag
-          <TagPlus
-            className="h-4 w-4 text-muted"
-            aria-hidden="true"
-          />
+          <TagPlus className="h-4 w-4 text-muted" aria-hidden="true" />
         </summary>
         <div className="border-t border-line p-4 sm:border-t-0">
           <TagForm
-            initial={{ name: '', meaning: '', color: DEFAULT_COLOR }}
+            initial={{ name: "", meaning: "", color: DEFAULT_COLOR }}
             onSubmit={createTag}
             submitLabel="Create"
           />
@@ -193,23 +172,17 @@ function TagsTab() {
             onDelete={handleDelete}
           />
           {deleteError && (
-            <p className="mt-2 text-xs text-status-error">
-              {deleteError}
-            </p>
+            <p className="mt-2 text-xs text-status-error">{deleteError}</p>
           )}
         </div>
       )}
       <div className="space-y-2">
-        {loading && (
-          <p className="text-sm text-body">Loading tags…</p>
-        )}
+        {loading && <p className="text-sm text-body">Loading tags…</p>}
         {fetchError && (
           <p className="text-sm text-status-error">{fetchError}</p>
         )}
         {!loading && !fetchError && tags.length === 0 && (
-          <p className="text-sm text-muted">
-            No tags yet. Create one above.
-          </p>
+          <p className="text-sm text-muted">No tags yet. Create one above.</p>
         )}
         <ul className="flex flex-wrap justify-center gap-2">
           {tags.map((tag) => (
@@ -224,30 +197,20 @@ function TagsTab() {
             />
           ))}
         </ul>
-        {pinError && (
-          <p className="text-xs text-status-error">{pinError}</p>
-        )}
+        {pinError && <p className="text-xs text-status-error">{pinError}</p>}
       </div>
     </div>
   );
 }
 
-function DomainTab({
-  apiPath,
-  label,
-}: {
-  apiPath: string;
-  label: string;
-}) {
+function DomainTab({ apiPath, label }: { apiPath: string; label: string }) {
   const { domains, loading, fetchError, addDomain, removeDomain } =
     useDomainList(apiPath, label);
   const inputId = useId(); // both DomainTab instances render at once - IDs must be unique
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | undefined>();
-  const [removeError, setRemoveError] = useState<
-    string | undefined
-  >();
+  const [removeError, setRemoveError] = useState<string | undefined>();
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,9 +220,9 @@ function DomainTab({
     setAddError(undefined);
     try {
       await addDomain(trimmed);
-      setInput('');
+      setInput("");
     } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : 'Add failed');
+      setAddError(err instanceof Error ? err.message : "Add failed");
     } finally {
       setAdding(false);
     }
@@ -270,27 +233,17 @@ function DomainTab({
     try {
       await removeDomain(domain);
     } catch (err: unknown) {
-      setRemoveError(
-        err instanceof Error ? err.message : 'Remove failed',
-      );
+      setRemoveError(err instanceof Error ? err.message : "Remove failed");
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-line bg-surface p-4">
-        <h3 className="mb-3 text-sm font-semibold text-ink">
-          Add domain
-        </h3>
-        <form
-          onSubmit={handleAdd}
-          className="flex flex-wrap items-end gap-3"
-        >
+        <h3 className="mb-3 text-sm font-semibold text-ink">Add domain</h3>
+        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label
-              htmlFor={inputId}
-              className="text-xs font-medium text-body"
-            >
+            <label htmlFor={inputId} className="text-xs font-medium text-body">
               Domain or URL
             </label>
             <input
@@ -308,28 +261,22 @@ function DomainTab({
             disabled={adding}
             className="h-8 rounded-md bg-signal px-3.5 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:bg-surface disabled:text-muted"
           >
-            {adding ? 'Adding…' : 'Add'}
+            {adding ? "Adding…" : "Add"}
           </button>
           {addError && (
-            <p className="w-full text-xs text-status-error">
-              {addError}
-            </p>
+            <p className="w-full text-xs text-status-error">{addError}</p>
           )}
         </form>
       </div>
 
       {loading && (
-        <p className="px-4 text-sm text-body">
-          Loading {label.toLowerCase()}…
-        </p>
+        <p className="px-4 text-sm text-body">Loading {label.toLowerCase()}…</p>
       )}
       {fetchError && (
         <p className="px-4 text-sm text-status-error">{fetchError}</p>
       )}
       {removeError && (
-        <p className="px-4 text-sm text-status-error">
-          {removeError}
-        </p>
+        <p className="px-4 text-sm text-status-error">{removeError}</p>
       )}
       {!loading && !fetchError && domains.length === 0 && (
         <p className="px-4 text-sm text-muted">
@@ -368,30 +315,28 @@ function RecoveryTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/controls/recovery-settings', {
+    fetch("/api/controls/recovery-settings", {
       signal: controller.signal,
     })
       .then(async (res) => {
-        if (!res.ok)
-          throw new Error('Failed to load recovery settings');
+        if (!res.ok) throw new Error("Failed to load recovery settings");
         return res.json() as Promise<{
           telegram_notifications: boolean;
         }>;
       })
       .then((data) => {
-        if (!controller.signal.aborted)
-          setEnabled(data.telegram_notifications);
+        if (!controller.signal.aborted) setEnabled(data.telegram_notifications);
       })
       .catch((err) => {
         if (
           controller.signal.aborted ||
-          (err instanceof Error && err.name === 'AbortError')
+          (err instanceof Error && err.name === "AbortError")
         )
           return;
         setError(
           err instanceof Error
             ? err.message
-            : 'Failed to load recovery settings',
+            : "Failed to load recovery settings",
         );
       })
       .finally(() => {
@@ -409,17 +354,15 @@ function RecoveryTab() {
       const result = await apiPut<{
         telegram_notifications: boolean;
       }>(
-        '/api/controls/recovery-settings',
+        "/api/controls/recovery-settings",
         { telegram_notifications: checked },
-        'Failed to save recovery settings',
+        "Failed to save recovery settings",
       );
       setEnabled(result.telegram_notifications);
     } catch (err) {
       setEnabled(previous);
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to save recovery settings',
+        err instanceof Error ? err.message : "Failed to save recovery settings",
       );
     } finally {
       setSaving(false);
@@ -441,13 +384,121 @@ function RecoveryTab() {
         </span>
       </label>
       <p className="ml-7 mt-1.5 text-xs text-muted">
-        Send a Telegram message when a stuck job is recovered from the
-        Feed.
+        Send a Telegram message when a stuck job is recovered from the Feed.
       </p>
-      {error && (
-        <p className="ml-7 mt-2 text-sm text-status-error">{error}</p>
-      )}
+      {error && <p className="ml-7 mt-2 text-sm text-status-error">{error}</p>}
     </>
+  );
+}
+
+function AccessibilitySection() {
+  const [settings, setSettings] = useState<AccessibilitySettings>({
+    visual_motion: true,
+    haptic_motion: true,
+  });
+  // Only true once a real GET response has applied, so a failed initial
+  // load can't leave the checkboxes editable against the hardcoded
+  // { true, true } placeholder above.
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const pressFeedback = usePressFeedback();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/controls/accessibility-settings", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error("Failed to load accessibility settings");
+        return response.json() as Promise<AccessibilitySettings>;
+      })
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setSettings(value);
+          publishAccessibilitySettings(value);
+          setLoaded(true);
+        }
+      })
+      .catch((caught) => {
+        if (
+          controller.signal.aborted ||
+          (caught instanceof Error && caught.name === "AbortError")
+        )
+          return;
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Failed to load accessibility settings",
+        );
+      });
+    return () => controller.abort();
+  }, []);
+
+  const toggle = async (key: keyof AccessibilitySettings, checked: boolean) => {
+    const previous = settings;
+    const next = { ...settings, [key]: checked };
+    setSettings(next);
+    publishAccessibilitySettings(next);
+    setSaving(true);
+    setError(undefined);
+    try {
+      const saved = await apiPut<AccessibilitySettings>(
+        "/api/controls/accessibility-settings",
+        next,
+        "Failed to save accessibility settings",
+      );
+      setSettings(saved);
+      publishAccessibilitySettings(saved);
+    } catch (caught) {
+      setSettings(previous);
+      publishAccessibilitySettings(previous);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Failed to save accessibility settings",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {(
+        [
+          [
+            "visual_motion",
+            "Press animation",
+            "Show tactile press animation on touch controls.",
+          ],
+          [
+            "haptic_motion",
+            "Haptic motion",
+            "Vibrate for completed or failed actions when your device supports it.",
+          ],
+        ] as const
+      ).map(([key, label, description]) => (
+        <div key={key}>
+          <label className="flex items-center gap-3 text-sm text-ink">
+            <input
+              {...pressFeedback}
+              type="checkbox"
+              checked={settings[key]}
+              disabled={!loaded || saving}
+              onChange={(event) => void toggle(key, event.target.checked)}
+              className="h-4 w-4 accent-signal active:scale-[0.96] motion-reduce:active:scale-100"
+            />
+            <span className="font-medium">{label}</span>
+          </label>
+          <p className="ml-7 mt-1.5 text-xs text-muted">{description}</p>
+        </div>
+      ))}
+      {error && (
+        <p className="ml-7 text-sm text-status-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -458,16 +509,16 @@ function DeleteAccountSection() {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const [confirmText, setConfirmText] = useState('');
+  const [confirmText, setConfirmText] = useState("");
 
   const handleDelete = async () => {
     setDeleting(true);
     setError(undefined);
     try {
-      await apiDelete('/api/auth/me', 'Could not delete account');
-      router.replace('/login');
+      await apiDelete("/api/auth/me", "Could not delete account");
+      router.replace("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete account');
+      setError(err instanceof Error ? err.message : "Could not delete account");
       setDeleting(false);
       throw err;
     }
@@ -475,9 +526,7 @@ function DeleteAccountSection() {
 
   return (
     <div className="flex items-stretch gap-4 max-[620px]:flex-col">
-      <p className="text-sm text-body">
-        {DELETE_ACCOUNT_CONSEQUENCES}
-      </p>
+      <p className="text-sm text-body">{DELETE_ACCOUNT_CONSEQUENCES}</p>
       <div className="border-l border-line max-[620px]:hidden" />
       <div className="flex-shrink-0">
         <ConfirmDialog
@@ -485,12 +534,12 @@ function DeleteAccountSection() {
           description={DELETE_ACCOUNT_CONSEQUENCES}
           confirmLabel="Yes, delete my account"
           pending={deleting}
-          confirmDisabled={confirmText.trim().toLowerCase() !== 'delete'}
+          confirmDisabled={confirmText.trim().toLowerCase() !== "delete"}
           onConfirm={handleDelete}
           trigger={
             <button
               onClick={() => {
-                setConfirmText('');
+                setConfirmText("");
                 setError(undefined);
               }}
               className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised"
@@ -500,7 +549,9 @@ function DeleteAccountSection() {
           }
         >
           <label className="flex flex-col gap-1 text-xs text-body">
-            Type <span className="font-mono font-semibold text-ink">delete</span> to confirm
+            Type{" "}
+            <span className="font-mono font-semibold text-ink">delete</span> to
+            confirm
             <input
               type="text"
               value={confirmText}
@@ -510,10 +561,7 @@ function DeleteAccountSection() {
             />
           </label>
           {error && (
-            <p
-              className="mt-2 text-xs text-status-error"
-              role="alert"
-            >
+            <p className="mt-2 text-xs text-status-error" role="alert">
               {error}
             </p>
           )}
@@ -543,8 +591,8 @@ function Section({
       open={defaultOpen}
       onToggle={() => {
         ref.current?.scrollIntoView?.({
-          behavior: reducedMotion ? 'auto' : 'smooth',
-          block: 'nearest',
+          behavior: reducedMotion ? "auto" : "smooth",
+          block: "nearest",
         });
       }}
       className="group overflow-hidden rounded-lg border border-line bg-surface"
@@ -553,9 +601,7 @@ function Section({
         <span className={titleClassName}>{title}</span>
         <OwnixChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
       </summary>
-      <div className="border-t border-line bg-canvas p-4">
-        {children}
-      </div>
+      <div className="border-t border-line bg-canvas p-4">{children}</div>
     </details>
   );
 }
@@ -564,12 +610,9 @@ export default function ControlsPage() {
   const { restricted } = useRestrictedMode();
   if (restricted)
     return (
-      <RestrictedFacade
-        icon={SlidersHorizontal}
-        title="Settings"
-      >
-        Settings control domains, tags, and workspace behavior for
-        your own Index. Changes are locked in this read-only preview.
+      <RestrictedFacade icon={SlidersHorizontal} title="Settings">
+        Settings control domains, tags, and workspace behavior for your own
+        Index. Changes are locked in this read-only preview.
       </RestrictedFacade>
     );
 
@@ -581,21 +624,15 @@ export default function ControlsPage() {
         description="Manage the tags, domain rules, and recovery behavior that shape your Index."
       />
       <div className="space-y-3">
-        <Section
-          title="Tags"
-          defaultOpen
-        >
+        <Section title="Tags" defaultOpen>
           <TagsTab />
         </Section>
-        <Section
-          title="Domains"
-          defaultOpen
-        >
+        <Section title="Domains" defaultOpen>
           <p className="mb-4 text-sm text-body">
-            Control which link domains Ownix processes automatically.
-            Adding a domain to Allowed lets Ownix process links from
-            it; adding it to Ignored skips those links - steer around
-            noisy sources without touching individual saves.
+            Control which link domains Ownix processes automatically. Adding a
+            domain to Allowed lets Ownix process links from it; adding it to
+            Ignored skips those links - steer around noisy sources without
+            touching individual saves.
           </p>
           <div className="grid gap-6 md:grid-cols-2">
             <div>
@@ -618,16 +655,16 @@ export default function ControlsPage() {
             </div>
           </div>
         </Section>
+        <Section title="Accessibility">
+          <AccessibilitySection />
+        </Section>
         <div className="rounded-lg border border-line bg-surface px-4 py-3">
           <RecoveryTab />
         </div>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
         </Section>
-        <Section
-          title="Danger zone"
-          titleClassName="text-status-error"
-        >
+        <Section title="Danger zone" titleClassName="text-status-error">
           <DeleteAccountSection />
         </Section>
       </div>

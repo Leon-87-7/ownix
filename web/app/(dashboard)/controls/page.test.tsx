@@ -56,7 +56,16 @@ function setupDomainsMock(overrides: Partial<ReturnType<typeof useDomainList>> =
 beforeEach(() => {
   setupTagsMock();
   setupDomainsMock();
-  vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes('accessibility-settings')) {
+      if (init?.method === 'PUT') {
+        return new Response(init.body as string, { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        visual_motion: true,
+        haptic_motion: true,
+      }), { status: 200 });
+    }
     if (init?.method === 'PUT') {
       return new Response(JSON.stringify({ telegram_notifications: false }), { status: 200 });
     }
@@ -87,6 +96,8 @@ describe('ControlsPage', () => {
     expect(screen.getByText('Domains')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Allowed' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Ignored' })).toBeTruthy();
+    expect(screen.getByText('Accessibility')).toBeTruthy();
+    expect(screen.getByText('Press animation')).toBeTruthy();
   });
 
   it('shows Tags section content', () => {

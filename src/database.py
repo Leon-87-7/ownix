@@ -1691,6 +1691,41 @@ async def set_brain_links_view(
     return view
 
 
+_ACCESSIBILITY_SETTINGS_KEY = "dashboard_accessibility_settings"
+_DEFAULT_ACCESSIBILITY_SETTINGS = {"visual_motion": True, "haptic_motion": True}
+
+
+def _normalize_accessibility_settings(value: object) -> dict[str, bool]:
+    if not isinstance(value, dict):
+        return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
+    visual_motion = value.get("visual_motion")
+    haptic_motion = value.get("haptic_motion")
+    if not isinstance(visual_motion, bool) or not isinstance(haptic_motion, bool):
+        return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
+    return {"visual_motion": visual_motion, "haptic_motion": haptic_motion}
+
+
+async def get_accessibility_settings(chat_id: int) -> dict[str, bool]:
+    value = await get_user_setting(chat_id, _ACCESSIBILITY_SETTINGS_KEY)
+    if value is None:
+        return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
+    return _normalize_accessibility_settings(parsed)
+
+
+async def set_accessibility_settings(
+    chat_id: int, *, visual_motion: bool, haptic_motion: bool
+) -> dict[str, bool]:
+    settings_value = {"visual_motion": visual_motion, "haptic_motion": haptic_motion}
+    await set_user_setting(
+        chat_id, _ACCESSIBILITY_SETTINGS_KEY, json.dumps(settings_value, separators=(",", ":"))
+    )
+    return settings_value
+
+
 _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY = "dashboard_recovery_telegram_notifications"
 
 

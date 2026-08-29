@@ -1,16 +1,18 @@
-'use client';
+"use client";
 
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
-import type { ComponentPropsWithoutRef } from 'react';
+import * as RadixDialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
+import type { ComponentPropsWithoutRef } from "react";
 
 export const Sheet = RadixDialog.Root;
 
 export function SheetContent({
   children,
-  className = '',
+  className = "",
   ...props
 }: ComponentPropsWithoutRef<typeof RadixDialog.Content>) {
+  const pressFeedback = usePressFeedback();
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay className="fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
@@ -19,11 +21,11 @@ export function SheetContent({
         {...props}
       >
         {children}
-        <RadixDialog.Close className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100">
-          <X
-            className="h-4 w-4"
-            aria-hidden="true"
-          />
+        <RadixDialog.Close
+          {...pressFeedback}
+          className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-[background-color,color,transform] duration-150 hover:bg-raised hover:text-ink motion-reduce:transition-none"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Close</span>
         </RadixDialog.Close>
       </RadixDialog.Content>
@@ -32,7 +34,7 @@ export function SheetContent({
 }
 
 export function SheetTitle({
-  className = '',
+  className = "",
   ...props
 }: ComponentPropsWithoutRef<typeof RadixDialog.Title>) {
   return (

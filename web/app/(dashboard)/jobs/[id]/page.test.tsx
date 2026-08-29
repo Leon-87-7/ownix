@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@/test/render';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@/test/render';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -7,6 +7,10 @@ import { useState } from 'react';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import JobDetailPage from './page';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
+import {
+  resetAccessibilitySettingsForTests,
+  useAccessibilitySettings,
+} from '@/lib/hooks/useAccessibilitySettings';
 
 const routerBack = vi.fn();
 const routerPush = vi.fn();
@@ -149,6 +153,7 @@ beforeEach(() => {
   vi.unstubAllGlobals();
   mockStartPolling.mockReset();
   mockStartPolling.mockReturnValue(vi.fn());
+  resetAccessibilitySettingsForTests();
 });
 
 describe('JobDetailPage', () => {
@@ -429,10 +434,31 @@ describe('JobDetailPage', () => {
     expect(body).toEqual({ template: 'summary', freestyle_prompt: null });
   });
 
-  it('requires Freestyle text and surfaces an API error inline', async () => {
+  it('requires Freestyle text and surfaces an API error inline, with an error haptic', async () => {
+    const vibrate = vi.fn(() => true);
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate });
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
-    server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', () => HttpResponse.json({ detail: 'Already claimed' }, { status: 409 })));
+    let resolveSettings!: () => void;
+    const settingsDeferred = new Promise<void>((resolve) => {
+      resolveSettings = resolve;
+    });
+    server.use(
+      http.get('/api/templates', () => HttpResponse.json([])),
+      http.post('/api/jobs/:id/enrich', () => HttpResponse.json({ detail: 'Already claimed' }, { status: 409 })),
+      http.get('/api/controls/accessibility-settings', async () => {
+        await settingsDeferred;
+        return HttpResponse.json({ visual_motion: true, haptic_motion: true });
+      }),
+    );
+    const settings = renderHook(() => useAccessibilitySettings());
     render(<JobDetailPage />);
+    // Resolve the accessibility-settings GET (fired on mount) and wait for
+    // useHapticFeedback's readiness gate to open before interacting, rather
+    // than a fixed delay that only happens to outrun the real timing.
+    await act(async () => {
+      resolveSettings();
+    });
+    await waitFor(() => expect(settings.result.current.loaded).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
     fireEvent.click(screen.getByRole('button', { name: 'Freestyle' }));
     const submit = screen.getByRole('button', { name: 'Run Freestyle' });
@@ -440,6 +466,8 @@ describe('JobDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Freestyle instructions'), { target: { value: 'Find risks' } });
     fireEvent.click(submit);
     expect(await screen.findByRole('alert')).toHaveTextContent('Already claimed');
+    await waitFor(() => expect(vibrate).toHaveBeenCalledWith([40, 30, 40]));
+    Reflect.deleteProperty(navigator, 'vibrate');
   });
 
   it('uses the desktop slide panel with built-in descriptions', async () => {

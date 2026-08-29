@@ -49,6 +49,21 @@ def test_domain_validation_rejects_bare_tld_and_bad_labels() -> None:
     assert is_valid_domain_name("example..com") is False
 
 
+def test_accessibility_settings_endpoints_roundtrip(controls_client: TestClient) -> None:
+    endpoint = "/api/controls/accessibility-settings"
+    assert controls_client.get(endpoint).json() == {
+        "visual_motion": True,
+        "haptic_motion": True,
+    }
+    saved = controls_client.put(
+        endpoint,
+        json={"visual_motion": False, "haptic_motion": True},
+    )
+    assert saved.status_code == 200
+    assert controls_client.get(endpoint).json() == saved.json()
+    assert controls_client.put(endpoint, json={"visual_motion": True}).status_code == 422
+
+
 def test_tag_endpoints_return_409_for_canonical_collisions(
     controls_client: TestClient,
 ) -> None:
@@ -79,3 +94,17 @@ def test_tag_endpoints_return_409_for_canonical_collisions(
     tags = controls_client.get("/api/controls/tags")
     assert tags.status_code == 200
     assert sorted(tag["name"] for tag in tags.json()) == ["Archive", "Read Later"]
+
+def test_accessibility_settings_get_put_and_validate(controls_client: TestClient) -> None:
+    response = controls_client.get("/api/controls/accessibility-settings")
+    assert response.status_code == 200
+    assert response.json() == {"visual_motion": True, "haptic_motion": True}
+    response = controls_client.put(
+        "/api/controls/accessibility-settings",
+        json={"visual_motion": False, "haptic_motion": True},
+    )
+    assert response.status_code == 200
+    assert controls_client.get("/api/controls/accessibility-settings").json() == response.json()
+    assert controls_client.put(
+        "/api/controls/accessibility-settings", json={"visual_motion": False}
+    ).status_code == 422
