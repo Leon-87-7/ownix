@@ -69,7 +69,6 @@
 | [#562](https://github.com/Leon-87-7/ownix/issues/562) | feat(tags): extend job/link tag merge to article jobs with not-yet-linked fallback | Jobs / Tags | #561 |
 | [#563](https://github.com/Leon-87-7/ownix/issues/563) | feat(tags): extend job/link tag merge to repo jobs | Jobs / Tags | #562 |
 | [#560](https://github.com/Leon-87-7/ownix/issues/560) | ci(mutation): fail backend-mutation below an 85% mutation score | CI / Mutation | — |
-
 ---
 
 ## Ready for Agent
@@ -102,6 +101,10 @@ Ordered by unblocked-first, then dependency chain.
 | [#569](https://github.com/Leon-87-7/ownix/issues/569) | Accessibility settings — storage, API, and Settings UI toggle | — | — |
 | [#570](https://github.com/Leon-87-7/ownix/issues/570) | Visual press-feedback hook + v1 rollout | — | #569 |
 | [#571](https://github.com/Leon-87-7/ownix/issues/571) | Real vibration on outcome-bearing actions | — | #569, #570 |
+| [#580](https://github.com/Leon-87-7/ownix/issues/580) | Screenshot capture: core pipeline + job-detail button | Screenshots | — |
+| [#581](https://github.com/Leon-87-7/ownix/issues/581) | Screenshot capture: /screenshots command (Telegram + dashboard composer) | Screenshots | #580 |
+| [#582](https://github.com/Leon-87-7/ownix/issues/582) | Screenshot capture: job purge deletes the screenshots subfolder | Screenshots | #580 |
+| [#583](https://github.com/Leon-87-7/ownix/issues/583) | Screenshot capture: persist video duration, gate trigger UI proactively | Long video | #580 |
 
 ---
 
@@ -636,6 +639,14 @@ Mobile haptic button feel (PRD #568 — ADR-0053; grill-with-search-docs 2026-08
     └── #571 Real vibration on outcome-bearing actions ◄── also #569
 Critical path: #569 → #570 → #571
 Note: #568 is the parent PRD spec issue (not a build slice) — see docs/adr/0053-mobile-haptic-button-feel.md.
+
+Long-video screenshot capture (spec #579 — ADR-0054, ADR-0055, ADR-0056; grill-with-docs 2026-08-29)
+#580 Screenshot capture: core pipeline + job-detail button (root, unblocked)
+├── #581 /screenshots command (Telegram + dashboard composer) ◄── #580
+├── #582 Job purge deletes the screenshots subfolder ◄── #580
+└── #583 Persist video duration, gate trigger UI proactively ◄── #580
+Critical path: #580 → {#581, #582, #583} (all three parallel once #580 lands)
+Note: #579 is the parent spec issue (not a build slice) — see docs/adr/0054-screenshot-capture-per-job-drive-subfolder.md, 0055-screenshot-capture-two-layer-detection.md, 0056-screenshot-capture-trigger-mirrors-prd-not-checklists.md, and CONTEXT.md `Screenshot capture`.
 ```
 
 ---
