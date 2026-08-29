@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentPropsWithoutRef, ElementType, ReactNode } from "react";
+import Link from "next/link";
 import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
 
 type GhostButtonAccent = "signal" | "contrasignal" | "body";
@@ -55,4 +56,14 @@ export function GhostButton<T extends ElementType = "button">({
       {children}
     </Component>
   );
+}
+
+/**
+ * Next.js `Link`-backed GhostButton, pre-wired inside this client module.
+ * A Server Component caller can't pass `as={Link}` itself — React can't
+ * serialize a component reference across that boundary — so this gives
+ * server files (e.g. app/page.tsx) a plain, serializable-props entry point.
+ */
+export function GhostLinkButton(props: Omit<GhostButtonProps<typeof Link>, "as">) {
+  return <GhostButton as={Link} {...props} />;
 }

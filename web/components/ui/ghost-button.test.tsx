@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { GhostButton } from './ghost-button';
+import { GhostButton, GhostLinkButton } from './ghost-button';
 
 describe('GhostButton', () => {
   it('renders a non-submitting contrasignal button by default', () => {
@@ -51,6 +51,20 @@ describe('GhostButton', () => {
 
     rerender(<GhostButton borderLine="2">Thick edge</GhostButton>);
     expect(screen.getByRole('button', { name: 'Thick edge' })).toHaveClass('border-b-2');
+  });
+
+  it('GhostLinkButton renders as a next/link anchor without a Server-Component-unsafe prop', () => {
+    // Regression test: a Server Component caller (e.g. app/page.tsx) can't
+    // pass `as={Link}` to GhostButton directly — React can't serialize a
+    // component reference across that boundary, and it crashes in
+    // production with "Functions cannot be passed directly to Client
+    // Components". GhostLinkButton keeps that wiring inside this client
+    // module so callers only ever pass serializable props.
+    render(<GhostLinkButton href="/restricted">Look inside</GhostLinkButton>);
+
+    expect(
+      screen.getByRole('link', { name: 'Look inside' }),
+    ).toHaveAttribute('href', '/restricted');
   });
 
   it('preserves an explicit submit type', () => {

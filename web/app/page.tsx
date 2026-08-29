@@ -22,7 +22,7 @@ import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
 import { DesktopIcon } from '@/components/svg/desktop';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
-import { GhostButton } from '@/components/ui/ghost-button';
+import { GhostButton, GhostLinkButton } from '@/components/ui/ghost-button';
 import PreviewMotif from '@/components/ui/preview-motif';
 
 import { Brain, Inbox, ListChecks, Share } from 'lucide-react';
@@ -108,14 +108,13 @@ export default async function LandingPage() {
               </Link>
             )}
             {signedIn && (
-              <GhostButton
-                as={Link}
+              <GhostLinkButton
                 accent="contrasignal"
                 href="/logout"
                 className={`h-8 bg-transparent px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
               >
                 Logout
-              </GhostButton>
+              </GhostLinkButton>
             )}
           </div>
         </div>
@@ -237,14 +236,13 @@ export default async function LandingPage() {
                   <span className="font-mono text-xs text-muted">
                     See the product
                   </span>
-                  <GhostButton
-                    as={Link}
+                  <GhostLinkButton
                     accent="contrasignal"
                     href="/restricted"
                     className={`h-8 w-full bg-canvas/70 px-3.5 text-button font-medium leading-none text-ink focus-visible:ring-offset-canvas ${touchTarget}`}
                   >
                     {signedIn ? 'Open Feed' : 'Look inside'}
-                  </GhostButton>
+                  </GhostLinkButton>
                 </div>
               </div>
             </div>
