@@ -1,16 +1,23 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   resetAccessibilitySettingsForTests,
   useAccessibilitySettings,
 } from "./useAccessibilitySettings";
 import { useHapticFeedback, vibrateOutcome } from "./useHapticFeedback";
 
+const server = setupServer();
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterAll(() => server.close());
+
 afterEach(() => {
   resetAccessibilitySettingsForTests();
   Reflect.deleteProperty(navigator, "vibrate");
   vi.restoreAllMocks();
+  server.resetHandlers();
 });
 
 describe("vibrateOutcome", () => {
@@ -40,11 +47,16 @@ describe("vibrateOutcome", () => {
 
 describe("useHapticFeedback", () => {
   it("suppresses vibration until the stored preference loads, then respects a saved opt-out", async () => {
-    let resolveLoad!: (response: Response) => void;
-    const deferred = new Promise<Response>((resolve) => {
-      resolveLoad = resolve;
+    let resolveSettings!: () => void;
+    const settingsDeferred = new Promise<void>((resolve) => {
+      resolveSettings = resolve;
     });
-    vi.stubGlobal("fetch", vi.fn(() => deferred));
+    server.use(
+      http.get("/api/controls/accessibility-settings", async () => {
+        await settingsDeferred;
+        return HttpResponse.json({ visual_motion: true, haptic_motion: false });
+      }),
+    );
     const vibrate = vi.fn(() => true);
     Object.defineProperty(navigator, "vibrate", {
       configurable: true,
@@ -60,11 +72,7 @@ describe("useHapticFeedback", () => {
     expect(vibrate).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveLoad(
-        new Response(
-          JSON.stringify({ visual_motion: true, haptic_motion: false }),
-        ),
-      );
+      resolveSettings();
     });
     await waitFor(() => expect(settings.result.current.loaded).toBe(true));
 
