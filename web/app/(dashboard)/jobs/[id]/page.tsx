@@ -404,7 +404,7 @@ function JobHeader({
   return (
     <div>
       {/* #192: 44px touch target, icon back + segmented Previous/Next in one row, capped to mobile's width on larger screens instead of stretching full-bleed. */}
-      <div className="mb-4 flex items-center gap-2 sm:max-w-xs">
+      <div className="sticky -top-4 z-20 mb-4 flex items-center gap-2 bg-canvas py-4 sm:-top-6 sm:max-w-xs sm:py-6">
         <button
           type="button"
           onClick={handleBackToFeed}
