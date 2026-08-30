@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
+from urllib.parse import urlsplit
+
 import httpx
 
 from src.config import settings
@@ -7,8 +10,29 @@ from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
+
+
+def _is_local_host(hostname: str) -> bool:
+    """True for loopback, private-network, and unqualified (docker/k8s service-name) hosts."""
+    if not hostname:
+        return False
+    if hostname in _LOCAL_HOSTS or "." not in hostname:
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_private
+    except ValueError:
+        return False
+
+
 def _auth_headers() -> dict[str, str]:
-    return {"X-Ownix-Internal-Token": settings.TRANSCRIPT_SERVICE_TOKEN} if settings.TRANSCRIPT_SERVICE_TOKEN else {}
+    if not settings.TRANSCRIPT_SERVICE_TOKEN:
+        return {}
+    parsed = urlsplit(settings.TRANSCRIPT_SERVICE_URL)
+    if parsed.scheme == "https" or _is_local_host(parsed.hostname or ""):
+        return {"X-Ownix-Internal-Token": settings.TRANSCRIPT_SERVICE_TOKEN}
+    log.warning("transcript_token_omitted_insecure_url", url=settings.TRANSCRIPT_SERVICE_URL)
+    return {}
 
 
 _TIMEOUT = httpx.Timeout(90.0)

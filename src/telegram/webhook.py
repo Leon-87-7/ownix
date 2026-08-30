@@ -1176,6 +1176,7 @@ _HELP_TEXT = (
     "`/unallowlist` <domain> — remove an article domain\n"
     "`/allowlist_list` — show allowlisted domains\n"
     "`/download_md` <suffix> — download a job result as Markdown\n"
+    "`/screenshots` <suffix> — capture screenshots from a long video\n"
     "`/rebuild-graph` — rebuild the Second Brain link graph"
 )
 

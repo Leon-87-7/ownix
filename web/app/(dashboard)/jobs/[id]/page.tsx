@@ -778,12 +778,16 @@ function ScreenshotsSection({ job, reload }: { job: JobDetail; reload: () => Pro
 
   const run = async () => {
     setError(null);
-    const result = await apiPost<{ screenshots_status: string }>(
-      `/api/jobs/${job.id}/screenshots`,
-      {},
-      "Screenshot capture failed",
-    );
-    if (!result.ok) setError(result.detail);
+    try {
+      const result = await apiPost<{ screenshots_status: string }>(
+        `/api/jobs/${job.id}/screenshots`,
+        {},
+        "Screenshot capture failed",
+      );
+      if (!result.ok) setError(result.detail);
+    } catch {
+      setError("Screenshot capture failed");
+    }
     await reload();
   };
 

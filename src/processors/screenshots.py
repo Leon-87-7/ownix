@@ -42,6 +42,7 @@ async def trigger(job: dict) -> str:
 async def run(job: dict) -> None:
     job_id = job["id"]
     chat_id = job["chat_id"]
+    folder_id = None
     try:
         metadata = await transcript.fetch_metadata(job["url"])
         duration = metadata.get("duration")
@@ -56,6 +57,14 @@ async def run(job: dict) -> None:
             raise RuntimeError(result["error"].get("message", "Frame extraction failed"))
         frames = result.get("frames", [])
         selections = await gemini.select_informative_screenshots(frames)
+        valid_selections = [
+            (number, selected)
+            for number, selected in enumerate(selections, 1)
+            if isinstance(selected.get("index"), int) and 0 <= selected["index"] < len(frames)
+        ]
+        if not valid_selections:
+            raise RuntimeError("No informative frames were found")
+
         title = metadata.get("title") or job.get("title") or "untitled"
         folder_id, folder_url = await drive.create_subfolder(
             f"{job_id}_{slugify(title) or 'untitled'}",
@@ -64,11 +73,6 @@ async def run(job: dict) -> None:
         )
         if not folder_id:
             raise RuntimeError("Screenshot Drive export is unavailable")
-        valid_selections = [
-            (number, selected)
-            for number, selected in enumerate(selections, 1)
-            if isinstance(selected.get("index"), int) and 0 <= selected["index"] < len(frames)
-        ]
         semaphore = asyncio.Semaphore(_UPLOAD_CONCURRENCY)
 
         async def _upload(number: int, selected: dict) -> None:
@@ -82,7 +86,13 @@ async def run(job: dict) -> None:
                     chat_id=chat_id,
                 )
 
-        await asyncio.gather(*(_upload(number, selected) for number, selected in valid_selections))
+        uploads = await asyncio.gather(
+            *(_upload(number, selected) for number, selected in valid_selections),
+            return_exceptions=True,
+        )
+        upload_failure = next((r for r in uploads if isinstance(r, Exception)), None)
+        if upload_failure is not None:
+            raise upload_failure
         generated_at = datetime.now(UTC).isoformat()
         await database.update_job_fields(
             job_id,
@@ -94,5 +104,16 @@ async def run(job: dict) -> None:
         await send_message(chat_id, f'🖼 Screenshots ready: {folder_url}')
     except Exception as exc:
         log.exception("screenshots.failed", job_id=job_id)
-        await database.update_job_fields(job_id, screenshots_status="error")
+        fields: dict = {"screenshots_status": "error"}
+        if folder_id:
+            try:
+                await drive.delete_file(folder_id, chat_id=chat_id)
+            except Exception:
+                log.exception(
+                    "screenshots.folder_cleanup_failed", job_id=job_id, folder_id=folder_id
+                )
+                existing = await database.get_job(job_id)
+                if not existing or not existing.get("screenshots_drive_folder_id"):
+                    fields["screenshots_drive_folder_id"] = folder_id
+        await database.update_job_fields(job_id, **fields)
         await send_message(chat_id, f"⚠️ Screenshot capture failed: {exc}")

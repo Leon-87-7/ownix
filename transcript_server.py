@@ -46,6 +46,9 @@ INSTAGRAM_MAX_SLIDES = 10
 # /metadata so the app and independently deployed sidecar cannot drift.
 SHORT_VIDEO_MAX_DURATION = 180
 SCREENSHOTS_MAX_DURATION = 5400
+SCREENSHOTS_MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024  # 1 GiB — bounds temp disk use for the source video
+SCREENSHOTS_MAX_RAW_FRAMES = 200  # ffmpeg scene-detect cap, before perceptual dedup
+SCREENSHOTS_MAX_FRAMES = 60  # final frames returned to the caller, after dedup
 
 TRANSCRIPT_SERVICE_TOKEN = os.environ.get("TRANSCRIPT_SERVICE_TOKEN", "")
 _INTERNAL_AUTH_HEADER = "X-Ownix-Internal-Token"
@@ -404,15 +407,28 @@ def screenshot_candidates():
             return _reject("too_long", f"Video exceeds {SCREENSHOTS_MAX_DURATION}s limit", 422)
 
         video_dir, frame_dir = tempfile.mkdtemp(), tempfile.mkdtemp()
-        opts = _with_cookies({"quiet": True, "no_warnings": True, "outtmpl": os.path.join(video_dir, "video.%(ext)s")}, video_dir)
+        opts = _with_cookies(
+            {
+                "quiet": True,
+                "no_warnings": True,
+                "outtmpl": os.path.join(video_dir, "video.%(ext)s"),
+                "max_filesize": SCREENSHOTS_MAX_DOWNLOAD_BYTES,
+            },
+            video_dir,
+        )
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
         videos = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.startswith("video.")]
         if not videos:
-            return _reject("download_failed", "yt-dlp produced no video", 502)
+            return _reject("download_failed", "yt-dlp produced no video (or exceeded the size limit)", 502)
         pattern = os.path.join(frame_dir, "frame_%04d.jpg")
         scene = subprocess.run(
-            ["ffmpeg", "-y", "-i", videos[0], "-vf", "select='gt(scene,0.20)',scale=1280:-2", "-vsync", "vfr", pattern],
+            [
+                "ffmpeg", "-y", "-i", videos[0],
+                "-vf", "select='gt(scene,0.20)',scale=1280:-2",
+                "-vsync", "vfr", "-frames:v", str(SCREENSHOTS_MAX_RAW_FRAMES),
+                pattern,
+            ],
             capture_output=True,
             timeout=300,
         )
@@ -428,7 +444,7 @@ def screenshot_candidates():
                 timeout=300,
             )
         frames = []
-        for path in _deduplicate_frames(frame_dir):
+        for path in _deduplicate_frames(frame_dir)[:SCREENSHOTS_MAX_FRAMES]:
             with open(path, "rb") as handle:
                 frames.append({"data": base64.b64encode(handle.read()).decode(), "mime_type": "image/jpeg"})
         return jsonify({"duration": duration, "frame_count": len(frames), "frames": frames})
