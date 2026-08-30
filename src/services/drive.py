@@ -89,6 +89,45 @@ async def upload_file(
     return file_id, link
 
 
+def _create_folder_sync(name: str, parent_id: str, chat_id: int | None = None) -> tuple[str, str]:
+    result = (
+        _build_service(chat_id)
+        .files()
+        .create(
+            body={
+                "name": name,
+                "parents": [parent_id],
+                "mimeType": "application/vnd.google-apps.folder",
+            },
+            fields="id,webViewLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    return result["id"], result["webViewLink"]
+
+
+async def create_subfolder(
+    name: str, parent_id: str, *, chat_id: int | None = None
+) -> tuple[str, str]:
+    """Create one browsable Drive subfolder under parent_id, or under the caller's
+    connected personal Drive if they have one (mirrors upload_file's routing)."""
+    if await settings.export_blocked(chat_id):
+        log.info("drive_folder_export_gated", name=name, chat_id=chat_id)
+        return "", ""
+    try:
+        target_parent = await asyncio.to_thread(lambda: user_folder_id(chat_id) or parent_id)
+        folder_id, link = await asyncio.to_thread(_create_folder_sync, name, target_parent, chat_id)
+    except RefreshError as exc:
+        await _handle_refresh_error(chat_id, exc)
+        return "", ""
+    except HttpError as exc:
+        _degrade_or_raise(chat_id, exc, "drive_folder_create_failed", name=name)
+        return "", ""
+    log.info("drive_folder_created", name=name, folder_id=folder_id)
+    return folder_id, link
+
+
 def _update_sync(
     file_id: str, content: str | bytes, mime_type: str, chat_id: int | None = None
 ) -> str:

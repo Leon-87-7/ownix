@@ -45,3 +45,15 @@ async def fetch_metadata(url: str) -> dict:
     data = resp.json()
     log.info("metadata_fetched", url=url, has_error="error" in data)
     return data
+
+
+async def fetch_screenshot_candidates(url: str) -> dict:
+    """Extract visually distinct long-video candidates in the sidecar."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        resp = await client.post(
+            f"{settings.TRANSCRIPT_SERVICE_URL}/screenshot_candidates",
+            json={"url": url},
+            headers=_auth_headers(),
+        )
+        resp.raise_for_status()
+    return resp.json()

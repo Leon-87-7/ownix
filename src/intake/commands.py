@@ -373,6 +373,29 @@ async def checklists_command(chat_id: int, parts: list[str]) -> IntakeResponse:
     return IntakeResponse(kind="checklists_result", text=md, job_id=job["id"])
 
 
+async def screenshots_command(chat_id: int, parts: list[str]) -> IntakeResponse:
+    """`/screenshots <suffix>` — claim long-video screenshot capture in background."""
+    if len(parts) < 2:
+        return responses.command_result("Usage: /screenshots <suffix>")
+    from src import database
+    from src.processors.screenshots import trigger
+
+    rows = await database.find_jobs_by_suffix(chat_id, parts[1][-4:])
+    if not rows:
+        return responses.error("No matching job found.")
+    job = rows[0]
+    outcome = await trigger(job)
+    messages = {
+        "started": "Screenshot capture started. I'll send the Drive folder when it is ready.",
+        "busy": "Screenshot capture is already running.",
+        "too_long": "That video exceeds the screenshot duration limit.",
+        "ineligible": "Screenshots require a completed long-video transcript.",
+    }
+    if outcome != "started":
+        return responses.error(messages[outcome])
+    return responses.action_ack(messages[outcome], job_id=job["id"])
+
+
 SHARED_COMMANDS: dict[str, Command] = {
     "/help": Command("/help", "this message", help_command),
     "/cancel": Command("/cancel", "cancel the current pending prompt", cancel_command),
@@ -386,6 +409,9 @@ SHARED_COMMANDS: dict[str, Command] = {
         "engineering checklist from a short/long transcript",
         checklists_command,
         args="<suffix>",
+    ),
+    "/screenshots": Command(
+        "/screenshots", "capture informative long-video frames", screenshots_command, args="<suffix>"
     ),
 }
 

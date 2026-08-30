@@ -762,6 +762,63 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
   );
 }
 
+function ScreenshotsSection({ job, reload }: { job: JobDetail; reload: () => Promise<void> }) {
+  const [error, setError] = useState<string | null>(null);
+  const generating = job.screenshots_status === "generating";
+  const overLimit =
+    job.video_duration_seconds != null && job.video_duration_seconds > 5400;
+
+  useEffect(() => {
+    if (!generating) return;
+    return startPolling(reload, () => job.screenshots_status !== "generating", 2000);
+  }, [generating, reload, job.screenshots_status]);
+
+  if (job.content_type !== "long" || !["transcript_done", "done"].includes(job.status))
+    return null;
+
+  const run = async () => {
+    setError(null);
+    const result = await apiPost<{ screenshots_status: string }>(
+      `/api/jobs/${job.id}/screenshots`,
+      {},
+      "Screenshot capture failed",
+    );
+    if (!result.ok) setError(result.detail);
+    await reload();
+  };
+
+  return (
+    <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-title font-semibold text-ink">Screenshots</h2>
+          <p className="mt-1 text-label text-muted">
+            Informative diagrams, code, slides, and product views.
+          </p>
+        </div>
+        {job.screenshots_drive_url ? (
+          <CardOpenButton href={job.screenshots_drive_url} label="Open screenshots in Drive" />
+        ) : (
+          <Tooltip content={overLimit ? "Available for videos up to 90 minutes" : "Capture informative frames"}>
+            <button
+              type="button"
+              onClick={run}
+              disabled={generating || overLimit}
+              className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+            >
+              {generating ? "Capturing…" : "Capture Screenshots"}
+            </button>
+          </Tooltip>
+        )}
+      </div>
+      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+      {job.screenshots_status === "error" && !error && (
+        <p role="alert" className="text-sm text-status-error">Capture failed. Try again.</p>
+      )}
+    </section>
+  );
+}
+
 const GEMINI_RECIPES = [
   "summary",
   "method",
@@ -1135,6 +1192,7 @@ export default function JobDetailPage() {
         )}
 
       {!restricted && <ChecklistsSection job={job} />}
+      {!restricted && <ScreenshotsSection job={job} reload={reload} />}
 
       <TranscriptCard job={job} />
 

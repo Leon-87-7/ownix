@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     GOOGLE_TOKEN_ENCRYPTION_KEY: str = ""
     GOOGLE_DRIVE_FOLDER_SHORT: str = ""
     GOOGLE_DRIVE_FOLDER_LONG: str = ""
+    GOOGLE_DRIVE_FOLDER_SCREENSHOTS: str = ""
+    SCREENSHOTS_MAX_DURATION_SECONDS: int = 5_400
     # Single consolidated workbook holding all per-domain tabs (ADR-0013).
     # Tabs: 'YouTube Transcript Index', 'Short Video Analysis',
     # 'Article Analysis', 'mini PRD'. Tab routing lives in src/services/sheets.py.

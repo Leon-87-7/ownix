@@ -62,6 +62,7 @@ async def build_job_purge_task(job: dict[str, Any]) -> dict[str, Any]:
                 drive.file_id_from_url(job.get("drive_url")),
                 job.get("prd_auto_drive_file_id"),
                 job.get("prd_intent_drive_file_id"),
+                job.get("screenshots_drive_folder_id"),
             )
             if file_id
         ],

@@ -93,6 +93,7 @@ async def run(job: dict) -> None:
     channel = meta_resp.get("channel", "")
     views = meta_resp.get("views", "")
     description = meta_resp.get("description", "")
+    duration = meta_resp.get("duration")
 
     # 2. Auto-detect template (plain URL jobs only)
     if not job.get("template"):
@@ -123,6 +124,7 @@ async def run(job: dict) -> None:
         "drive_url": drive_url,
         "title": title,
         "transcript": transcript,
+        "video_duration_seconds": duration,
     }
     if description_links:
         transcript_fields["links"] = json.dumps(description_links)

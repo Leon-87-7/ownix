@@ -263,6 +263,43 @@ async def call_gemini_photo_links(
     return data
 
 
+async def select_informative_screenshots(frames: list[dict]) -> list[dict]:
+    """Select and caption informative long-video frames (diagrams, code, UI, slides)."""
+    from google.genai import types
+
+    prompt = (
+        "Select only frames that teach something useful: code, diagrams, slides, data, or "
+        "meaningful UI. Exclude talking heads, logos, transitions, and near duplicates. "
+        "Return JSON object with selections [{index, caption}]; index is zero-based."
+    )
+    parts: list[object] = [prompt]
+    for frame in frames:
+        parts.append(types.Part.from_bytes(data=base64.b64decode(frame["data"]), mime_type="image/jpeg"))
+    response = await _call_with_fallback(
+        _call_sync,
+        parts,
+        model="gemini-2.5-flash",
+        schema={
+            "type": "object",
+            "properties": {
+                "selections": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"index": {"type": "integer"}, "caption": {"type": "string"}},
+                        "required": ["index", "caption"],
+                    },
+                }
+            },
+            "required": ["selections"],
+        },
+        log_ok="gemini.screenshots_ok",
+        log_fail="gemini.screenshots_key_failed",
+    )
+    data = extract_json(response.text or "")
+    return data.get("selections", [])
+
+
 async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
     """Resolve canonical URLs for a tool/product list via Gemini. Returns tools with 'url' added."""
     if not tools:

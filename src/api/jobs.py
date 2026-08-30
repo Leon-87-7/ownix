@@ -564,6 +564,10 @@ _DETAIL_FIELDS_COMMON = (
     "sheets_row_id",
     "checklists_md",
     "checklists_generated_at",
+    "screenshots_status",
+    "screenshots_drive_url",
+    "screenshots_generated_at",
+    "video_duration_seconds",
 )
 
 # Extra fields for long/article/repo jobs (AI enrichment schema)
@@ -691,6 +695,22 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
         checklists_generated_at=generated_at,
     )
     return {"checklists_md": markdown, "checklists_generated_at": generated_at}
+
+
+@jobs_router.post("/{job_id}/screenshots", status_code=202)
+async def generate_job_screenshots(job_id: str, request: Request) -> dict:
+    """Claim screenshot capture and return immediately while it runs."""
+    job = await get_owned_job(job_id, request)
+    from src.processors.screenshots import trigger
+
+    outcome = await trigger(job)
+    if outcome == "ineligible":
+        raise HTTPException(status_code=422, detail="Screenshots require a completed long video")
+    if outcome == "too_long":
+        raise HTTPException(status_code=422, detail="Video exceeds the screenshot duration limit")
+    if outcome == "busy":
+        raise HTTPException(status_code=409, detail="Screenshot capture is already running")
+    return {"screenshots_status": "generating"}
 
 
 @jobs_router.post("/{job_id}/enrich", status_code=202)
