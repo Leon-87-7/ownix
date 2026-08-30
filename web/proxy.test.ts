@@ -85,3 +85,11 @@ describe('proxy restricted mode (ADR-0035)', () => {
     expect(response.headers.get('location')).toBe('https://ownix.test/login');
   });
 });
+
+describe('proxy agent-readable 404s', () => {
+  it('lets an unknown path fall through to a real 404 instead of the login wall', () => {
+    const response = proxy(requestFor('/pricing'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+});

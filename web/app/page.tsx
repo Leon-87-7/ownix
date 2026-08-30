@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
+import { SITE_URL } from '@/lib/site-url';
 import Image from 'next/image';
 import Link from 'next/link';
 import OwnixLogo from '@/app/ownix-logo.svg';
@@ -35,6 +36,7 @@ const chromeExtensionUrl =
 export const metadata: Metadata = {
   title: 'Ownix - Your internet. Own it',
   description: pageDescription,
+  alternates: { canonical: SITE_URL },
   openGraph: {
     title: 'Ownix - Your internet. Own it',
     description: pageDescription,

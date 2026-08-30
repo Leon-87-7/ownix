@@ -3,6 +3,12 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/logout", "/privacy", "/terms", "/restricted", "/opengraph-image", "/offline", "/intake/share"];
 
+// Mirrors app/(dashboard)/* — keep in sync when adding a dashboard route.
+// Anything NOT in this list falls through to Next's real 404 instead of the
+// login wall, so a typo'd or nonexistent path reads as "doesn't exist" rather
+// than "exists, log in" to crawlers/agents.
+const PROTECTED_PREFIXES = ["/feed", "/brain", "/spaces", "/controls", "/jobs", "/doc-parser", "/prompts", "/intake"];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -23,6 +29,10 @@ export function proxy(request: NextRequest) {
   }
 
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.next();
+  }
+
+  if (!PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
 
