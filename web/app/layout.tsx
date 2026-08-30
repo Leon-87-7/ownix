@@ -117,14 +117,14 @@ export default function RootLayout({
       <body className="bg-canvas font-sans text-ink antialiased">
         {/* SITE_URL is env/deploy-controlled, not user input, but escape
             </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
-        {/* nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars */}
         <script
           type="application/ld+json"
+          // nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars
           dangerouslySetInnerHTML={{ __html: jsonLdScript(softwareAppSchema) }}
         />
-        {/* nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars */}
         <script
           type="application/ld+json"
+          // nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars
           dangerouslySetInnerHTML={{ __html: jsonLdScript(organizationSchema) }}
         />
         <MockProvider>{children}</MockProvider>
