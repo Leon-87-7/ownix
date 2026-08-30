@@ -1,0 +1,15 @@
+# Ownix
+
+> Share videos, articles, and repos to Ownix from any app. Three taps, and a minute later the transcript and summary are in your Index - searchable, agent-ready markdown.
+
+Ownix ingests links and files shared from Telegram, a Chrome extension, or direct share-sheet intake, then enriches them (transcript, summary, tags) and stores the result in a searchable personal knowledge graph ("the Brain"). Login is required for the product itself; the pages below are public.
+
+## Docs
+
+- [Privacy Policy](https://app.leondev.xyz/privacy)
+- [Terms of Service](https://app.leondev.xyz/terms)
+- [Accessibility statement](https://app.leondev.xyz/accessibility)
+
+## Product
+
+- [Homepage](https://app.leondev.xyz/) — overview, onboarding, sign-in

@@ -18,6 +18,21 @@ const softwareAppSchema = {
   operatingSystem: 'Web',
 };
 
+// Separate from softwareAppSchema (product vs. legal entity) — agent scanners
+// and rich results look for Organization specifically for legitimacy/contact
+// signals; contactPoint email matches the one on the Privacy/Terms pages.
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Ownix',
+  url: SITE_URL,
+  contactPoint: {
+    '@type': 'ContactPoint',
+    email: 'leoneidelman09@gmail.com',
+    contactType: 'customer support',
+  },
+};
+
 // All four self-hosted (fonts/, OFL-licensed, latin-subset) instead of
 // next/font/google — Vercel's Turbopack build cache can pin a stale
 // fonts.gstatic.com URL that later 404s (Google rotates hashed asset
@@ -60,6 +75,15 @@ const merienda = localFont({
   preload: false,
 });
 
+// Schema objects here are static/env-derived, never user input, but escape
+// </script>-breaking chars anyway — cheap and standard for inline JSON-LD.
+function jsonLdScript(schema: object): string {
+  return JSON.stringify(schema)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
 // new URL() throws on a malformed value (missing protocol, stray whitespace);
 // fall back to Vercel's deployment URL rather than crashing metadata resolution.
 function siteUrl(): URL | undefined {
@@ -95,12 +119,13 @@ export default function RootLayout({
             </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(softwareAppSchema)
-              .replace(/</g, '\\u003c')
-              .replace(/>/g, '\\u003e')
-              .replace(/&/g, '\\u0026'),
-          }}
+          // nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(softwareAppSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          // nosemgrep -- schema is a static object literal above, not user input; jsonLdScript escapes </script>-breaking chars
+          dangerouslySetInnerHTML={{ __html: jsonLdScript(organizationSchema) }}
         />
         <MockProvider>{children}</MockProvider>
         <SwRegister />

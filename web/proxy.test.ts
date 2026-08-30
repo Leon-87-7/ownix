@@ -13,6 +13,11 @@ const requestFor = (pathname: string, cookie?: string) =>
     headers: cookie ? { cookie } : undefined,
   });
 
+const expectLoginRedirect = (response: Response) => {
+  expect(response.status).toBe(307);
+  expect(response.headers.get('location')).toBe('https://ownix.test/login');
+};
+
 describe('proxy matcher', () => {
   it('excludes public static assets from the auth gate', () => {
     expect(matches('/images/vig_logo_lockup.svg')).toBe(false);
@@ -40,9 +45,7 @@ describe('proxy routing cutover', () => {
   });
 
   it('keeps /feed behind the session gate', () => {
-    const response = proxy(requestFor('/feed'));
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('https://ownix.test/login');
+    expectLoginRedirect(proxy(requestFor('/feed')));
   });
 
   it('lets link-preview crawlers (always cookie-less) reach the OG image', () => {
@@ -56,9 +59,7 @@ describe('proxy routing cutover', () => {
   });
 
   it('keeps the real /intake surface behind the session gate', () => {
-    const response = proxy(requestFor('/intake'));
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('https://ownix.test/login');
+    expectLoginRedirect(proxy(requestFor('/intake')));
   });
 });
 
@@ -80,8 +81,18 @@ describe('proxy restricted mode (ADR-0035)', () => {
   });
 
   it('still bounces cookie-less visitors from dashboard routes', () => {
-    const response = proxy(requestFor('/jobs/20260711_010101_ab12'));
-    expect(response.status).toBe(307);
-    expect(response.headers.get('location')).toBe('https://ownix.test/login');
+    expectLoginRedirect(proxy(requestFor('/jobs/20260711_010101_ab12')));
+  });
+});
+
+describe('proxy agent-readable 404s', () => {
+  // Only verifies proxy's own pass-through contract — that an unprotected
+  // path isn't redirected to /login. Whether Next.js then actually renders a
+  // 404 for /pricing depends on no matching route existing under app/, which
+  // this unit test can't exercise without a running server.
+  it('does not redirect an unprotected, unknown path to the login wall', () => {
+    const response = proxy(requestFor('/pricing'));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
   });
 });
