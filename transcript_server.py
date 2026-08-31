@@ -412,6 +412,10 @@ def screenshot_candidates():
                 "quiet": True,
                 "no_warnings": True,
                 "outtmpl": os.path.join(video_dir, "video.%(ext)s"),
+                # Video-only, capped at 720p: frames get scaled to 1280px wide anyway, so a
+                # higher-res source only inflates download size and ffmpeg scene-detect decode
+                # cost (which is what was timing out on the 1-vCPU host) for no visible gain.
+                "format": "bestvideo[height<=720]/best[height<=720]",
                 "max_filesize": SCREENSHOTS_MAX_DOWNLOAD_BYTES,
             },
             video_dir,
