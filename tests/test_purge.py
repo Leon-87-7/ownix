@@ -39,10 +39,12 @@ async def test_purge_runs_every_service_after_partial_failure(monkeypatch) -> No
 
     await purge.run({
         "job_id": "j1", "chat_id": 7,
-        "drive_file_ids": ["d1"], "gcs_keys": ["g1"], "url": "https://job",
+        "drive_file_ids": ["d1", "screens"],
+        "gcs_keys": ["g1"], "url": "https://job",
     })
     assert calls == [
         ("drive", "d1", 7),
+        ("drive", "screens", 7),
         ("storage", "g1"),
         ("sheets", "https://job", 7, "j1"),
     ]

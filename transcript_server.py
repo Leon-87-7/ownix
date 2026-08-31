@@ -45,6 +45,10 @@ INSTAGRAM_MAX_SLIDES = 10
 # Authoritative short/long boundary.  The worker receives this value from
 # /metadata so the app and independently deployed sidecar cannot drift.
 SHORT_VIDEO_MAX_DURATION = 180
+SCREENSHOTS_MAX_DURATION = 5400
+SCREENSHOTS_MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024  # 1 GiB — bounds temp disk use for the source video
+SCREENSHOTS_MAX_RAW_FRAMES = 200  # ffmpeg scene-detect cap, before perceptual dedup
+SCREENSHOTS_MAX_FRAMES = 60  # final frames returned to the caller, after dedup
 
 TRANSCRIPT_SERVICE_TOKEN = os.environ.get("TRANSCRIPT_SERVICE_TOKEN", "")
 _INTERNAL_AUTH_HEADER = "X-Ownix-Internal-Token"
@@ -366,6 +370,91 @@ def get_metadata():
                 "short_max_duration": SHORT_VIDEO_MAX_DURATION,
             }
         ), 200
+
+
+def _deduplicate_frames(frame_dir: str) -> list[str]:
+    """Keep frames whose 16x16 grayscale mean-pixel delta from last kept exceeds 2."""
+    kept: list[str] = []
+    last_pixels = None
+    for name in sorted(f for f in os.listdir(frame_dir) if f.endswith(".jpg")):
+        path = os.path.join(frame_dir, name)
+        with Image.open(path) as image:
+            pixels = list(image.convert("L").resize((16, 16)).getdata())
+        if last_pixels is None or sum(abs(a - b) for a, b in zip(pixels, last_pixels)) / 256 > 2.0:
+            kept.append(path)
+            last_pixels = pixels
+    return kept
+
+
+@app.route("/screenshot_candidates", methods=["POST"])
+def screenshot_candidates():
+    """Live duration probe, scene/uniform extraction, and perceptual dedup."""
+    video_dir = frame_dir = None
+    try:
+        if _auth_failed():
+            return _reject("unauthorized", "Invalid internal token", 401)
+        url = (request.get_json(silent=True) or {}).get("url", "")
+        error = _validate_public_http_url(url)
+        if error:
+            return _reject("invalid_url", error)
+        probe_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+        with yt_dlp.YoutubeDL(probe_opts) as ydl:
+            probe = ydl.extract_info(url, download=False)
+        duration = probe.get("duration")
+        if not duration:
+            return _reject("duration_unavailable", "Video duration is unavailable", 422)
+        if duration > SCREENSHOTS_MAX_DURATION:
+            return _reject("too_long", f"Video exceeds {SCREENSHOTS_MAX_DURATION}s limit", 422)
+
+        video_dir, frame_dir = tempfile.mkdtemp(), tempfile.mkdtemp()
+        opts = _with_cookies(
+            {
+                "quiet": True,
+                "no_warnings": True,
+                "outtmpl": os.path.join(video_dir, "video.%(ext)s"),
+                "max_filesize": SCREENSHOTS_MAX_DOWNLOAD_BYTES,
+            },
+            video_dir,
+        )
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+        videos = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.startswith("video.")]
+        if not videos:
+            return _reject("download_failed", "yt-dlp produced no video (or exceeded the size limit)", 502)
+        pattern = os.path.join(frame_dir, "frame_%04d.jpg")
+        scene = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", videos[0],
+                "-vf", "select='gt(scene,0.20)',scale=1280:-2",
+                "-vsync", "vfr", "-frames:v", str(SCREENSHOTS_MAX_RAW_FRAMES),
+                pattern,
+            ],
+            capture_output=True,
+            timeout=300,
+        )
+        paths = sorted(f for f in os.listdir(frame_dir) if f.endswith(".jpg"))
+        if scene.returncode != 0 or len(paths) < 8:
+            for path in paths:
+                os.remove(os.path.join(frame_dir, path))
+            interval = max(10, duration / 24)
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", videos[0], "-vf", f"fps=1/{interval},scale=1280:-2", "-frames:v", "24", pattern],
+                capture_output=True,
+                check=True,
+                timeout=300,
+            )
+        frames = []
+        for path in _deduplicate_frames(frame_dir)[:SCREENSHOTS_MAX_FRAMES]:
+            with open(path, "rb") as handle:
+                frames.append({"data": base64.b64encode(handle.read()).decode(), "mime_type": "image/jpeg"})
+        return jsonify({"duration": duration, "frame_count": len(frames), "frames": frames})
+    except Exception as exc:
+        return _reject("unexpected_error", str(exc), 500)
+    finally:
+        if video_dir:
+            shutil.rmtree(video_dir, ignore_errors=True)
+        if frame_dir:
+            shutil.rmtree(frame_dir, ignore_errors=True)
 
 
 def _detect_platform(extractor: str, url: str) -> str:

@@ -6,6 +6,7 @@ import base64
 
 import pytest
 from unittest.mock import MagicMock, patch
+from PIL import Image
 
 from transcript_server import _detect_platform, _download_audio_b64, _parse_vtt, app
 
@@ -274,3 +275,139 @@ def test_short_frames_rejects_out_of_range_params(client, monkeypatch):
     )
     resp = client.get("/short_frames?url=https://example.com/video&max_frames=9999")
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# /screenshot_candidates — long-video two-layer detection (ADR-0055/0056)
+# ---------------------------------------------------------------------------
+
+
+def test_screenshot_candidates_rejects_missing_internal_token(client, monkeypatch):
+    monkeypatch.setattr("transcript_server.TRANSCRIPT_SERVICE_TOKEN", "secret")
+    monkeypatch.setattr(
+        "transcript_server.socket.getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("8.8.8.8", 0))],
+    )
+    resp = client.post("/screenshot_candidates", json={"url": "https://example.com/video"})
+    assert resp.status_code == 401
+
+
+def test_screenshot_candidates_rejects_duration_unavailable(client, monkeypatch):
+    monkeypatch.setattr("transcript_server.TRANSCRIPT_SERVICE_TOKEN", "")
+    monkeypatch.setattr(
+        "transcript_server.socket.getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("8.8.8.8", 0))],
+    )
+    with patch(
+        "transcript_server.yt_dlp.YoutubeDL",
+        return_value=_make_ydl_mock({"duration": None}),
+    ):
+        resp = client.post("/screenshot_candidates", json={"url": "https://example.com/video"})
+    assert resp.status_code == 422
+    assert resp.get_json()["error"]["type"] == "duration_unavailable"
+
+
+def test_screenshot_candidates_rejects_too_long_duration(client, monkeypatch):
+    monkeypatch.setattr("transcript_server.TRANSCRIPT_SERVICE_TOKEN", "")
+    monkeypatch.setattr(
+        "transcript_server.socket.getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("8.8.8.8", 0))],
+    )
+    with patch(
+        "transcript_server.yt_dlp.YoutubeDL",
+        return_value=_make_ydl_mock({"duration": 5_401}),
+    ):
+        resp = client.post("/screenshot_candidates", json={"url": "https://example.com/video"})
+    assert resp.status_code == 422
+    assert resp.get_json()["error"]["type"] == "too_long"
+
+
+def _stub_probe_and_download(monkeypatch, tmp_path, duration: int):
+    """Route yt-dlp's probe call to a fixed duration and its download call to
+    dropping a fake video file into a deterministic, pre-created video_dir.
+    Returns (video_dir, frame_dir) so the caller can seed fake ffmpeg output."""
+    video_dir = tmp_path / "video"
+    frame_dir = tmp_path / "frames"
+    video_dir.mkdir()
+    frame_dir.mkdir()
+    dirs = iter([str(video_dir), str(frame_dir)])
+    monkeypatch.setattr("transcript_server.tempfile.mkdtemp", lambda: next(dirs))
+
+    probe_mock = _make_ydl_mock({"duration": duration})
+    download_mock = MagicMock()
+    download_mock.__enter__ = MagicMock(return_value=download_mock)
+    download_mock.__exit__ = MagicMock(return_value=False)
+    download_mock.download = MagicMock(
+        side_effect=lambda urls: (video_dir / "video.mp4").write_bytes(b"fake")
+    )
+
+    def ydl_factory(opts):
+        return download_mock if "outtmpl" in opts else probe_mock
+
+    monkeypatch.setattr("transcript_server.yt_dlp.YoutubeDL", MagicMock(side_effect=ydl_factory))
+    return video_dir, frame_dir
+
+
+def test_screenshot_candidates_dedups_against_last_kept_frame(client, monkeypatch, tmp_path):
+    monkeypatch.setattr("transcript_server.TRANSCRIPT_SERVICE_TOKEN", "")
+    monkeypatch.setattr(
+        "transcript_server.socket.getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("8.8.8.8", 0))],
+    )
+    video_dir, frame_dir = _stub_probe_and_download(monkeypatch, tmp_path, duration=42)
+
+    def fake_ffmpeg(cmd, **kwargs):
+        # 7 near-identical frames clear the min-shot floor, plus one clearly
+        # distinct frame — dedup (vs. last *kept*, not immediately prior)
+        # should collapse the run of identical frames down to one.
+        for i in range(1, 8):
+            Image.new("L", (16, 16), color=0).save(frame_dir / f"frame_{i:04d}.jpg")
+        Image.new("L", (16, 16), color=255).save(frame_dir / "frame_0008.jpg")
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    with patch("transcript_server.subprocess.run", side_effect=fake_ffmpeg):
+        resp = client.post("/screenshot_candidates", json={"url": "https://example.com/video"})
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["duration"] == 42
+    assert data["frame_count"] == 2
+    assert not video_dir.exists()
+    assert not frame_dir.exists()
+
+
+def test_screenshot_candidates_falls_back_to_uniform_sampling_below_shot_floor(
+    client, monkeypatch, tmp_path
+):
+    monkeypatch.setattr("transcript_server.TRANSCRIPT_SERVICE_TOKEN", "")
+    monkeypatch.setattr(
+        "transcript_server.socket.getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, ("8.8.8.8", 0))],
+    )
+    video_dir, frame_dir = _stub_probe_and_download(monkeypatch, tmp_path, duration=42)
+
+    calls: list[list[str]] = []
+
+    def fake_ffmpeg(cmd, **kwargs):
+        calls.append(cmd)
+        if len(calls) == 1:
+            # Scene-change pass finds only 2 shots — below the min-shot floor.
+            Image.new("L", (16, 16), color=0).save(frame_dir / "frame_0001.jpg")
+            Image.new("L", (16, 16), color=255).save(frame_dir / "frame_0002.jpg")
+        else:
+            # Duration-aware uniform-sampling fallback.
+            Image.new("L", (16, 16), color=0).save(frame_dir / "frame_0001.jpg")
+            Image.new("L", (16, 16), color=128).save(frame_dir / "frame_0002.jpg")
+            Image.new("L", (16, 16), color=255).save(frame_dir / "frame_0003.jpg")
+        result = MagicMock()
+        result.returncode = 0
+        return result
+
+    with patch("transcript_server.subprocess.run", side_effect=fake_ffmpeg):
+        resp = client.post("/screenshot_candidates", json={"url": "https://example.com/video"})
+
+    assert resp.status_code == 200
+    assert len(calls) == 2
+    assert resp.get_json()["frame_count"] == 3

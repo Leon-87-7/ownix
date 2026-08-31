@@ -78,6 +78,29 @@ async def test_drive_upload_runs_for_system_call(operator_set):
 
 
 @pytest.mark.asyncio
+async def test_create_subfolder_routes_to_connected_users_personal_drive(operator_set, monkeypatch):
+    """Mirrors upload_file's user_folder_id(chat_id) or folder_id routing — a
+    connected user's screenshots subfolder must land in their own Drive, not
+    always under the shared static parent."""
+    monkeypatch.setattr(drive_svc, "user_folder_id", lambda chat_id: "personal_root")
+    with patch(
+        "src.services.drive._create_folder_sync", return_value=("f1", "http://x")
+    ) as sync:
+        await drive_svc.create_subfolder("job1_video", "static_parent", chat_id=OPERATOR)
+    sync.assert_called_once_with("job1_video", "personal_root", OPERATOR)
+
+
+@pytest.mark.asyncio
+async def test_create_subfolder_falls_back_to_static_parent_when_unconnected(operator_set, monkeypatch):
+    monkeypatch.setattr(drive_svc, "user_folder_id", lambda chat_id: None)
+    with patch(
+        "src.services.drive._create_folder_sync", return_value=("f1", "http://x")
+    ) as sync:
+        await drive_svc.create_subfolder("job1_video", "static_parent", chat_id=OPERATOR)
+    sync.assert_called_once_with("job1_video", "static_parent", OPERATOR)
+
+
+@pytest.mark.asyncio
 async def test_drive_update_and_gdoc_skip_for_non_operator(operator_set):
     with patch("src.services.drive._update_sync") as up, \
          patch("src.services.drive._gdoc_sync") as gd:

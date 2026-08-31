@@ -725,6 +725,13 @@ async def _cmd_checklists(ctx: SlashCtx) -> None:
                 await delete_message(ctx.chat_id, status_message_id)
 
 
+async def _cmd_screenshots(ctx: SlashCtx) -> None:
+    from src.intake import commands as intake_commands
+
+    response = await intake_commands.screenshots_command(ctx.chat_id, ctx.parts)
+    await send_message(ctx.chat_id, response.text)
+
+
 async def _cmd_find(ctx: SlashCtx) -> None:
     # Search, score-filter (0.58) and GitHub enrichment are shared with the
     # dashboard's /find (issue #485, src/intake/commands.py:find_command) —
@@ -1169,6 +1176,7 @@ _HELP_TEXT = (
     "`/unallowlist` <domain> — remove an article domain\n"
     "`/allowlist_list` — show allowlisted domains\n"
     "`/download_md` <suffix> — download a job result as Markdown\n"
+    "`/screenshots` <suffix> — capture screenshots from a long video\n"
     "`/rebuild-graph` — rebuild the Second Brain link graph"
 )
 
@@ -1195,6 +1203,7 @@ _SLASH_TABLE: dict[str, Callable[[SlashCtx], Awaitable[None]]] = {
     "/cancel": _cmd_cancel,
     "/spec": _cmd_spec,
     "/checklists": _cmd_checklists,
+    "/screenshots": _cmd_screenshots,
     "/find": _cmd_find,
     "/rebuild-graph": _cmd_rebuild_graph,
     "/force": _cmd_force,

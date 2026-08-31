@@ -15,6 +15,10 @@ export interface JobDetail {
   drive_url: string | null;
   checklists_md?: string | null;
   checklists_generated_at?: string | null;
+  screenshots_status?: string | null;
+  screenshots_drive_url?: string | null;
+  screenshots_generated_at?: string | null;
+  video_duration_seconds?: number | null;
   // Not a jobs column — a live COUNT of this job's Brain links, only used by
   // the delete-confirm checkbox (ADR-0046). Optional so fixtures elsewhere
   // in the test suite don't all need updating for a field only one UI reads.

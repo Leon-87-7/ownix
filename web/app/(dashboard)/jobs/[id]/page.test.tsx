@@ -192,6 +192,61 @@ describe('JobDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download checklist' })).toBeInTheDocument();
   });
+  it('captures screenshots and shows the Drive link on reload', async () => {
+    const reload = vi.fn().mockResolvedValue(undefined);
+    setupMocks({ reload });
+    server.use(
+      http.post('/api/jobs/:jobId/screenshots', () =>
+        HttpResponse.json({ screenshots_status: 'generating' }),
+      ),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Capture Screenshots' }));
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+  });
+
+  it('shows the Open screenshots in Drive button once generated', () => {
+    setupMocks({
+      job: {
+        ...JOB,
+        screenshots_status: 'done',
+        screenshots_drive_url: 'https://drive.google.com/drive/folders/abc',
+      },
+    });
+    render(<JobDetailPage />);
+    expect(screen.getByRole('link', { name: 'Open screenshots in Drive' })).toHaveAttribute(
+      'href',
+      'https://drive.google.com/drive/folders/abc',
+    );
+    expect(screen.queryByRole('button', { name: 'Capture Screenshots' })).toBeNull();
+  });
+
+  it('disables Capture Screenshots for videos over the duration cap', () => {
+    setupMocks({ job: { ...JOB, video_duration_seconds: 6000 } });
+    render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: 'Capture Screenshots' })).toBeDisabled();
+  });
+
+  it('does not gate the button when duration is unknown', () => {
+    setupMocks({ job: { ...JOB, video_duration_seconds: null } });
+    render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: 'Capture Screenshots' })).toBeEnabled();
+  });
+
+  it('shows an error message when screenshot capture fails to start', async () => {
+    setupMocks();
+    server.use(
+      http.post('/api/jobs/:jobId/screenshots', () =>
+        HttpResponse.json({ detail: 'Screenshot capture is already running' }, { status: 409 }),
+      ),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Capture Screenshots' }));
+    await waitFor(() =>
+      expect(screen.getByText('Screenshot capture is already running')).toBeInTheDocument(),
+    );
+  });
+
   it('shows loading skeleton when fetchState is loading', () => {
     setupMocks({ fetchState: 'loading', job: null });
     render(<JobDetailPage />);

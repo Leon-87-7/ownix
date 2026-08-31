@@ -90,6 +90,12 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed_at                TIMESTAMP,
     checklists_md               TEXT,
     checklists_generated_at     TEXT,
+    -- Long-video screenshot capture (#580/#583)
+    screenshots_status          TEXT,
+    screenshots_drive_url       TEXT,
+    screenshots_drive_folder_id TEXT,
+    screenshots_generated_at    TIMESTAMP,
+    video_duration_seconds      REAL,
     CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
@@ -3016,3 +3022,13 @@ async def reorder_context_blob(*, blob_id: str, new_sort_order: int) -> bool:
         )
         > 0
     )
+
+
+# v44 → v45: long-video screenshot capture and cached duration (#580/#583).
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN screenshots_status TEXT",
+    "ALTER TABLE jobs ADD COLUMN screenshots_drive_url TEXT",
+    "ALTER TABLE jobs ADD COLUMN screenshots_drive_folder_id TEXT",
+    "ALTER TABLE jobs ADD COLUMN screenshots_generated_at TIMESTAMP",
+    "ALTER TABLE jobs ADD COLUMN video_duration_seconds REAL",
+])
