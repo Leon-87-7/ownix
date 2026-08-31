@@ -92,23 +92,27 @@
   }
 }
 
-/* Hold-to-deliver-retroactively progress cue. The glow is a loader spinner: a
-   telegram-ring (#145b7d) arc that sweeps from 12 o'clock clockwise and lands
-   back at 12, over the full 1.5s hold window — a deep Telegram-blue that ties
-   the spinner to the brand mark it surrounds. The ring is carved out of a conic
-   disc with a radial mask, then blurred so it reads as a soft glow. */
-@property --doc-hold-angle {
+/* Hold-to-confirm progress cue. The glow is a loader spinner: an arc that
+   sweeps from 12 o'clock clockwise and lands back at 12, over the hold
+   window. Carved out of a conic disc with a radial mask, then blurred so it
+   reads as a soft glow. Shared by two callers, each just picking a color and
+   a duration: the Telegram-delivery hold (deep Telegram-blue, ties the
+   spinner to the brand mark it surrounds, 1.5s) and the screenshot retry
+   hold (signal-deep — retry is a destructive action, not a brand surface —
+   500ms, a lighter-weight confirm than delivery). */
+@property --hold-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
 }
 
-.doc-telegram-hold::before {
+.doc-telegram-hold::before,
+.retry-hold::before {
   content: "";
   position: absolute;
   inset: -4px;
   pointer-events: none;
-  background: conic-gradient(from 0deg, theme("colors.telegram-ring") var(--doc-hold-angle), transparent 0deg);
+  background: conic-gradient(from 0deg, var(--hold-ring-color) var(--hold-angle), transparent 0deg);
   /* Carve a 2px circular ring out of the conic disc. The closing transparent stop
      past 100% is essential — without it the square's corners (which sit beyond the
      farthest-side radius) stay opaque and the glow reads as a square, not a ring. */
@@ -117,18 +121,30 @@
   filter: blur(1px);
 }
 
+.doc-telegram-hold {
+  --hold-ring-color: theme("colors.telegram-ring");
+}
+
+.retry-hold {
+  --hold-ring-color: theme("colors.signal.deep");
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .doc-telegram-hold::before {
-    animation: doc-hold 1.5s linear forwards;
+    animation: hold-sweep 1.5s linear forwards;
   }
 
-  @keyframes doc-hold {
+  .retry-hold::before {
+    animation: hold-sweep 500ms linear forwards;
+  }
+
+  @keyframes hold-sweep {
     from {
-      --doc-hold-angle: 0deg;
+      --hold-angle: 0deg;
     }
 
     to {
-      --doc-hold-angle: 360deg;
+      --hold-angle: 360deg;
     }
   }
 }
@@ -136,8 +152,9 @@
 @media (prefers-reduced-motion: reduce) {
 
   /* No sweep available — show the completed ring as a static "charging" cue. */
-  .doc-telegram-hold::before {
-    --doc-hold-angle: 360deg;
+  .doc-telegram-hold::before,
+  .retry-hold::before {
+    --hold-angle: 360deg;
   }
 }
 

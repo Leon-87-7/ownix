@@ -132,7 +132,7 @@ export function MobileOnboardingStepper() {
                     {index === 0 && (
                       <a
                         href="#capture"
-                        className="ownix-shimmer -my-2 ml-auto inline-flex items-center py-2 text-button font-medium leading-none text-ink transition-ui focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
+                        className="ownix-shimmer -my-2 ml-auto inline-flex items-center py-2 text-button font-medium leading-none text-ink transition-ui underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface"
                       >
                         More ways to collect
                       </a>

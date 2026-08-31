@@ -205,7 +205,7 @@ describe('JobDetailPage', () => {
     await waitFor(() => expect(reload).toHaveBeenCalled());
   });
 
-  it('shows the Open screenshots in Drive button once generated', () => {
+  it('shows the Open in Drive button and retry button once generated', () => {
     setupMocks({
       job: {
         ...JOB,
@@ -214,10 +214,26 @@ describe('JobDetailPage', () => {
       },
     });
     render(<JobDetailPage />);
-    expect(screen.getByRole('link', { name: 'Open screenshots in Drive' })).toHaveAttribute(
-      'href',
-      'https://drive.google.com/drive/folders/abc',
-    );
+    expect(
+      screen.getByRole('link', { name: 'Open screenshots in Drive' }),
+    ).toHaveAttribute('href', 'https://drive.google.com/drive/folders/abc');
+    expect(
+      screen.getByRole('button', { name: 'Retry screenshot capture' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Capture Screenshots' })).toBeNull();
+  });
+
+  it('shows only the retry button (no Drive link) after a failed capture', () => {
+    setupMocks({
+      job: { ...JOB, screenshots_status: 'error' },
+    });
+    render(<JobDetailPage />);
+    expect(
+      screen.getByRole('button', { name: 'Retry screenshot capture' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Open screenshots in Drive' }),
+    ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Capture Screenshots' })).toBeNull();
   });
 
