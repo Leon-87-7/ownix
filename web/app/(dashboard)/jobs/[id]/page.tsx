@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   useEffect,
@@ -7,18 +7,22 @@ import {
   useState,
   type JSX,
   type ReactNode,
-} from "react";
-import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
-import { Check, Copy, Download, Pencil } from "lucide-react";
-import { OwnixChevronRight } from "@/components/svg/ownix-chevron-right";
-import { TagMenu, TagChips } from "@/components/ui/tag-picker";
-import { StatusBadge, TypeBadge } from "@/components/ui/badges";
-import { useJobDetail } from "@/lib/hooks/useJobDetail";
-import { useJobAnnotation } from "@/lib/hooks/useJobAnnotation";
-import { useMergedTags } from "@/lib/hooks/useMergedTags";
-import type { JobDetail } from "@/lib/hooks/useJobDetail";
+} from 'react';
+import Link from 'next/link';
+import {
+  useParams,
+  useRouter,
+  useSearchParams,
+} from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { Check, Copy, Download, Pencil } from 'lucide-react';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
+import { TagMenu, TagChips } from '@/components/ui/tag-picker';
+import { StatusBadge, TypeBadge } from '@/components/ui/badges';
+import { useJobDetail } from '@/lib/hooks/useJobDetail';
+import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
+import { useMergedTags } from '@/lib/hooks/useMergedTags';
+import type { JobDetail } from '@/lib/hooks/useJobDetail';
 import {
   type RenderType,
   ENRICHMENT_FIELDS,
@@ -33,29 +37,29 @@ import {
   jobScopeQuery,
   downloadMarkdownFile,
   isSafeHttpUrl,
-} from "@/lib/job-detail-utils";
-import { useChecklists } from "@/lib/hooks/useChecklists";
-import { useCopyFeedback } from "@/lib/hooks/useCopyFeedback";
-import { PageShell } from "@/components/shell/page-shell";
-import { SkeletonBlock } from "@/components/feed/feed-states";
-import { Tooltip } from "@/components/ui/tooltip";
-import { CopyButton } from "@/components/ui/copy-button";
-import { useRestrictedMode } from "@/lib/restricted/context";
-import { useGoogleStatus } from "@/components/shell/google-status";
-import { GoogleDriveIcon } from "@/components/svg/google-drive-icon";
-import { OwnixShareIcon } from "@/components/svg/ownix-share-icon";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { FolderTagForm } from "@/components/feed/folder-tag-form";
-import { apiPost, apiPut } from "@/lib/fetch-utils";
-import { DateTime } from "@/components/ui/date-time";
-import { startPolling } from "@/lib/polling";
-import { useTemplateList } from "@/lib/hooks/useTemplateList";
-import { RepoFollowupPanel } from "@/components/ui/repo-followup-panel";
-import { useHapticFeedback } from "@/lib/hooks/useHapticFeedback";
-import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
+} from '@/lib/job-detail-utils';
+import { useChecklists } from '@/lib/hooks/useChecklists';
+import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
+import { PageShell } from '@/components/shell/page-shell';
+import { SkeletonBlock } from '@/components/feed/feed-states';
+import { Tooltip } from '@/components/ui/tooltip';
+import { CopyButton } from '@/components/ui/copy-button';
+import { useRestrictedMode } from '@/lib/restricted/context';
+import { useGoogleStatus } from '@/components/shell/google-status';
+import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
+import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { FolderTagForm } from '@/components/feed/folder-tag-form';
+import { apiPost, apiPut } from '@/lib/fetch-utils';
+import { DateTime } from '@/components/ui/date-time';
+import { startPolling } from '@/lib/polling';
+import { useTemplateList } from '@/lib/hooks/useTemplateList';
+import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
+import { useHapticFeedback } from '@/lib/hooks/useHapticFeedback';
+import { usePressFeedback } from '@/lib/hooks/usePressFeedback';
 
 const MarkdownEditor = dynamic(
-  () => import("@/components/ui/markdown-editor"),
+  () => import('@/components/ui/markdown-editor'),
   {
     ssr: false,
     loading: () => (
@@ -68,12 +72,16 @@ const MarkdownEditor = dynamic(
 
 // --- template_analysis: JSON → readable React tree ---
 
-function JsonValue({ value }: { value: unknown }): JSX.Element | null {
+function JsonValue({
+  value,
+}: {
+  value: unknown;
+}): JSX.Element | null {
   if (isEmpty(value)) return null;
   if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
   ) {
     return (
       <p className="whitespace-pre-wrap break-words text-sm text-ink">
@@ -82,7 +90,9 @@ function JsonValue({ value }: { value: unknown }): JSX.Element | null {
     );
   }
   if (Array.isArray(value)) {
-    const allScalar = value.every((v) => typeof v !== "object" || v === null);
+    const allScalar = value.every(
+      (v) => typeof v !== 'object' || v === null,
+    );
     if (allScalar) {
       return (
         <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
@@ -104,7 +114,12 @@ function JsonValue({ value }: { value: unknown }): JSX.Element | null {
       </ol>
     );
   }
-  return <JsonObject obj={value as Record<string, unknown>} nested />;
+  return (
+    <JsonObject
+      obj={value as Record<string, unknown>}
+      nested
+    />
+  );
 }
 
 function JsonObject({
@@ -117,27 +132,35 @@ function JsonObject({
   const entries = Object.entries(obj).filter(([, v]) => !isEmpty(v));
   if (entries.length === 0) return null;
   return (
-    <div className={nested ? "space-y-1" : "space-y-3"}>
+    <div className={nested ? 'space-y-1' : 'space-y-3'}>
       {entries.map(([key, value]) => {
         const scalar =
-          typeof value === "string" ||
-          typeof value === "number" ||
-          typeof value === "boolean";
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean';
         if (nested && scalar) {
           return (
-            <p key={key} className="text-sm text-ink">
-              <span className="font-medium text-body">{humanizeKey(key)}:</span>{" "}
+            <p
+              key={key}
+              className="text-sm text-ink"
+            >
+              <span className="font-medium text-body">
+                {humanizeKey(key)}:
+              </span>{' '}
               {String(value)}
             </p>
           );
         }
         return (
-          <div key={key} className="space-y-1">
+          <div
+            key={key}
+            className="space-y-1"
+          >
             <h3
               className={
                 nested
-                  ? "text-xs font-medium text-muted"
-                  : "text-sm font-semibold text-ink"
+                  ? 'text-xs font-medium text-muted'
+                  : 'text-sm font-semibold text-ink'
               }
             >
               {humanizeKey(key)}
@@ -160,20 +183,33 @@ function TemplateAnalysis({ raw }: { raw: string }) {
   }, [raw]);
   if (parsed === undefined) {
     return (
-      <p className="whitespace-pre-wrap break-words text-sm text-ink">{raw}</p>
+      <p className="whitespace-pre-wrap break-words text-sm text-ink">
+        {raw}
+      </p>
     );
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+  if (
+    parsed === null ||
+    typeof parsed !== 'object' ||
+    Array.isArray(parsed)
+  )
     return <JsonValue value={parsed} />;
   return <JsonObject obj={parsed as Record<string, unknown>} />;
 }
 
 // --- UI pieces ---
 
-function FieldBody({ value, render }: { value: string; render: RenderType }) {
-  if (render === "list") {
+function FieldBody({
+  value,
+  render,
+}: {
+  value: string;
+  render: RenderType;
+}) {
+  if (render === 'list') {
     const items = splitPipes(value);
-    if (items.length === 0) return <p className="text-sm text-ink">{value}</p>;
+    if (items.length === 0)
+      return <p className="text-sm text-ink">{value}</p>;
     return (
       <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
         {items.map((item, i) => (
@@ -182,7 +218,7 @@ function FieldBody({ value, render }: { value: string; render: RenderType }) {
       </ul>
     );
   }
-  if (render === "links") {
+  if (render === 'links') {
     const links = parseLinks(value);
     if (links.length === 0)
       return (
@@ -195,7 +231,10 @@ function FieldBody({ value, render }: { value: string; render: RenderType }) {
         {links.map((link) => {
           const label = link.label || link.url;
           return (
-            <li key={link.url} className="space-y-1">
+            <li
+              key={link.url}
+              className="space-y-1"
+            >
               <a
                 href={link.url}
                 target="_blank"
@@ -218,15 +257,17 @@ function FieldBody({ value, render }: { value: string; render: RenderType }) {
       </ul>
     );
   }
-  if (render === "json") return <TemplateAnalysis raw={value} />;
-  if (render === "code")
+  if (render === 'json') return <TemplateAnalysis raw={value} />;
+  if (render === 'code')
     return (
       <pre className="overflow-x-auto whitespace-pre rounded-md bg-canvas p-3 font-mono text-xs text-ink">
         {value}
       </pre>
     );
   return (
-    <p className="whitespace-pre-wrap break-words text-sm text-ink">{value}</p>
+    <p className="whitespace-pre-wrap break-words text-sm text-ink">
+      {value}
+    </p>
   );
 }
 
@@ -250,7 +291,10 @@ function FieldCard({
           ariaLabel={`Copy ${label}`}
         />
       </div>
-      <FieldBody value={value} render={render} />
+      <FieldBody
+        value={value}
+        render={render}
+      />
     </div>
   );
 }
@@ -265,9 +309,9 @@ function isEditableTarget(target: EventTarget | null): boolean {
   const tag = target.tagName.toLowerCase();
   return (
     target.isContentEditable ||
-    tag === "textarea" ||
-    tag === "input" ||
-    tag === "select"
+    tag === 'textarea' ||
+    tag === 'input' ||
+    tag === 'select'
   );
 }
 
@@ -281,7 +325,7 @@ function AdjacentNavLink({
   children: ReactNode;
 }) {
   const base =
-    "flex flex-1 items-center justify-center px-3 text-sm font-medium";
+    'flex flex-1 items-center justify-center px-3 text-sm font-medium';
   return href ? (
     <Link
       href={href}
@@ -290,7 +334,10 @@ function AdjacentNavLink({
       {children}
     </Link>
   ) : (
-    <span aria-disabled="true" className={`${base} text-muted opacity-50`}>
+    <span
+      aria-disabled="true"
+      className={`${base} text-muted opacity-50`}
+    >
       {children}
     </span>
   );
@@ -308,11 +355,13 @@ function JobHeader({
   const { restricted } = useRestrictedMode();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const contentType = searchParams.get("content_type") ?? undefined;
-  const status = searchParams.get("status") ?? undefined;
+  const contentType = searchParams.get('content_type') ?? undefined;
+  const status = searchParams.get('status') ?? undefined;
   const scopeQuery = useMemo(
     () =>
-      new URLSearchParams(jobScopeQuery({ contentType, status })).toString(),
+      new URLSearchParams(
+        jobScopeQuery({ contentType, status }),
+      ).toString(),
     [contentType, status],
   );
   const [adjacent, setAdjacent] = useState<AdjacentJobs>({
@@ -342,19 +391,19 @@ function JobHeader({
       const data = await apiPut<{ title: string | null }>(
         `/api/jobs/${job.id}/title`,
         { title: next },
-        "Could not save title",
+        'Could not save title',
       );
       onTitleSaved(data.title);
       setEditingTitle(false);
     } catch {
-      setTitleError("Could not save title");
+      setTitleError('Could not save title');
     } finally {
       setTitleSaving(false);
     }
   };
   const jobHref = (id: string) =>
-    `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ""}`;
-  const feedHref = `/feed${scopeQuery ? `?${scopeQuery}` : ""}`;
+    `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`;
+  const feedHref = `/feed${scopeQuery ? `?${scopeQuery}` : ''}`;
   const handleBackToFeed = () => {
     if (window.history.length > 1) router.back();
     else router.push(feedHref);
@@ -365,18 +414,19 @@ function JobHeader({
     // request would just 401, so skip it and leave the pager links hidden.
     if (restricted) return;
     let cancelled = false;
-    const qs = scopeQuery ? `?${scopeQuery}` : "";
+    const qs = scopeQuery ? `?${scopeQuery}` : '';
     void fetch(`/api/jobs/${job.id}/adjacent${qs}`)
       .then((res) =>
         res.ok
           ? res.json()
-          : Promise.reject(new Error("Adjacent request failed")),
+          : Promise.reject(new Error('Adjacent request failed')),
       )
       .then((payload: AdjacentJobs) => {
         if (!cancelled) setAdjacent(payload);
       })
       .catch(() => {
-        if (!cancelled) setAdjacent({ previous_id: null, next_id: null });
+        if (!cancelled)
+          setAdjacent({ previous_id: null, next_id: null });
       });
     return () => {
       cancelled = true;
@@ -386,20 +436,25 @@ function JobHeader({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // Modified arrows are browser/OS shortcuts (Alt+Left = history back).
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+      if (
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      )
         return;
       if (isEditableTarget(event.target)) return;
-      if (event.key === "ArrowLeft" && adjacent.previous_id) {
+      if (event.key === 'ArrowLeft' && adjacent.previous_id) {
         event.preventDefault();
         router.push(jobHref(adjacent.previous_id));
       }
-      if (event.key === "ArrowRight" && adjacent.next_id) {
+      if (event.key === 'ArrowRight' && adjacent.next_id) {
         event.preventDefault();
         router.push(jobHref(adjacent.next_id));
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [adjacent.previous_id, adjacent.next_id, router, scopeQuery]);
   return (
     <div>
@@ -418,12 +473,19 @@ function JobHeader({
         </button>
         <div className="flex h-11 flex-1 items-stretch overflow-hidden rounded-full border border-line bg-surface">
           <AdjacentNavLink
-            href={adjacent.previous_id && jobHref(adjacent.previous_id)}
+            href={
+              adjacent.previous_id && jobHref(adjacent.previous_id)
+            }
           >
             ← Previous
           </AdjacentNavLink>
-          <span aria-hidden="true" className="w-px shrink-0 bg-line" />
-          <AdjacentNavLink href={adjacent.next_id && jobHref(adjacent.next_id)}>
+          <span
+            aria-hidden="true"
+            className="w-px shrink-0 bg-line"
+          />
+          <AdjacentNavLink
+            href={adjacent.next_id && jobHref(adjacent.next_id)}
+          >
             Next →
           </AdjacentNavLink>
         </div>
@@ -444,11 +506,11 @@ function JobHeader({
                 void saveTitle();
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === 'Enter') {
                   e.preventDefault();
                   void saveTitle();
                 }
-                if (e.key === "Escape") {
+                if (e.key === 'Escape') {
                   skipBlurSaveRef.current = true;
                   setTitleValue(displayTitle);
                   setEditingTitle(false);
@@ -460,7 +522,10 @@ function JobHeader({
               className="w-full rounded-md border border-line bg-canvas px-2 py-1 text-xl font-semibold leading-snug text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright"
             />
             {titleError && (
-              <p role="alert" className="mt-1 text-xs text-status-error">
+              <p
+                role="alert"
+                className="mt-1 text-xs text-status-error"
+              >
                 {titleError}
               </p>
             )}
@@ -490,7 +555,10 @@ function JobHeader({
       {/* URL, then the tag row stacked below it (not squeezed beside a wrapping URL). */}
       <div className="mt-1 flex flex-col items-start gap-2">
         {isSafeHttpUrl(job.url) ? (
-          <Tooltip content={job.url} mono>
+          <Tooltip
+            content={job.url}
+            mono
+          >
             <a
               href={job.url}
               target="_blank"
@@ -501,7 +569,10 @@ function JobHeader({
             </a>
           </Tooltip>
         ) : (
-          <Tooltip content={job.url} mono>
+          <Tooltip
+            content={job.url}
+            mono
+          >
             <p className="max-w-full break-all font-mono text-xs text-muted">
               {displayUrl}
             </p>
@@ -533,7 +604,7 @@ function JobActionsBar({
       return;
     }
     let cancelled = false;
-    void fetch("/api/google/folder")
+    void fetch('/api/google/folder')
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { folder_url: string } | null) => {
         if (!cancelled) setFolderUrl(data?.folder_url ?? null);
@@ -557,8 +628,11 @@ function JobActionsBar({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
-            Open in Drive{" "}
-            <OwnixShareIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+            Open in Drive{' '}
+            <OwnixShareIcon
+              className="h-[18px] w-[18px]"
+              aria-hidden="true"
+            />
           </a>
         )}
         {folderUrl && (
@@ -569,8 +643,11 @@ function JobActionsBar({
             className="inline-flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             <GoogleDriveIcon className="h-3.5 w-3.5" />
-            Ownix folder{" "}
-            <OwnixShareIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+            Ownix folder{' '}
+            <OwnixShareIcon
+              className="h-[18px] w-[18px]"
+              aria-hidden="true"
+            />
           </a>
         )}
       </div>
@@ -590,14 +667,20 @@ function JobActionsBar({
 // Borderless icon buttons shared by the transcript and checklist preview cards
 // so both carry the same copy/download affordances.
 const CARD_ACTION_BUTTON =
-  "inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink";
+  'inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:text-ink';
 
-function CardCopyButton({ value, label }: { value: string; label: string }) {
+function CardCopyButton({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}) {
   const { copied, copy } = useCopyFeedback(value);
   const pressFeedback = usePressFeedback();
 
   return (
-    <Tooltip content={copied ? "Copied" : label}>
+    <Tooltip content={copied ? 'Copied' : label}>
       <button
         type="button"
         onClick={copy}
@@ -605,7 +688,11 @@ function CardCopyButton({ value, label }: { value: string; label: string }) {
         className={CARD_ACTION_BUTTON}
         {...pressFeedback}
       >
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copied ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <Copy className="h-4 w-4" />
+        )}
       </button>
     </Tooltip>
   );
@@ -634,7 +721,13 @@ function CardDownloadButton({
   );
 }
 
-function CardOpenButton({ href, label }: { href: string; label: string }) {
+function CardOpenButton({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
   const pressFeedback = usePressFeedback();
   return (
     <Tooltip content={label}>
@@ -646,7 +739,10 @@ function CardOpenButton({ href, label }: { href: string; label: string }) {
         className={CARD_ACTION_BUTTON}
         {...pressFeedback}
       >
-        <OwnixShareIcon className="h-4 w-4" aria-hidden="true" />
+        <OwnixShareIcon
+          className="h-4 w-4"
+          aria-hidden="true"
+        />
       </a>
     </Tooltip>
   );
@@ -662,8 +758,13 @@ function TranscriptCard({ job }: { job: JobDetail }) {
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-2 flex items-center gap-2">
-        <h2 className="flex-1 text-sm font-semibold text-ink">Transcript</h2>
-        <CardCopyButton value={transcript} label="Copy transcript" />
+        <h2 className="flex-1 text-sm font-semibold text-ink">
+          Transcript
+        </h2>
+        <CardCopyButton
+          value={transcript}
+          label="Copy transcript"
+        />
         <CardDownloadButton
           onDownload={() =>
             downloadMarkdownFile(
@@ -674,7 +775,10 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           label="Download transcript"
         />
         {job.drive_url && isSafeHttpUrl(job.drive_url) && (
-          <CardOpenButton href={job.drive_url} label="Open in Drive" />
+          <CardOpenButton
+            href={job.drive_url}
+            label="Open in Drive"
+          />
         )}
       </div>
       <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
@@ -687,11 +791,13 @@ function TranscriptCard({ job }: { job: JobDetail }) {
 function ChecklistsSection({ job }: { job: JobDetail }) {
   const { generating, error, run } = useChecklists(job.id);
   const [markdown, setMarkdown] = useState(job.checklists_md);
-  const [generatedAt, setGeneratedAt] = useState(job.checklists_generated_at);
+  const [generatedAt, setGeneratedAt] = useState(
+    job.checklists_generated_at,
+  );
 
   if (
-    !["short", "long"].includes(job.content_type) ||
-    !["transcript_done", "done"].includes(job.status)
+    !['short', 'long'].includes(job.content_type) ||
+    !['transcript_done', 'done'].includes(job.status)
   )
     return null;
 
@@ -707,7 +813,9 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-title font-semibold text-ink">Checklists</h2>
+          <h2 className="text-title font-semibold text-ink">
+            Checklists
+          </h2>
           {generatedAt && (
             <p className="mt-1 font-mono text-label text-muted">
               Generated <DateTime iso={generatedAt} />
@@ -717,7 +825,10 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
         <div className="flex items-center gap-2">
           {markdown && (
             <>
-              <CardCopyButton value={markdown} label="Copy checklist" />
+              <CardCopyButton
+                value={markdown}
+                label="Copy checklist"
+              />
               <CardDownloadButton
                 onDownload={() =>
                   downloadMarkdownFile(
@@ -741,15 +852,18 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
               // the button's own `disabled:text-muted`.
               <span className="ownix-shimmer">Generating…</span>
             ) : markdown ? (
-              "Regenerate"
+              'Regenerate'
             ) : (
-              "Run Checklists"
+              'Run Checklists'
             )}
           </button>
         </div>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-status-error">
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
           {error}
         </p>
       )}
@@ -762,18 +876,32 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
   );
 }
 
-function ScreenshotsSection({ job, reload }: { job: JobDetail; reload: () => Promise<void> }) {
+function ScreenshotsSection({
+  job,
+  reload,
+}: {
+  job: JobDetail;
+  reload: () => Promise<void>;
+}) {
   const [error, setError] = useState<string | null>(null);
-  const generating = job.screenshots_status === "generating";
+  const generating = job.screenshots_status === 'generating';
   const overLimit =
-    job.video_duration_seconds != null && job.video_duration_seconds > 5400;
+    job.video_duration_seconds != null &&
+    job.video_duration_seconds > 5400;
 
   useEffect(() => {
     if (!generating) return;
-    return startPolling(reload, () => job.screenshots_status !== "generating", 2000);
+    return startPolling(
+      reload,
+      () => job.screenshots_status !== 'generating',
+      2000,
+    );
   }, [generating, reload, job.screenshots_status]);
 
-  if (job.content_type !== "long" || !["transcript_done", "done"].includes(job.status))
+  if (
+    job.content_type !== 'long' ||
+    !['transcript_done', 'done'].includes(job.status)
+  )
     return null;
 
   const run = async () => {
@@ -782,11 +910,11 @@ function ScreenshotsSection({ job, reload }: { job: JobDetail; reload: () => Pro
       const result = await apiPost<{ screenshots_status: string }>(
         `/api/jobs/${job.id}/screenshots`,
         {},
-        "Screenshot capture failed",
+        'Screenshot capture failed',
       );
       if (!result.ok) setError(result.detail);
     } catch {
-      setError("Screenshot capture failed");
+      setError('Screenshot capture failed');
     }
     await reload();
   };
@@ -795,50 +923,77 @@ function ScreenshotsSection({ job, reload }: { job: JobDetail; reload: () => Pro
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-title font-semibold text-ink">Screenshots</h2>
+          <h2 className="text-title font-semibold text-ink">
+            Screenshots
+          </h2>
           <p className="mt-1 text-label text-muted">
             Informative diagrams, code, slides, and product views.
           </p>
         </div>
         {job.screenshots_drive_url ? (
-          <CardOpenButton href={job.screenshots_drive_url} label="Open screenshots in Drive" />
+          <CardOpenButton
+            href={job.screenshots_drive_url}
+            label="Open screenshots in Drive"
+          />
         ) : (
-          <Tooltip content={overLimit ? "Available for videos up to 90 minutes" : "Capture informative frames"}>
+          <Tooltip
+            content={
+              overLimit
+                ? 'Available for videos up to 90 minutes'
+                : 'Capture informative frames'
+            }
+          >
             <button
               type="button"
               onClick={run}
               disabled={generating || overLimit}
               className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
             >
-              {generating ? "Capturing…" : "Capture Screenshots"}
+              {generating ? (
+                <span className="ownix-shimmer">Capturing…</span>
+              ) : (
+                'Capture Screenshots'
+              )}
             </button>
           </Tooltip>
         )}
       </div>
-      {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
-      {job.screenshots_status === "error" && !error && (
-        <p role="alert" className="text-sm text-status-error">Capture failed. Try again.</p>
+      {error && (
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
+          {error}
+        </p>
+      )}
+      {job.screenshots_status === 'error' && !error && (
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
+          Capture failed. Try again.
+        </p>
       )}
     </section>
   );
 }
 
 const GEMINI_RECIPES = [
-  "summary",
-  "method",
-  "technical",
-  "review",
-  "narrative",
+  'summary',
+  'method',
+  'technical',
+  'review',
+  'narrative',
 ] as const;
 
 function useDesktopViewport() {
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 768px)");
+    const media = window.matchMedia('(min-width: 768px)');
     const update = () => setDesktop(media.matches);
     update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, []);
   return desktop;
 }
@@ -853,7 +1008,7 @@ function RecipeChoices({
   disabled?: boolean;
 }) {
   const [freestyle, setFreestyle] = useState(false);
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState('');
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -863,7 +1018,7 @@ function RecipeChoices({
             type="button"
             disabled={disabled}
             onClick={() => void onSubmit(recipe)}
-            className={`${descriptions[recipe] ? "h-auto w-full py-2 text-left" : "h-8"} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}
+            className={`${descriptions[recipe] ? 'h-auto w-full py-2 text-left' : 'h-8'} rounded-md border border-line px-3 text-button font-medium capitalize text-ink transition-ui hover:bg-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal`}
           >
             <span className="block">{recipe}</span>
             {descriptions[recipe] && (
@@ -902,7 +1057,7 @@ function RecipeChoices({
           <button
             type="button"
             disabled={disabled || !prompt.trim()}
-            onClick={() => void onSubmit("freestyle", prompt.trim())}
+            onClick={() => void onSubmit('freestyle', prompt.trim())}
             className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
           >
             Run Freestyle
@@ -939,15 +1094,19 @@ function RunGeminiSection({
   const [error, setError] = useState<string>();
   const desktop = useDesktopViewport();
   const { templates } = useTemplateList();
-  const submit = async (template: string, freestylePrompt?: string) => {
+  const submit = async (
+    template: string,
+    freestylePrompt?: string,
+  ) => {
     setError(undefined);
     const result = await apiPost<{ status: string }>(
       `/api/jobs/${job.id}/enrich`,
       {
         template,
-        freestyle_prompt: template === "freestyle" ? freestylePrompt : null,
+        freestyle_prompt:
+          template === 'freestyle' ? freestylePrompt : null,
       },
-      "Could not run Gemini",
+      'Could not run Gemini',
     );
     if (!result.ok) {
       setError(result.detail);
@@ -968,7 +1127,10 @@ function RunGeminiSection({
         Run Gemini
       </button>
       {error && (
-        <p role="alert" className="text-sm text-status-error">
+        <p
+          role="alert"
+          className="text-sm text-status-error"
+        >
           {error}
         </p>
       )}
@@ -986,7 +1148,7 @@ function RunGeminiSection({
           aria-label="Gemini recipes"
           aria-hidden={!open}
           inert={!open}
-          className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? "translate-x-0" : "translate-x-full pointer-events-none"}`}
+          className={`fixed inset-y-0 right-0 z-40 w-full max-w-sm overflow-y-auto border-l border-line bg-surface p-6 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : 'translate-x-full pointer-events-none'}`}
         >
           <div className="mb-5 flex items-center justify-between">
             <h2 className="text-title font-semibold text-ink">
@@ -1007,7 +1169,10 @@ function RunGeminiSection({
             descriptions={Object.fromEntries(
               templates
                 .filter((template) => template.is_builtin)
-                .map((template) => [template.name, template.description]),
+                .map((template) => [
+                  template.name,
+                  template.description,
+                ]),
             )}
           />
         </aside>
@@ -1030,23 +1195,27 @@ export default function JobDetailPage() {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [withLinks, setWithLinks] = useState(false);
   const [folderTagFormOpen, setFolderTagFormOpen] = useState(false);
-  const { job, setData, fetchState, reload } = useJobDetail(id, restricted);
+  const { job, setData, fetchState, reload } = useJobDetail(
+    id,
+    restricted,
+  );
   const jobRef = useRef(job);
   useEffect(() => {
     jobRef.current = job;
   }, [job]);
   useEffect(() => {
-    if (job?.status !== "enriching") return;
+    if (job?.status !== 'enriching') return;
     return startPolling(
       reload,
-      () => jobRef.current?.status !== "enriching",
+      () => jobRef.current?.status !== 'enriching',
       10_000,
     );
   }, [job?.status, reload]);
   useEffect(() => {
-    if (!enrichmentTriggered.current || job?.status === "enriching") return;
-    if (job?.status === "done") haptic("success");
-    else if (job?.status === "error") haptic("error");
+    if (!enrichmentTriggered.current || job?.status === 'enriching')
+      return;
+    if (job?.status === 'done') haptic('success');
+    else if (job?.status === 'error') haptic('error');
     else return;
     enrichmentTriggered.current = false;
   }, [haptic, job?.status]);
@@ -1057,13 +1226,13 @@ export default function JobDetailPage() {
   );
   const { jobTags, allTags, toggleTag, createTag } = useMergedTags(
     id,
-    job?.content_type ?? "",
+    job?.content_type ?? '',
     job?.link_id,
     fetchState,
     restricted,
   );
 
-  if (fetchState === "loading") {
+  if (fetchState === 'loading') {
     return (
       <PageShell width="narrow">
         <div className="space-y-3">
@@ -1074,63 +1243,76 @@ export default function JobDetailPage() {
       </PageShell>
     );
   }
-  if (fetchState === "not_found")
+  if (fetchState === 'not_found')
     return (
       <div className="text-sm text-body">
-        Job not found.{" "}
-        <Link href="/feed" className="text-signal hover:underline">
+        Job not found.{' '}
+        <Link
+          href="/feed"
+          className="text-signal hover:underline"
+        >
           Back to feed
         </Link>
       </div>
     );
-  if (fetchState === "forbidden")
+  if (fetchState === 'forbidden')
     return (
       <div className="text-sm text-body">
-        Access denied.{" "}
-        <Link href="/feed" className="text-signal hover:underline">
+        Access denied.{' '}
+        <Link
+          href="/feed"
+          className="text-signal hover:underline"
+        >
           Back to feed
         </Link>
       </div>
     );
-  if (fetchState === "error" || !job)
+  if (fetchState === 'error' || !job)
     return (
       <div className="text-sm text-body">
-        Failed to load job.{" "}
-        <Link href="/feed" className="text-signal hover:underline">
+        Failed to load job.{' '}
+        <Link
+          href="/feed"
+          className="text-signal hover:underline"
+        >
           Back to feed
         </Link>
       </div>
     );
 
   const fieldSet =
-    job.content_type === "short" ? SHORT_FIELDS : ENRICHMENT_FIELDS;
+    job.content_type === 'short' ? SHORT_FIELDS : ENRICHMENT_FIELDS;
   // Transcript renders as its own preview card (see TranscriptCard); Topic is
   // folded into the merged Title | Topic card below - drop both from the
   // generic field loop to avoid showing them twice.
   const presentFields = fieldSet.filter(({ key }) => {
-    if (key === "transcript" || key === "ai_topic") return false;
+    if (key === 'transcript' || key === 'ai_topic') return false;
     const value = job[key];
-    return value !== null && value !== undefined && String(value).trim() !== "";
+    return (
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== ''
+    );
   });
   const titleTopicValue = [job.title?.trim(), job.ai_topic?.trim()]
     .filter(Boolean)
-    .join("\n\n");
+    .join('\n\n');
 
   async function handleDelete() {
     setDeleting(true);
     setDeleteFailed(false);
     try {
       const response = await fetch(
-        `/api/jobs/${id}${withLinks ? "?with_links=1" : ""}`,
-        { method: "DELETE" },
+        `/api/jobs/${id}${withLinks ? '?with_links=1' : ''}`,
+        { method: 'DELETE' },
       );
-      if (!response.ok) throw new Error("Job delete failed");
-      haptic("success");
+      if (!response.ok) throw new Error('Job delete failed');
+      haptic('success');
       if (window.history.length > 1) router.back();
-      else router.push("/feed");
+      else router.push('/feed');
     } catch {
       setDeleteFailed(true);
-      haptic("error");
+      haptic('error');
     } finally {
       setDeleting(false);
     }
@@ -1159,7 +1341,7 @@ export default function JobDetailPage() {
         }
       />
 
-      {job.status === "error" && job.error_msg && (
+      {job.status === 'error' && job.error_msg && (
         <div className="rounded-lg border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
           <span className="font-semibold">Error: </span>
           {job.error_msg}
@@ -1168,35 +1350,45 @@ export default function JobDetailPage() {
 
       <JobActionsBar
         job={job}
-        hasFields={presentFields.length > 0 || !!job.transcript?.trim()}
+        hasFields={
+          presentFields.length > 0 || !!job.transcript?.trim()
+        }
       />
 
       {!restricted &&
-        job.content_type === "long" &&
-        job.status === "transcript_done" && (
+        job.content_type === 'long' &&
+        job.status === 'transcript_done' && (
           <RunGeminiSection
             job={job}
             onClaim={() => {
               enrichmentTriggered.current = true;
               setData((current) =>
-                current ? { ...current, status: "enriching" } : current,
+                current
+                  ? { ...current, status: 'enriching' }
+                  : current,
               );
             }}
-            onError={() => haptic("error")}
+            onError={() => haptic('error')}
           />
         )}
       {!restricted &&
-        job.content_type === "long" &&
-        job.status === "enriching" && <EnrichmentStatusCard />}
+        job.content_type === 'long' &&
+        job.status === 'enriching' && <EnrichmentStatusCard />}
 
       {!restricted &&
-        job.status === "done" &&
-        (job.content_type === "long" || job.content_type === "short") && (
+        job.status === 'done' &&
+        (job.content_type === 'long' ||
+          job.content_type === 'short') && (
           <RepoFollowupPanel jobId={job.id} />
         )}
 
       {!restricted && <ChecklistsSection job={job} />}
-      {!restricted && <ScreenshotsSection job={job} reload={reload} />}
+      {!restricted && (
+        <ScreenshotsSection
+          job={job}
+          reload={reload}
+        />
+      )}
 
       <TranscriptCard job={job} />
 
@@ -1212,7 +1404,7 @@ export default function JobDetailPage() {
           <FieldCard
             key={key}
             label={
-              key === "code" && job.code_lang
+              key === 'code' && job.code_lang
                 ? `${label} (${job.code_lang})`
                 : label
             }
@@ -1239,8 +1431,8 @@ export default function JobDetailPage() {
           />
         ))}
       {!restricted &&
-        job.content_type === "link" &&
-        job.url?.startsWith("bookmarks:") && (
+        job.content_type === 'link' &&
+        job.url?.startsWith('bookmarks:') && (
           <div className="border-t border-line pt-5">
             <div className="flex items-stretch gap-4 max-[620px]:flex-col">
               <div className="flex-shrink-0">
@@ -1254,9 +1446,9 @@ export default function JobDetailPage() {
               </div>
               <div className="border-l border-line max-[620px]:hidden" />
               <p className="text-sm text-body">
-                Turn this import&apos;s bookmark folders into link tags, applied
-                to every link in that folder. Safe to run any time - nothing is
-                lost by skipping it now.
+                Turn this import&apos;s bookmark folders into link
+                tags, applied to every link in that folder. Safe to
+                run any time - nothing is lost by skipping it now.
               </p>
             </div>
             <FolderTagForm
@@ -1284,21 +1476,24 @@ export default function JobDetailPage() {
               >
                 {/* ADR-0046: links outlive the job by default - this is the
                     opt-in back into the old cascade. */}
-                {typeof job.link_count === "number" && job.link_count > 0 && (
-                  <label className="flex items-start gap-2 text-xs text-body">
-                    <input
-                      type="checkbox"
-                      checked={withLinks}
-                      onChange={(event) => setWithLinks(event.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      Also remove the {job.link_count}{" "}
-                      {job.link_count === 1 ? "link" : "links"} this job added
-                      to your Brain
-                    </span>
-                  </label>
-                )}
+                {typeof job.link_count === 'number' &&
+                  job.link_count > 0 && (
+                    <label className="flex items-start gap-2 text-xs text-body">
+                      <input
+                        type="checkbox"
+                        checked={withLinks}
+                        onChange={(event) =>
+                          setWithLinks(event.target.checked)
+                        }
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Also remove the {job.link_count}{' '}
+                        {job.link_count === 1 ? 'link' : 'links'} this
+                        job added to your Brain
+                      </span>
+                    </label>
+                  )}
               </ConfirmDialog>
               {deleteFailed && (
                 <p className="text-xs text-status-error">
@@ -1308,9 +1503,10 @@ export default function JobDetailPage() {
             </div>
             <div className="border-l border-line max-[620px]:hidden" />
             <p className="text-sm text-body">
-              Permanently removes this job, its notes and tags, and its files in
-              Drive, Sheets and storage. Its Brain links stay in your Index
-              unless you choose to remove them below. This can&apos;t be undone.
+              Permanently removes this job, its notes and tags, and
+              its files in Drive, Sheets and storage. Its Brain links
+              stay in your Index unless you choose to remove them
+              below. This can&apos;t be undone.
             </p>
           </div>
         </div>

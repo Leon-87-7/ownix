@@ -73,7 +73,7 @@ async def fetch_metadata(url: str) -> dict:
 
 async def fetch_screenshot_candidates(url: str) -> dict:
     """Extract visually distinct long-video candidates in the sidecar."""
-    async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(900.0)) as client:
         resp = await client.post(
             f"{settings.TRANSCRIPT_SERVICE_URL}/screenshot_candidates",
             json={"url": url},
