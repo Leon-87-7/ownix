@@ -23,9 +23,11 @@ export function useHoldConfirm(holdMs: number, onHold: () => void, onTap?: () =>
   );
 
   function startHold() {
+    if (timer.current) clearTimeout(timer.current);
     setHolding(true);
     fired.current = false;
     timer.current = setTimeout(() => {
+      timer.current = null;
       fired.current = true;
       setHolding(false);
       onHold();
@@ -34,7 +36,10 @@ export function useHoldConfirm(holdMs: number, onHold: () => void, onTap?: () =>
 
   function cancelHold() {
     setHolding(false);
-    if (timer.current) clearTimeout(timer.current);
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
   }
 
   function handleClick(e: { preventDefault: () => void }) {
