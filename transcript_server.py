@@ -429,7 +429,10 @@ def screenshot_candidates():
         scene = subprocess.run(
             [
                 "ffmpeg", "-y", "-i", videos[0],
-                "-vf", "select='gt(scene,0.20)',scale=1280:-2",
+                # fps=2 first: scene-detect on a decimated stream so a candidate frame
+                # lands fully before/after a quick scroll instead of mid-motion-blur
+                # (the raw per-frame scene score triggers squarely inside the scroll).
+                "-vf", "fps=2,select='gt(scene,0.20)',scale=1280:-2",
                 "-vsync", "vfr", "-frames:v", str(SCREENSHOTS_MAX_RAW_FRAMES),
                 pattern,
             ],

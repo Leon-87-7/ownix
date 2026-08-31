@@ -84,6 +84,7 @@ async def run(job: dict) -> None:
                     folder_id,
                     "image/jpeg",
                     chat_id=chat_id,
+                    resolve_personal=False,
                 )
 
         uploads = await asyncio.gather(

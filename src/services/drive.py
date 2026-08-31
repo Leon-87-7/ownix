@@ -65,17 +65,28 @@ async def upload_file(
     mime_type: str = "text/markdown",
     *,
     chat_id: int | None = None,
+    resolve_personal: bool = True,
 ) -> tuple[str, str]:
     """Upload to Google Drive. Returns (file_id, web_view_link).
 
     Non-operator jobs are gated out (#202, ADR-0027): they get ("", "") and the
     file never lands in the operator's Drive. System calls (no chat_id) pass.
+
+    resolve_personal routes to the caller's connected personal Drive root when
+    True (default — matches create_subfolder's routing for a bare logical
+    folder_id like a GOOGLE_DRIVE_FOLDER_* constant). Pass False when folder_id
+    is already a specific folder resolved by an earlier create_subfolder call —
+    otherwise this re-routes every file to the personal root, past the subfolder.
     """
     if await settings.export_blocked(chat_id):
         log.info("drive_export_gated", filename=filename, chat_id=chat_id)
         return "", ""
     try:
-        target_folder = await asyncio.to_thread(lambda: user_folder_id(chat_id) or folder_id)
+        target_folder = (
+            await asyncio.to_thread(lambda: user_folder_id(chat_id) or folder_id)
+            if resolve_personal
+            else folder_id
+        )
         file_id, link = await asyncio.to_thread(
             _upload_sync, content, filename, target_folder, mime_type, chat_id
         )
