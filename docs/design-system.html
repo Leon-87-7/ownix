@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ownix Design System</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Montserrat:wght@600&family=Merienda:wght@500&display=swap">
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #0d0e10; color: #e6e6e6; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  a { color: #d99a45; text-decoration: none; }
+  a:hover { color: #efb566; }
+
+  .group-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.4px; color: #d99a45; text-transform: uppercase; }
+  #dosdonts .group-label { font-size: 12px; font-weight: 600; letter-spacing: 0.6px; }
+  .cap { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #948e84; margin-top: 10px; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .swatch-name { font-size: 13px; font-weight: 500; color: #e6e6e6; }
+  .swatch-hex { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #948e84; }
+
+  .spec-row { display:flex; align-items:baseline; justify-content:space-between; gap:24px; padding:20px 0; border-bottom:1px solid #30343d; }
+  .spec-meta { font-family:'JetBrains Mono', monospace; font-size:11px; color:#948e84; white-space:nowrap; text-align:right; }
+
+  .row { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+  .cell { display:flex; flex-direction:column; align-items:flex-start; }
+  .badge-status { display:inline-block; border-radius:4px; padding:2px 6px; font-family:'JetBrains Mono',monospace; font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; text-transform:capitalize; }
+  .badge-type { display:inline-block; border-radius:4px; padding:2px 6px; border:1px solid #30343d; font-family:'JetBrains Mono',monospace; font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; text-transform:uppercase; }
+
+  .item { display:flex; align-items:flex-start; gap:12px; font-size:13.5px; line-height:1.5; color:#b8b8b8; }
+  .icon { flex-shrink:0; margin-top:2px; }
+
+  .title-voice { font-family:'Montserrat', system-ui, sans-serif; font-weight:600; }
+  .subtitle-voice { font-family:'Merienda', Georgia, serif; font-weight:500; }
+
+  @keyframes ownix-shimmer-demo { from { background-position: 200% center; } to { background-position: -200% center; } }
+  .shimmer-label { color: #94e6ee; }
+  @media (prefers-reduced-motion: no-preference) {
+    .shimmer-label {
+      background-image: linear-gradient(90deg,#a57534,#d99a45,#efb566,#c6c1b8,#9ec9ff,#94e6ee,#649ca1,#a57534);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: ownix-shimmer-demo 3s linear infinite;
+    }
+  }
+
+  @keyframes logo-cycle-demo {
+    0% { color:#a57534; } 14.28% { color:#d99a45; } 28.57% { color:#efb566; }
+    42.85% { color:#c6c1b8; } 57.14% { color:#9ec9ff; } 71.42% { color:#94e6ee; }
+    85.71% { color:#649ca1; } 100% { color:#a57534; }
+  }
+  @keyframes shimmer-demo { from { background-position:200% center; } to { background-position:-200% center; } }
+  .logo-cycle { animation: logo-cycle-demo 7s linear infinite; }
+  .shimmer-text {
+    background-image: linear-gradient(90deg,#a57534,#d99a45,#efb566,#c6c1b8,#9ec9ff,#94e6ee,#649ca1,#a57534);
+    background-size:200% auto; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation: shimmer-demo 3s linear infinite;
+  }
+
+  section { scroll-margin-top: 60px; }
+
+  .top-nav {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    background: rgba(13,14,16,0.9); backdrop-filter: blur(8px);
+    border-bottom: 1px solid #30343d;
+    padding: 14px 24px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #948e84;
+  }
+  .top-nav a { color: #948e84; }
+  .top-nav a:hover { color: #efb566; }
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a href="#overview">Overview</a>
+  <a href="#colors">Colors</a>
+  <a href="#typography">Typography</a>
+  <a href="#components">Components</a>
+  <a href="#patterns">Patterns</a>
+  <a href="#dosdonts">Do/Don't</a>
+  <a href="#landing-voice">Landing Voice</a>
+  <a href="#landing-components">Landing Components</a>
+</nav>
+
+<section id="overview">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:900px; background: linear-gradient(180deg, #070503 0%, #0d0e10 100%); color: #e6e6e6; padding: 64px 72px; display: flex; flex-direction: column; gap: 56px;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <svg viewBox="368 344 560 560" width="34" height="34" fill="#d99a45" style="flex-shrink:0;"><path d="M 612 370.680 C 605.581 371.340, 593.769 374.177, 587.303 376.610 C 577.535 380.287, 571.136 383.739, 536.508 404.013 C 444.511 457.874, 446.573 456.566, 435.391 468.141 C 419.795 484.284, 410.376 504.003, 407.035 527.500 C 406.438 531.699, 406.032 568.922, 406.020 620.526 L 406 706.552 407.036 715.026 C 409.111 731.997, 414.360 746.612, 423.308 760.332 C 434.049 776.801, 445.084 786.419, 468.500 799.721 C 476.200 804.096, 492.625 813.505, 505 820.632 C 567.187 856.445, 564.571 855.158, 575.500 855.315 L 582.500 855.416 588 852.847 C 591.275 851.318, 598.680 845.725, 606.301 839.023 L 619.102 827.768 618.801 826.227 C 618.626 825.332, 614.313 822.956, 608.500 820.552 C 591.344 813.460, 576.383 805.417, 508.067 766.561 C 487.108 754.640, 474.287 738.470, 467.673 715.618 L 465.612 708.500 465.254 627 L 464.895 545.500 466.002 537 C 467.331 526.795, 471.533 514.063, 476.135 506.300 C 480.085 499.634, 491.704 486.988, 497.611 482.924 C 499.888 481.357, 516.095 471.798, 533.626 461.681 C 551.157 451.564, 570 440.680, 575.500 437.493 C 587.628 430.466, 596.670 426.533, 605.704 424.352 L 612.500 422.712 624 422.760 L 635.500 422.807 643.500 424.905 C 647.900 426.058, 655.775 429.173, 661 431.827 C 678.970 440.953, 750.218 482.943, 755.745 487.666 C 766.183 496.583, 773.392 507.536, 778.671 522.500 L 781.493 530.500 781.996 574.202 L 782.500 617.903 783.677 619.078 C 784.324 619.725, 785.926 619.984, 787.237 619.655 C 789.541 619.077, 835.611 571.684, 839.245 566.155 L 840.989 563.500 840.982 544.500 L 840.974 525.500 839.110 516.500 C 834.394 493.727, 822.741 474.215, 804.642 458.786 L 797.267 452.500 738.204 418.720 C 705.718 400.140, 674.946 382.969, 669.820 380.560 C 651.814 372.100, 631.666 368.658, 612 370.680 M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134 M 835.500 633.963 C 834.400 634.423, 830.747 637.882, 827.383 641.650 C 824.018 645.417, 811.306 659.504, 799.133 672.952 L 777 697.404 777 700.163 L 777 702.922 791.039 718.869 C 798.760 727.640, 805.691 735.051, 806.442 735.339 C 808.301 736.053, 809.149 735.274, 821.865 721.160 L 832.984 708.820 836.001 702.498 C 840.420 693.238, 841 688.374, 841 660.564 L 841 635.400 839.800 634.200 C 838.431 632.831, 838.232 632.821, 835.500 633.963 M 800.245 780.250 C 788.789 792.487, 774.401 808.317, 773.138 810.075 C 772.389 811.117, 772.033 812.990, 772.348 814.235 C 773.218 817.678, 815.704 864.883, 821.692 869.059 C 824.548 871.051, 829.948 873.745, 833.692 875.047 L 840.500 877.412 863.667 877.786 L 886.834 878.159 888.917 877.044 C 891.239 875.802, 891.592 872.983, 889.840 869.684 C 889.201 868.483, 882.542 860.525, 875.041 852 C 867.541 843.475, 854.501 828.625, 846.063 819 C 821.161 790.593, 806.977 775, 806.039 775 C 805.556 775, 802.949 777.362, 800.245 780.250"/></svg>
+      <div style="font-size:19px; font-weight:600; letter-spacing:-0.2px;">Ownix</div>
+      <div style="width:1px; height:18px; background:#30343d;"></div>
+      <div style="font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#948e84; text-transform:uppercase;">Design System</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">01 / 08 — Overview</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:20px; max-width:920px;">
+    <div style="font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#d99a45; text-transform:uppercase;">Creative North Star</div>
+    <div style="font-size:56px; font-weight:600; line-height:1.08; letter-spacing:-1.2px; color:#e6e6e6;">The Personal Index</div>
+    <div style="font-size:17px; line-height:1.6; color:#b8b8b8; max-width:760px;">
+      A calm, durable place for the internet a person wants to keep. Not a command surface or a novelty archive — a premium product for saving videos, links, articles, repos and documents into a private Index, returning to them through an owned Feed, and choosing what contributes signal to the shared Brain.
+    </div>
+    <div style="font-size:15px; line-height:1.6; color:#948e84; max-width:760px;">
+      Quiet and precise. Dark premium surfaces carry the product with very little decoration. Amber is restrained and meaningful — it marks the moments where a person saves, selects, contributes, retries, or continues.
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:1px; background:#30343d; border:1px solid #30343d; border-radius:8px; overflow:hidden;">
+    <div style="background:#16181c; padding:20px 22px; display:flex; flex-direction:column; gap:8px;">
+      <div style="width:28px; height:3px; background:#d99a45; border-radius:2px;"></div>
+      <div style="font-size:14px; font-weight:600; color:#e6e6e6;">One warm action color</div>
+      <div style="font-size:13px; line-height:1.5; color:#948e84;">Index Amber appears only on actions, active selections, focus, and current navigation — never on status or decoration.</div>
+    </div>
+    <div style="background:#16181c; padding:20px 22px; display:flex; flex-direction:column; gap:8px;">
+      <div style="width:28px; height:3px; background:#94e6ee; border-radius:2px;"></div>
+      <div style="font-size:14px; font-weight:600; color:#e6e6e6;">Ownership, made legible</div>
+      <div style="font-size:13px; line-height:1.5; color:#948e84;">Private Index, owned Feed, optional contribution to the Brain — always stated in text, never color alone.</div>
+    </div>
+    <div style="background:#16181c; padding:20px 22px; display:flex; flex-direction:column; gap:8px;">
+      <div style="width:28px; height:3px; background:linear-gradient(90deg,#7c3aed,#22d3ee); border-radius:2px;"></div>
+      <div style="font-size:14px; font-weight:600; color:#e6e6e6;">Two voices, one gradient</div>
+      <div style="font-size:13px; line-height:1.5; color:#948e84;">Inter speaks for people, JetBrains Mono for machine facts. The Brain gradient is the system's one expressive moment.</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:14px; margin-top:8px;">
+    <div style="font-size:13px; font-weight:600; color:#e6e6e6;">Key characteristics</div>
+    <div style="display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px 32px;">
+      <div style="display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6; color:#b8b8b8;"><span style="color:#d99a45;">—</span>Quiet near-black plate ladder with 1px hairlines; depth is structural, not decorative.</div>
+      <div style="display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6; color:#b8b8b8;"><span style="color:#d99a45;">—</span>Status stays clear: filled tint badges in semantic hues, always paired with a text label.</div>
+      <div style="display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6; color:#b8b8b8;"><span style="color:#d99a45;">—</span>Flat by default; shadows exist only for overlays — dialogs, menus, toasts.</div>
+      <div style="display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.6; color:#b8b8b8;"><span style="color:#d99a45;">—</span>Density is welcome, but every element must help someone collect, understand, return to, or share.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:auto; padding-top:24px; border-top:1px solid #30343d; display:flex; justify-content:space-between; font-family:'JetBrains Mono', monospace; font-size:11px; color:#948e84;">
+    <div>DESIGN.md — normative source</div>
+    <div>Colors → Typography → Components → Patterns → Do/Don't → Landing Voice → Landing Components</div>
+  </div>
+
+</div>
+</section>
+
+<section id="colors">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:1760px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:44px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Colors</div>
+      <div style="font-size:14px; color:#948e84;">The Ownix Palette</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">02 / 08</div>
+  </div>
+
+  <div style="font-size:14px; line-height:1.6; color:#b8b8b8; max-width:820px;">
+    Warmth means a person can do something; hue means state or content type. Index Amber is the single action color — it never appears in status badges, decorative fills, or disabled controls.
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Primary — Action</div>
+    <div style="display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:16px;">
+      <div><div style="height:76px; border-radius:8px; background:#d99a45;"></div><div style="margin-top:10px;" class="swatch-name">Index Amber</div><div class="swatch-hex">#d99a45 · default</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#efb566;"></div><div style="margin-top:10px;" class="swatch-name">Amber Bright</div><div class="swatch-hex">#efb566 · hover</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#a57534;"></div><div style="margin-top:10px;" class="swatch-name">Amber Deep</div><div class="swatch-hex">#a57534 · pressed</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#1b1309; border:1px solid #30343d;"></div><div style="margin-top:10px;" class="swatch-name">On Amber</div><div class="swatch-hex">#1b1309 · text on fill</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Secondary — Brain &amp; Contrasignal</div>
+    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap:16px;">
+      <div><div style="height:76px; border-radius:8px; background:linear-gradient(90deg,#7c3aed,#22d3ee);"></div><div style="margin-top:10px;" class="swatch-name">Brain Gradient</div><div class="swatch-hex">#7c3aed → #22d3ee · Brain surfaces only</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#94e6ee;"></div><div style="margin-top:10px;" class="swatch-name">Contrasignal</div><div class="swatch-hex">#94e6ee</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#9ec9ff;"></div><div style="margin-top:10px;" class="swatch-name">Contra Bright</div><div class="swatch-hex">#9ec9ff</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#649ca1;"></div><div style="margin-top:10px;" class="swatch-name">Contra Deep</div><div class="swatch-hex">#649ca1</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Neutral — Plate Ladder &amp; Text</div>
+    <div style="display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:16px;">
+      <div><div style="height:76px; border-radius:8px; background:#0d0e10; border:1px solid #30343d;"></div><div style="margin-top:10px;" class="swatch-name">Canvas</div><div class="swatch-hex">#0d0e10</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#16181c; border:1px solid #30343d;"></div><div style="margin-top:10px;" class="swatch-name">Surface</div><div class="swatch-hex">#16181c</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#202329; border:1px solid #30343d;"></div><div style="margin-top:10px;" class="swatch-name">Raised</div><div class="swatch-hex">#202329 · hover</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#2a2e36; border:1px solid #30343d;"></div><div style="margin-top:10px;" class="swatch-name">Selected</div><div class="swatch-hex">#2a2e36 · stepper only</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#16181c; border:1px solid #30343d; display:flex; align-items:center; justify-content:center;"><div style="width:70%; height:0; border-top:1px solid #30343d;"></div></div><div style="margin-top:10px;" class="swatch-name">Hairline</div><div class="swatch-hex">#30343d</div></div>
+      <div><div style="height:76px; border-radius:8px; background:#16181c; border:1px solid #343a44; display:flex; align-items:center; justify-content:center;"><div style="width:70%; height:0; border-top:1px solid #343a44;"></div></div><div style="margin-top:10px;" class="swatch-name">Hairline Strong</div><div class="swatch-hex">#343a44</div></div>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px;">
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:18px 20px; display:flex; flex-direction:column; gap:6px;"><div style="font-size:16px; color:#e6e6e6;">Ink — headings &amp; primary text</div><div class="swatch-hex">#e6e6e6</div></div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:18px 20px; display:flex; flex-direction:column; gap:6px;"><div style="font-size:16px; color:#b8b8b8;">Body — secondary text</div><div class="swatch-hex">#b8b8b8</div></div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:18px 20px; display:flex; flex-direction:column; gap:6px;"><div style="font-size:16px; color:#948e84;">Muted — meta, timestamps</div><div class="swatch-hex">#948e84</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Semantic — Status (filled)</div>
+    <div style="display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:16px;">
+      <div><div style="height:60px; border-radius:8px; background:#122b1c; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#4ade80; text-transform:uppercase;">Done</span></div><div style="margin-top:10px;" class="swatch-hex">#4ade80 / #122b1c</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#2b240e; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#eab308; text-transform:uppercase;">Pending</span></div><div style="margin-top:10px;" class="swatch-hex">#eab308 / #2b240e</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#14233b; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#60a5fa; text-transform:uppercase;">Processing</span></div><div style="margin-top:10px;" class="swatch-hex">#60a5fa / #14233b</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#221a3d; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#a78bfa; text-transform:uppercase;">Enriching</span></div><div style="margin-top:10px;" class="swatch-hex">#a78bfa / #221a3d</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#371717; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#f87171; text-transform:uppercase;">Error</span></div><div style="margin-top:10px;" class="swatch-hex">#f87171 / #371717</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#23262c; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#9aa1ad; text-transform:uppercase;">Cancelled</span></div><div style="margin-top:10px;" class="swatch-hex">#9aa1ad / #23262c</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Semantic — Content Type (outlined)</div>
+    <div style="display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:16px;">
+      <div><div style="height:60px; border-radius:8px; background:transparent; border:1px solid #30343d; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#c084fc; text-transform:uppercase;">Short</span></div><div style="margin-top:10px;" class="swatch-hex">#c084fc · Reels / Shorts / TikTok</div></div>
+      <div><div style="height:60px; border-radius:8px; background:transparent; border:1px solid #30343d; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#38bdf8; text-transform:uppercase;">Long</span></div><div style="margin-top:10px;" class="swatch-hex">#38bdf8 · Full-length video</div></div>
+      <div><div style="height:60px; border-radius:8px; background:transparent; border:1px solid #30343d; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#2dd4bf; text-transform:uppercase;">Article</span></div><div style="margin-top:10px;" class="swatch-hex">#2dd4bf · Article / document</div></div>
+      <div><div style="height:60px; border-radius:8px; background:transparent; border:1px solid #30343d; display:flex; align-items:center; justify-content:center;"><span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; letter-spacing:0.4px; color:#fb7185; text-transform:uppercase;">Repo</span></div><div style="margin-top:10px;" class="swatch-hex">#fb7185 · Repository pipeline</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Brand-adjacent — off-system, single-purpose</div>
+    <div style="display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px;">
+      <div><div style="height:60px; border-radius:8px; background:#26A5E4;"></div><div style="margin-top:10px;" class="swatch-name">Telegram Blue</div><div class="swatch-hex">#26A5E4</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#145b7d;"></div><div style="margin-top:10px;" class="swatch-name">Telegram Ring</div><div class="swatch-hex">#145b7d · hold-to-deliver</div></div>
+      <div><div style="height:60px; border-radius:8px; background:#4285F4;"></div><div style="margin-top:10px;" class="swatch-name">Google</div><div class="swatch-hex">#4285F4 · connected state only</div></div>
+    </div>
+  </div>
+
+  <div style="margin-top:12px; padding-top:24px; border-top:1px solid #30343d; font-size:13px; line-height:1.6; color:#948e84; max-width:820px;">
+    <strong style="color:#e6e6e6;">The Amber Rule.</strong> Index Amber means action, selection, or contribution — forbidden in status badges, decorative fills, inactive states, and disabled controls. Pending yellow is a status color and must never stand in for action.
+  </div>
+
+</div>
+</section>
+
+<section id="typography">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:1560px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:44px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Typography</div>
+      <div style="font-size:14px; color:#948e84;">Two voices, one hierarchy</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">03 / 08</div>
+  </div>
+
+  <div style="font-size:14px; line-height:1.6; color:#b8b8b8; max-width:820px;">
+    Inter speaks for people — headings, body, buttons, navigation, product copy. JetBrains Mono speaks for generated or system facts — IDs, timestamps, URLs, statuses, counts. No weight above 600: premium restraint comes from spacing and contrast, not heavy type.
+  </div>
+
+  <div style="display:grid; grid-template-columns: 3fr 2fr; gap:56px;">
+
+    <div style="display:flex; flex-direction:column; gap:0;">
+      <div class="group-label" style="margin-bottom:12px;">Inter — for people</div>
+
+      <div class="spec-row">
+        <div style="font-weight:600; font-size:1.5rem; line-height:1.2; letter-spacing:-0.5px;">Display · Page title</div>
+        <div class="spec-meta">text-display<br>600 · 24px · 1.2 · -0.5px</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:600; font-size:1.25rem; line-height:1.25; letter-spacing:-0.25px;">Headline · Section head</div>
+        <div class="spec-meta">text-headline<br>600 · 20px · 1.25 · -0.25px</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:600; font-size:1rem; line-height:1.4;">Title · Card &amp; panel title</div>
+        <div class="spec-meta">text-title<br>600 · 16px · 1.4</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:400; font-size:0.875rem; line-height:1.5; color:#b8b8b8;">Body · Default UI text, descriptions and supporting copy</div>
+        <div class="spec-meta">text-copy<br>400 · 14px · 1.5</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:500; font-size:0.875rem; line-height:1.5;">Body Strong · Nav items, emphasized inline text</div>
+        <div class="spec-meta">text-copy (500)<br>500 · 14px · 1.5</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:500; font-size:0.75rem; line-height:1.4; color:#b8b8b8;">Label · Form &amp; filter group labels</div>
+        <div class="spec-meta">text-label<br>500 · 12px · 1.4</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-weight:600; font-size:1.75rem; line-height:1.1; font-variant-numeric: tabular-nums;">1,204</div>
+        <div class="spec-meta">text-stat<br>600 · 28px · 1.1 · tabular-nums</div>
+      </div>
+      <div class="spec-row" style="border-bottom:none;">
+        <div style="font-weight:500; font-size:0.8125rem; line-height:1; background:#d99a45; color:#1b1309; display:inline-flex; align-items:center; height:32px; padding:0 14px; border-radius:6px; width:fit-content;">Add to Index</div>
+        <div class="spec-meta">button<br>500 · 13px · 1.0</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:0;">
+      <div class="group-label" style="margin-bottom:12px;">JetBrains Mono — for machine facts</div>
+
+      <div class="spec-row">
+        <div style="font-family:'JetBrains Mono',monospace; font-weight:400; font-size:0.75rem; line-height:1.4; color:#b8b8b8;">2026-08-30T14:02:11Z · job_8f21ac</div>
+        <div class="spec-meta">Mono Meta → text-label<br>400 · 12px · 1.4</div>
+      </div>
+      <div class="spec-row">
+        <div style="font-family:'JetBrains Mono',monospace; font-weight:500; font-size:0.6875rem; line-height:1.4; letter-spacing:0.4px; text-transform:uppercase; color:#4ade80;">Done</div>
+        <div class="spec-meta">Mono Label → text-mono-label<br>500 · 11px · 1.4 · +0.4px, badges &amp; table headers only</div>
+      </div>
+
+      <div style="margin-top:32px; display:flex; flex-direction:column; gap:8px;">
+        <div class="group-label">The Mono Fact Rule</div>
+        <div style="font-size:13px; line-height:1.6; color:#948e84;">If a system generated it — an ID, timestamp, URL, status, count, or filename — render it in JetBrains Mono. If a person reads it as language, render it in Inter.</div>
+      </div>
+
+      <div style="margin-top:28px; display:flex; flex-direction:column; gap:8px;">
+        <div class="group-label">Landing-only sizes</div>
+        <div style="font-size:13px; line-height:1.6; color:#948e84; margin-bottom:8px;">The marketing surface runs one step larger than the console.</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:0.625rem; color:#b8b8b8;">text-micro · dense chips</span><span class="spec-meta">10px</span></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:0.9375rem; color:#b8b8b8;">text-prose · section body</span><span class="spec-meta">15px</span></div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline;"><span style="font-size:1.0625rem; color:#b8b8b8;">text-lead · closing line</span><span class="spec-meta">17px</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</section>
+
+<section id="components">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:2080px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:48px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Components</div>
+      <div style="font-size:14px; color:#948e84;">Buttons, chips, badges, cards, inputs, nav</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">04 / 08</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Buttons — 32px, 6px radius, 13px/500 label</div>
+    <div class="row">
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; background:#d99a45; color:#1b1309; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Add to Index</div>
+        <div class="cap">Primary</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; background:#efb566; color:#1b1309; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Add to Index</div>
+        <div class="cap">Primary — hover</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; background:transparent; border:1px solid #30343d; color:#e6e6e6; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Cancel</div>
+        <div class="cap">Ghost / Secondary</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; background:#f87171; color:#1b1309; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Delete job</div>
+        <div class="cap">Danger — inside a dialog</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; background:#16181c; color:#948e84; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Add to Index</div>
+        <div class="cap">Disabled — no amber</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; border:1px solid #30343d; border-bottom:2px solid #d99a45; color:#e6e6e6; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Submit</div>
+        <div class="cap">GhostButton — signal edge</div>
+      </div>
+      <div class="cell">
+        <div style="height:32px; padding:0 14px; border-radius:6px; border:1px solid #30343d; border-bottom:2px solid #94e6ee; color:#e6e6e6; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Back</div>
+        <div class="cap">GhostButton — contrasignal edge</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Chips — 28px, 6px radius</div>
+    <div class="row">
+      <div class="cell">
+        <div style="height:28px; padding:0 12px; border-radius:6px; background:#16181c; color:#b8b8b8; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">All types</div>
+        <div class="cap">Filter — default</div>
+      </div>
+      <div class="cell">
+        <div style="height:28px; padding:0 12px; border-radius:6px; background:#d99a45; color:#1b1309; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">Long video</div>
+        <div class="cap">Filter — active (selection is the action)</div>
+      </div>
+      <div class="cell">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="height:28px; padding:0 12px; border-radius:6px; background:#2a2e36; color:#e6e6e6; font-size:0.8125rem; font-weight:500; display:flex; align-items:center; border-bottom:2px solid #e6e6e6;">2. Enrich</div>
+          <div style="width:32px; height:1px; background:rgba(230,230,230,0.6);"></div>
+          <div style="height:28px; padding:0 12px; border-radius:6px; background:transparent; color:#948e84; font-size:0.8125rem; font-weight:500; display:flex; align-items:center;">3. Review</div>
+        </div>
+        <div class="cap">Stepper — Selected plate marks position, not action; amber stays on Next</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Badges — every badge carries its text label</div>
+    <div class="row">
+      <span class="badge-status" style="background:#122b1c; color:#4ade80;">Done</span>
+      <span class="badge-status" style="background:#2b240e; color:#eab308;">Pending</span>
+      <span class="badge-status" style="background:#14233b; color:#60a5fa;">Processing</span>
+      <span class="badge-status" style="background:#221a3d; color:#a78bfa;">Enriching</span>
+      <span class="badge-status" style="background:#371717; color:#f87171;">Error</span>
+      <span class="badge-status" style="background:#23262c; color:#9aa1ad;">Cancelled</span>
+      <div style="width:1px; align-self:stretch; background:#30343d;"></div>
+      <span class="badge-type" style="color:#c084fc;">Short</span>
+      <span class="badge-type" style="color:#38bdf8;">Long</span>
+      <span class="badge-type" style="color:#2dd4bf;">Article</span>
+      <span class="badge-type" style="color:#fb7185;">Repo</span>
+    </div>
+    <div style="font-size:12px; color:#948e84;">The Two-Dialect Rule — statuses are filled (tint + hue text), content types are outlined (transparent + hairline + hue text).</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Cards — 8px radius, 1px hairline, flat at rest</div>
+    <div class="row" style="align-items:stretch;">
+      <div style="width:520px; background:#16181c; border:1px solid #30343d; border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="font-size:1rem; font-weight:600;">How we shipped the Second Brain</div>
+          <span class="badge-type" style="color:#38bdf8;">Long</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#948e84;">youtube.com/watch?v=8f2ac1 · 18:42</div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+          <span class="badge-status" style="background:#122b1c; color:#4ade80;">Done</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#948e84;">2 min ago</span>
+        </div>
+      </div>
+      <div style="width:520px; background:#202329; border:1px solid #30343d; border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="font-size:1rem; font-weight:600;">How we shipped the Second Brain</div>
+          <span class="badge-type" style="color:#38bdf8;">Long</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#948e84;">youtube.com/watch?v=8f2ac1 · 18:42</div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+          <span class="badge-status" style="background:#122b1c; color:#4ade80;">Done</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#948e84;">2 min ago</span>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="cap" style="margin-top:0;">Rest — surface</div>
+      <div class="cap" style="margin-top:0; margin-left:544px;">Hover — raised, no shadow</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Inputs — inset to canvas, 36px, 6px radius</div>
+    <div class="row">
+      <div class="cell">
+        <div style="width:280px; height:36px; padding:0 12px; border-radius:6px; background:#0d0e10; border:1px solid #30343d; display:flex; align-items:center; font-size:0.875rem; color:#948e84;">Paste a URL…</div>
+        <div class="cap">Default — placeholder muted</div>
+      </div>
+      <div class="cell">
+        <div style="width:280px; height:36px; padding:0 12px; border-radius:6px; background:#0d0e10; border:1px solid #d99a45; display:flex; align-items:center; font-size:0.875rem; color:#e6e6e6;">https://youtu.be/8f2ac1</div>
+        <div class="cap">Focus — amber border, no glow</div>
+      </div>
+      <div class="cell">
+        <div style="width:280px; height:36px; padding:0 12px; border-radius:6px; background:#0d0e10; border:1px solid #f87171; display:flex; align-items:center; font-size:0.875rem; color:#e6e6e6;">not-a-url</div>
+        <div class="cap" style="color:#f87171;">Error — border &amp; message in status-error</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Navigation — 14px/500, 6px radius, 8px×12px padding</div>
+    <div style="width:208px; background:#16181c; border:1px solid #30343d; border-radius:8px; padding:24px 16px; display:flex; flex-direction:column; gap:4px;">
+      <div style="padding:8px 12px; border-radius:6px; color:#b8b8b8; font-size:0.875rem; font-weight:500;">Feed</div>
+      <div style="padding:8px 12px; border-radius:6px; background:#202329; color:#e6e6e6; font-size:0.875rem; font-weight:500;">Brain</div>
+      <div style="padding:8px 12px; border-radius:6px; background:#202329; color:#d99a45; font-size:0.875rem; font-weight:500;">Spaces</div>
+      <div style="padding:8px 12px; border-radius:6px; color:#b8b8b8; font-size:0.875rem; font-weight:500;">Controls</div>
+    </div>
+    <div class="row">
+      <span class="cap" style="margin-top:0;">rest</span>
+      <span class="cap" style="margin-top:0; margin-left:20px;">hover — raised, ink</span>
+      <span class="cap" style="margin-top:0; margin-left:56px;">active — raised, amber text (current place)</span>
+    </div>
+  </div>
+
+</div>
+</section>
+
+<section id="patterns">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:1620px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:48px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Patterns</div>
+      <div style="font-size:14px; color:#948e84;">Elevation, iconography, motion, tiles, the Brain surface</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">05 / 08</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Elevation — the Plate Rule</div>
+    <div style="display:flex; gap:40px; align-items:flex-end;">
+      <div style="display:flex; align-items:flex-end; gap:0;">
+        <div style="width:120px; height:80px; background:#0d0e10; border:1px solid #30343d; display:flex; align-items:center; justify-content:center; font-size:11px; color:#948e84;">canvas</div>
+        <div style="width:120px; height:104px; background:#16181c; border:1px solid #30343d; display:flex; align-items:center; justify-content:center; font-size:11px; color:#948e84;">surface</div>
+        <div style="width:120px; height:128px; background:#202329; border:1px solid #30343d; display:flex; align-items:center; justify-content:center; font-size:11px; color:#b8b8b8;">raised</div>
+        <div style="width:120px; height:152px; background:#2a2e36; border:1px solid #30343d; display:flex; align-items:center; justify-content:center; font-size:11px; color:#e6e6e6;">selected</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; max-width:420px;">
+        <div style="font-size:13px; line-height:1.6; color:#b8b8b8;">Depth is stacked plates and 1px hairlines. Resting cards do not float — shadows exist only for surfaces that genuinely sit above the product.</div>
+        <div style="position:relative; width:220px; height:70px; margin-top:8px;">
+          <div style="position:absolute; inset:0; background:#16181c; border:1px solid #30343d; border-radius:8px;"></div>
+          <div style="position:absolute; left:16px; top:10px; width:200px; height:66px; background:#202329; border:1px solid #343a44; border-radius:8px; box-shadow: 0px 2px 4px rgba(0,0,0,0.4), 0px 12px 24px -8px rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; font-size:12px; color:#e6e6e6;">Dialog / overlay</div>
+        </div>
+        <div class="cap" style="margin-top:2px;">Overlay shadow — dialogs, dropdowns, toasts only</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Iconography — the one directional glyph</div>
+    <div style="display:flex; gap:40px; align-items:center;">
+      <div style="display:flex; gap:28px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <svg viewBox="581 665 258 180" width="22" height="22" fill="#e6e6e6"><path d="M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134"/></svg>
+          <span class="cap" style="margin-top:0;">Right — base</span>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <svg viewBox="581 665 258 180" width="22" height="22" fill="#e6e6e6"><path transform="rotate(90 710 755)" d="M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134"/></svg>
+          <span class="cap" style="margin-top:0;">Down — base</span>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <svg viewBox="581 665 258 180" width="22" height="22" fill="#e6e6e6" style="transform:rotate(180deg);"><path d="M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134"/></svg>
+          <span class="cap" style="margin-top:0;">Left — Right rotated 180°</span>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <svg viewBox="581 665 258 180" width="22" height="22" fill="#e6e6e6" style="transform:rotate(180deg);"><path transform="rotate(90 710 755)" d="M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134"/></svg>
+          <span class="cap" style="margin-top:0;">Up — Down rotated 180°</span>
+        </div>
+      </div>
+      <div style="font-size:13px; line-height:1.6; color:#948e84; max-width:420px;">Cut from the wordmark's "X". The one directional glyph in the system — replaces every vendor arrow/chevron for back links, disclosure, reorder, and scroll-to-top.</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Shimmer — in-flight acknowledgement</div>
+    <div style="display:flex; align-items:center; gap:32px;">
+      <div class="shimmer-label" style="font-size:0.875rem; font-weight:500;">Gemini is enriching…</div>
+      <div style="font-size:13px; line-height:1.6; color:#948e84; max-width:520px;">Fires the moment a user action kicks off enrichment. Says <em>alive</em>, not <em>where</em> — pair with a StatusBadge for that. Freezes to a solid label under reduced motion.</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">Summary tiles — label + number, no hero metrics</div>
+    <div style="display:flex; gap:16px;">
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:12px 16px; display:flex; flex-direction:column; gap:6px; width:160px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; text-transform:uppercase; color:#948e84;">Indexed today</div>
+        <div style="font-size:1.75rem; font-weight:600; line-height:1.1; font-variant-numeric: tabular-nums;">18</div>
+      </div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:12px 16px; display:flex; flex-direction:column; gap:6px; width:160px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; text-transform:uppercase; color:#948e84;">Errors</div>
+        <div style="font-size:1.75rem; font-weight:600; line-height:1.1; font-variant-numeric: tabular-nums; color:#f87171;">2</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:18px;">
+    <div class="group-label">The Brain surface — the one expressive moment</div>
+    <div style="position:relative; height:140px; border-radius:8px; overflow:hidden; background:linear-gradient(120deg,#7c3aed,#22d3ee); display:flex; align-items:center; padding:0 28px;">
+      <div style="font-size:1.25rem; font-weight:600; color:#0d0e10;">Shared knowledge graph</div>
+      <span style="margin-left:16px; display:inline-block; border-radius:4px; padding:2px 8px; background:rgba(13,14,16,0.25); font-family:'JetBrains Mono',monospace; font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; text-transform:uppercase; color:#0d0e10;">Shared to Brain</span>
+    </div>
+    <div class="cap" style="margin-top:0;">Never miniaturized to an icon, never on buttons, never as text fill — reserved for the Brain surface itself.</div>
+  </div>
+
+</div>
+</section>
+
+<section id="dosdonts">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:1220px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:44px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Do's &amp; Don'ts</div>
+      <div style="font-size:14px; color:#948e84;">The system's guardrails</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">06 / 08</div>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1px; background:#30343d; border:1px solid #30343d; border-radius:8px; overflow:hidden;">
+
+    <div style="background:#16181c; padding:28px 32px; display:flex; flex-direction:column; gap:18px;">
+      <div class="group-label" style="color:#4ade80;">Do</div>
+
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Reserve Index Amber for actionable elements — primary buttons, active selections, focus rings, active nav, retry, invite, contribution.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Make privacy and contribution state legible — private Index, Feed, Indexed, Shared to Brain.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Render generated facts — IDs, timestamps, URLs, statuses, counts, filenames — in JetBrains Mono.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Keep badge dialects distinct — statuses filled, content types outlined, ownership labeled.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Build depth from the plate ladder plus 1px hairlines.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Use tabular-nums on counts and stats.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Keep meta text at muted (#948e84) or lighter, so it stays WCAG AA.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Provide full states for interactive components — default, hover, focus, active, disabled, loading, error.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Provide a reduced-motion fallback for every animation.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Use OwnixChevron for every wayfinding arrow — back, next, disclosure, reorder, scroll-to-top.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 13 10 18 19 7"></polyline></svg>Shimmer the busy label whenever a user action triggers enrichment — the response always reads as acknowledged.</div>
+    </div>
+
+    <div style="background:#16181c; padding:28px 32px; display:flex; flex-direction:column; gap:18px;">
+      <div class="group-label" style="color:#f87171;">Don't</div>
+
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Make Ownix feel like a cluttered admin panel — density needs hierarchy, not everything visible at once.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Make it toy-like — no mascots, oversized emoji, bouncy motion, jokey copy, rounded-everything.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Use Index Amber decoratively, on inactive states, in status badges, or on disabled controls.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Put pending yellow on clickable controls.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Use gradient text. The Brain gradient is a backdrop, never text fill or a button treatment.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Ship hero-metric stat cards. Summary tiles are label + number, nothing more.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Use side-stripe borders as colored accents — use full borders, labeled badges, or tints instead.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Put a tracked-uppercase eyebrow above every section — uppercase mono only inside badges and table headers.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Exceed font weight 600, use display type in UI labels, or float resting cards on shadows.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Reach for a vendor arrow/chevron icon for a wayfinding control — that's what OwnixChevron is for.</div>
+      <div class="item"><svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>Reach for a modal first. Prefer inline and progressive disclosure when it keeps the user in flow.</div>
+    </div>
+
+  </div>
+
+  <div style="padding-top:16px; border-top:1px solid #30343d; font-size:13px; line-height:1.6; color:#948e84;">
+    Full detail, states, and rules live in <span style="font-family:'JetBrains Mono',monospace; color:#b8b8b8;">DESIGN.md</span> — its frontmatter tokens are the normative source for <span style="font-family:'JetBrains Mono',monospace; color:#b8b8b8;">web/tailwind.config.ts</span>.
+  </div>
+
+</div>
+</section>
+
+<section id="landing-voice">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:1620px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:48px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Landing Voice</div>
+      <div style="font-size:14px; color:#948e84;">The marketing surface — one step bolder than the console</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">07 / 08</div>
+  </div>
+
+  <div style="font-size:14px; line-height:1.6; color:#b8b8b8; max-width:820px;">
+    The dashboard runs Inter and JetBrains Mono only. The landing page adds two voices reserved for marketing: <span class="title-voice">Montserrat</span> for every section head, <span class="subtitle-voice" style="font-style:italic;">Merienda</span> italic for the emotional accent phrase inside a headline. Sourced from <span style="font-family:'JetBrains Mono',monospace; color:#948e84;">web/app/page.tsx</span> — this page pulls its values straight from the shipped code, not from DESIGN.md's landing note alone.
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Hero — golden-ratio type</div>
+    <div style="background:#070503; border:1px solid #30343d; border-radius:8px; padding:40px 44px;">
+      <div class="title-voice" style="font-size:2.618rem; line-height:1.15; letter-spacing:-0.5px; max-width:24ch; color:#e6e6e6;">
+        You watched it. You liked it.
+        <span class="subtitle-voice" style="position:relative; display:inline-block; font-style:italic; color:#efb566;">
+          You lost it.
+          <svg aria-hidden="true" viewBox="0 0 120 12" preserveAspectRatio="none" style="position:absolute; bottom:-4px; left:0; height:8px; width:100%; color:#9ec9ff;">
+            <path d="M2 8 C 20 2, 40 10, 60 6 S 100 2, 118 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+        </span>
+      </div>
+    </div>
+    <div class="cap" style="margin-top:0;">font-title 600, clamp(1.618rem, 6vw, 2.618rem) — floor is φ×1rem (the body paragraph's own size), ceiling is φ². Accent span: font-subtitle italic, signal-bright, hand-drawn contrasignal-bright underline.</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Section heads — the clamp scale</div>
+    <div style="display:flex; flex-direction:column; gap:0;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:16px 0; border-bottom:1px solid #30343d;">
+        <div class="title-voice" style="font-size:2.25rem;">Never lose it again.</div>
+        <div class="cap" style="margin-top:0; text-align:right;">Features H2<br>clamp(1.5rem, 4vw, 2.25rem)</div>
+      </div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:16px 0; border-bottom:1px solid #30343d;">
+        <div class="title-voice" style="font-size:1.75rem;">Three taps. Nothing new to learn.</div>
+        <div class="cap" style="margin-top:0; text-align:right;">Section H2<br>clamp(1.375rem, 3.4vw, 1.75rem)</div>
+      </div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:16px 0; border-bottom:1px solid #30343d;">
+        <div class="title-voice" style="font-size:1.5rem;">The AI reads it. You still know it.</div>
+        <div class="cap" style="margin-top:0; text-align:right;">Stepper H3<br>clamp(1.25rem, 2.6vw, 1.5rem)</div>
+      </div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:16px 0;">
+        <div class="subtitle-voice" style="font-size:1.0625rem; font-style:italic; color:#e6e6e6;">even from a glimpse.</div>
+        <div class="cap" style="margin-top:0; text-align:right;">text-lead, closing line accent<br>17px, font-subtitle italic</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Backdrops — landing-only</div>
+    <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:16px;">
+      <div>
+        <div style="height:120px; border-radius:8px; background: radial-gradient(120% 140% at 15% 15%, #efb667 0%, #a77735 28%, #353b45 55%, #0e0f11 100%); position:relative; overflow:hidden; border:1px solid #30343d;">
+          <div style="position:absolute; inset:0; background:linear-gradient(100deg, rgba(13,14,16,0.96) 0%, rgba(13,14,16,0.88) 55%, rgba(13,14,16,0.45) 80%, rgba(13,14,16,0.12) 100%);"></div>
+        </div>
+        <div class="cap">HeroGradient — animated WebGL grain shader (static color-stop approximation shown here). Stops: #353b45, #a77735, #efb667, #9ecaff, #649ba0 on #0e0f11, plus the same left-to-right legibility scrim used behind hero copy.</div>
+      </div>
+      <div>
+        <div style="height:120px; border-radius:8px; background:linear-gradient(180deg, #070503 0%, #0d0e10 100%); border:1px solid #30343d;"></div>
+        <div class="cap">.canvas-gradient — alternating section backdrop below the fold, flattens to plain canvas at sm+.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Signature motion</div>
+    <div style="display:flex; gap:56px; align-items:center;">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <span class="shimmer-text" style="font-size:0.875rem; font-weight:500;">More ways to collect</span>
+        <div class="cap" style="margin-top:0;">.ownix-shimmer link — signal→body→contrasignal loop, 3s</div>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <svg class="logo-cycle" viewBox="368 344 560 560" width="30" height="30" fill="currentColor"><path d="M 612 370.680 C 605.581 371.340, 593.769 374.177, 587.303 376.610 C 577.535 380.287, 571.136 383.739, 536.508 404.013 C 444.511 457.874, 446.573 456.566, 435.391 468.141 C 419.795 484.284, 410.376 504.003, 407.035 527.500 C 406.438 531.699, 406.032 568.922, 406.020 620.526 L 406 706.552 407.036 715.026 C 409.111 731.997, 414.360 746.612, 423.308 760.332 C 434.049 776.801, 445.084 786.419, 468.500 799.721 C 476.200 804.096, 492.625 813.505, 505 820.632 C 567.187 856.445, 564.571 855.158, 575.500 855.315 L 582.500 855.416 588 852.847 C 591.275 851.318, 598.680 845.725, 606.301 839.023 L 619.102 827.768 618.801 826.227 C 618.626 825.332, 614.313 822.956, 608.500 820.552 C 591.344 813.460, 576.383 805.417, 508.067 766.561 C 487.108 754.640, 474.287 738.470, 467.673 715.618 L 465.612 708.500 465.254 627 L 464.895 545.500 466.002 537 C 467.331 526.795, 471.533 514.063, 476.135 506.300 C 480.085 499.634, 491.704 486.988, 497.611 482.924 C 499.888 481.357, 516.095 471.798, 533.626 461.681 C 551.157 451.564, 570 440.680, 575.500 437.493 C 587.628 430.466, 596.670 426.533, 605.704 424.352 L 612.500 422.712 624 422.760 L 635.500 422.807 643.500 424.905 C 647.900 426.058, 655.775 429.173, 661 431.827 C 678.970 440.953, 750.218 482.943, 755.745 487.666 C 766.183 496.583, 773.392 507.536, 778.671 522.500 L 781.493 530.500 781.996 574.202 L 782.500 617.903 783.677 619.078 C 784.324 619.725, 785.926 619.984, 787.237 619.655 C 789.541 619.077, 835.611 571.684, 839.245 566.155 L 840.989 563.500 840.982 544.500 L 840.974 525.500 839.110 516.500 C 834.394 493.727, 822.741 474.215, 804.642 458.786 L 797.267 452.500 738.204 418.720 C 705.718 400.140, 674.946 382.969, 669.820 380.560 C 651.814 372.100, 631.666 368.658, 612 370.680 M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134 M 835.500 633.963 C 834.400 634.423, 830.747 637.882, 827.383 641.650 C 824.018 645.417, 811.306 659.504, 799.133 672.952 L 777 697.404 777 700.163 L 777 702.922 791.039 718.869 C 798.760 727.640, 805.691 735.051, 806.442 735.339 C 808.301 736.053, 809.149 735.274, 821.865 721.160 L 832.984 708.820 836.001 702.498 C 840.420 693.238, 841 688.374, 841 660.564 L 841 635.400 839.800 634.200 C 838.431 632.831, 838.232 632.821, 835.500 633.963 M 800.245 780.250 C 788.789 792.487, 774.401 808.317, 773.138 810.075 C 772.389 811.117, 772.033 812.990, 772.348 814.235 C 773.218 817.678, 815.704 864.883, 821.692 869.059 C 824.548 871.051, 829.948 873.745, 833.692 875.047 L 840.500 877.412 863.667 877.786 L 886.834 878.159 888.917 877.044 C 891.239 875.802, 891.592 872.983, 889.840 869.684 C 889.201 868.483, 882.542 860.525, 875.041 852 C 867.541 843.475, 854.501 828.625, 846.063 819 C 821.161 790.593, 806.977 775, 806.039 775 C 805.556 775, 802.949 777.362, 800.245 780.250"/></svg>
+        <div class="cap" style="margin-top:0;">ownix-logo-cycle — footer mark, hover-idle, 7s loop through all 6 named hues</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</section>
+
+<section id="landing-components">
+<div style="max-width:1440px; width:100%; margin:0 auto; min-height:2400px; background:#0d0e10; color:#e6e6e6; padding:64px 72px; display:flex; flex-direction:column; gap:48px;">
+
+  <div style="display:flex; align-items:baseline; justify-content:space-between;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <div style="font-size:28px; font-weight:600; letter-spacing:-0.4px;">Landing Components</div>
+      <div style="font-size:14px; color:#948e84;">Stepper, marquee, showcase cards, stats, invite</div>
+    </div>
+    <div style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#948e84;">08 / 08</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Onboarding stepper — desktop (GSAP-pinned)</div>
+    <div style="display:flex; gap:24px; align-items:stretch;">
+      <div style="width:32%; display:flex; flex-direction:column; gap:8px;">
+        <div style="height:2px; background:#d99a45; border-radius:2px;"></div>
+        <div class="mono" style="font-size:11px; letter-spacing:0.06em; color:#d99a45;">COLLECT</div>
+      </div>
+      <div style="width:32%; display:flex; flex-direction:column; gap:8px;">
+        <div style="height:2px; background:#30343d; border-radius:2px;"></div>
+        <div class="mono" style="font-size:11px; letter-spacing:0.06em; color:#948e84;">OWN</div>
+      </div>
+      <div style="width:32%; display:flex; flex-direction:column; gap:8px;">
+        <div style="height:2px; background:#30343d; border-radius:2px;"></div>
+        <div class="mono" style="font-size:11px; letter-spacing:0.06em; color:#948e84;">RECALL</div>
+      </div>
+    </div>
+    <div style="border-radius:8px; border:1px solid #30343d; background:#16181c; padding:24px; display:flex; flex-direction:column; gap:14px; max-width:640px;">
+      <div style="display:flex; align-items:center; gap:8px; color:#94e6ee;">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4"></path></svg>
+        <span class="mono" style="font-size:11px; letter-spacing:0.06em;">INDEX</span>
+      </div>
+      <div class="title-voice" style="font-size:1.5rem;">Share it from wherever you found it.</div>
+      <div class="mono" style="font-size:11px; color:#948e84;">reels ◉ videos ◉ articles ◉ repos ◉ PDFs</div>
+      <span class="cap" style="margin-top:4px;">first step also carries a shimmer "More ways to collect" link; last step reveals the Get an invite signal button on arrival</span>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Onboarding stepper — mobile (sticky chips)</div>
+    <div style="width:390px; display:flex; flex-direction:column; gap:14px;">
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+        <div style="background:#2a2e36; border-bottom:2px solid #e6e6e6; border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:2px;">
+          <span class="mono" style="font-size:10px; color:#948e84;">01</span>
+          <span style="font-size:12px; font-weight:500;">Collect</span>
+        </div>
+        <div style="border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:2px;">
+          <span class="mono" style="font-size:10px; color:#948e84;">02</span>
+          <span style="font-size:12px; font-weight:500; color:#948e84;">Own</span>
+        </div>
+        <div style="border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; gap:2px;">
+          <span class="mono" style="font-size:10px; color:#948e84;">03</span>
+          <span style="font-size:12px; font-weight:500; color:#948e84;">Recall</span>
+        </div>
+      </div>
+      <div style="height:2px; background:rgba(230,230,230,0.6); width:33%; border-radius:2px;"></div>
+      <div style="border-radius:8px; border:1px solid #30343d; background:#16181c; padding:18px; display:flex; flex-direction:column; gap:10px;">
+        <div class="title-voice" style="font-size:1.25rem; line-height:1.2;">Share it from wherever you found it.</div>
+        <div class="mono" style="font-size:10px; color:#948e84;">reels ◉ videos ◉ articles ◉ repos ◉ PDFs</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div style="height:44px; flex:1; border-radius:6px; border:1px solid #30343d; display:flex; align-items:center; justify-content:center; font-size:0.8125rem; font-weight:500; color:#948e84;">Back</div>
+        <div style="height:44px; flex:2; border-radius:6px; background:#d99a45; display:flex; align-items:center; justify-content:center; font-size:0.8125rem; font-weight:500; color:#1b1309;">Next</div>
+      </div>
+    </div>
+    <div class="cap" style="margin-top:0;">Selected chip: Surface Selected (#2a2e36) + ink underline — position marker, not the action. Amber stays reserved for Next.</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Wordmark marquee — decorative, edge-masked</div>
+    <div style="position:relative; height:48px; border-radius:8px; overflow:hidden; background:#0d0e10; border:1px solid #30343d; display:flex; align-items:center;">
+      <div style="display:flex; gap:40px; padding:0 24px; white-space:nowrap; color:#948e84; font-size:0.8125rem; align-items:center;">
+        <span>Instagram</span><span class="mono">·</span><span>Documents</span><span class="mono">·</span><span>YouTube</span><span class="mono">·</span><span>TikTok</span><span class="mono">·</span><span>GitHub</span><span class="mono">·</span><span>Articles</span>
+      </div>
+      <div style="position:absolute; inset:0; background:linear-gradient(to right, #0d0e10 0%, transparent 10%, transparent 90%, #0d0e10 100%); pointer-events:none;"></div>
+    </div>
+    <div class="cap" style="margin-top:0;">Two duplicated groups, translateX 0→-50%, 28s linear reverse, mask-fades both edges.</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Showcase pattern — file card → file card</div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div style="width:340px; background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="mono" style="font-size:11px; color:#948e84;">transcript.md</span>
+          <span class="mono" style="font-size:0.6875rem; font-weight:500; letter-spacing:0.4px; background:#122b1c; color:#4ade80; border-radius:4px; padding:2px 6px;">DONE</span>
+        </div>
+        <div style="height:64px; border-radius:4px; background:#0d0e10; border:1px solid #30343d;"></div>
+      </div>
+      <svg viewBox="581 665 258 180" width="20" height="20" fill="#948e84" style="transform:rotate(0deg); flex-shrink:0;"><path d="M 628.250 634.134 C 627.563 634.830, 627 636.438, 627 637.707 L 627 640.013 643.750 658.843 C 669.777 688.101, 687.335 707.947, 704.149 727.111 L 719.600 744.722 720.800 748.727 C 722.485 754.352, 722.262 758.825, 720.054 763.689 C 719.009 765.992, 709.681 777.424, 699.326 789.093 C 688.972 800.762, 678.700 812.390, 676.500 814.934 C 674.300 817.477, 663.496 829.670, 652.490 842.029 C 641.485 854.388, 631.247 865.997, 629.740 867.827 C 626.445 871.827, 626.192 875.497, 629.104 877.056 L 631.208 878.182 654.854 877.762 L 678.500 877.343 684.500 875.142 C 687.800 873.932, 692.813 871.408, 695.641 869.534 L 700.781 866.125 745.017 817.312 C 770.304 789.409, 790.046 766.787, 791.104 764.500 C 793.320 759.713, 793.556 751.211, 791.597 746.718 C 790.195 743.500, 780.233 732.123, 738 685.504 C 725.625 671.843, 712.276 657.029, 708.336 652.583 C 700.747 644.021, 693.567 638.978, 684.127 635.582 L 678.500 633.558 654 633.212 L 629.500 632.867 628.250 634.134"/></svg>
+      <div style="width:340px; background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+        <span class="mono" style="font-size:11px; color:#948e84;">AGENTS.md</span>
+        <div style="height:64px; border-radius:4px; background:#0d0e10; border:1px solid #30343d;"></div>
+      </div>
+    </div>
+    <div class="cap" style="margin-top:0;">Doomscroll in, engineering standards out — bottom mask-fade at max-h 280px, same pattern reused for the checklist showcase.</div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Stats — CountUp tiles</div>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; max-width:900px;">
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:6px;">
+        <div class="mono" style="font-size:0.6875rem; color:#948e84; text-transform:uppercase; letter-spacing:0.4px;">Items indexed</div>
+        <div style="font-size:1.75rem; font-weight:600; font-variant-numeric:tabular-nums;">318</div>
+      </div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:6px;">
+        <div class="mono" style="font-size:0.6875rem; color:#948e84; text-transform:uppercase; letter-spacing:0.4px;">Links extracted</div>
+        <div style="font-size:1.75rem; font-weight:600; font-variant-numeric:tabular-nums;">727</div>
+      </div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:6px;">
+        <div class="mono" style="font-size:0.6875rem; color:#948e84; text-transform:uppercase; letter-spacing:0.4px;">Videos transcribed</div>
+        <div style="font-size:1.75rem; font-weight:600; font-variant-numeric:tabular-nums;">259</div>
+      </div>
+      <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:14px 16px; display:flex; flex-direction:column; gap:6px;">
+        <div class="mono" style="font-size:0.6875rem; color:#948e84; text-transform:uppercase; letter-spacing:0.4px;">Repos collected</div>
+        <div style="font-size:1.75rem; font-weight:600; font-variant-numeric:tabular-nums;">38</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="group-label">Invite card</div>
+    <div style="background:#16181c; border:1px solid #30343d; border-radius:8px; padding:32px; display:flex; flex-direction:column; gap:20px; max-width:900px;">
+      <div class="title-voice" style="font-size:1.75rem; line-height:1.2; letter-spacing:-0.25px;">
+        <span style="display:block; margin-bottom:6px;">Invite-only for now</span>
+        <span class="subtitle-voice" style="display:block; font-style:italic; font-size:1.2rem; font-weight:500;">Here's exactly what happens next.</span>
+      </div>
+      <div style="display:flex; gap:40px;">
+        <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:8px; font-size:0.9375rem; color:#b8b8b8; max-width:44ch;">
+          <li>Sign in with Telegram. The bot asks for your email.</li>
+          <li>I approve every member myself, usually within a few hours.</li>
+          <li>Your saves start landing in your own Google Drive that day - not just ours.</li>
+          <li>You get a hello from me, and one question: want to help build what Ownix becomes?</li>
+        </ol>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="height:64px; width:220px; border-radius:6px; background:#26A5E4; display:flex; align-items:center; justify-content:center; color:#0d0e10; font-size:0.8125rem; font-weight:500;">Log in with Telegram</div>
+          <div class="mono" style="font-size:11px; color:#948e84; max-width:220px; line-height:1.5;">no password ◉ the bot asks for your email ◉ approval within hours</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #30343d; padding-top:16px; text-align:center;">
+        <span style="font-size:1.0625rem; color:#e6e6e6;">Your internet.&nbsp;&nbsp;Find it, use it, own it - </span><span class="subtitle-voice" style="font-size:1.0625rem; font-style:italic; color:#e6e6e6;">even from a glimpse.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</section>
+
+</body>
+</html>
