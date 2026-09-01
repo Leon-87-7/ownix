@@ -18,6 +18,9 @@ from fastapi import HTTPException
 _WINDOW_SECONDS = 60.0
 _MAX_REQUESTS = 30
 
+# ponytail: in-process dict, not shared across worker processes. Redis is
+# already in the stack (src/queue.py) — move `_hits` there if this ever runs
+# as more than one process.
 _hits: dict[str, list[float]] = {}
 
 

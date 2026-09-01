@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src import database, job_queue as queue
 from src.api.auth import auth_router
@@ -20,6 +21,7 @@ from src.api.preview import preview_router
 from src.api.spaces import spaces_router
 from src.api.templates import templates_router
 from src.auth.middleware import SessionMiddleware
+from src.config import settings
 from src.telegram import sender, webhook
 from src.utils.logger import configure_logging, get_logger
 
@@ -159,6 +161,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
 app.add_middleware(SessionMiddleware)
+if settings.DASHBOARD_URL:
+    # Added after SessionMiddleware so it ends up outermost (Starlette wraps
+    # in reverse add-order) — CORS preflight must be answered before the
+    # session gate sees the request, or OPTIONS gets a 401.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.DASHBOARD_URL.rstrip("/")],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.include_router(webhook.router)
 app.include_router(auth_router)
 app.include_router(brain_router)

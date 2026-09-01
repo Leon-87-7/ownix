@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from src import database
 from src.api.deps import get_owned_job
-from src.intake import mime_sniff
+from src.intake import mime_sniff, rate_limit
 from src.processors import document as document_processor
 from src.services import storage
 from src.services.document_intake import (
@@ -165,12 +165,14 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
 
 @parsed_router.post("/{job_id}/clean", status_code=201)
 async def clean(job_id: str, request: Request) -> dict:
+    rate_limit.enforce(f"doc_generate:{request.state.user['id']}", max_requests=10)
     job = await get_owned_document_job(job_id, request)
     return await _generate_output(job, "clean")
 
 
 @parsed_router.post("/{job_id}/freestyle", status_code=201)
 async def freestyle(job_id: str, body: FreestyleIn, request: Request) -> dict:
+    rate_limit.enforce(f"doc_generate:{request.state.user['id']}", max_requests=10)
     job = await get_owned_document_job(job_id, request)
     return await _generate_output(job, "freestyle", body.prompt)
 

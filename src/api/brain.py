@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from src import brain, database
+from src.intake import rate_limit
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -162,6 +163,9 @@ async def update_links_view(body: BrainLinksViewIn, request: Request) -> dict[st
 
 @brain_router.post("/rebuild")
 async def rebuild_graph() -> dict[str, int]:
+    # Shared operator-wide resource (see scoping note above) — one key for
+    # every caller, not per-user.
+    rate_limit.enforce("brain_rebuild", max_requests=3, window_seconds=60)
     try:
         n = await brain.rebuild_graph()
         return {"nodes": n}
