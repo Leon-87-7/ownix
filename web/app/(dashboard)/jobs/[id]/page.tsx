@@ -1037,7 +1037,7 @@ function ScreenshotsRetryButton({
         onKeyUp={(e) => {
           if (e.key === 'Enter' || e.key === ' ') cancelHold();
         }}
-        className={`relative flex h-8 w-8 items-center justify-center rounded-md border border-line text-ink transition-ui hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60 ${holding ? 'retry-hold' : ''}`}
+        className={`relative flex h-8 w-8 items-center justify-center rounded-full border border-line text-ink transition-ui hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60 ${holding ? 'retry-hold' : ''}`}
       >
         <RotateCcw
           className={`h-6 w-6 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite_reverse,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
