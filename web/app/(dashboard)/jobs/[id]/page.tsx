@@ -392,12 +392,12 @@ function JobHeader({
       const data = await apiPut<{ title: string | null }>(
         `/api/jobs/${job.id}/title`,
         { title: next },
-        'Could not save title',
+        'Title save failed',
       );
       onTitleSaved(data.title);
       setEditingTitle(false);
     } catch {
-      setTitleError('Could not save title');
+      setTitleError('Title save failed');
     } finally {
       setTitleSaving(false);
     }
@@ -729,7 +729,7 @@ function DriveTextLink({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={ariaLabel}
-      className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
     >
       {label}{' '}
       <OwnixShareIcon
@@ -947,7 +947,9 @@ function ScreenshotsSection({
             Screenshots
           </h2>
           <p className="mt-1 text-label text-muted">
-            Informative diagrams, code, slides, and product views.
+            {hasRun
+              ? 'Hold the retry button to capture again.'
+              : 'Informative diagrams, code, slides, and product views.'}
           </p>
         </div>
         {hasRun ? (
@@ -981,7 +983,7 @@ function ScreenshotsSection({
               {generating ? (
                 <span className="ownix-shimmer">Capturing…</span>
               ) : (
-                'Capture Screenshots'
+                'Capture'
               )}
             </button>
           </Tooltip>
@@ -1036,7 +1038,7 @@ function ScreenshotsRetryButton({
         className={`relative flex h-8 w-8 items-center justify-center rounded-md border border-line text-ink transition-ui hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60 ${holding ? 'retry-hold' : ''}`}
       >
         <RotateCcw
-          className={`h-4 w-4 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
+          className={`h-4 w-4 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite_reverse,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
           aria-hidden="true"
         />
       </button>
@@ -1172,7 +1174,7 @@ function RunGeminiSection({
         freestyle_prompt:
           template === 'freestyle' ? freestylePrompt : null,
       },
-      'Could not run Gemini',
+      'Enrichment failed',
     );
     if (!result.ok) {
       setError(result.detail);
