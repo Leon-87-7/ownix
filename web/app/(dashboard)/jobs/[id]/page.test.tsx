@@ -201,7 +201,7 @@ describe('JobDetailPage', () => {
       ),
     );
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Capture Screenshots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Capture' }));
     await waitFor(() => expect(reload).toHaveBeenCalled());
   });
 
@@ -220,7 +220,7 @@ describe('JobDetailPage', () => {
     expect(
       screen.getByRole('button', { name: 'Retry screenshot capture' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Capture Screenshots' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Capture' })).toBeNull();
   });
 
   it('shows only the retry button (no Drive link) after a failed capture', () => {
@@ -234,19 +234,19 @@ describe('JobDetailPage', () => {
     expect(
       screen.queryByRole('link', { name: 'Open screenshots in Drive' }),
     ).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Capture Screenshots' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Capture' })).toBeNull();
   });
 
   it('disables Capture Screenshots for videos over the duration cap', () => {
     setupMocks({ job: { ...JOB, video_duration_seconds: 6000 } });
     render(<JobDetailPage />);
-    expect(screen.getByRole('button', { name: 'Capture Screenshots' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Capture' })).toBeDisabled();
   });
 
   it('does not gate the button when duration is unknown', () => {
     setupMocks({ job: { ...JOB, video_duration_seconds: null } });
     render(<JobDetailPage />);
-    expect(screen.getByRole('button', { name: 'Capture Screenshots' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Capture' })).toBeEnabled();
   });
 
   it('shows an error message when screenshot capture fails to start', async () => {
@@ -257,7 +257,7 @@ describe('JobDetailPage', () => {
       ),
     );
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Capture Screenshots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Capture' }));
     await waitFor(() =>
       expect(screen.getByText('Screenshot capture is already running')).toBeInTheDocument(),
     );
