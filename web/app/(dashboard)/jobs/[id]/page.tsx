@@ -947,9 +947,11 @@ function ScreenshotsSection({
             Screenshots
           </h2>
           <p className="mt-1 text-label text-muted">
-            {hasRun
-              ? 'Hold the retry button to capture again.'
-              : 'Informative diagrams, code, slides, and product views.'}
+            {generating
+              ? 'Capturing…'
+              : hasRun
+                ? 'Hold the retry button to capture again.'
+                : 'Informative diagrams, code, slides, and product views.'}
           </p>
         </div>
         {hasRun ? (
