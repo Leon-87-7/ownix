@@ -44,6 +44,16 @@ async def run(job: dict) -> None:
     chat_id = job["chat_id"]
     folder_id = None
     try:
+        previous_folder_id = job.get("screenshots_drive_folder_id")
+        if previous_folder_id:
+            # A retry: drop the prior run's folder before making a new one, so repeated
+            # retries don't pile up orphaned duplicates in the user's Drive. Cleared from
+            # the job row too, so a failure below doesn't leave it pointing at a deleted id.
+            await drive.delete_file(previous_folder_id, chat_id=chat_id)
+            await database.update_job_fields(
+                job_id, screenshots_drive_folder_id=None, screenshots_drive_url=None
+            )
+
         metadata = await transcript.fetch_metadata(job["url"])
         duration = metadata.get("duration")
         if duration is None:

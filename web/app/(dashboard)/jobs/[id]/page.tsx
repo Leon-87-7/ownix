@@ -15,10 +15,11 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Check, Copy, Download, Pencil } from 'lucide-react';
+import { Check, Copy, Download, Pencil, RotateCcw } from 'lucide-react';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
+import { useHoldConfirm } from '@/lib/hooks/useHoldConfirm';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
 import { useMergedTags } from '@/lib/hooks/useMergedTags';
@@ -622,18 +623,10 @@ function JobActionsBar({
     <div className="flex items-start gap-2">
       <div className="flex flex-col items-start gap-2">
         {job.drive_url && isSafeHttpUrl(job.drive_url) && (
-          <a
+          <DriveTextLink
             href={job.drive_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
-          >
-            Open in Drive{' '}
-            <OwnixShareIcon
-              className="h-[18px] w-[18px]"
-              aria-hidden="true"
-            />
-          </a>
+            label="Open in Drive"
+          />
         )}
         {folderUrl && (
           <a
@@ -718,6 +711,32 @@ function CardDownloadButton({
         <Download className="h-4 w-4" />
       </button>
     </Tooltip>
+  );
+}
+
+function DriveTextLink({
+  href,
+  label,
+  ariaLabel,
+}: {
+  href: string;
+  label: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-1.5 text-button font-medium text-ink transition-ui hover:bg-raised"
+    >
+      {label}{' '}
+      <OwnixShareIcon
+        className="h-[18px] w-[18px]"
+        aria-hidden="true"
+      />
+    </a>
   );
 }
 
@@ -885,6 +904,7 @@ function ScreenshotsSection({
 }) {
   const [error, setError] = useState<string | null>(null);
   const generating = job.screenshots_status === 'generating';
+  const hasRun = job.screenshots_status != null;
   const overLimit =
     job.video_duration_seconds != null &&
     job.video_duration_seconds > 5400;
@@ -930,11 +950,20 @@ function ScreenshotsSection({
             Informative diagrams, code, slides, and product views.
           </p>
         </div>
-        {job.screenshots_drive_url ? (
-          <CardOpenButton
-            href={job.screenshots_drive_url}
-            label="Open screenshots in Drive"
-          />
+        {hasRun ? (
+          <div className="flex items-center gap-2">
+            {job.screenshots_drive_url && (
+              <DriveTextLink
+                href={job.screenshots_drive_url}
+                label="Open in Drive"
+                ariaLabel="Open screenshots in Drive"
+              />
+            )}
+            <ScreenshotsRetryButton
+              generating={generating}
+              onConfirm={run}
+            />
+          </div>
         ) : (
           <Tooltip
             content={
@@ -975,6 +1004,43 @@ function ScreenshotsSection({
         </p>
       )}
     </section>
+  );
+}
+
+function ScreenshotsRetryButton({
+  generating,
+  onConfirm,
+}: {
+  generating: boolean;
+  onConfirm: () => void;
+}) {
+  const { holding, startHold, cancelHold } = useHoldConfirm(500, onConfirm);
+
+  return (
+    <Tooltip content={generating ? 'Capturing…' : 'Hold to retry'}>
+      <button
+        type="button"
+        aria-label="Retry screenshot capture"
+        disabled={generating}
+        onPointerDown={startHold}
+        onPointerUp={cancelHold}
+        onPointerLeave={cancelHold}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          if (!e.repeat) startHold();
+        }}
+        onKeyUp={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') cancelHold();
+        }}
+        className={`relative flex h-8 w-8 items-center justify-center rounded-md border border-line text-ink transition-ui hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60 ${holding ? 'retry-hold' : ''}`}
+      >
+        <RotateCcw
+          className={`h-4 w-4 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
+          aria-hidden="true"
+        />
+      </button>
+    </Tooltip>
   );
 }
 
