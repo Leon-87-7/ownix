@@ -23,7 +23,10 @@ import { MobileDeviceIcon } from '@/components/svg/mobile-device-icon';
 import { DesktopIcon } from '@/components/svg/desktop';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
-import { GhostButton, GhostLinkButton } from '@/components/ui/ghost-button';
+import {
+  GhostButton,
+  GhostLinkButton,
+} from '@/components/ui/ghost-button';
 import PreviewMotif from '@/components/ui/preview-motif';
 
 import { Brain, Inbox, ListChecks, Share } from 'lucide-react';
@@ -80,7 +83,6 @@ export default async function LandingPage() {
   return (
     <>
       <nav
-        id="top"
         aria-label="Main"
         className="border-b border-line bg-canvas lg:sticky lg:top-0 lg:z-40 lg:border-line/70 lg:bg-canvas/85 lg:backdrop-blur-md"
       >
@@ -1003,7 +1005,7 @@ export default async function LandingPage() {
         <div className="flex flex-col px-3 gap-3 min-[450px]:flex-row min-[450px]:items-center min-[450px]:justify-between">
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-3">
             <a
-              href="#top"
+              href="#hero"
               aria-label="Back to top"
               className="hover:text-signal-bright"
             >
