@@ -40,6 +40,7 @@ async def _insert_job(
     created_at: datetime | None = None,
     transcript: str | None = None,
     drive_url: str | None = None,
+    transcript_drive_url: str | None = None,
     sheets_row_id: str | None = None,
     error_msg: str | None = None,
 ) -> None:
@@ -49,8 +50,9 @@ async def _insert_job(
         await conn.execute(
             """
             INSERT INTO jobs (id, chat_id, url, content_type, status, title,
-                              created_at, transcript, drive_url, sheets_row_id, error_msg)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              created_at, transcript, drive_url, transcript_drive_url,
+                              sheets_row_id, error_msg)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job_id,
@@ -62,6 +64,7 @@ async def _insert_job(
                 _iso(created_at or _now()),
                 transcript,
                 drive_url,
+                transcript_drive_url,
                 sheets_row_id,
                 error_msg,
             ),
@@ -383,6 +386,7 @@ class TestPreviewDetail:
                     "job_id": "s1",
                     "transcript": "words " * 400,  # > TRANSCRIPT_CAP chars
                     "drive_url": "https://drive.google.com/secret",
+                    "transcript_drive_url": "https://drive.google.com/secret-transcript",
                     "sheets_row_id": "42",
                     "error_msg": "Traceback: secret internals",
                 }
@@ -392,6 +396,7 @@ class TestPreviewDetail:
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["drive_url"] is None
+        assert payload["transcript_drive_url"] is None
         assert payload["sheets_row_id"] is None
         assert payload["error_msg"] is None
         assert payload["telegram_delivery"] is None

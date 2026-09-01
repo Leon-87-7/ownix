@@ -1854,6 +1854,7 @@ async def reset_job(job_id: str) -> None:
                 attempt = attempt + 1,
                 error_msg = NULL,
                 drive_url = NULL,
+                transcript_drive_url = NULL,
                 title = NULL,
                 transcript = NULL,
                 bot_message_id = NULL,

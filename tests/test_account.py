@@ -24,8 +24,11 @@ def account_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         await database.set_user_status(CHAT_ID, "approved")
         async with database.connection() as conn:
             await conn.execute(
-                "INSERT INTO jobs (id, chat_id, url, content_type, status, created_at) "
-                "VALUES ('job_1', ?, 'https://example.com/a', 'article', 'done', '2026-01-01')",
+                "INSERT INTO jobs (id, chat_id, url, content_type, status, created_at, "
+                "drive_url, transcript_drive_url) "
+                "VALUES ('job_1', ?, 'https://example.com/a', 'article', 'done', '2026-01-01', "
+                "'https://drive.google.com/file/d/enrich1/view', "
+                "'https://drive.google.com/file/d/transcript1/view')",
                 (CHAT_ID,),
             )
             # source_job points at a job that no longer exists (ADR-0046: a link
@@ -80,6 +83,20 @@ def test_delete_account_removes_every_owned_row(account_db) -> None:
     # The delete is recorded as a durable purge task even though nothing external was ever attached.
     row = asyncio.run(database._fetch_one("SELECT 1 FROM purge_tasks WHERE job_id = 'job_1'"))
     assert row is not None
+
+
+def test_delete_account_purges_both_job_drive_docs(account_db) -> None:
+    """ADR-0057: a job can carry two independently-tracked Drive links
+    (drive_url = enrichment, transcript_drive_url = transcript). The bulk
+    SELECT account deletion uses to build purge tasks must fetch both, or
+    the transcript file silently never gets queued for purge."""
+    from src.services.account import delete_account
+
+    database = account_db
+    asyncio.run(delete_account(CHAT_ID))
+
+    pending = asyncio.run(database.list_pending_purge_tasks())
+    assert set(pending[0]["task_payload"]["drive_file_ids"]) == {"enrich1", "transcript1"}
 
 
 def test_delete_account_is_scoped_to_the_caller(account_db) -> None:

@@ -242,6 +242,31 @@ async def test_update_job_status_writes_transcript_drive_url(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_reset_job_clears_both_drive_link_columns(temp_db):
+    """A retried job must not keep a stale transcript_drive_url from the
+    attempt being reset — Phase 1 re-uploads it fresh. drive_url is the
+    pre-ADR-0057 precedent this mirrors."""
+    from src import database as db
+
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test-reset-drive-url",
+        content_type="long",
+    )
+    await db.update_job_status(
+        job_id, "done",
+        drive_url="https://drive.google.com/enriched",
+        transcript_drive_url="https://drive.google.com/transcript",
+    )
+
+    await db.reset_job(job_id)
+
+    job = await db.get_job(job_id)
+    assert job["drive_url"] is None
+    assert job["transcript_drive_url"] is None
+
+
+@pytest.mark.asyncio
 async def test_update_job_status_writes_key_phrases(temp_db):
     import json
     from src import database as db

@@ -478,9 +478,7 @@ async def _resync_transcript_drive_doc(job: dict, transcript: str) -> None:
     file_id = file_id_from_url(job.get("transcript_drive_url"))
     if not file_id:
         return
-    md_text = build_transcript_markdown(
-        job.get("title") or "", "", "", "", job.get("url") or "", transcript
-    )
+    md_text = build_transcript_markdown(job.get("title") or "", job.get("url") or "", transcript)
     try:
         await update_file(file_id, md_text, chat_id=job["chat_id"])
     except Exception as exc:

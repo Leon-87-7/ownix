@@ -32,7 +32,8 @@ async def delete_account(chat_id: int) -> None:
     # removal-by-content primitive available; not worth it for a case the
     # worker already handles safely.
     job_rows = await database._fetch_dicts(
-        "SELECT id, chat_id, url, drive_url, prd_auto_drive_file_id, prd_intent_drive_file_id "
+        "SELECT id, chat_id, url, drive_url, transcript_drive_url, "
+        "prd_auto_drive_file_id, prd_intent_drive_file_id "
         "FROM jobs WHERE chat_id = ?",
         (chat_id,),
     )

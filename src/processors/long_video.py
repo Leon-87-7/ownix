@@ -109,7 +109,9 @@ async def run(job: dict) -> None:
     description_links_raw = "\n".join(lnk["url"] for lnk in description_links)
 
     # 4. Build transcript markdown and upload to Drive
-    md_text = build_transcript_markdown(title, channel, views, video_id, url, transcript)
+    md_text = build_transcript_markdown(
+        title, url, transcript, channel=channel, views=views, video_id=video_id
+    )
 
     if status_msg_id:
         await edit_message_text(chat_id, status_msg_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")

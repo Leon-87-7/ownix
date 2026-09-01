@@ -777,9 +777,11 @@ function CardOpenButton({
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
 function TranscriptCard({ job }: { job: JobDetail }) {
-  const hasTranscript = Boolean(job.transcript?.trim());
   const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
-  if (!hasTranscript) return null;
+  // Mount decision stays keyed off the job prop, not the hook's live edited
+  // state — otherwise clearing the editor to empty would unmount the card
+  // out from under the user mid-edit.
+  if (!job.transcript?.trim()) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
