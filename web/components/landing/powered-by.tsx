@@ -65,10 +65,7 @@ const stack: {
  * specifically, not just the vendor's own pitch. */
 export function PoweredBy() {
   return (
-    <div
-      aria-label="Powered by"
-      className="mb-8 rounded-lg border border-line bg-surface px-6 py-5"
-    >
+    <div aria-label="Powered by" className="mb-8 px-6 py-5">
       <span className="mb-4 block text-center font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
         Powered by
       </span>

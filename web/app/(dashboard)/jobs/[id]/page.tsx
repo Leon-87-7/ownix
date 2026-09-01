@@ -15,7 +15,13 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Check, Copy, Download, Pencil, RotateCcw } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Download,
+  Pencil,
+  RotateCcw,
+} from 'lucide-react';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
 import { StatusBadge, TypeBadge } from '@/components/ui/badges';
@@ -52,7 +58,6 @@ import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FolderTagForm } from '@/components/feed/folder-tag-form';
 import { apiPost, apiPut } from '@/lib/fetch-utils';
-import { DateTime } from '@/components/ui/date-time';
 import { startPolling } from '@/lib/polling';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
 import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
@@ -810,9 +815,6 @@ function TranscriptCard({ job }: { job: JobDetail }) {
 function ChecklistsSection({ job }: { job: JobDetail }) {
   const { generating, error, run } = useChecklists(job.id);
   const [markdown, setMarkdown] = useState(job.checklists_md);
-  const [generatedAt, setGeneratedAt] = useState(
-    job.checklists_generated_at,
-  );
 
   if (
     !['short', 'long'].includes(job.content_type) ||
@@ -824,59 +826,49 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     const result = await run();
     if (result) {
       setMarkdown(result.checklists_md);
-      setGeneratedAt(result.checklists_generated_at);
     }
   };
 
   return (
     <section className="space-y-3 rounded-lg border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-title font-semibold text-ink">
-            Checklists
-          </h2>
-          {generatedAt && (
-            <p className="mt-1 font-mono text-label text-muted">
-              Generated <DateTime iso={generatedAt} />
-            </p>
+      <div className="flex items-center gap-2">
+        <h2 className="flex-1 text-sm font-semibold text-ink">
+          Checklists
+        </h2>
+        {markdown && (
+          <>
+            <CardCopyButton
+              value={markdown}
+              label="Copy checklist"
+            />
+            <CardDownloadButton
+              onDownload={() =>
+                downloadMarkdownFile(
+                  `checklist_${job.id.slice(-4)}.md`,
+                  markdown,
+                )
+              }
+              label="Download checklist"
+            />
+          </>
+        )}
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={generating}
+          className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
+        >
+          {generating ? (
+            // `.ownix-shimmer` only takes effect under
+            // `prefers-reduced-motion: no-preference` - otherwise it inherits
+            // the button's own `disabled:text-muted`.
+            <span className="ownix-shimmer">Generating…</span>
+          ) : markdown ? (
+            'Regenerate'
+          ) : (
+            'Run Checklists'
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          {markdown && (
-            <>
-              <CardCopyButton
-                value={markdown}
-                label="Copy checklist"
-              />
-              <CardDownloadButton
-                onDownload={() =>
-                  downloadMarkdownFile(
-                    `checklist_${job.id.slice(-4)}.md`,
-                    markdown,
-                  )
-                }
-                label="Download checklist"
-              />
-            </>
-          )}
-          <button
-            type="button"
-            onClick={handleRun}
-            disabled={generating}
-            className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
-          >
-            {generating ? (
-              // `.ownix-shimmer` only takes effect under
-              // `prefers-reduced-motion: no-preference` - otherwise it inherits
-              // the button's own `disabled:text-muted`.
-              <span className="ownix-shimmer">Generating…</span>
-            ) : markdown ? (
-              'Regenerate'
-            ) : (
-              'Run Checklists'
-            )}
-          </button>
-        </div>
+        </button>
       </div>
       {error && (
         <p
@@ -1018,7 +1010,10 @@ function ScreenshotsRetryButton({
   generating: boolean;
   onConfirm: () => void;
 }) {
-  const { holding, startHold, cancelHold } = useHoldConfirm(500, onConfirm);
+  const { holding, startHold, cancelHold } = useHoldConfirm(
+    500,
+    onConfirm,
+  );
 
   return (
     <Tooltip content={generating ? 'Capturing…' : 'Hold to retry'}>
@@ -1040,7 +1035,7 @@ function ScreenshotsRetryButton({
         className={`relative flex h-8 w-8 items-center justify-center rounded-full border border-line text-ink transition-ui hover:bg-raised disabled:cursor-not-allowed disabled:opacity-60 ${holding ? 'retry-hold' : ''}`}
       >
         <RotateCcw
-          className={`h-6 w-6 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite_reverse,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
+          className={`h-5 w-5 ${generating ? 'motion-safe:animate-[spin_1s_linear_infinite_reverse,ownix-logo-cycle_7s_linear_infinite]' : ''}`}
           aria-hidden="true"
         />
       </button>
