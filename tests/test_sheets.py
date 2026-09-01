@@ -150,6 +150,39 @@ async def test_append_long_row_routes_to_long_tab(monkeypatch) -> None:
     assert tab_name == "YouTube Transcript Index"
 
 
+@pytest.mark.asyncio
+async def test_append_long_row_drive_url_column_uses_transcript_drive_url(monkeypatch) -> None:
+    """ADR-0057: this row is appended at Phase 1 time, before an enrichment doc
+    exists — its 'drive_url' sheet column must read the job's transcript_drive_url
+    (what Phase 1 actually wrote), not the now-unrelated drive_url field."""
+    monkeypatch.setattr("src.services.sheets.settings.GOOGLE_SHEETS_ID", "wb-123")
+
+    captured: list = []
+
+    def fake_append_sync(tab_name, values, chat_id=None):
+        captured.append((tab_name, values))
+
+    with patch("src.services.sheets._append_sync", side_effect=fake_append_sync):
+        await sheets_svc.append_long_row(
+            {
+                "id": "j",
+                "url": "https://yt/x",
+                "title": "T",
+                "drive_url": None,
+                "transcript_drive_url": "https://d/transcript-doc",
+            },
+            video_id="vid",
+            channel="C",
+            views="1",
+            description_links_raw="",
+            char_count=1,
+            drive_file_id="fid",
+        )
+
+    _, row = captured[0]
+    assert "https://d/transcript-doc" in row
+
+
 # ---------------------------------------------------------------------------
 # Repo Analysis tab — TAB_REPO, append_repo_row, update_repo_row
 # ---------------------------------------------------------------------------

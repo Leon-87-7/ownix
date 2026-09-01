@@ -28,6 +28,7 @@ import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useHoldConfirm } from '@/lib/hooks/useHoldConfirm';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
+import { useJobTranscript } from '@/lib/hooks/useJobTranscript';
 import { useMergedTags } from '@/lib/hooks/useMergedTags';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
 import {
@@ -776,8 +777,9 @@ function CardOpenButton({
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
 function TranscriptCard({ job }: { job: JobDetail }) {
-  const transcript = job.transcript;
-  if (!transcript || !transcript.trim()) return null;
+  const hasTranscript = Boolean(job.transcript?.trim());
+  const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
+  if (!hasTranscript) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
@@ -798,16 +800,17 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           }
           label="Download transcript"
         />
-        {job.drive_url && isSafeHttpUrl(job.drive_url) && (
+        {job.transcript_drive_url && isSafeHttpUrl(job.transcript_drive_url) && (
           <CardOpenButton
-            href={job.drive_url}
-            label="Open in Drive"
+            href={job.transcript_drive_url}
+            label="Open transcript in Drive"
           />
         )}
       </div>
-      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
-        {transcript}
-      </pre>
+      <MarkdownEditor
+        initialMarkdown={transcript}
+        onSave={handleSave}
+      />
     </article>
   );
 }

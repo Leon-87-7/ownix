@@ -221,6 +221,27 @@ async def test_update_job_status_writes_template_detection_method(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_update_job_status_writes_transcript_drive_url(temp_db):
+    """ADR-0057: transcript_drive_url tracks the transcript doc, independent of drive_url."""
+    from src import database as db
+
+    job_id = await db.create_job(
+        chat_id=99,
+        url="https://youtube.com/watch?v=test-transcript-url",
+        content_type="long",
+    )
+
+    await db.update_job_status(
+        job_id, "done",
+        drive_url="https://drive.google.com/enriched",
+        transcript_drive_url="https://drive.google.com/transcript",
+    )
+    job = await db.get_job(job_id)
+    assert job["drive_url"] == "https://drive.google.com/enriched"
+    assert job["transcript_drive_url"] == "https://drive.google.com/transcript"
+
+
+@pytest.mark.asyncio
 async def test_update_job_status_writes_key_phrases(temp_db):
     import json
     from src import database as db

@@ -284,7 +284,7 @@ async def run(job: dict) -> None:
     # 4. Upload analysis markdown to Drive
     md_content = _build_analysis_markdown(job, platform, video_id, summary, links, code, code_lang)
     file_id, drive_url = await upload_file(
-        md_content, f"{job_id}_short.md", settings.GOOGLE_DRIVE_FOLDER_SHORT, chat_id=chat_id
+        md_content, f"{job_id}_enriched_short.md", settings.GOOGLE_DRIVE_FOLDER_SHORT, chat_id=chat_id
     )
 
     # 5. Update job status
@@ -387,9 +387,10 @@ async def _deliver_transcript_doc(
     """Drive upload + Telegram document — always last, always after enrichment."""
     transcript_md = _build_transcript_markdown(job, platform, video_id, transcript_text)
     try:
-        await upload_file(
+        _, transcript_drive_url = await upload_file(
             transcript_md, f"{job_id}_transcript.md", settings.GOOGLE_DRIVE_FOLDER_SHORT, chat_id=chat_id
         )
+        await database.update_job_status(job_id, "done", transcript_drive_url=transcript_drive_url)
     except Exception as exc:
         log.warning("transcript_drive_upload_failed", error=str(exc))
     try:

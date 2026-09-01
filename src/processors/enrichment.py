@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from json_repair import repair_json
 
 from src import database
+from src.config import settings
+from src.services.drive import upload_file
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES, validate_template_choice
 from src.utils import dashboard_button_row, job_tag
@@ -392,15 +394,53 @@ def _format_template_analysis(template: str, analysis: dict) -> str:
     return "\n".join(lines)
 
 
+def _build_enrichment_markdown(
+    job: dict, enrichment: Enrichment, template_analysis: dict | None = None
+) -> str:
+    """Drive doc content for the enrichment result — uploaded as {job_id}_enriched_long.md (ADR-0057)."""
+    ts = datetime.now(timezone.utc).isoformat()
+    parts = [
+        "# Enrichment\n",
+        f"**Source:** {job.get('url', '')}",
+        f"**Processed:** {ts}",
+        f"**Job ID:** {job['id']}",
+        "",
+        "---",
+        "",
+        f"## {enrichment.category} — {enrichment.topic}",
+        "",
+        "### Objective",
+        "",
+        enrichment.objective,
+        "",
+        "### Action Points",
+        "",
+    ]
+    parts += [f"- {ap}" for ap in enrichment.action_points_str.split(" | ") if ap]
+    parts += ["", "### Tools", ""]
+    parts += [format_tool_line(t) for t in enrichment.tools_raw]
+    if enrichment.market_data:
+        parts += ["", "### Market Data", "", enrichment.market_data]
+    if template_analysis:
+        template = "freestyle" if job.get("freestyle_prompt") else job.get("template") or "summary"
+        parts.append(_format_template_analysis(template, template_analysis))
+    return "\n".join(parts)
+
+
 def _build_enrichment_message(
     job: dict,
     enrichment: Enrichment,
     template_analysis: dict | None = None,
     promise_gap: dict | None = None,
+    enriched_drive_url: str | None = None,
 ) -> str:
     tag = f"job_{job['id'][-4:]}:"
     title = _escape_html(job.get("title", "Untitled"))
-    drive_url = job.get("drive_url", "")
+    # ADR-0057: drive_url is the enrichment doc, transcript_drive_url is the
+    # transcript doc. enriched_drive_url is passed explicitly rather than read
+    # from job — job was fetched before Phase 2 uploaded anything, so its
+    # drive_url is stale (still whatever Phase 1 last wrote, or unset).
+    transcript_url = job.get("transcript_drive_url", "")
 
     tools_lines = [format_tool_line(t) for t in enrichment.tools_raw]
 
@@ -409,10 +449,12 @@ def _build_enrichment_message(
     ]
 
     transcript_line = (
-        f'📄 <a href="{_escape_attr(drive_url)}">Transcript</a>'
-        if drive_url
+        f'📄 <a href="{_escape_attr(transcript_url)}">Transcript</a>'
+        if transcript_url
         else "📄 Transcript (unavailable)"
     )
+    if enriched_drive_url:
+        transcript_line += f'\n📄 <a href="{_escape_attr(enriched_drive_url)}">Enriched doc</a>'
 
     parts = [
         f"{tag}",
@@ -520,10 +562,23 @@ async def run(job_id: str) -> None:
         await database.update_job_status(job_id, "error")
         return
 
+    # Enrichment doc → Drive, non-fatal (ADR-0057, mirrors the short pipeline's
+    # best-effort transcript upload precedent, ADR-0020). Gemini already
+    # succeeded and will be delivered via Telegram regardless of this outcome.
+    enriched_drive_url: str | None = None
+    try:
+        enriched_md = _build_enrichment_markdown(job, enrichment, template_analysis)
+        _, enriched_drive_url = await upload_file(
+            enriched_md, f"{job_id}_enriched_long.md", settings.GOOGLE_DRIVE_FOLDER_LONG, chat_id=chat_id
+        )
+    except Exception as exc:
+        log.warning("enrichment_drive_upload_failed", job_id=job_id, error=str(exc))
+
     now = datetime.now(timezone.utc).isoformat()
     await database.update_job_status(
         job_id,
         "done",
+        drive_url=enriched_drive_url,
         ai_category=enrichment.category,
         ai_topic=enrichment.topic,
         ai_objective=enrichment.objective,
@@ -535,7 +590,9 @@ async def run(job_id: str) -> None:
         completed_at=now,
     )
 
-    msg = _build_enrichment_message(job, enrichment, template_analysis, promise_gap)
+    msg = _build_enrichment_message(
+        job, enrichment, template_analysis, promise_gap, enriched_drive_url=enriched_drive_url
+    )
     for chunk in _split_message(msg):
         await send_message(chat_id, chunk, parse_mode="HTML")
 

@@ -625,6 +625,36 @@ def test_delete_job_leaves_brain_links_standing_and_enqueues_refs(
     ]
 
 
+def test_delete_job_purges_transcript_drive_doc_too(
+    jobs_client: TestClient,
+) -> None:
+    """ADR-0057: a job can now have two Drive docs (drive_url = enrichment,
+    transcript_drive_url = transcript) — purge must clean up both, or the
+    transcript file leaks in Drive forever after the job row is deleted."""
+    _insert_thumbnail_job("pending-delete-2", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET status='pending', "
+                "drive_url='https://drive.google.com/file/d/drive-1/view', "
+                "transcript_drive_url='https://drive.google.com/file/d/drive-3/view', "
+                "url='https://example.com/job' WHERE id=?",
+                ("pending-delete-2",),
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    response = jobs_client.delete("/api/jobs/pending-delete-2")
+
+    assert response.status_code == 204
+    pending = asyncio.run(jobs.database.list_pending_purge_tasks())
+    assert pending[0]["task_payload"]["drive_file_ids"] == ["drive-1", "drive-3"]
+
+
 def test_delete_job_with_links_flag_removes_them(
     jobs_client: TestClient,
 ) -> None:
@@ -756,6 +786,131 @@ def test_update_job_title_forbidden_for_foreign_job(jobs_client: TestClient) -> 
     assert resp.status_code == 403
     job = asyncio.run(jobs.database.get_job("owner-job"))
     assert job["title"] == "title owner-job"
+
+
+def test_update_job_transcript_persists(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "Corrected transcript text."},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"transcript": "Corrected transcript text."}
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["transcript"] == "Corrected transcript text."
+
+
+def test_update_job_transcript_forbidden_for_foreign_job(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_b)
+
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "Hijacked"},
+    )
+
+    assert resp.status_code == 403
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["transcript"] is None
+
+
+def test_update_job_transcript_rejects_oversized_body(jobs_client: TestClient) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "x" * 500_001},
+    )
+
+    assert resp.status_code == 422
+
+
+def test_update_job_transcript_resyncs_drive_doc(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET transcript_drive_url = ? WHERE id = ?",
+                ("https://drive.google.com/file/d/FID123/view", "owner-job"),
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+
+    updated = AsyncMock(return_value="https://drive.google.com/file/d/FID123/view")
+    monkeypatch.setattr("src.services.drive.update_file", updated)
+
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "Edited body."},
+    )
+
+    assert resp.status_code == 200
+    updated.assert_awaited_once()
+    call = updated.await_args
+    assert call.args[0] == "FID123"
+    assert "Edited body." in call.args[1]
+    assert call.kwargs["chat_id"] == 1
+
+
+def test_update_job_transcript_skips_drive_resync_when_no_transcript_doc(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)  # transcript_drive_url stays NULL
+
+    updated = AsyncMock()
+    monkeypatch.setattr("src.services.drive.update_file", updated)
+
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "No drive doc yet."},
+    )
+
+    assert resp.status_code == 200
+    updated.assert_not_awaited()
+
+
+def test_update_job_transcript_save_succeeds_even_if_drive_resync_fails(
+    jobs_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _insert_thumbnail_job("owner-job", chat_id=1)
+
+    async def seed() -> None:
+        from src import database
+
+        async with database.connection() as conn:
+            await conn.execute(
+                "UPDATE jobs SET transcript_drive_url = ? WHERE id = ?",
+                ("https://drive.google.com/file/d/FID123/view", "owner-job"),
+            )
+            await conn.commit()
+
+    asyncio.run(seed())
+
+    monkeypatch.setattr(
+        "src.services.drive.update_file", AsyncMock(side_effect=RuntimeError("boom"))
+    )
+
+    jobs_client.cookies.set("vig_session", jobs_client.session_a)
+    resp = jobs_client.put(
+        "/api/jobs/owner-job/transcript",
+        json={"transcript": "Still saved."},
+    )
+
+    assert resp.status_code == 200
+    job = asyncio.run(jobs.database.get_job("owner-job"))
+    assert job["transcript"] == "Still saved."
 
 
 class TestJobThumbnailCaching:

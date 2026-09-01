@@ -580,15 +580,27 @@ def test_build_enrichment_message_escapes_html_special_chars() -> None:
 
 def test_build_enrichment_message_transcript_is_html_anchor() -> None:
     """Transcript link is an <a href> — the URL lives in the attribute, so
-    underscores/dots in it can never break parsing."""
+    underscores/dots in it can never break parsing. Sourced from
+    transcript_drive_url, not drive_url (ADR-0057: drive_url is the enrichment doc)."""
     job = {
         "id": "20260519_120000_ABCD",
         "title": "T",
         "chat_id": 1,
-        "drive_url": "https://drive.google.com/file/d/abc_def/view",
+        "transcript_drive_url": "https://drive.google.com/file/d/abc_def/view",
     }
     msg = _build_enrichment_message(job, _make_enrichment())
     assert '<a href="https://drive.google.com/file/d/abc_def/view">Transcript</a>' in msg
+
+
+def test_build_enrichment_message_enriched_doc_is_html_anchor() -> None:
+    """ADR-0057: when an enriched_drive_url is passed, the message also links
+    to the freshly-written enrichment doc — the job dict itself is stale (fetched
+    before Phase 2 uploaded anything), so it can't be the source."""
+    job = {"id": "20260519_120000_ABCD", "title": "T", "chat_id": 1}
+    msg = _build_enrichment_message(
+        job, _make_enrichment(), enriched_drive_url="https://drive.google.com/file/d/enr_123/view"
+    )
+    assert '<a href="https://drive.google.com/file/d/enr_123/view">' in msg
 
 
 def test_build_enrichment_message_tool_is_html_anchor() -> None:
@@ -617,6 +629,85 @@ def test_build_enrichment_message_no_markdown_backslash_escapes() -> None:
     assert "\\*" not in msg
     assert "\\[" not in msg
     assert "a_b*c`d[e" in msg  # title passes through untouched (no &<>)
+
+
+# ---------------------------------------------------------------------------
+# run() — Phase 2 Drive write (ADR-0057)
+# ---------------------------------------------------------------------------
+
+
+def _patch_run(monkeypatch, *, upload_file_mock=None):
+    """Patch run()'s collaborators, matching this module's existing single-mock style."""
+    from src.processors import enrichment as enrichment_mod
+
+    job = {
+        "id": "job1",
+        "chat_id": 42,
+        "status": "transcript_done",
+        "title": "Test Video",
+        "transcript": "some transcript text",
+        "transcript_drive_url": "https://drive.google.com/transcript-doc",
+    }
+    monkeypatch.setattr(enrichment_mod.database, "get_job", AsyncMock(return_value=job))
+    update_status = AsyncMock()
+    monkeypatch.setattr(enrichment_mod.database, "update_job_status", update_status)
+    monkeypatch.setattr(enrichment_mod, "send_message", AsyncMock(return_value={"message_id": 1}))
+    monkeypatch.setattr(enrichment_mod, "send_inline_keyboard", AsyncMock())
+    monkeypatch.setattr(enrichment_mod, "dashboard_button_row", AsyncMock(return_value=[]))
+    monkeypatch.setattr(enrichment_mod, "offer_repo_followups", AsyncMock())
+    monkeypatch.setattr(enrichment_mod, "enrich", AsyncMock(return_value=(_make_enrichment(), None, None)))
+    if upload_file_mock is None:
+        upload_file_mock = AsyncMock(return_value=("fid", "https://drive.google.com/enriched-doc"))
+    monkeypatch.setattr(enrichment_mod, "upload_file", upload_file_mock)
+    return enrichment_mod, job, update_status, upload_file_mock
+
+
+@pytest.mark.asyncio
+async def test_run_uploads_enriched_doc_and_sets_drive_url(monkeypatch) -> None:
+    """Phase 2 uploads {job_id}_enriched_long.md and persists it as drive_url (ADR-0057)."""
+    enrichment_mod, job, update_status, upload_file_mock = _patch_run(monkeypatch)
+
+    await enrichment_mod.run("job1")
+
+    upload_filenames = [str(c) for c in upload_file_mock.call_args_list]
+    assert any("job1_enriched_long.md" in f for f in upload_filenames)
+
+    done_updates = [c for c in update_status.await_args_list if c.args[1] == "done"]
+    assert any(
+        c.kwargs.get("drive_url") == "https://drive.google.com/enriched-doc" for c in done_updates
+    ), "enrichment drive_url not persisted on done"
+
+
+@pytest.mark.asyncio
+async def test_run_sends_telegram_message_with_both_drive_links(monkeypatch) -> None:
+    """The completion message links both the transcript doc (from Phase 1) and
+    the freshly-uploaded enrichment doc (ADR-0057)."""
+    enrichment_mod, job, _, _ = _patch_run(monkeypatch)
+
+    await enrichment_mod.run("job1")
+
+    sent_texts = [str(c) for c in enrichment_mod.send_message.call_args_list]
+    combined = "\n".join(sent_texts)
+    assert job["transcript_drive_url"] in combined, "transcript link missing from completion message"
+    assert "https://drive.google.com/enriched-doc" in combined, (
+        "enrichment doc link missing from completion message"
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_drive_upload_failure_is_non_fatal(monkeypatch) -> None:
+    """A Drive-upload failure for the enrichment doc must not block the job from
+    reaching done — mirrors the short pipeline's best-effort precedent (ADR-0020)."""
+    failing_upload = AsyncMock(side_effect=RuntimeError("drive quota exceeded"))
+    enrichment_mod, job, update_status, _ = _patch_run(monkeypatch, upload_file_mock=failing_upload)
+
+    await enrichment_mod.run("job1")  # must not raise
+
+    done_updates = [c for c in update_status.await_args_list if c.args[1] == "done"]
+    assert done_updates, "job never reached done after a non-fatal Drive failure"
+    assert all(c.kwargs.get("drive_url") is None for c in done_updates), (
+        "drive_url should stay unset when the upload failed"
+    )
 
 
 # ---------------------------------------------------------------------------

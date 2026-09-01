@@ -13,7 +13,7 @@ from src.services.github import enrich_github_links
 from src.utils.markdown import build_enriched_links_message, build_transcript_markdown
 from src.utils import dashboard_button_row, job_tag
 from src.utils.background_tasks import spawn_background
-from src.utils.validators import extract_description_links, slugify
+from src.utils.validators import extract_description_links
 from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
@@ -109,7 +109,6 @@ async def run(job: dict) -> None:
     description_links_raw = "\n".join(lnk["url"] for lnk in description_links)
 
     # 4. Build transcript markdown and upload to Drive
-    slug = slugify(title) or "untitled"
     md_text = build_transcript_markdown(title, channel, views, video_id, url, transcript)
 
     if status_msg_id:
@@ -117,11 +116,15 @@ async def run(job: dict) -> None:
     else:
         await send_message(chat_id, f"{tag}\n🍪 video is in-progress. Transcript done, now sent to Drive")
 
-    file_id, drive_url = await upload_file(md_text, f"{slug}.md", settings.GOOGLE_DRIVE_FOLDER_LONG, chat_id=chat_id)
+    file_id, transcript_drive_url = await upload_file(
+        md_text, f"{job_id}_transcript.md", settings.GOOGLE_DRIVE_FOLDER_LONG, chat_id=chat_id
+    )
 
-    # 5. Update job to transcript_done, caching title + transcript for Phase 2
+    # 5. Update job to transcript_done, caching title + transcript for Phase 2.
+    # transcript_drive_url, not drive_url — drive_url is reserved for Phase 2's
+    # enrichment doc (ADR-0057).
     transcript_fields = {
-        "drive_url": drive_url,
+        "transcript_drive_url": transcript_drive_url,
         "title": title,
         "transcript": transcript,
         "video_duration_seconds": duration,
@@ -132,12 +135,12 @@ async def run(job: dict) -> None:
 
     # 6. Telegram delivery sequence
     doc_caption = f"{tag}\n📜 Transcript ready"
-    if drive_url:
-        doc_caption += f'\n📄 <a href="{drive_url}">Open in Drive</a>'
+    if transcript_drive_url:
+        doc_caption += f'\n📄 <a href="{transcript_drive_url}">Open in Drive</a>'
     doc_result = await send_document(
         chat_id,
         md_text.encode("utf-8-sig"),
-        filename=f"{slug}.md",
+        filename=f"{job_id}_transcript.md",
         caption=doc_caption,
         parse_mode="HTML",
     )

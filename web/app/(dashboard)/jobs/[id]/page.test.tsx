@@ -458,17 +458,44 @@ describe('JobDetailPage', () => {
     expect(merged?.textContent).toContain('Machine Learning');
   });
 
-  it('renders a long transcript but omits empty article and repo transcripts', () => {
+  it('renders a transcript editor but omits empty article and repo transcripts', () => {
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
     const { rerender } = render(<JobDetailPage />);
     expect(screen.getByText('Transcript')).toBeInTheDocument();
-    expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
+    // MarkdownEditor is dynamic - mocked as dynamic component
+    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
     setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
     rerender(<JobDetailPage />);
     expect(screen.queryByText('Transcript')).toBeNull();
     setupMocks({ job: { ...JOB, content_type: 'repo', transcript: null } });
     rerender(<JobDetailPage />);
     expect(screen.queryByText('Transcript')).toBeNull();
+  });
+
+  it('renders an Open transcript in Drive link on the transcript card when transcript_drive_url is set', () => {
+    setupMocks({
+      job: {
+        ...JOB,
+        transcript: 'Full long-video transcript',
+        transcript_drive_url: 'https://drive.google.com/file/d/transcript-doc',
+      },
+    });
+    render(<JobDetailPage />);
+    const link = screen.getByRole('link', { name: /open transcript in drive/i });
+    expect(link).toHaveAttribute('href', 'https://drive.google.com/file/d/transcript-doc');
+  });
+
+  it('omits the transcript card Drive link when transcript_drive_url is not set', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript', transcript_drive_url: null } });
+    render(<JobDetailPage />);
+    expect(screen.queryByRole('link', { name: /open transcript in drive/i })).toBeNull();
+  });
+
+  it('copy and download buttons still use the live transcript text', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: 'Copy transcript' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download transcript' })).toBeInTheDocument();
   });
 
   it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {

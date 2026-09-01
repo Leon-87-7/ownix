@@ -273,7 +273,9 @@ async def append_long_row(
         description_links_raw,
         char_count,
         drive_file_id,
-        job.get("drive_url", ""),
+        # ADR-0057: this row is appended at Phase 1 (before an enrichment doc
+        # exists), so the sheet's drive_url column reflects the transcript doc.
+        job.get("transcript_drive_url", ""),
         fetched_at,
         "ok",
         "",  # ai_objective — filled by Phase 2

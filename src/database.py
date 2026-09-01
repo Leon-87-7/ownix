@@ -96,6 +96,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     screenshots_drive_folder_id TEXT,
     screenshots_generated_at    TIMESTAMP,
     video_duration_seconds      REAL,
+    -- Symmetric transcript/enrichment Drive tracking (ADR-0057): drive_url is
+    -- always the enrichment doc, transcript_drive_url is always the transcript doc.
+    transcript_drive_url        TEXT,
     CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
@@ -3031,4 +3034,10 @@ _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN screenshots_drive_folder_id TEXT",
     "ALTER TABLE jobs ADD COLUMN screenshots_generated_at TIMESTAMP",
     "ALTER TABLE jobs ADD COLUMN video_duration_seconds REAL",
+])
+
+# v45 → v46: transcript_drive_url for symmetric transcript/enrichment Drive
+# tracking (ADR-0057) — drive_url is always the enrichment doc.
+_MIGRATIONS.append([
+    "ALTER TABLE jobs ADD COLUMN transcript_drive_url TEXT",
 ])
