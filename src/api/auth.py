@@ -18,6 +18,7 @@ from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
+from src.intake import rate_limit
 from src.services.account import delete_account
 from src.services.invite_notifications import notify_operator_invite
 from src.utils.logger import get_logger
@@ -202,6 +203,7 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
     submitted_password = payload.password.strip()
     if not (settings.REVIEWER_LOGIN_ENABLED and configured_email and configured_password):
         raise HTTPException(status_code=404, detail="Reviewer login is disabled")
+    rate_limit.enforce(f"reviewer_login:{submitted_email}", max_requests=5)
     if submitted_email != configured_email or not hmac.compare_digest(
         submitted_password.encode("utf-8"),
         configured_password.encode("utf-8"),
