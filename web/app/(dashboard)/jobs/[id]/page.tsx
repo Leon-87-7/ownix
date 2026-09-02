@@ -28,7 +28,6 @@ import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useHoldConfirm } from '@/lib/hooks/useHoldConfirm';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
-import { useJobTranscript } from '@/lib/hooks/useJobTranscript';
 import { useMergedTags } from '@/lib/hooks/useMergedTags';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
 import {
@@ -711,6 +710,28 @@ function CardCopyButton({
   );
 }
 
+function CardEditButton({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  const pressFeedback = usePressFeedback();
+  return (
+    <Tooltip content={label}>
+      <Link
+        href={href}
+        aria-label={label}
+        className={CARD_ACTION_BUTTON}
+        {...pressFeedback}
+      >
+        <Pencil className="h-4 w-4" />
+      </Link>
+    </Tooltip>
+  );
+}
+
 function CardDownloadButton({
   onDownload,
   label,
@@ -789,26 +810,12 @@ function CardOpenButton({
 
 // Transcript preview card - mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), minus the leading
-// glyph so the title anchors the row on its own.
+// glyph so the title anchors the row on its own. Capped/read-only here so the
+// mobile job feed stays glanceable (PRODUCT.md "state at a glance") - editing
+// lives on its own page (see TranscriptEditPage) behind an explicit Edit tap.
 function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boolean }) {
-  const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
-  // Once a transcript has ever been seen for this job, latch the card
-  // mounted for good — never key the mount decision off the live
-  // job.transcript prop alone. A long-video job can still be 'enriching'
-  // when this first mounts, and that status polls job data every 10s;
-  // without the latch, a user who clears the editor to empty would have
-  // the next poll flip job.transcript back to '' and unmount the card (and
-  // the editor inside it) out from under them mid-edit. State, not a ref,
-  // per React's "adjust state during render" pattern — the equivalent ref
-  // mutation trips the react-hooks/refs rule (unsafe under concurrent
-  // rendering). The caller keys this component by job.id, so a different
-  // job is a full remount (fresh latch and a fresh useJobTranscript) rather
-  // than something this component needs to detect itself.
-  const [hadTranscript, setHadTranscript] = useState(Boolean(job.transcript?.trim()));
-  if (job.transcript?.trim() && !hadTranscript) {
-    setHadTranscript(true);
-  }
-  if (!hadTranscript) return null;
+  const transcript = job.transcript;
+  if (!transcript || !transcript.trim()) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
@@ -816,6 +823,12 @@ function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boole
         <h2 className="flex-1 text-sm font-semibold text-ink">
           Transcript
         </h2>
+        {!restricted && (
+          <CardEditButton
+            href={`/jobs/${job.id}/transcript`}
+            label="Edit transcript"
+          />
+        )}
         <CardCopyButton
           value={transcript}
           label="Copy transcript"
@@ -836,22 +849,9 @@ function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boole
           />
         )}
       </div>
-      {restricted ? (
-        <Tooltip content="Restricted mode on">
-          <pre
-            aria-disabled="true"
-            className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-surface p-4 font-mono text-sm text-body"
-          >
-            {transcript}
-          </pre>
-        </Tooltip>
-      ) : (
-        <MarkdownEditor
-          initialMarkdown={transcript}
-          onSave={handleSave}
-          label="Transcript"
-        />
-      )}
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
+        {transcript}
+      </pre>
     </article>
   );
 }

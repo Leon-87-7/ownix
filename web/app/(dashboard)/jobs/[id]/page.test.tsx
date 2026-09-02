@@ -471,12 +471,13 @@ describe('JobDetailPage', () => {
     expect(merged?.textContent).toContain('Machine Learning');
   });
 
-  it('renders a transcript editor for a long-video job with a transcript', () => {
+  it('renders a capped transcript preview for a long-video job with a transcript', () => {
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
     render(<JobDetailPage />);
     expect(screen.getByText('Transcript')).toBeInTheDocument();
-    // MarkdownEditor is dynamic - mocked as dynamic component
-    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
+    expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
+    // Editing lives on its own page now - the card never mounts the editor.
+    expect(screen.queryByTestId('dynamic-component')).toBeNull();
   });
 
   // Separate mounts (not rerenders of one instance) — each represents a
@@ -512,11 +513,8 @@ describe('JobDetailPage', () => {
     expect(screen.queryByRole('link', { name: /open transcript in drive/i })).toBeNull();
   });
 
-  it('copy and download buttons reflect an edited transcript, not the stale initial value', async () => {
+  it('copy and download buttons reflect the transcript text', async () => {
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
-    server.use(
-      http.put('/api/jobs/:id/transcript', async ({ request }) => HttpResponse.json(await request.json())),
-    );
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     let downloadedBlob: Blob | undefined;
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
@@ -527,11 +525,10 @@ describe('JobDetailPage', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
 
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('edited transcript text'),
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Full long-video transcript'),
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Download transcript' }));
@@ -542,63 +539,35 @@ describe('JobDetailPage', () => {
       reader.onerror = reject;
       reader.readAsText(downloadedBlob!);
     });
-    expect(downloadedText).toBe('edited transcript text');
+    expect(downloadedText).toBe('Full long-video transcript');
   });
 
-  it('shows a read-only transcript in Restricted mode instead of the live editor', () => {
+  it('links the Edit transcript button to the standalone transcript edit page', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    render(<JobDetailPage />);
+    const link = screen.getByRole('link', { name: 'Edit transcript' });
+    expect(link).toHaveAttribute('href', '/jobs/j1/transcript');
+  });
+
+  it('hides the Edit transcript button in Restricted mode', () => {
     mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
     render(<JobDetailPage />);
     expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
-    expect(screen.queryByTestId('dynamic-component')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Edit transcript' })).toBeNull();
   });
 
-  it('reverts to the last saved transcript when a save is rejected', async () => {
-    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
-    server.use(
-      http.put('/api/jobs/:id/transcript', () => HttpResponse.json({ detail: 'nope' }, { status: 500 })),
-    );
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
-
-    render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
-
-    await waitFor(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
-      expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith('Full long-video transcript');
-    });
-  });
-
-  it('syncs a transcript that arrives after the card first mounts, before any edit', async () => {
-    // A long job can mount this hook while still processing (transcript
-    // null) and only get its real transcript later via the 'enriching'
-    // status poll refetching job data — same job.id, no remount.
+  it('shows the transcript card once a transcript arrives via a later refetch', () => {
+    // A long job can mount with transcript still null and only get its real
+    // transcript later via the 'enriching' status poll refetching job data —
+    // same job.id, no remount.
     setupMocks({ job: { ...JOB, transcript: null } });
     const { rerender } = render(<JobDetailPage />);
     expect(screen.queryByText('Transcript')).toBeNull();
 
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     setupMocks({ job: { ...JOB, transcript: 'Arrived later' } });
     rerender(<JobDetailPage />);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Copy transcript' }));
-    await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Arrived later'),
-    );
-  });
-
-  it('keeps the transcript card mounted once a transcript has been seen, even if a later refetch reports it empty', () => {
-    // Guards against the 'enriching' status poll (page.tsx) refetching job
-    // data mid-edit and flipping job.transcript back to empty/null out from
-    // under a user who just cleared the editor — the card must not unmount
-    // and take the editor with it.
-    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
-    const { rerender } = render(<JobDetailPage />);
-    expect(screen.getByText('Transcript')).toBeInTheDocument();
-    setupMocks({ job: { ...JOB, transcript: '' } });
-    rerender(<JobDetailPage />);
-    expect(screen.getByText('Transcript')).toBeInTheDocument();
-    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
+    expect(screen.getByText('Arrived later')).toBeInTheDocument();
   });
 
   it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {
