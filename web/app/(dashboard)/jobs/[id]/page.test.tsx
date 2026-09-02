@@ -553,6 +553,40 @@ describe('JobDetailPage', () => {
     expect(screen.queryByTestId('dynamic-component')).toBeNull();
   });
 
+  it('reverts to the last saved transcript when a save is rejected', async () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    server.use(
+      http.put('/api/jobs/:id/transcript', () => HttpResponse.json({ detail: 'nope' }, { status: 500 })),
+    );
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
+
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
+      expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith('Full long-video transcript');
+    });
+  });
+
+  it('syncs a transcript that arrives after the card first mounts, before any edit', async () => {
+    // A long job can mount this hook while still processing (transcript
+    // null) and only get its real transcript later via the 'enriching'
+    // status poll refetching job data — same job.id, no remount.
+    setupMocks({ job: { ...JOB, transcript: null } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    setupMocks({ job: { ...JOB, transcript: 'Arrived later' } });
+    rerender(<JobDetailPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy transcript' }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Arrived later'),
+    );
+  });
+
   it('keeps the transcript card mounted once a transcript has been seen, even if a later refetch reports it empty', () => {
     // Guards against the 'enriching' status poll (page.tsx) refetching job
     // data mid-edit and flipping job.transcript back to empty/null out from
