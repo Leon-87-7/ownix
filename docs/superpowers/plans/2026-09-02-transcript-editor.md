@@ -6,7 +6,7 @@
 
 **Architecture:** A new per-field mutation route, `PUT /api/jobs/{job_id}/transcript`, follows the existing `PUT /api/jobs/{job_id}/title` convention exactly (`get_owned_job` → `database.update_job_fields`). On save it also best-effort mirrors the edit back to the transcript's Drive doc (`transcript_drive_url`, added by ADR-0057) by regenerating the `.md` via the existing `build_transcript_markdown()` and calling `update_file()` in place — never blocking the save if Drive fails. On the frontend, a small `useJobTranscript` hook (mirroring the existing `useJobAnnotation` hook) wires `MarkdownEditor`'s `onSave` to the new route, matching the pattern this exact page already uses for the job-notes/annotations field.
 
-**Tech Stack:** FastAPI + aiosqlite (backend), Next.js 14 App Router + React + Vitest/RTL/MSW (frontend), Milkdown Crepe via the existing `MarkdownEditor` component.
+**Tech Stack:** FastAPI + aiosqlite (backend), Next.js 16 App Router + React + Vitest/RTL/MSW (frontend), Milkdown Crepe via the existing `MarkdownEditor` component.
 
 **Spec:** This plan's spec is the conversation that produced it — no separate spec doc. Key decisions, restated:
 - Editable surface is `jobs.transcript` only (a real, persisted column) — not the Drive `.md` file's decorative header (channel/views/video_id/fetched_at/char-count), which is not persisted anywhere and is regenerated blank/current at save time, never preserved from the original fetch.
@@ -310,7 +310,7 @@ it('renders a transcript editor but omits empty article and repo transcripts', (
   setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
   const { rerender } = render(<JobDetailPage />);
   expect(screen.getByText('Transcript')).toBeInTheDocument();
-  expect(screen.getByTestId('markdown-editor')).toBeInTheDocument();
+  expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
   setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
   rerender(<JobDetailPage />);
   expect(screen.queryByText('Transcript')).toBeNull();
