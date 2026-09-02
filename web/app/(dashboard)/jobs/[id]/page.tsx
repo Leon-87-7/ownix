@@ -1131,7 +1131,7 @@ function RecipeChoices({
   const [prompt, setPrompt] = useState('');
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         {GEMINI_RECIPES.map((recipe) => (
           <button
             key={recipe}
