@@ -523,14 +523,14 @@ describe('JobDetailPage', () => {
   it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
     const { rerender } = render(<JobDetailPage />);
-    expect(screen.getByRole('button', { name: 'Run Gemini' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enriche' })).toBeInTheDocument();
     setupMocks({ job: { ...JOB, status: 'done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enriche' })).toBeNull();
     setupMocks({ job: { ...JOB, content_type: 'article', status: 'transcript_done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enriche' })).toBeNull();
     mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
     setupMocks({ job: { ...JOB, status: 'transcript_done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enriche' })).toBeNull();
   });
 
   it('submits a named recipe and optimistically marks the job enriching', async () => {
@@ -545,10 +545,10 @@ describe('JobDetailPage', () => {
     let body: unknown;
     server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', async ({ request }) => { body = await request.json(); return HttpResponse.json({ status: 'enriching' }, { status: 202 }); }));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enriche' }));
     fireEvent.click(screen.getByRole('button', { name: 'summary' }));
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Enriche' })).toBeNull();
       expect(screen.queryByTestId('gemini-accordion')).toBeNull();
     });
     expect(body).toEqual({ template: 'summary', freestyle_prompt: null });
@@ -579,7 +579,7 @@ describe('JobDetailPage', () => {
       resolveSettings();
     });
     await waitFor(() => expect(settings.result.current.loaded).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enriche' }));
     fireEvent.click(screen.getByRole('button', { name: 'Freestyle' }));
     const submit = screen.getByRole('button', { name: 'Run Freestyle' });
     expect(submit).toBeDisabled();
@@ -602,7 +602,7 @@ describe('JobDetailPage', () => {
     ].map(([name, description], index) => ({ id: String(index), name, description, extra_instructions: '', is_builtin: true }));
     server.use(http.get('/api/templates', () => HttpResponse.json([...builtins, { id: 'custom', name: 'custom', description: 'Hidden', extra_instructions: '', is_builtin: false }])));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enriche' }));
     expect(await screen.findByTestId('gemini-slide-panel')).toBeInTheDocument();
     expect(screen.getByTestId('gemini-slide-panel')).not.toHaveAttribute('inert');
     for (const [, description] of builtins.map(({ name, description }) => [name, description])) {
@@ -619,7 +619,7 @@ describe('JobDetailPage', () => {
     server.use(http.get('/api/templates', () => HttpResponse.json([])));
     render(<JobDetailPage />);
     const panel = await screen.findByTestId('gemini-slide-panel');
-    const runGemini = screen.getByRole('button', { name: 'Run Gemini' });
+    const runGemini = screen.getByRole('button', { name: 'Enriche' });
     runGemini.focus();
 
     expect(panel).toHaveAttribute('inert');
@@ -632,7 +632,7 @@ describe('JobDetailPage', () => {
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
     server.use(http.get('/api/templates', () => HttpResponse.json([])));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enriche' }));
     expect(await screen.findByTestId('gemini-accordion')).toBeInTheDocument();
     expect(screen.queryByTestId('gemini-slide-panel')).toBeNull();
   });
