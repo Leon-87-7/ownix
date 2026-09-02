@@ -395,7 +395,7 @@ def _format_template_analysis(template: str, analysis: dict) -> str:
 
 
 def _build_enrichment_markdown(
-    job: dict, enrichment: Enrichment, template_analysis: dict | None = None
+    job: dict, enrichment: Enrichment, template_analysis: dict | None
 ) -> str:
     """Drive doc content for the enrichment result — uploaded as {job_id}_enriched_long.md (ADR-0057)."""
     ts = datetime.now(timezone.utc).isoformat()

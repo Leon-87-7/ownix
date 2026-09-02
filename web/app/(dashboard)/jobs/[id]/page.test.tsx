@@ -458,17 +458,25 @@ describe('JobDetailPage', () => {
     expect(merged?.textContent).toContain('Machine Learning');
   });
 
-  it('renders a transcript editor but omits empty article and repo transcripts', () => {
+  it('renders a transcript editor for a long-video job with a transcript', () => {
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
-    const { rerender } = render(<JobDetailPage />);
+    render(<JobDetailPage />);
     expect(screen.getByText('Transcript')).toBeInTheDocument();
     // MarkdownEditor is dynamic - mocked as dynamic component
     expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
+  });
+
+  // Separate mounts (not rerenders of one instance) — each represents a
+  // different job navigated to fresh, not a live update of the same job.
+  it('omits the transcript card for an article job with no transcript', () => {
     setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
-    rerender(<JobDetailPage />);
+    render(<JobDetailPage />);
     expect(screen.queryByText('Transcript')).toBeNull();
+  });
+
+  it('omits the transcript card for a repo job with no transcript', () => {
     setupMocks({ job: { ...JOB, content_type: 'repo', transcript: null } });
-    rerender(<JobDetailPage />);
+    render(<JobDetailPage />);
     expect(screen.queryByText('Transcript')).toBeNull();
   });
 
@@ -496,6 +504,20 @@ describe('JobDetailPage', () => {
     render(<JobDetailPage />);
     expect(screen.getByRole('button', { name: 'Copy transcript' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download transcript' })).toBeInTheDocument();
+  });
+
+  it('keeps the transcript card mounted once a transcript has been seen, even if a later refetch reports it empty', () => {
+    // Guards against the 'enriching' status poll (page.tsx) refetching job
+    // data mid-edit and flipping job.transcript back to empty/null out from
+    // under a user who just cleared the editor — the card must not unmount
+    // and take the editor with it.
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    setupMocks({ job: { ...JOB, transcript: '' } });
+    rerender(<JobDetailPage />);
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
   });
 
   it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {

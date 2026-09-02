@@ -778,10 +778,26 @@ function CardOpenButton({
 // glyph so the title anchors the row on its own.
 function TranscriptCard({ job }: { job: JobDetail }) {
   const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
-  // Mount decision stays keyed off the job prop, not the hook's live edited
-  // state — otherwise clearing the editor to empty would unmount the card
-  // out from under the user mid-edit.
-  if (!job.transcript?.trim()) return null;
+  // Once a transcript has ever been seen for this job, latch the card
+  // mounted for good — never key the mount decision off the live
+  // job.transcript prop alone. A long-video job can still be 'enriching'
+  // when this first mounts, and that status polls job data every 10s;
+  // without the latch, a user who clears the editor to empty would have
+  // the next poll flip job.transcript back to '' and unmount the card (and
+  // the editor inside it) out from under them mid-edit. State, not a ref,
+  // per React's "adjust state during render" pattern — the equivalent ref
+  // mutation trips the react-hooks/refs rule (unsafe under concurrent
+  // rendering). Resets when job.id changes so navigating to a different
+  // job doesn't inherit the previous one's latch.
+  const [latchedJobId, setLatchedJobId] = useState(job.id);
+  const [hadTranscript, setHadTranscript] = useState(Boolean(job.transcript?.trim()));
+  if (job.id !== latchedJobId) {
+    setLatchedJobId(job.id);
+    setHadTranscript(Boolean(job.transcript?.trim()));
+  } else if (job.transcript?.trim() && !hadTranscript) {
+    setHadTranscript(true);
+  }
+  if (!hadTranscript) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
