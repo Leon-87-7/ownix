@@ -668,7 +668,7 @@ function JobActionsBar({
               aria-expanded={enrich.open}
               className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
             >
-              Enriche
+              Enrich
             </button>
           )}
         </div>
@@ -790,7 +790,7 @@ function CardOpenButton({
 // Transcript preview card - mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
-function TranscriptCard({ job }: { job: JobDetail }) {
+function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boolean }) {
   const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
   // Once a transcript has ever been seen for this job, latch the card
   // mounted for good — never key the mount decision off the live
@@ -801,14 +801,11 @@ function TranscriptCard({ job }: { job: JobDetail }) {
   // the editor inside it) out from under them mid-edit. State, not a ref,
   // per React's "adjust state during render" pattern — the equivalent ref
   // mutation trips the react-hooks/refs rule (unsafe under concurrent
-  // rendering). Resets when job.id changes so navigating to a different
-  // job doesn't inherit the previous one's latch.
-  const [latchedJobId, setLatchedJobId] = useState(job.id);
+  // rendering). The caller keys this component by job.id, so a different
+  // job is a full remount (fresh latch and a fresh useJobTranscript) rather
+  // than something this component needs to detect itself.
   const [hadTranscript, setHadTranscript] = useState(Boolean(job.transcript?.trim()));
-  if (job.id !== latchedJobId) {
-    setLatchedJobId(job.id);
-    setHadTranscript(Boolean(job.transcript?.trim()));
-  } else if (job.transcript?.trim() && !hadTranscript) {
+  if (job.transcript?.trim() && !hadTranscript) {
     setHadTranscript(true);
   }
   if (!hadTranscript) return null;
@@ -839,10 +836,21 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           />
         )}
       </div>
-      <MarkdownEditor
-        initialMarkdown={transcript}
-        onSave={handleSave}
-      />
+      {restricted ? (
+        <Tooltip content="Restricted mode on">
+          <pre
+            aria-disabled="true"
+            className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-surface p-4 font-mono text-sm text-body"
+          >
+            {transcript}
+          </pre>
+        </Tooltip>
+      ) : (
+        <MarkdownEditor
+          initialMarkdown={transcript}
+          onSave={handleSave}
+        />
+      )}
     </article>
   );
 }
@@ -1390,15 +1398,22 @@ export default function JobDetailPage() {
     freestylePrompt?: string,
   ) {
     setRunGeminiError(undefined);
-    const result = await apiPost<{ status: string }>(
-      `/api/jobs/${id}/enrich`,
-      {
-        template,
-        freestyle_prompt:
-          template === 'freestyle' ? freestylePrompt : null,
-      },
-      'Enrichment failed',
-    );
+    let result: Awaited<ReturnType<typeof apiPost<{ status: string }>>>;
+    try {
+      result = await apiPost<{ status: string }>(
+        `/api/jobs/${id}/enrich`,
+        {
+          template,
+          freestyle_prompt:
+            template === 'freestyle' ? freestylePrompt : null,
+        },
+        'Enrichment failed',
+      );
+    } catch {
+      setRunGeminiError('Enrichment failed');
+      haptic('error');
+      return;
+    }
     if (!result.ok) {
       setRunGeminiError(result.detail);
       haptic('error');
@@ -1502,7 +1517,7 @@ export default function JobDetailPage() {
         />
       )}
 
-      <TranscriptCard job={job} />
+      <TranscriptCard key={job.id} job={job} restricted={restricted} />
 
       <div className="space-y-3">
         {titleTopicValue && (

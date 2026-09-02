@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +29,10 @@ jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 ThumbnailKind = Literal["landscape", "portrait"]
 RecoveryContentType = Literal["short", "long", "article", "repo"]
 LINK_BACKED_CONTENT_TYPES = {"link", "article", "repo"}
+
+# ponytail: grows one entry per job_id ever edited and never shrinks — fine at
+# this app's scale (a handful of locks, each a few bytes), revisit if that stops holding.
+_transcript_save_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 async def _add_link_ids(items: list[dict], chat_id: int) -> None:
@@ -463,11 +469,17 @@ class TranscriptIn(BaseModel):
 async def update_job_transcript(job_id: str, body: TranscriptIn, request: Request) -> dict:
     """Persist an operator edit to *job_id*'s transcript and best-effort mirror
     it to the transcript Drive doc if one exists (transcript_drive_url, ADR-0057).
-    A Drive failure never blocks the save — SQLite is the source of truth."""
+    A Drive failure never blocks the save — SQLite is the source of truth.
+
+    Serialized per job: the frontend's debounced autosave can fire a second
+    save before the first's Drive resync finishes, and without this lock the
+    slower request's Drive write could land after a newer one and leave Drive
+    showing stale text even though SQLite has the latest."""
     job = await get_owned_job(job_id, request)
 
-    await database.update_job_fields(job_id, transcript=body.transcript)
-    await _resync_transcript_drive_doc(job, body.transcript)
+    async with _transcript_save_locks[job_id]:
+        await database.update_job_fields(job_id, transcript=body.transcript)
+        await _resync_transcript_drive_doc(job, body.transcript)
     return {"transcript": body.transcript}
 
 
