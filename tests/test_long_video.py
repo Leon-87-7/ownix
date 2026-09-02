@@ -206,10 +206,60 @@ async def test_description_links_are_persisted_on_long_job(monkeypatch) -> None:
 
     transcript_done_updates = [
         call for call in update_status.await_args_list
-        if call.args[1] == "transcript_done" and "drive_url" in call.kwargs
+        if call.args[1] == "transcript_done" and "transcript_drive_url" in call.kwargs
     ]
     assert transcript_done_updates
     assert json.loads(transcript_done_updates[0].kwargs["links"]) == links
+
+
+@pytest.mark.asyncio
+async def test_phase1_writes_transcript_drive_url_not_drive_url() -> None:
+    """ADR-0057: Phase 1 tracks the transcript link under transcript_drive_url, leaving
+    drive_url for Phase 2 (enrichment) to set. Also uploads under {job_id}_transcript.md,
+    not the old {slug}.md, matching the short pipeline's naming."""
+    from src.processors import long_video
+
+    update_status = AsyncMock()
+    upload_file_mock = AsyncMock(return_value=("fid", "https://drive.google.com/transcript-doc"))
+
+    with (
+        patch("src.processors.long_video.database.update_job_status", update_status),
+        patch(
+            "src.processors.long_video.database.get_job",
+            new_callable=AsyncMock,
+            return_value={"id": "job1", "url": "https://youtube.com/watch?v=x", "chat_id": 42},
+        ),
+        patch("src.processors.long_video.send_message", new_callable=AsyncMock,
+              return_value={"message_id": 999}),
+        patch("src.processors.long_video.edit_message_text", new_callable=AsyncMock),
+        patch("src.processors.long_video.send_document", new_callable=AsyncMock, return_value={}),
+        patch("src.processors.long_video.send_inline_keyboard", new_callable=AsyncMock),
+        patch("src.processors.long_video.transcript_svc.fetch_transcript", new_callable=AsyncMock,
+              return_value={"videoId": "v1", "text": "transcript text"}),
+        patch("src.processors.long_video.transcript_svc.fetch_metadata", new_callable=AsyncMock,
+              return_value={"title": "T", "channel": "C", "views": "100", "description": ""}),
+        patch("src.processors.long_video.upload_file", upload_file_mock),
+        patch("src.processors.long_video.sheets.append_long_row", new_callable=AsyncMock),
+    ):
+        job = {"id": "job1", "chat_id": 42, "url": "https://youtube.com/watch?v=x"}
+        await long_video.run(job)
+
+    transcript_done_updates = [
+        call for call in update_status.await_args_list
+        if call.args[1] == "transcript_done"
+    ]
+    assert any(
+        c.kwargs.get("transcript_drive_url") == "https://drive.google.com/transcript-doc"
+        for c in transcript_done_updates
+    ), "transcript_drive_url not written on transcript_done"
+    assert all("drive_url" not in c.kwargs for c in transcript_done_updates), (
+        "Phase 1 must not write drive_url — that belongs to Phase 2 enrichment (ADR-0057)"
+    )
+
+    upload_filenames = [str(c) for c in upload_file_mock.call_args_list]
+    assert any("job1_transcript.md" in f for f in upload_filenames), (
+        "transcript doc not uploaded as {job_id}_transcript.md"
+    )
 
 
 @pytest.mark.asyncio

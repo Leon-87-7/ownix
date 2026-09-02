@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import parse_qs, urlparse
@@ -27,6 +29,10 @@ jobs_router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 ThumbnailKind = Literal["landscape", "portrait"]
 RecoveryContentType = Literal["short", "long", "article", "repo"]
 LINK_BACKED_CONTENT_TYPES = {"link", "article", "repo"}
+
+# ponytail: grows one entry per job_id ever edited and never shrinks — fine at
+# this app's scale (a handful of locks, each a few bytes), revisit if that stops holding.
+_transcript_save_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 async def _add_link_ids(items: list[dict], chat_id: int) -> None:
@@ -451,6 +457,47 @@ async def update_job_title(job_id: str, body: TitleIn, request: Request) -> dict
 
 
 # ---------------------------------------------------------------------------
+# Transcript — declared before /{job_id} to avoid routing conflicts
+# ---------------------------------------------------------------------------
+
+
+class TranscriptIn(BaseModel):
+    transcript: str = Field(..., max_length=500_000)
+
+
+@jobs_router.put("/{job_id}/transcript")
+async def update_job_transcript(job_id: str, body: TranscriptIn, request: Request) -> dict:
+    """Persist an operator edit to *job_id*'s transcript and best-effort mirror
+    it to the transcript Drive doc if one exists (transcript_drive_url, ADR-0057).
+    A Drive failure never blocks the save — SQLite is the source of truth.
+
+    Serialized per job: the frontend's debounced autosave can fire a second
+    save before the first's Drive resync finishes, and without this lock the
+    slower request's Drive write could land after a newer one and leave Drive
+    showing stale text even though SQLite has the latest."""
+    job = await get_owned_job(job_id, request)
+
+    async with _transcript_save_locks[job_id]:
+        await database.update_job_fields(job_id, transcript=body.transcript)
+        await _resync_transcript_drive_doc(job, body.transcript)
+    return {"transcript": body.transcript}
+
+
+async def _resync_transcript_drive_doc(job: dict, transcript: str) -> None:
+    from src.services.drive import file_id_from_url, update_file
+    from src.utils.markdown import build_transcript_markdown
+
+    file_id = file_id_from_url(job.get("transcript_drive_url"))
+    if not file_id:
+        return
+    md_text = build_transcript_markdown(job.get("title") or "", job.get("url") or "", transcript)
+    try:
+        await update_file(file_id, md_text, chat_id=job["chat_id"])
+    except Exception as exc:
+        log.warning("transcript_drive_resync_failed", job_id=job["id"], error=str(exc))
+
+
+# ---------------------------------------------------------------------------
 # Job-tag links — declared before /{job_id} to avoid routing conflicts
 # ---------------------------------------------------------------------------
 
@@ -560,6 +607,7 @@ _DETAIL_FIELDS_COMMON = (
     "completed_at",
     "error_msg",
     "drive_url",
+    "transcript_drive_url",
     "telegram_delivery",
     "sheets_row_id",
     "checklists_md",

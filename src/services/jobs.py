@@ -60,6 +60,10 @@ async def build_job_purge_task(job: dict[str, Any]) -> dict[str, Any]:
             file_id
             for file_id in (
                 drive.file_id_from_url(job.get("drive_url")),
+                # ADR-0057: a job can carry a second, independently-tracked
+                # Drive doc (the transcript) alongside drive_url (the enrichment
+                # doc) — both must be purged, or the transcript file leaks.
+                drive.file_id_from_url(job.get("transcript_drive_url")),
                 job.get("prd_auto_drive_file_id"),
                 job.get("prd_intent_drive_file_id"),
                 job.get("screenshots_drive_folder_id"),

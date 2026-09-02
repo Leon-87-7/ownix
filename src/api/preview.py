@@ -34,7 +34,7 @@ TRANSCRIPT_CAP = 1200
 # Keys stay in the payload as None so the response shape matches the
 # authenticated detail route.
 PRIVATE_DETAIL_FIELDS = frozenset(
-    {"drive_url", "sheets_row_id", "error_msg", "telegram_delivery"}
+    {"drive_url", "transcript_drive_url", "sheets_row_id", "error_msg", "telegram_delivery"}
 )
 
 # These endpoints are public reads, so per-request corpus recomputes would

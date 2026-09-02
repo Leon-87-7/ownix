@@ -561,6 +561,59 @@ async def test_transcript_persisted_on_all_short_jobs() -> None:
 
 
 # ---------------------------------------------------------------------------
+# ADR-0057: symmetric transcript + enrichment Drive link tracking
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_digest_upload_uses_enriched_filename() -> None:
+    """The analysis/digest doc uploads as {job_id}_enriched_short.md (ADR-0057)."""
+    transcript_resp = {"text": "hello world content here"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    filenames = [str(c) for c in mocks["upload_file"].call_args_list]
+    assert any("_enriched_short.md" in f for f in filenames), (
+        "digest doc not uploaded as {job_id}_enriched_short.md"
+    )
+
+
+@pytest.mark.asyncio
+async def test_transcript_delivery_persists_transcript_drive_url() -> None:
+    """The transcript doc's Drive URL is persisted to transcript_drive_url, not discarded (ADR-0057)."""
+    transcript_resp = {"text": "hello world content here"}
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        await short_video.run(_PLAIN_JOB)
+
+    update_calls = mocks["update_job_status"].call_args_list
+    assert any(
+        c.kwargs.get("transcript_drive_url") == "https://drive/x" for c in update_calls
+    ), "transcript_drive_url was never persisted"
+
+
+@pytest.mark.asyncio
+async def test_transcript_drive_url_persistence_failure_is_not_swallowed() -> None:
+    """A successful transcript upload must not hide a failed URL persistence write."""
+    transcript_resp = {"text": "hello world content here"}
+
+    async def fail_transcript_url_write(_job_id: str, _status: str, **fields: object) -> None:
+        if fields.get("transcript_drive_url"):
+            raise RuntimeError("database unavailable")
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["update_job_status"].side_effect = fail_transcript_url_write
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            await short_video.run(_PLAIN_JOB)
+
+    assert any(
+        "_transcript.md" in str(call) for call in mocks["upload_file"].await_args_list
+    ), "the transcript upload did not succeed before persistence failed"
+
+
+# ---------------------------------------------------------------------------
 # ADR-0020 issue #103: Drive upload + Telegram document delivery tail
 # ---------------------------------------------------------------------------
 

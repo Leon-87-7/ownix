@@ -28,6 +28,7 @@ import { StatusBadge, TypeBadge } from '@/components/ui/badges';
 import { useHoldConfirm } from '@/lib/hooks/useHoldConfirm';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobAnnotation } from '@/lib/hooks/useJobAnnotation';
+import { useJobTranscript } from '@/lib/hooks/useJobTranscript';
 import { useMergedTags } from '@/lib/hooks/useMergedTags';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
 import {
@@ -597,9 +598,11 @@ function JobHeader({
 function JobActionsBar({
   job,
   hasFields,
+  enrich,
 }: {
   job: JobDetail;
   hasFields: boolean;
+  enrich?: { open: boolean; onToggle: () => void };
 }) {
   const { connected } = useGoogleStatus();
   const [folderUrl, setFolderUrl] = useState<string | null>(null);
@@ -623,7 +626,7 @@ function JobActionsBar({
     };
   }, [connected]);
 
-  if (!job.drive_url && !hasFields && !folderUrl) return null;
+  if (!job.drive_url && !hasFields && !folderUrl && !enrich) return null;
   return (
     <div className="flex items-start gap-2">
       <div className="flex flex-col items-start gap-2">
@@ -649,13 +652,25 @@ function JobActionsBar({
           </a>
         )}
       </div>
-      {hasFields && (
-        <div className="ml-auto">
-          <CopyButton
-            value={buildMarkdown(job)}
-            ariaLabel="Copy all fields as Markdown"
-            label="Copy all"
-          />
+      {(hasFields || enrich) && (
+        <div className="ml-auto flex flex-col items-end gap-2">
+          {hasFields && (
+            <CopyButton
+              value={buildMarkdown(job)}
+              ariaLabel="Copy all fields as Markdown"
+              label="Copy all"
+            />
+          )}
+          {enrich && (
+            <button
+              type="button"
+              onClick={enrich.onToggle}
+              aria-expanded={enrich.open}
+              className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+            >
+              Enrich
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -775,9 +790,25 @@ function CardOpenButton({
 // Transcript preview card - mirrors the doc-parser detail page's output cards
 // (rounded surface, capped scroll region, header actions), minus the leading
 // glyph so the title anchors the row on its own.
-function TranscriptCard({ job }: { job: JobDetail }) {
-  const transcript = job.transcript;
-  if (!transcript || !transcript.trim()) return null;
+function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boolean }) {
+  const { transcript, handleSave } = useJobTranscript(job.id, job.transcript ?? '');
+  // Once a transcript has ever been seen for this job, latch the card
+  // mounted for good — never key the mount decision off the live
+  // job.transcript prop alone. A long-video job can still be 'enriching'
+  // when this first mounts, and that status polls job data every 10s;
+  // without the latch, a user who clears the editor to empty would have
+  // the next poll flip job.transcript back to '' and unmount the card (and
+  // the editor inside it) out from under them mid-edit. State, not a ref,
+  // per React's "adjust state during render" pattern — the equivalent ref
+  // mutation trips the react-hooks/refs rule (unsafe under concurrent
+  // rendering). The caller keys this component by job.id, so a different
+  // job is a full remount (fresh latch and a fresh useJobTranscript) rather
+  // than something this component needs to detect itself.
+  const [hadTranscript, setHadTranscript] = useState(Boolean(job.transcript?.trim()));
+  if (job.transcript?.trim() && !hadTranscript) {
+    setHadTranscript(true);
+  }
+  if (!hadTranscript) return null;
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
@@ -798,16 +829,29 @@ function TranscriptCard({ job }: { job: JobDetail }) {
           }
           label="Download transcript"
         />
-        {job.drive_url && isSafeHttpUrl(job.drive_url) && (
+        {job.transcript_drive_url && isSafeHttpUrl(job.transcript_drive_url) && (
           <CardOpenButton
-            href={job.drive_url}
-            label="Open in Drive"
+            href={job.transcript_drive_url}
+            label="Open transcript in Drive"
           />
         )}
       </div>
-      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded bg-canvas p-3 font-mono text-xs text-body">
-        {transcript}
-      </pre>
+      {restricted ? (
+        <Tooltip content="Restricted mode on">
+          <pre
+            aria-disabled="true"
+            className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg border border-line bg-surface p-4 font-mono text-sm text-body"
+          >
+            {transcript}
+          </pre>
+        </Tooltip>
+      ) : (
+        <MarkdownEditor
+          initialMarkdown={transcript}
+          onSave={handleSave}
+          label="Transcript"
+        />
+      )}
     </article>
   );
 }
@@ -1146,51 +1190,26 @@ function EnrichmentStatusCard() {
   );
 }
 
-function RunGeminiSection({
-  job,
-  onClaim,
-  onError,
+/** Trigger button lives in JobActionsBar now (stacked under Copy all); this
+ * panel just owns the recipe picker itself - the mobile accordion and the
+ * desktop slide panel - driven by state lifted to JobDetailPage so both can
+ * share one `open` toggle. */
+function RunGeminiPanel({
+  open,
+  setOpen,
+  error,
+  submit,
 }: {
-  job: JobDetail;
-  onClaim: () => void;
-  onError: () => void;
+  open: boolean;
+  setOpen: (value: boolean) => void;
+  error?: string;
+  submit: (template: string, freestylePrompt?: string) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string>();
   const desktop = useDesktopViewport();
   const { templates } = useTemplateList();
-  const submit = async (
-    template: string,
-    freestylePrompt?: string,
-  ) => {
-    setError(undefined);
-    const result = await apiPost<{ status: string }>(
-      `/api/jobs/${job.id}/enrich`,
-      {
-        template,
-        freestyle_prompt:
-          template === 'freestyle' ? freestylePrompt : null,
-      },
-      'Enrichment failed',
-    );
-    if (!result.ok) {
-      setError(result.detail);
-      onError();
-      return;
-    }
-    onClaim();
-  };
 
   return (
     <section className="space-y-3">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
-      >
-        Run Gemini
-      </button>
       {error && (
         <p
           role="alert"
@@ -1199,12 +1218,18 @@ function RunGeminiSection({
           {error}
         </p>
       )}
-      {open && !desktop && (
+      {!desktop && (
         <div
-          data-testid="gemini-accordion"
-          className="rounded-lg border border-line bg-surface p-4 motion-safe:animate-in motion-reduce:transition-none"
+          aria-hidden={!open}
+          inert={!open}
+          className={`grid overflow-hidden transition-[grid-template-rows] duration-300 ease-out-quart motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
         >
-          <RecipeChoices onSubmit={submit} />
+          <div
+            data-testid="gemini-accordion"
+            className={`min-h-0 overflow-hidden rounded-lg border border-line bg-surface p-4 transition-[opacity,transform] duration-300 ease-out-quart motion-reduce:transition-none ${open ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'}`}
+          >
+            <RecipeChoices onSubmit={submit} disabled={!open} />
+          </div>
         </div>
       )}
       {desktop && (
@@ -1260,6 +1285,8 @@ export default function JobDetailPage() {
   const [deleteFailed, setDeleteFailed] = useState(false);
   const [withLinks, setWithLinks] = useState(false);
   const [folderTagFormOpen, setFolderTagFormOpen] = useState(false);
+  const [runGeminiOpen, setRunGeminiOpen] = useState(false);
+  const [runGeminiError, setRunGeminiError] = useState<string>();
   const { job, setData, fetchState, reload } = useJobDetail(
     id,
     restricted,
@@ -1362,6 +1389,42 @@ export default function JobDetailPage() {
   const titleTopicValue = [job.title?.trim(), job.ai_topic?.trim()]
     .filter(Boolean)
     .join('\n\n');
+  const showRunGemini =
+    !restricted &&
+    job.content_type === 'long' &&
+    job.status === 'transcript_done';
+
+  async function submitRunGemini(
+    template: string,
+    freestylePrompt?: string,
+  ) {
+    setRunGeminiError(undefined);
+    let result: Awaited<ReturnType<typeof apiPost<{ status: string }>>>;
+    try {
+      result = await apiPost<{ status: string }>(
+        `/api/jobs/${id}/enrich`,
+        {
+          template,
+          freestyle_prompt:
+            template === 'freestyle' ? freestylePrompt : null,
+        },
+        'Enrichment failed',
+      );
+    } catch {
+      setRunGeminiError('Enrichment failed');
+      haptic('error');
+      return;
+    }
+    if (!result.ok) {
+      setRunGeminiError(result.detail);
+      haptic('error');
+      return;
+    }
+    enrichmentTriggered.current = true;
+    setData((current) =>
+      current ? { ...current, status: 'enriching' } : current,
+    );
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -1418,24 +1481,24 @@ export default function JobDetailPage() {
         hasFields={
           presentFields.length > 0 || !!job.transcript?.trim()
         }
+        enrich={
+          showRunGemini
+            ? {
+                open: runGeminiOpen,
+                onToggle: () => setRunGeminiOpen((value) => !value),
+              }
+            : undefined
+        }
       />
 
-      {!restricted &&
-        job.content_type === 'long' &&
-        job.status === 'transcript_done' && (
-          <RunGeminiSection
-            job={job}
-            onClaim={() => {
-              enrichmentTriggered.current = true;
-              setData((current) =>
-                current
-                  ? { ...current, status: 'enriching' }
-                  : current,
-              );
-            }}
-            onError={() => haptic('error')}
-          />
-        )}
+      {showRunGemini && (
+        <RunGeminiPanel
+          open={runGeminiOpen}
+          setOpen={setRunGeminiOpen}
+          error={runGeminiError}
+          submit={submitRunGemini}
+        />
+      )}
       {!restricted &&
         job.content_type === 'long' &&
         job.status === 'enriching' && <EnrichmentStatusCard />}
@@ -1455,7 +1518,7 @@ export default function JobDetailPage() {
         />
       )}
 
-      <TranscriptCard job={job} />
+      <TranscriptCard key={job.id} job={job} restricted={restricted} />
 
       <div className="space-y-3">
         {titleTopicValue && (

@@ -56,10 +56,23 @@ vi.mock('@/components/ui/tag-picker', () => ({
 vi.mock('@/components/ui/markdown-editor', () => ({
   default: () => <div data-testid="markdown-editor">MarkdownEditor</div>,
 }));
-// next/dynamic calls are resolved; mock the dynamic import target directly
+// next/dynamic calls are resolved; mock the dynamic import target directly.
+// Forwards onSave via a button so tests can simulate an edit without needing
+// the real Milkdown editor - only one dynamic() consumer (transcript or
+// annotations) ever mounts at once across this file's tests, so a single
+// shared testid stays unambiguous.
 vi.mock('next/dynamic', () => ({
   default: (fn: () => Promise<{ default: React.ComponentType }>) => {
-    const Component = () => <div data-testid="dynamic-component">Dynamic Component</div>;
+    const Component = (props: { onSave?: (md: string) => void }) => (
+      <div data-testid="dynamic-component">
+        Dynamic Component
+        {props.onSave && (
+          <button type="button" onClick={() => props.onSave!('edited transcript text')}>
+            Simulate edit
+          </button>
+        )}
+      </div>
+    );
     return Component;
   },
 }));
@@ -458,30 +471,147 @@ describe('JobDetailPage', () => {
     expect(merged?.textContent).toContain('Machine Learning');
   });
 
-  it('renders a long transcript but omits empty article and repo transcripts', () => {
+  it('renders a transcript editor for a long-video job with a transcript', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    render(<JobDetailPage />);
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    // MarkdownEditor is dynamic - mocked as dynamic component
+    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
+  });
+
+  // Separate mounts (not rerenders of one instance) — each represents a
+  // different job navigated to fresh, not a live update of the same job.
+  it('omits the transcript card for an article job with no transcript', () => {
+    setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
+    render(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+  });
+
+  it('omits the transcript card for a repo job with no transcript', () => {
+    setupMocks({ job: { ...JOB, content_type: 'repo', transcript: null } });
+    render(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+  });
+
+  it('renders an Open transcript in Drive link on the transcript card when transcript_drive_url is set', () => {
+    setupMocks({
+      job: {
+        ...JOB,
+        transcript: 'Full long-video transcript',
+        transcript_drive_url: 'https://drive.google.com/file/d/transcript-doc',
+      },
+    });
+    render(<JobDetailPage />);
+    const link = screen.getByRole('link', { name: /open transcript in drive/i });
+    expect(link).toHaveAttribute('href', 'https://drive.google.com/file/d/transcript-doc');
+  });
+
+  it('omits the transcript card Drive link when transcript_drive_url is not set', () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript', transcript_drive_url: null } });
+    render(<JobDetailPage />);
+    expect(screen.queryByRole('link', { name: /open transcript in drive/i })).toBeNull();
+  });
+
+  it('copy and download buttons reflect an edited transcript, not the stale initial value', async () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    server.use(
+      http.put('/api/jobs/:id/transcript', async ({ request }) => HttpResponse.json(await request.json())),
+    );
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    let downloadedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      downloadedBlob = blob as Blob;
+      return 'blob:download';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('edited transcript text'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download transcript' }));
+    await waitFor(() => expect(downloadedBlob).toBeDefined());
+    const downloadedText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(downloadedBlob!);
+    });
+    expect(downloadedText).toBe('edited transcript text');
+  });
+
+  it('shows a read-only transcript in Restricted mode instead of the live editor', () => {
+    mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    render(<JobDetailPage />);
+    expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
+    expect(screen.queryByTestId('dynamic-component')).toBeNull();
+  });
+
+  it('reverts to the last saved transcript when a save is rejected', async () => {
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    server.use(
+      http.put('/api/jobs/:id/transcript', () => HttpResponse.json({ detail: 'nope' }, { status: 500 })),
+    );
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
+
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
+      expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith('Full long-video transcript');
+    });
+  });
+
+  it('syncs a transcript that arrives after the card first mounts, before any edit', async () => {
+    // A long job can mount this hook while still processing (transcript
+    // null) and only get its real transcript later via the 'enriching'
+    // status poll refetching job data — same job.id, no remount.
+    setupMocks({ job: { ...JOB, transcript: null } });
+    const { rerender } = render(<JobDetailPage />);
+    expect(screen.queryByText('Transcript')).toBeNull();
+
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    setupMocks({ job: { ...JOB, transcript: 'Arrived later' } });
+    rerender(<JobDetailPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy transcript' }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Arrived later'),
+    );
+  });
+
+  it('keeps the transcript card mounted once a transcript has been seen, even if a later refetch reports it empty', () => {
+    // Guards against the 'enriching' status poll (page.tsx) refetching job
+    // data mid-edit and flipping job.transcript back to empty/null out from
+    // under a user who just cleared the editor — the card must not unmount
+    // and take the editor with it.
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
     const { rerender } = render(<JobDetailPage />);
     expect(screen.getByText('Transcript')).toBeInTheDocument();
-    expect(screen.getByText('Full long-video transcript')).toBeInTheDocument();
-    setupMocks({ job: { ...JOB, content_type: 'article', transcript: null } });
+    setupMocks({ job: { ...JOB, transcript: '' } });
     rerender(<JobDetailPage />);
-    expect(screen.queryByText('Transcript')).toBeNull();
-    setupMocks({ job: { ...JOB, content_type: 'repo', transcript: null } });
-    rerender(<JobDetailPage />);
-    expect(screen.queryByText('Transcript')).toBeNull();
+    expect(screen.getByText('Transcript')).toBeInTheDocument();
+    expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
   });
 
   it('shows Run Gemini only for unrestricted transcript-complete long jobs', () => {
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
     const { rerender } = render(<JobDetailPage />);
-    expect(screen.getByRole('button', { name: 'Run Gemini' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enrich' })).toBeInTheDocument();
     setupMocks({ job: { ...JOB, status: 'done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enrich' })).toBeNull();
     setupMocks({ job: { ...JOB, content_type: 'article', status: 'transcript_done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enrich' })).toBeNull();
     mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
     setupMocks({ job: { ...JOB, status: 'transcript_done' } }); rerender(<JobDetailPage />);
-    expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Enrich' })).toBeNull();
   });
 
   it('submits a named recipe and optimistically marks the job enriching', async () => {
@@ -496,10 +626,10 @@ describe('JobDetailPage', () => {
     let body: unknown;
     server.use(http.get('/api/templates', () => HttpResponse.json([])), http.post('/api/jobs/:id/enrich', async ({ request }) => { body = await request.json(); return HttpResponse.json({ status: 'enriching' }, { status: 202 }); }));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enrich' }));
     fireEvent.click(screen.getByRole('button', { name: 'summary' }));
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Run Gemini' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Enrich' })).toBeNull();
       expect(screen.queryByTestId('gemini-accordion')).toBeNull();
     });
     expect(body).toEqual({ template: 'summary', freestyle_prompt: null });
@@ -530,7 +660,7 @@ describe('JobDetailPage', () => {
       resolveSettings();
     });
     await waitFor(() => expect(settings.result.current.loaded).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enrich' }));
     fireEvent.click(screen.getByRole('button', { name: 'Freestyle' }));
     const submit = screen.getByRole('button', { name: 'Run Freestyle' });
     expect(submit).toBeDisabled();
@@ -553,7 +683,7 @@ describe('JobDetailPage', () => {
     ].map(([name, description], index) => ({ id: String(index), name, description, extra_instructions: '', is_builtin: true }));
     server.use(http.get('/api/templates', () => HttpResponse.json([...builtins, { id: 'custom', name: 'custom', description: 'Hidden', extra_instructions: '', is_builtin: false }])));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enrich' }));
     expect(await screen.findByTestId('gemini-slide-panel')).toBeInTheDocument();
     expect(screen.getByTestId('gemini-slide-panel')).not.toHaveAttribute('inert');
     for (const [, description] of builtins.map(({ name, description }) => [name, description])) {
@@ -570,7 +700,7 @@ describe('JobDetailPage', () => {
     server.use(http.get('/api/templates', () => HttpResponse.json([])));
     render(<JobDetailPage />);
     const panel = await screen.findByTestId('gemini-slide-panel');
-    const runGemini = screen.getByRole('button', { name: 'Run Gemini' });
+    const runGemini = screen.getByRole('button', { name: 'Enrich' });
     runGemini.focus();
 
     expect(panel).toHaveAttribute('inert');
@@ -583,7 +713,7 @@ describe('JobDetailPage', () => {
     setupMocks({ job: { ...JOB, status: 'transcript_done' } });
     server.use(http.get('/api/templates', () => HttpResponse.json([])));
     render(<JobDetailPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enrich' }));
     expect(await screen.findByTestId('gemini-accordion')).toBeInTheDocument();
     expect(screen.queryByTestId('gemini-slide-panel')).toBeNull();
   });

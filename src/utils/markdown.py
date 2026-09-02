@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 
 def build_transcript_markdown(
     title: str,
-    channel: str,
-    views: str,
-    video_id: str,
     url: str,
     transcript: str,
+    *,
+    channel: str = "",
+    views: str = "",
+    video_id: str = "",
 ) -> str:
     """Build the Phase 1 raw transcript .md file content."""
     fetched_at = datetime.now(timezone.utc).isoformat()

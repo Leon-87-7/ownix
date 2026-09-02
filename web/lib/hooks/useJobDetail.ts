@@ -13,6 +13,9 @@ export interface JobDetail {
   completed_at: string | null;
   error_msg: string | null;
   drive_url: string | null;
+  // Transcript doc's own Drive link (ADR-0057) — drive_url is always the
+  // enrichment doc; this is always the transcript doc, for both pipelines.
+  transcript_drive_url?: string | null;
   checklists_md?: string | null;
   checklists_generated_at?: string | null;
   screenshots_status?: string | null;

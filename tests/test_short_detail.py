@@ -77,6 +77,13 @@ def test_detail_fields_common_always_present() -> None:
             assert common in fields, f"{common!r} missing from {ct!r} fields"
 
 
+def test_detail_fields_include_transcript_drive_url() -> None:
+    """ADR-0057: the dashboard job detail API must expose transcript_drive_url
+    for both pipelines, or the transcript card's Drive link can never render."""
+    for ct in ("short", "long"):
+        assert "transcript_drive_url" in detail_fields_for(ct)
+
+
 # ---------------------------------------------------------------------------
 # API: get_job returns correct field set depending on content_type
 # ---------------------------------------------------------------------------
