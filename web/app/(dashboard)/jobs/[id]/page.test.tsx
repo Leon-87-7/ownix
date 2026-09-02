@@ -549,6 +549,17 @@ describe('JobDetailPage', () => {
     expect(link).toHaveAttribute('href', '/jobs/j1/transcript');
   });
 
+  it('carries the active job-list filter scope onto the Edit transcript link', () => {
+    searchParams = new URLSearchParams('content_type=long&status=done');
+    setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    render(<JobDetailPage />);
+    const link = screen.getByRole('link', { name: 'Edit transcript' });
+    expect(link).toHaveAttribute(
+      'href',
+      '/jobs/j1/transcript?content_type=long&status=done',
+    );
+  });
+
   it('hides the Edit transcript button in Restricted mode', () => {
     mockUseRestrictedMode.mockReturnValue({ restricted: true, showRestrictedToast: vi.fn() });
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });

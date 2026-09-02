@@ -10,8 +10,11 @@ const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 
+let searchParams = new URLSearchParams();
+
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'j1' }),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/lib/hooks/useJobDetail', () => ({
@@ -64,6 +67,7 @@ beforeEach(() => {
   server.resetHandlers();
   setupMocks();
   mockUseRestrictedMode.mockReturnValue({ restricted: false, showRestrictedToast: vi.fn() });
+  searchParams = new URLSearchParams();
 });
 
 describe('TranscriptEditPage', () => {
@@ -84,6 +88,15 @@ describe('TranscriptEditPage', () => {
     render(<TranscriptEditPage />);
     expect(screen.getByRole('link', { name: /back to job/i })).toHaveAttribute('href', '/jobs/j1');
     expect(screen.getByTestId('dynamic-component')).toHaveTextContent('Full long-video transcript');
+  });
+
+  it('carries the active job-list filter scope onto the back link', () => {
+    searchParams = new URLSearchParams('content_type=long&status=done');
+    render(<TranscriptEditPage />);
+    expect(screen.getByRole('link', { name: /back to job/i })).toHaveAttribute(
+      'href',
+      '/jobs/j1?content_type=long&status=done',
+    );
   });
 
   it('saves an edit through the transcript PUT endpoint', async () => {

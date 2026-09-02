@@ -814,6 +814,17 @@ function CardOpenButton({
 // mobile job feed stays glanceable (PRODUCT.md "state at a glance") - editing
 // lives on its own page (see TranscriptEditPage) behind an explicit Edit tap.
 function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boolean }) {
+  const searchParams = useSearchParams();
+  const scopeQuery = useMemo(
+    () =>
+      new URLSearchParams(
+        jobScopeQuery({
+          contentType: searchParams.get('content_type') ?? undefined,
+          status: searchParams.get('status') ?? undefined,
+        }),
+      ).toString(),
+    [searchParams],
+  );
   const transcript = job.transcript;
   if (!transcript || !transcript.trim()) return null;
 
@@ -825,7 +836,7 @@ function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boole
         </h2>
         {!restricted && (
           <CardEditButton
-            href={`/jobs/${job.id}/transcript`}
+            href={`/jobs/${job.id}/transcript${scopeQuery ? `?${scopeQuery}` : ''}`}
             label="Edit transcript"
           />
         )}

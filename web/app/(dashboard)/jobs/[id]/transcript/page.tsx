@@ -1,8 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobTranscript } from '@/lib/hooks/useJobTranscript';
 import { useRestrictedMode } from '@/lib/restricted/context';
@@ -10,6 +11,7 @@ import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
+import { jobScopeQuery } from '@/lib/job-detail-utils';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -23,15 +25,31 @@ const MarkdownEditor = dynamic(
   },
 );
 
-const BackLink = ({ id }: { id: string }) => (
-  <Link
-    href={`/jobs/${id}`}
-    className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
-  >
-    <OwnixChevronRight className="h-3.5 w-3.5 rotate-180" />
-    Back to job
-  </Link>
-);
+// Carries the job-list's active filter scope (content_type/status) back to
+// the job detail page, matching JobHeader's own scopeQuery in ../page.tsx -
+// otherwise a user who opened this from a filtered feed loses that filter.
+const BackLink = ({ id }: { id: string }) => {
+  const searchParams = useSearchParams();
+  const scopeQuery = useMemo(
+    () =>
+      new URLSearchParams(
+        jobScopeQuery({
+          contentType: searchParams.get('content_type') ?? undefined,
+          status: searchParams.get('status') ?? undefined,
+        }),
+      ).toString(),
+    [searchParams],
+  );
+  return (
+    <Link
+      href={`/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`}
+      className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
+    >
+      <OwnixChevronRight className="h-3.5 w-3.5 rotate-180" />
+      Back to job
+    </Link>
+  );
+};
 
 // Full-page transcript editor - split out from the job-detail card (see
 // TranscriptCard in ../page.tsx) so the mobile job feed stays a glanceable
