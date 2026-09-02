@@ -180,7 +180,7 @@ async def test_append_long_row_drive_url_column_uses_transcript_drive_url(monkey
         )
 
     _, row = captured[0]
-    assert "https://d/transcript-doc" in row
+    assert row[7] == "https://d/transcript-doc"
 
 
 # ---------------------------------------------------------------------------

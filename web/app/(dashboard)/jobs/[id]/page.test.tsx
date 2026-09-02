@@ -56,10 +56,23 @@ vi.mock('@/components/ui/tag-picker', () => ({
 vi.mock('@/components/ui/markdown-editor', () => ({
   default: () => <div data-testid="markdown-editor">MarkdownEditor</div>,
 }));
-// next/dynamic calls are resolved; mock the dynamic import target directly
+// next/dynamic calls are resolved; mock the dynamic import target directly.
+// Forwards onSave via a button so tests can simulate an edit without needing
+// the real Milkdown editor - only one dynamic() consumer (transcript or
+// annotations) ever mounts at once across this file's tests, so a single
+// shared testid stays unambiguous.
 vi.mock('next/dynamic', () => ({
   default: (fn: () => Promise<{ default: React.ComponentType }>) => {
-    const Component = () => <div data-testid="dynamic-component">Dynamic Component</div>;
+    const Component = (props: { onSave?: (md: string) => void }) => (
+      <div data-testid="dynamic-component">
+        Dynamic Component
+        {props.onSave && (
+          <button type="button" onClick={() => props.onSave!('edited transcript text')}>
+            Simulate edit
+          </button>
+        )}
+      </div>
+    );
     return Component;
   },
 }));
@@ -499,11 +512,37 @@ describe('JobDetailPage', () => {
     expect(screen.queryByRole('link', { name: /open transcript in drive/i })).toBeNull();
   });
 
-  it('copy and download buttons still use the live transcript text', () => {
+  it('copy and download buttons reflect an edited transcript, not the stale initial value', async () => {
     setupMocks({ job: { ...JOB, transcript: 'Full long-video transcript' } });
+    server.use(
+      http.put('/api/jobs/:id/transcript', async ({ request }) => HttpResponse.json(await request.json())),
+    );
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    let downloadedBlob: Blob | undefined;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+      downloadedBlob = blob as Blob;
+      return 'blob:download';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
     render(<JobDetailPage />);
-    expect(screen.getByRole('button', { name: 'Copy transcript' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Download transcript' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Simulate edit' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy transcript' }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('edited transcript text'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download transcript' }));
+    await waitFor(() => expect(downloadedBlob).toBeDefined());
+    const downloadedText = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(downloadedBlob!);
+    });
+    expect(downloadedText).toBe('edited transcript text');
   });
 
   it('keeps the transcript card mounted once a transcript has been seen, even if a later refetch reports it empty', () => {

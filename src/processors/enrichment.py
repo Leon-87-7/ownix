@@ -4,7 +4,7 @@ import html
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from json_repair import repair_json
 
@@ -398,7 +398,7 @@ def _build_enrichment_markdown(
     job: dict, enrichment: Enrichment, template_analysis: dict | None
 ) -> str:
     """Drive doc content for the enrichment result — uploaded as {job_id}_enriched_long.md (ADR-0057)."""
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     parts = [
         "# Enrichment\n",
         f"**Source:** {job.get('url', '')}",
@@ -574,7 +574,7 @@ async def run(job_id: str) -> None:
     except Exception as exc:
         log.warning("enrichment_drive_upload_failed", job_id=job_id, error=str(exc))
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     await database.update_job_status(
         job_id,
         "done",

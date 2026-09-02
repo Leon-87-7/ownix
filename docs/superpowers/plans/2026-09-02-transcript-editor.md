@@ -124,7 +124,7 @@ git commit -m "feat(api): add PUT /api/jobs/{job_id}/transcript endpoint"
 - Test: `tests/test_jobs_api.py`
 
 **Interfaces:**
-- Consumes: `job["transcript_drive_url"]` / `job["title"]` / `job["url"]` / `job["chat_id"]` (from `get_owned_job`'s return), `src.services.drive.file_id_from_url(url: str | None) -> str | None`, `src.services.drive.update_file(file_id: str, content: str | bytes, mime_type: str = "text/markdown", *, chat_id: int | None = None) -> str`, `src.utils.markdown.build_transcript_markdown(title, channel, views, video_id, url, transcript) -> str`.
+- Consumes: `job["transcript_drive_url"]` / `job["title"]` / `job["url"]` / `job["chat_id"]` (from `get_owned_job`'s return), `src.services.drive.file_id_from_url(url: str | None) -> str | None`, `src.services.drive.update_file(file_id: str, content: str | bytes, mime_type: str = "text/markdown", *, chat_id: int | None = None) -> str`, `src.utils.markdown.build_transcript_markdown(title: str, url: str, transcript: str, *, channel: str = "", views: str = "", video_id: str = "") -> str`.
 - Produces: no change to the route's public response shape from Task 1 — this task only adds a side effect.
 
 - [ ] **Step 1: Write the failing tests**
