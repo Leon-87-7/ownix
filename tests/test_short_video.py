@@ -593,6 +593,26 @@ async def test_transcript_delivery_persists_transcript_drive_url() -> None:
     ), "transcript_drive_url was never persisted"
 
 
+@pytest.mark.asyncio
+async def test_transcript_drive_url_persistence_failure_is_not_swallowed() -> None:
+    """A successful transcript upload must not hide a failed URL persistence write."""
+    transcript_resp = {"text": "hello world content here"}
+
+    async def fail_transcript_url_write(_job_id: str, _status: str, **fields: object) -> None:
+        if fields.get("transcript_drive_url"):
+            raise RuntimeError("database unavailable")
+
+    with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
+        mocks["update_job_status"].side_effect = fail_transcript_url_write
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            await short_video.run(_PLAIN_JOB)
+
+    assert any(
+        "_transcript.md" in str(call) for call in mocks["upload_file"].await_args_list
+    ), "the transcript upload did not succeed before persistence failed"
+
+
 # ---------------------------------------------------------------------------
 # ADR-0020 issue #103: Drive upload + Telegram document delivery tail
 # ---------------------------------------------------------------------------
