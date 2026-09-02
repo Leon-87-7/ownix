@@ -849,6 +849,7 @@ function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boole
         <MarkdownEditor
           initialMarkdown={transcript}
           onSave={handleSave}
+          label="Transcript"
         />
       )}
     </article>

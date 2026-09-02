@@ -12,6 +12,7 @@ import '@milkdown/crepe/theme/frame-dark.css'
 interface MarkdownEditorProps {
   initialMarkdown: string
   onSave: (md: string) => void
+  label?: string
 }
 
 /**
@@ -19,7 +20,7 @@ interface MarkdownEditorProps {
  * Debounces 800 ms after the last keystroke before calling onSave.
  * Cleans up the editor instance on unmount to prevent StrictMode double-init.
  */
-export default function MarkdownEditor({ initialMarkdown, onSave }: MarkdownEditorProps) {
+export default function MarkdownEditor({ initialMarkdown, onSave, label = 'Notes' }: MarkdownEditorProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   // Keep a stable ref to onSave so the effect closure never goes stale.
   const onSaveRef = useRef(onSave)
@@ -76,7 +77,7 @@ export default function MarkdownEditor({ initialMarkdown, onSave }: MarkdownEdit
   return (
     <div className="rounded-lg border border-line bg-surface p-2 sm:p-4">
       <span className="mb-2 block font-mono text-mono-label font-medium uppercase tracking-wider text-muted">
-        Notes
+        {label}
       </span>
       <div
         ref={mountRef}
