@@ -9,6 +9,7 @@ import { useRestrictedMode } from '@/lib/restricted/context';
 import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -27,7 +28,8 @@ const BackLink = ({ id }: { id: string }) => (
     href={`/jobs/${id}`}
     className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
   >
-    <span aria-hidden="true">&#8592;</span> Back to job
+    <OwnixChevronRight className="h-3.5 w-3.5 rotate-180" />
+    Back to job
   </Link>
 );
 
