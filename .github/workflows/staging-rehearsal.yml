@@ -1,0 +1,43 @@
+name: Staging rehearsal (draft)
+
+# Additive scaffold for issue #520. Promotion of the same image to production is
+# intentionally deferred; deploy-vps.yml remains the authoritative production path.
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Immutable image tag to rehearse
+        required: true
+        default: vig-app
+  schedule:
+    - cron: "17 3 * * 1"
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh sanitized data and start isolated staging services
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          REQUESTED_IMAGE: ${{ inputs.image || 'vig-app' }}
+        run: |
+          test -n "$STAGING_HOST"
+          [[ "$REQUESTED_IMAGE" =~ ^[A-Za-z0-9./:_@-]+$ ]]
+          install -m 600 /dev/null /tmp/staging_key
+          printf '%s' "$STAGING_SSH_KEY" > /tmp/staging_key
+          mkdir -p ~/.ssh
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i /tmp/staging_key -o StrictHostKeyChecking=yes "$STAGING_HOST" \
+            "export VIG_IMAGE='$REQUESTED_IMAGE'; bash -s" <<'REMOTE'
+            cd /opt/ownix
+            mkdir -p data-staging
+            python -m scripts.db_snapshot data/jobs.db data-staging/jobs.db
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+              --profile staging up -d api worker
+            docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+              exec -T api python -c 'import asyncio; from src.database import init_db; asyncio.run(init_db())'
+          REMOTE

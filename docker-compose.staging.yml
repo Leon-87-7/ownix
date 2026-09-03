@@ -1,0 +1,25 @@
+services:
+  api:
+    profiles: ["staging"]
+    container_name: vig-api-staging
+    image: ${VIG_IMAGE:-vig-app}
+    environment:
+      DB_PATH: /app/data/jobs.db
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data-staging:/app/data
+      - ./logs-staging:/app/logs
+
+  worker:
+    profiles: ["staging"]
+    container_name: vig-worker-staging
+    image: ${VIG_IMAGE:-vig-app}
+    environment:
+      DB_PATH: /app/data/jobs.db
+    volumes:
+      - ./data-staging:/app/data
+      - ./logs-staging:/app/logs
+
+  cloudflared:
+    profiles: ["production-only"]

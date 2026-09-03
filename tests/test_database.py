@@ -1711,3 +1711,63 @@ async def test_accessibility_settings_roundtrip_and_normalizes_invalid_values(
     for malformed in ('{"visual_motion":false}', '{"visual_motion":"no"}', "{not-json"):
         await database.set_user_setting(42, "dashboard_accessibility_settings", malformed)
         assert await database.get_accessibility_settings(42) == defaults
+
+
+@pytest.mark.asyncio
+async def test_pending_migration_creates_one_valid_pre_mutation_backup(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    await database.init_db()
+
+    backups = list((tmp_path / "backups").glob("*.db"))
+    assert len(backups) == 1
+    async with aiosqlite.connect(backups[0]) as conn:
+        assert (await (await conn.execute("PRAGMA integrity_check")).fetchone())[0] == "ok"
+        assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == (
+            len(database._MIGRATIONS) - 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_fresh_and_current_databases_do_not_create_backups(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    await database.init_db()
+    assert not (tmp_path / "backups").exists()
+
+
+@pytest.mark.asyncio
+async def test_failed_migration_restores_snapshot_and_reraises(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    old_version = len(database._MIGRATIONS) - 1
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {old_version}")
+        await conn.commit()
+
+    async def fail(_conn):
+        raise RuntimeError("forced migration failure")
+
+    original_step = database._MIGRATIONS[old_version]
+    database._MIGRATIONS[old_version] = fail
+    try:
+        with pytest.raises(RuntimeError, match="forced migration failure"):
+            await database.init_db()
+    finally:
+        database._MIGRATIONS[old_version] = original_step
+
+    async with aiosqlite.connect(db_path) as conn:
+        assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == old_version
