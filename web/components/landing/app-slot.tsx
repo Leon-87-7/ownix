@@ -8,6 +8,8 @@ import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { TikTokIcon } from '@/components/svg/tiktok-icon';
 import { GitHubIcon } from '@/components/svg/github-icon';
 import { PDFIcon } from '@/components/svg/pdf-icon';
+import { XIcon } from '@/components/svg/x-icon';
+import { FacebookIcon } from '@/components/svg/facebook-icon';
 
 const icons = [
   YouTubeIcon,
@@ -16,6 +18,8 @@ const icons = [
   TikTokIcon,
   YouTubeShortsIcon,
   GitHubIcon,
+  XIcon,
+  FacebookIcon,
 ];
 
 /** Inline 22px icon slot in the hero copy that cross-fades through the
