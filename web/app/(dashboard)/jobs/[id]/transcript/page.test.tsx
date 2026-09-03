@@ -105,6 +105,18 @@ describe('TranscriptEditPage', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('leaves modified clicks (ctrl/cmd/shift/middle-click) to the plain Link href instead of intercepting navigation', () => {
+    window.history.pushState({}, '', '/jobs/j1/transcript');
+    render(<TranscriptEditPage />);
+    const link = screen.getByRole('link', { name: /back to job/i });
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(link, { ctrlKey: true });
+    fireEvent.click(link, { shiftKey: true });
+    fireEvent.click(link, { button: 1 });
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('carries the active job-list filter scope onto the back link', () => {
     searchParams = new URLSearchParams('content_type=long&status=done');
     render(<TranscriptEditPage />);

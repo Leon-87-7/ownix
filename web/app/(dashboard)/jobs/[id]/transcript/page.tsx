@@ -43,6 +43,11 @@ const BackLink = ({ id }: { id: string }) => {
   );
   const jobHref = `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`;
   const handleBack = (event: React.MouseEvent) => {
+    // Modified/non-primary clicks are the browser's own "open in new
+    // tab/window" gesture - let the plain <Link href> handle those instead
+    // of hijacking navigation.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+      return;
     // Pushing a fresh /jobs/[id] entry here (a plain Link click) stacks a
     // duplicate on top of the one already in history - Detail's own back
     // button then pops back to Transcript instead of Feed, looping forever.
