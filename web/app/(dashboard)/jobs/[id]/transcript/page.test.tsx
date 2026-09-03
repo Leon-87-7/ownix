@@ -11,10 +11,13 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 
 let searchParams = new URLSearchParams();
+const mockBack = vi.fn();
+const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'j1' }),
   useSearchParams: () => searchParams,
+  useRouter: () => ({ back: mockBack, push: mockPush }),
 }));
 
 vi.mock('@/lib/hooks/useJobDetail', () => ({
@@ -68,6 +71,8 @@ beforeEach(() => {
   setupMocks();
   mockUseRestrictedMode.mockReturnValue({ restricted: false, showRestrictedToast: vi.fn() });
   searchParams = new URLSearchParams();
+  mockBack.mockClear();
+  mockPush.mockClear();
 });
 
 describe('TranscriptEditPage', () => {
@@ -88,6 +93,40 @@ describe('TranscriptEditPage', () => {
     render(<TranscriptEditPage />);
     expect(screen.getByRole('link', { name: /back to job/i })).toHaveAttribute('href', '/jobs/j1');
     expect(screen.getByTestId('dynamic-component')).toHaveTextContent('Full long-video transcript');
+  });
+
+  it('pops history instead of pushing a duplicate job entry when the back link is clicked', () => {
+    // Arriving at Transcript always means Detail was pushed onto history
+    // first - mirror that so history.length > 1, same as real usage.
+    window.history.pushState({}, '', '/jobs/j1/transcript');
+    render(<TranscriptEditPage />);
+    fireEvent.click(screen.getByRole('link', { name: /back to job/i }));
+    expect(mockBack).toHaveBeenCalledOnce();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('falls back to router.push with the scoped job href when there is no history to pop', () => {
+    const historyLengthSpy = vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
+    try {
+      render(<TranscriptEditPage />);
+      fireEvent.click(screen.getByRole('link', { name: /back to job/i }));
+      expect(mockPush).toHaveBeenCalledWith('/jobs/j1');
+      expect(mockBack).not.toHaveBeenCalled();
+    } finally {
+      historyLengthSpy.mockRestore();
+    }
+  });
+
+  it('leaves modified clicks (ctrl/cmd/shift/middle-click) to the plain Link href instead of intercepting navigation', () => {
+    window.history.pushState({}, '', '/jobs/j1/transcript');
+    render(<TranscriptEditPage />);
+    const link = screen.getByRole('link', { name: /back to job/i });
+    fireEvent.click(link, { metaKey: true });
+    fireEvent.click(link, { ctrlKey: true });
+    fireEvent.click(link, { shiftKey: true });
+    fireEvent.click(link, { button: 1 });
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('carries the active job-list filter scope onto the back link', () => {

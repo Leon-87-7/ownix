@@ -6,6 +6,9 @@ import { InstagramIcon } from '../svg/instagram-icon';
 import { InstagramWordmark } from '@/components/svg/instagram-wordmark';
 import { TikTokWordmark } from '@/components/svg/tiktok-wordmark';
 import { YouTubeWordmark } from '@/components/svg/youtube-wordmark';
+import { XIcon } from '@/components/svg/x-icon';
+import { FacebookIcon } from '@/components/svg/facebook-icon';
+import { FacebookWordmark } from '@/components/svg/facebook-wordmark';
 
 function Items() {
   return (
@@ -43,6 +46,24 @@ function Items() {
         <GitHubWordmark
           focusable="false"
           className="h-5 w-auto shrink-0 text-ink"
+        />
+      </span>
+
+      <span className="flex shrink-0 items-center gap-1 font-mono text-sm font-medium text-ink">
+        <XIcon
+          focusable="false"
+          className="h-5 w-auto shrink-0"
+        />
+        X
+      </span>
+      <span className="flex shrink-0 items-center gap-1 font-mono text-sm font-medium text-ink">
+        <FacebookIcon
+          focusable="false"
+          className="h-5 w-auto shrink-0"
+        />
+        <FacebookWordmark
+          focusable="false"
+          className="h-5 w-auto shrink-0"
         />
       </span>
 
