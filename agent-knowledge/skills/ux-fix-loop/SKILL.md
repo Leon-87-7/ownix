@@ -19,6 +19,7 @@ Observe → Ground → Choose → Implement. Turns a spotted defect into a fix t
 
 5. **Build → test → fix → test.** Write the fix directly, scoped to exactly the chosen option — not a broader refactor the investigation surfaced along the way. No red-first step: the code exists before any test runs against it — that upfront cost buys nothing on a change this small and pre-scoped. Run the touched test file(s) against the fix; on a failure, fix and re-run until green. Typecheck, then run the full suite once at the end.
    - Run `/code-review` scoped to the actual diff. Its generic checklist is written for a whole-repo audit; running it against unrelated files sitting dirty in `git status` wastes a review on someone else's in-progress work.
+   - Run `/codex:adversarial-review --wait` scoped to the same diff, with the chosen Law and the cheaper options step 4 rejected as focus text. This challenges whether the picked fix is the right shape, not defects in it — fold in anything it surfaces before committing.
    - Stage and commit only the files that belong to this fix, even when the repo has other unrelated changes sitting dirty.
 
 ## Completion criterion
