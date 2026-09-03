@@ -105,6 +105,15 @@ describe('TranscriptEditPage', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  it('falls back to router.push with the scoped job href when there is no history to pop', () => {
+    const historyLengthSpy = vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
+    render(<TranscriptEditPage />);
+    fireEvent.click(screen.getByRole('link', { name: /back to job/i }));
+    expect(mockPush).toHaveBeenCalledWith('/jobs/j1');
+    expect(mockBack).not.toHaveBeenCalled();
+    historyLengthSpy.mockRestore();
+  });
+
   it('leaves modified clicks (ctrl/cmd/shift/middle-click) to the plain Link href instead of intercepting navigation', () => {
     window.history.pushState({}, '', '/jobs/j1/transcript');
     render(<TranscriptEditPage />);
