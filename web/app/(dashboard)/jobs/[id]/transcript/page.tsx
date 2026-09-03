@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useJobDetail } from '@/lib/hooks/useJobDetail';
 import { useJobTranscript } from '@/lib/hooks/useJobTranscript';
 import { useRestrictedMode } from '@/lib/restricted/context';
@@ -29,6 +29,7 @@ const MarkdownEditor = dynamic(
 // the job detail page, matching JobHeader's own scopeQuery in ../page.tsx -
 // otherwise a user who opened this from a filtered feed loses that filter.
 const BackLink = ({ id }: { id: string }) => {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const scopeQuery = useMemo(
     () =>
@@ -40,9 +41,20 @@ const BackLink = ({ id }: { id: string }) => {
       ).toString(),
     [searchParams],
   );
+  const jobHref = `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`;
+  const handleBack = (event: React.MouseEvent) => {
+    // Pushing a fresh /jobs/[id] entry here (a plain Link click) stacks a
+    // duplicate on top of the one already in history - Detail's own back
+    // button then pops back to Transcript instead of Feed, looping forever.
+    // Popping history (like Detail's handleBackToFeed) keeps the stack flat.
+    event.preventDefault();
+    if (window.history.length > 1) router.back();
+    else router.push(jobHref);
+  };
   return (
     <Link
-      href={`/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`}
+      href={jobHref}
+      onClick={handleBack}
       className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
     >
       <OwnixChevronRight className="h-3.5 w-3.5 rotate-180" />
