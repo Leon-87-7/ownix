@@ -36,25 +36,6 @@ def test_snapshot_scrubs_sensitive_columns_and_samples_rows(tmp_path):
         assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
 
-def test_snapshot_supports_without_rowid_tables(tmp_path):
-    source = tmp_path / "source.db"
-    output = tmp_path / "snapshot.db"
-    with sqlite3.connect(source) as conn:
-        conn.executescript(
-            """
-            CREATE TABLE tags (name TEXT PRIMARY KEY, color TEXT) WITHOUT ROWID;
-            INSERT INTO tags VALUES ('a', 'red'), ('b', 'blue'), ('c', 'green');
-            """
-        )
-
-    create_sanitized_snapshot(source, output, rows_per_table=2)
-
-    with sqlite3.connect(output) as conn:
-        rows = conn.execute("SELECT name FROM tags ORDER BY name").fetchall()
-        assert rows == [("a",), ("b",)]
-        assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
-
-
 def test_snapshot_fails_on_orphaned_foreign_key_after_pruning(tmp_path):
     source = tmp_path / "source.db"
     output = tmp_path / "snapshot.db"

@@ -10,6 +10,9 @@ handled as internal test data rather than published.
 
 Run with ``python -m scripts.db_snapshot [SOURCE] OUTPUT``. SOURCE defaults to
 ``settings.DB_PATH``.
+
+Assumes every pruned table has a rowid (none in this schema is declared
+``WITHOUT ROWID``); such a table would need PK-based pruning instead.
 """
 
 from __future__ import annotations
@@ -24,20 +27,6 @@ from pathlib import Path
 from src.config import settings
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _primary_key_columns(dst: sqlite3.Connection, table: str) -> list[str]:
-    """Return *table*'s PK columns in declaration order (empty if none/ordinary rowid)."""
-    info = dst.execute(f'PRAGMA table_info("{table}")').fetchall()
-    ordered = sorted((row[5], row[1]) for row in info if row[5])
-    return [name for _, name in ordered]
-
-
-def _is_without_rowid(dst: sqlite3.Connection, table: str) -> bool:
-    row = dst.execute(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone()
-    return bool(row and row[0] and "WITHOUT ROWID" in row[0].upper())
 
 
 def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 100) -> None:
@@ -62,20 +51,11 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
                 if not _IDENTIFIER_RE.match(table):
                     raise ValueError(f"unsupported table name: {table!r}")
                 quoted = f'"{table}"'
-                if _is_without_rowid(dst, table):
-                    pk_cols = _primary_key_columns(dst, table)
-                    key_expr = ", ".join(f'"{col}"' for col in pk_cols)
-                    dst.execute(
-                        f"DELETE FROM {quoted} WHERE ({key_expr}) NOT IN "
-                        f"(SELECT {key_expr} FROM {quoted} ORDER BY {key_expr} LIMIT ?)",
-                        (rows_per_table,),
-                    )
-                else:
-                    dst.execute(
-                        f"DELETE FROM {quoted} WHERE rowid NOT IN "
-                        f"(SELECT rowid FROM {quoted} ORDER BY rowid LIMIT ?)",
-                        (rows_per_table,),
-                    )
+                dst.execute(
+                    f"DELETE FROM {quoted} WHERE rowid NOT IN "
+                    f"(SELECT rowid FROM {quoted} ORDER BY rowid LIMIT ?)",
+                    (rows_per_table,),
+                )
             if "users" in tables:
                 dst.execute("UPDATE users SET email = NULL")
             if "google_oauth_tokens" in tables:
