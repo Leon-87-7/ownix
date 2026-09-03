@@ -5,7 +5,7 @@ services:
     image: ${VIG_IMAGE:-vig-app}
     environment:
       DB_PATH: /app/data/jobs.db
-    ports:
+    ports: !override
       - "8001:8000"
     volumes:
       - ./data-staging:/app/data

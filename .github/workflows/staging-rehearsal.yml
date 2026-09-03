@@ -36,8 +36,8 @@ jobs:
             cd /opt/ownix
             mkdir -p data-staging
             python -m scripts.db_snapshot data/jobs.db data-staging/jobs.db
-            docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+            docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
               --profile staging up -d api worker
-            docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+            docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
               exec -T api python -c 'import asyncio; from src.database import init_db; asyncio.run(init_db())'
           REMOTE
