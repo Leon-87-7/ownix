@@ -16,6 +16,8 @@ jobs:
   rehearse:
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Refresh sanitized data and start isolated staging services
@@ -35,6 +37,9 @@ jobs:
             "export VIG_IMAGE='$REQUESTED_IMAGE'; bash -s" <<'REMOTE'
             cd /opt/ownix
             mkdir -p data-staging
+            docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
+              --profile staging down
+            rm -f data-staging/jobs.db-wal data-staging/jobs.db-shm
             python -m scripts.db_snapshot data/jobs.db data-staging/jobs.db
             docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
               --profile staging up -d api worker

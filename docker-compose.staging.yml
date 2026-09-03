@@ -1,25 +1,31 @@
+# Requires Docker Compose 2.24.4+ (the `!override` merge tag used below to
+# replace, rather than append to, the base file's ports/volumes/env_file).
 services:
   api:
     profiles: ["staging"]
     container_name: vig-api-staging
     image: ${VIG_IMAGE:-vig-app}
+    env_file: .env.staging
     environment:
       DB_PATH: /app/data/jobs.db
     ports: !override
       - "8001:8000"
-    volumes:
+    volumes: !override
       - ./data-staging:/app/data
       - ./logs-staging:/app/logs
+      - ./credentials-staging:/app/credentials:ro
 
   worker:
     profiles: ["staging"]
     container_name: vig-worker-staging
     image: ${VIG_IMAGE:-vig-app}
+    env_file: .env.staging
     environment:
       DB_PATH: /app/data/jobs.db
-    volumes:
+    volumes: !override
       - ./data-staging:/app/data
       - ./logs-staging:/app/logs
+      - ./credentials-staging:/app/credentials:ro
 
   cloudflared:
     profiles: ["production-only"]

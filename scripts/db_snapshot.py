@@ -15,12 +15,29 @@ Run with ``python -m scripts.db_snapshot [SOURCE] OUTPUT``. SOURCE defaults to
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 import sys
 from contextlib import closing
 from pathlib import Path
 
 from src.config import settings
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _primary_key_columns(dst: sqlite3.Connection, table: str) -> list[str]:
+    """Return *table*'s PK columns in declaration order (empty if none/ordinary rowid)."""
+    info = dst.execute(f'PRAGMA table_info("{table}")').fetchall()
+    ordered = sorted((row[5], row[1]) for row in info if row[5])
+    return [name for _, name in ordered]
+
+
+def _is_without_rowid(dst: sqlite3.Connection, table: str) -> bool:
+    row = dst.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return bool(row and row[0] and "WITHOUT ROWID" in row[0].upper())
 
 
 def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 100) -> None:
@@ -42,12 +59,23 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
             }
             dst.execute("PRAGMA foreign_keys=OFF")
             for table in tables:
-                quoted = table.replace('"', '""')
-                dst.execute(
-                    f'DELETE FROM "{quoted}" WHERE rowid NOT IN '
-                    f'(SELECT rowid FROM "{quoted}" ORDER BY rowid LIMIT ?)',
-                    (rows_per_table,),
-                )
+                if not _IDENTIFIER_RE.match(table):
+                    raise ValueError(f"unsupported table name: {table!r}")
+                quoted = f'"{table}"'
+                if _is_without_rowid(dst, table):
+                    pk_cols = _primary_key_columns(dst, table)
+                    key_expr = ", ".join(f'"{col}"' for col in pk_cols)
+                    dst.execute(
+                        f"DELETE FROM {quoted} WHERE ({key_expr}) NOT IN "
+                        f"(SELECT {key_expr} FROM {quoted} ORDER BY {key_expr} LIMIT ?)",
+                        (rows_per_table,),
+                    )
+                else:
+                    dst.execute(
+                        f"DELETE FROM {quoted} WHERE rowid NOT IN "
+                        f"(SELECT rowid FROM {quoted} ORDER BY rowid LIMIT ?)",
+                        (rows_per_table,),
+                    )
             if "users" in tables:
                 dst.execute("UPDATE users SET email = NULL")
             if "google_oauth_tokens" in tables:
@@ -59,6 +87,9 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
             if "job_thumbnails" in tables:
                 dst.execute("UPDATE job_thumbnails SET bytes = X''")
             dst.commit()
+            fk_violations = dst.execute("PRAGMA foreign_key_check").fetchall()
+            if fk_violations:
+                raise RuntimeError(f"snapshot foreign_key_check failed: {fk_violations!r}")
             result = dst.execute("PRAGMA integrity_check").fetchone()
             if result != ("ok",):
                 raise RuntimeError(f"snapshot integrity_check failed: {result!r}")

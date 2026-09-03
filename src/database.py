@@ -1497,9 +1497,11 @@ def _restore_database_file(backup_path: Path, db_path: Path) -> int:
                 raise RuntimeError(f"backup integrity_check failed: {integrity!r}")
             version = int(backup.execute("PRAGMA user_version").fetchone()[0])
         restore_tmp = db_path.with_name(f".{db_path.name}.restore")
-        with closing(sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True)) as source:
-            with closing(sqlite3.connect(restore_tmp)) as destination:
-                source.backup(destination)
+        with (
+            closing(sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True)) as source,
+            closing(sqlite3.connect(restore_tmp)) as destination,
+        ):
+            source.backup(destination)
         os.replace(restore_tmp, db_path)
         for suffix in ("-wal", "-shm"):
             db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
@@ -1609,12 +1611,16 @@ async def init_db() -> None:
             await conn.commit()
     except Exception:
         if migration_started and backup_path is not None:
-            restored_version = _restore_database_file(backup_path, db_path)
-            log.error(
-                "db_migration_backup_restored",
-                path=str(backup_path),
-                restored_version=restored_version,
-            )
+            try:
+                restored_version = _restore_database_file(backup_path, db_path)
+            except Exception:
+                log.exception("db_migration_backup_restore_failed", path=str(backup_path))
+            else:
+                log.error(
+                    "db_migration_backup_restored",
+                    path=str(backup_path),
+                    restored_version=restored_version,
+                )
         raise
     log.info("db_initialized", path=settings.DB_PATH)
 
