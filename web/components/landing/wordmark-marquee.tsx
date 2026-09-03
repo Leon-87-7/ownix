@@ -54,7 +54,7 @@ function Items() {
           focusable="false"
           className="h-5 w-auto shrink-0"
         />
-        X
+        
       </span>
       <span className="flex shrink-0 items-center gap-1 font-mono text-sm font-medium text-ink">
         <FacebookIcon
