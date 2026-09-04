@@ -1771,3 +1771,53 @@ async def test_failed_migration_restores_snapshot_and_reraises(tmp_path, monkeyp
 
     async with aiosqlite.connect(db_path) as conn:
         assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == old_version
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_returns_immediately_when_current(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+
+    await asyncio.wait_for(database.wait_for_schema_ready(timeout_seconds=5), timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_times_out_when_stale(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    with pytest.raises(TimeoutError):
+        await database.wait_for_schema_ready(timeout_seconds=0.3, poll_interval_seconds=0.1)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_returns_once_peer_finishes_migrating(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    wait_task = asyncio.create_task(
+        database.wait_for_schema_ready(timeout_seconds=5, poll_interval_seconds=0.1)
+    )
+    await asyncio.sleep(0.2)
+    assert not wait_task.done(), "should still be waiting for the peer's migration"
+
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS)}")
+        await conn.commit()
+
+    await asyncio.wait_for(wait_task, timeout=5)

@@ -7,10 +7,12 @@ no silent swallowing.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
 import sqlite3
+import time
 from contextlib import asynccontextmanager, closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1545,6 +1547,35 @@ async def _approve_operator_user(conn: aiosqlite.Connection) -> None:
         return
     await _upsert_minimal_user(conn, tg_id=operator_chat_id, status="approved")
     log.info("operator_user_approved", tg_id=operator_chat_id)
+
+
+async def wait_for_schema_ready(
+    timeout_seconds: float = 60.0, poll_interval_seconds: float = 1.0
+) -> None:
+    """Block until another process's ``init_db()`` has finished migrating.
+
+    Never runs a migration itself — unlike calling ``init_db()`` from two
+    processes sharing one SQLite file, this cannot race a peer's migration or
+    its backup/restore-on-failure guard, regardless of container restart
+    timing. Intended for a process (e.g. the worker) that must never be the
+    one to apply schema changes; the sole migration owner (the api container)
+    still calls ``init_db()`` directly.
+    """
+    db_path = Path(settings.DB_PATH)
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        if db_path.is_file():
+            async with aiosqlite.connect(settings.DB_PATH) as conn:
+                cur = await conn.execute("PRAGMA user_version")
+                current_version = (await cur.fetchone())[0]
+            if current_version >= len(_MIGRATIONS):
+                return
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"schema not ready after {timeout_seconds}s "
+                f"(is the api container running and healthy?)"
+            )
+        await asyncio.sleep(poll_interval_seconds)
 
 
 async def init_db() -> None:

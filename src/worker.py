@@ -380,12 +380,11 @@ async def reap_stale_jobs() -> None:
 
 async def loop() -> None:
     log.info("worker_started")
-    # docker-compose.yml gates worker on api's healthcheck, which only turns healthy after
-    # api's own init_db() completes — so by the time this runs, migrations are already
-    # applied and this is a no-op. Without that ordering, two processes racing to migrate
-    # (and, on failure, one restoring the pre-migration backup under the other's open
-    # connection) could corrupt the live file — see #518.
-    await database.init_db()
+    # api is the sole migration owner (its init_db() can back up, migrate, and restore
+    # on failure). worker only waits for that to finish — it never runs init_db() itself,
+    # so it structurally cannot race api's migration, regardless of container restart
+    # timing. See #518.
+    await database.wait_for_schema_ready()
 
     from src.processors import prd as _prd
 
