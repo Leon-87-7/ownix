@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 14 App Router, React, TypeScript, Vitest + React Testing Library + MSW, lucide-react icons, the browser Web Speech API (`speechSynthesis` / `SpeechSynthesisUtterance` — no backend, no third-party API).
 
-**Spec:** This plan implements the **Listen button** decisions reached in a `/grill-with-search-docs` session, recorded in `CONTEXT.md` (glossary entry "Listen button") and `docs/adr/0059-listen-button-uses-browser-tts-not-fish-audio.md`. Read both before starting — they carry the "why" behind every constraint below.
+**Spec:** This plan implements the **Listen button** decisions reached in a `/grill-search` session, recorded in `CONTEXT.md` (glossary entry "Listen button") and `docs/adr/0059-listen-button-uses-browser-tts-not-fish-audio.md`. Read both before starting — they carry the "why" behind every constraint below.
 
 ## Global Constraints
 

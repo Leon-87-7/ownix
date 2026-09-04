@@ -8,7 +8,7 @@ Canonical home for feature ideas, from one-line spark to grill-ready brief.
 2. Run **`/pre-grill`** — it grounds each one-liner in the real code, fattens it
    into a technical brief (Context · Wanted · Scope · Open questions), moves it
    into `## Briefs`, and clears it from the Inbox.
-3. **Grill** the briefed tasks (`/grill-with-docs`, `/grill-with-search-docs`,
+3. **Grill** the briefed tasks (`/grill-with-docs`, `/grill-search`,
    or `/grilling`) to resolve the Open questions, then `/to-issue-kanban` or
    `/spec-to-kanban`.
 
@@ -733,7 +733,7 @@ invite card and via the `/approve_pending <domain>` batch path.
 
 ## 23. Gemini resilience — model downgrade, 429 requeue-with-backoff, second provider
 
-> **Grill:** `/grill-with-search-docs` — hinges on google-genai SDK error
+> **Grill:** `/grill-search` — hinges on google-genai SDK error
 > types and OpenRouter/Groq API docs.
 
 > **Grounded:** 2026-07-27 — re-verified: no retry/backoff/attempt logic has
@@ -797,7 +797,7 @@ retry → other provider) instead of failing the job on first contact.
 
 ## 25. Migrate the canonical app URL `app.` → `ownix.leondev.xyz`
 
-> **Grill:** `/grill-with-search-docs` — hinges on external integration config
+> **Grill:** `/grill-search` — hinges on external integration config
 > (Google OAuth consent verification, Vercel domain, Telegram Login Widget
 > domain check) rather than repo internals.
 
@@ -891,7 +891,7 @@ routes likely need no change.
 
 ## 27. New Telegram bot aligned to the Ownix brand
 
-> **Grill:** `/grill-with-search-docs` — hinges on BotFather setup and the
+> **Grill:** `/grill-search` — hinges on BotFather setup and the
 > webhook re-registration flow (external Telegram API), not repo internals.
 
 > **Grill together with tasks 25 and 26** — the Ownix rebrand. A new bot handle
@@ -1111,7 +1111,7 @@ router.back(); else router.push('/feed')`, so a deep link, bookmark or hard
 
 ## 34. Widen video source coverage — an `unsized` content_type resolved by duration ✅ ISSUED TO GITHUB #466 #467 #468 #469
 
-> **Grill:** `/grill-with-search-docs` — in progress 2026-08-01. Origin: a
+> **Grill:** `/grill-search` — in progress 2026-08-01. Origin: a
 > competitor comparison against **Youwee** (`vanloctech/youwee`), a Tauri
 > desktop GUI wrapping yt-dlp/FFmpeg that advertises 1800+ supported sites.
 > Sibling idea from the same comparison (browser extension / share-target for
