@@ -77,8 +77,19 @@ describe('groupVoicesByLanguage', () => {
   });
 
   it('falls back to the raw tag when Intl.DisplayNames throws on a malformed lang', () => {
-    // Verified: new Intl.DisplayNames(['en'], {type:'language'}).of('not-a-real-lang-tag')
-    // throws RangeError rather than returning a fallback string.
+    // Intl.DisplayNames' throw-on-malformed-tag behavior isn't portable across
+    // ICU implementations (verified: throws on Windows/V8; the Linux CI
+    // runner's ICU instead loosely resolves 'not-a-real-lang-tag' to 'not'
+    // without throwing) — stub the constructor so this test exercises
+    // languageLabel's catch branch deterministically regardless of host ICU.
+    vi.stubGlobal('Intl', {
+      ...Intl,
+      DisplayNames: class {
+        of(): string {
+          throw new RangeError('invalid');
+        }
+      },
+    });
     const groups = groupVoicesByLanguage([voice({ voiceURI: 'z', name: 'Zed', lang: 'not-a-real-lang-tag' })]);
     expect(groups).toEqual([{ lang: 'not-a-real-lang-tag', label: 'not-a-real-lang-tag', voices: [expect.objectContaining({ voiceURI: 'z' })] }]);
   });
