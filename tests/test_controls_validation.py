@@ -54,14 +54,17 @@ def test_accessibility_settings_endpoints_roundtrip(controls_client: TestClient)
     assert controls_client.get(endpoint).json() == {
         "visual_motion": True,
         "haptic_motion": True,
+        "voice_uri": None,
     }
     saved = controls_client.put(
         endpoint,
-        json={"visual_motion": False, "haptic_motion": True},
+        json={"visual_motion": False, "haptic_motion": True, "voice_uri": "Daniel"},
     )
-    assert saved.status_code == 200
-    assert controls_client.get(endpoint).json() == saved.json()
-    assert controls_client.put(endpoint, json={"visual_motion": True}).status_code == 422
+    assert saved.json() == {
+        "visual_motion": False,
+        "haptic_motion": True,
+        "voice_uri": "Daniel",
+    }
 
 
 def test_tag_endpoints_return_409_for_canonical_collisions(
@@ -98,13 +101,25 @@ def test_tag_endpoints_return_409_for_canonical_collisions(
 def test_accessibility_settings_get_put_and_validate(controls_client: TestClient) -> None:
     response = controls_client.get("/api/controls/accessibility-settings")
     assert response.status_code == 200
-    assert response.json() == {"visual_motion": True, "haptic_motion": True}
+    assert response.json() == {
+        "visual_motion": True,
+        "haptic_motion": True,
+        "voice_uri": None,
+    }
     response = controls_client.put(
         "/api/controls/accessibility-settings",
-        json={"visual_motion": False, "haptic_motion": True},
+        json={"visual_motion": False, "haptic_motion": True, "voice_uri": None},
     )
     assert response.status_code == 200
     assert controls_client.get("/api/controls/accessibility-settings").json() == response.json()
     assert controls_client.put(
         "/api/controls/accessibility-settings", json={"visual_motion": False}
+    ).status_code == 422
+    assert controls_client.put(
+        "/api/controls/accessibility-settings",
+        json={"visual_motion": False, "haptic_motion": True},
+    ).status_code == 422
+    assert controls_client.put(
+        "/api/controls/accessibility-settings",
+        json={"visual_motion": False, "haptic_motion": True, "voice_uri": "x" * 513},
     ).status_code == 422

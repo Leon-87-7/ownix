@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor, within } from '@/test/render';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, act, cleanup } from '@/test/render';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import ControlsPage from './page';
+import { resetAccessibilitySettingsForTests } from '@/lib/hooks/useAccessibilitySettings';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
@@ -64,6 +65,7 @@ beforeEach(() => {
       return new Response(JSON.stringify({
         visual_motion: true,
         haptic_motion: true,
+        voice_uri: null,
       }), { status: 200 });
     }
     if (init?.method === 'PUT') {
@@ -71,6 +73,12 @@ beforeEach(() => {
     }
     return new Response(JSON.stringify({ telegram_notifications: true }), { status: 200 });
   }));
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  resetAccessibilitySettingsForTests();
 });
 
 // Each section is a native <details>; all mount at once, so scope queries to
@@ -98,6 +106,185 @@ describe('ControlsPage', () => {
     expect(screen.getByRole('heading', { name: 'Ignored' })).toBeTruthy();
     expect(screen.getByText('Accessibility')).toBeTruthy();
     expect(screen.getByText('Press animation')).toBeTruthy();
+  });
+
+  it('hides the Voice row when speech synthesis is unsupported', () => {
+    // Explicit regardless of prior test ordering/global stub leakage — vitest
+    // doesn't auto-clear vi.stubGlobal between tests in this file (its
+    // beforeEach only re-stubs fetch), so a speechSynthesis stub set by a
+    // later-defined test must never be relied on to be absent here.
+    delete (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+    render(<ControlsPage />);
+    expect(section('Accessibility').queryByText('Voice')).toBeNull();
+  });
+
+  it('shows the Voice row grouped by language and lets the operator pick a voice', async () => {
+    const voices = [
+      { voiceURI: 'us', name: 'Google US English', lang: 'en-US' },
+      { voiceURI: 'uk', name: 'Daniel', lang: 'en-GB' },
+    ] as SpeechSynthesisVoice[];
+    vi.stubGlobal('speechSynthesis', {
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      getVoices: vi.fn(() => voices),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    render(<ControlsPage />);
+
+    const select = await section('Accessibility').findByLabelText('Voice') as HTMLSelectElement;
+    expect(within(select).getByText('System default')).toBeTruthy();
+    // Intl.DisplayNames(['en'], {type:'language'}).of('en-US') resolves to
+    // "American English" under Node/browser ICU data, not a literal
+    // "English (United States)" — assert the real resolved label.
+    expect(within(select).getByRole('group', { name: 'American English' })).toBeTruthy();
+    expect(within(select).getByText('Google US English')).toBeTruthy();
+    expect(within(select).getByText('Daniel')).toBeTruthy();
+
+    fireEvent.change(select, { target: { value: 'uk' } });
+    await waitFor(() => expect(select.value).toBe('uk'));
+  });
+
+  it('shows an unavailable-voice placeholder and lets the operator clear it to System default', async () => {
+    const voices = [
+      { voiceURI: 'us', name: 'Google US English', lang: 'en-US' },
+    ] as SpeechSynthesisVoice[];
+    vi.stubGlobal('speechSynthesis', {
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      getVoices: vi.fn(() => voices),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    // Override this test's GET response with a voice_uri from a machine/browser
+    // that doesn't have that voice installed.
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('accessibility-settings')) {
+        if (init?.method === 'PUT') return new Response(init.body as string, { status: 200 });
+        return new Response(JSON.stringify({
+          visual_motion: true,
+          haptic_motion: true,
+          voice_uri: 'a-voice-from-another-machine',
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ telegram_notifications: true }), { status: 200 });
+    }));
+    render(<ControlsPage />);
+
+    const select = await section('Accessibility').findByLabelText('Voice') as HTMLSelectElement;
+    // Showing "" here (silently) would be a dead end: the same-value click
+    // wouldn't fire onChange, so the stale URI could never be cleared. It
+    // must show the missing URI as its own (disabled) option instead.
+    await waitFor(() => expect(select.value).toBe('a-voice-from-another-machine'));
+    expect(within(select).getByText('Unavailable voice')).toBeTruthy();
+
+    fireEvent.change(select, { target: { value: '' } });
+    await waitFor(() => expect(select.value).toBe(''));
+  });
+
+  it('keeps the newer voice pick when its PUT resolves before an older overlapping one', async () => {
+    // Regression test for the generationRef guard: pick 'us' (PUT deferred),
+    // then pick 'uk' before the first PUT resolves (PUT also deferred).
+    // Resolve the OLDER ('us') request last — without the guard, its
+    // response would land last and roll the UI back to 'us'.
+    //
+    // Note: a mouse/keyboard user can't literally trigger this — the select
+    // is disabled while saving={true}, so a real second pick can't happen
+    // before the first PUT settles. fireEvent.change bypasses the disabled
+    // attribute (it dispatches the DOM event directly), which is exactly
+    // what's needed here: this test exercises the generationRef guard logic
+    // itself, the same logic Task 3's "external write invalidates a slower
+    // in-flight load" test exercises from the other direction — not a
+    // literal two-click scenario.
+    const voices = [
+      { voiceURI: 'us', name: 'Google US English', lang: 'en-US' },
+      { voiceURI: 'uk', name: 'Daniel', lang: 'en-GB' },
+    ] as SpeechSynthesisVoice[];
+    vi.stubGlobal('speechSynthesis', {
+      cancel: vi.fn(),
+      speak: vi.fn(),
+      getVoices: vi.fn(() => voices),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+
+    let resolveFirstPut!: (response: Response) => void;
+    let resolveSecondPut!: (response: Response) => void;
+    const firstPut = new Promise<Response>((done) => { resolveFirstPut = done; });
+    const secondPut = new Promise<Response>((done) => { resolveSecondPut = done; });
+    let putCount = 0;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('accessibility-settings')) {
+        if (init?.method === 'PUT') {
+          putCount += 1;
+          return putCount === 1 ? firstPut : secondPut;
+        }
+        return Promise.resolve(new Response(JSON.stringify({
+          visual_motion: true,
+          haptic_motion: true,
+          voice_uri: null,
+        }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ telegram_notifications: true }), { status: 200 }));
+    }));
+
+    render(<ControlsPage />);
+    const select = await section('Accessibility').findByLabelText('Voice') as HTMLSelectElement;
+
+    fireEvent.change(select, { target: { value: 'us' } });
+    await waitFor(() => expect(select.value).toBe('us'));
+    fireEvent.change(select, { target: { value: 'uk' } });
+    await waitFor(() => expect(select.value).toBe('uk'));
+
+    await act(async () => {
+      // Older request resolves LAST.
+      resolveSecondPut(new Response(JSON.stringify({
+        visual_motion: true, haptic_motion: true, voice_uri: 'uk',
+      }), { status: 200 }));
+      await secondPut;
+      resolveFirstPut(new Response(JSON.stringify({
+        visual_motion: true, haptic_motion: true, voice_uri: 'us',
+      }), { status: 200 }));
+      await firstPut;
+    });
+
+    expect(select.value).toBe('uk');
+  });
+
+  it('previews the selected voice via the Listen affordance', async () => {
+    const voices = [
+      { voiceURI: 'us', name: 'Google US English', lang: 'en-US' },
+    ] as SpeechSynthesisVoice[];
+    const speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', {
+      cancel: vi.fn(),
+      speak,
+      getVoices: vi.fn(() => voices),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    render(<ControlsPage />);
+
+    // Wait for the exact element being clicked, not a sibling: the select's
+    // visibility is gated on useSpeechVoices' own supported flag, but the
+    // preview button's is gated on ListenButton's *own* internal useSpeech
+    // effect — a separate hook instance with its own tick. Waiting on the
+    // select alone doesn't guarantee the button is mounted yet.
+    const previewButton = await section('Accessibility').findByRole('button', { name: 'Preview voice' });
+    fireEvent.click(previewButton);
+    expect(speak).toHaveBeenCalledOnce();
   });
 
   it('shows Tags section content', () => {

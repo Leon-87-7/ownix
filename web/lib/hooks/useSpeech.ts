@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAccessibilitySettings } from './useAccessibilitySettings';
 
 // ponytail: module-scoped, shared by every useSpeech instance. Browsers
 // don't reliably fire onend/onerror for a queued-but-not-started utterance
@@ -8,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // so the button that queued it needs an explicit nudge to drop "speaking".
 let activeClear: (() => void) | null = null;
 
-export function useSpeech(text: string) {
+export function useSpeech(text: string, voiceURIOverride?: string | null) {
   // ponytail: starts false so server and first client render match; flips
   // true post-mount, avoiding a hydration mismatch on supported browsers.
   const [supported, setSupported] = useState(false);
@@ -18,6 +19,8 @@ export function useSpeech(text: string) {
   // after cancel() on a queued-but-not-yet-started utterance) can't clobber
   // state for whichever utterance actually replaced it.
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const { voice_uri: persistedVoiceURI } = useAccessibilitySettings();
+  const voiceURI = voiceURIOverride !== undefined ? voiceURIOverride : persistedVoiceURI;
 
   useEffect(() => {
     setSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
@@ -50,6 +53,10 @@ export function useSpeech(text: string) {
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
+    if (voiceURI) {
+      const match = window.speechSynthesis.getVoices().find((v) => v.voiceURI === voiceURI);
+      if (match) utterance.voice = match;
+    }
     const clear = () => {
       if (utteranceRef.current !== utterance) return;
       utteranceRef.current = null;
@@ -68,7 +75,7 @@ export function useSpeech(text: string) {
     speakingRef.current = true;
     setSpeaking(true);
     window.speechSynthesis.speak(utterance);
-  }, [speaking, supported, text]);
+  }, [speaking, supported, text, voiceURI]);
 
   return { supported, speaking, toggle };
 }

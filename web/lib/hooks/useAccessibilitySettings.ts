@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export interface AccessibilitySettings {
   visual_motion: boolean;
   haptic_motion: boolean;
+  voice_uri: string | null;
 }
 
 export interface AccessibilitySettingsState extends AccessibilitySettings {
@@ -29,16 +30,26 @@ export function publishAccessibilitySettings(value: AccessibilitySettings) {
   notify();
 }
 
+/** For call sites that run their own save flow (e.g. AccessibilitySection)
+ * but still publish into the shared store — invalidates any in-flight
+ * load() so a slower GET response can't overwrite this fresher write.
+ * saveAccessibilitySetting() doesn't need this: it already tracks its own
+ * generation end-to-end. */
+export function publishAccessibilitySettingsFromExternalWrite(value: AccessibilitySettings) {
+  requestGeneration += 1;
+  publishAccessibilitySettings(value);
+}
+
 /** Optimistic PUT with rollback, guarded against out-of-order responses so an
  * older overlapping call can never publish over a newer one. Mirrors the
  * requestGeneration pattern in web/lib/fetch-utils.ts's useFetchDetail. */
-export async function saveAccessibilitySetting(
-  key: keyof AccessibilitySettings,
-  checked: boolean,
+export async function saveAccessibilitySetting<K extends keyof AccessibilitySettings>(
+  key: K,
+  value: AccessibilitySettings[K],
 ): Promise<void> {
   const generation = ++requestGeneration;
-  const previous = stored ?? { visual_motion: true, haptic_motion: true };
-  const next = { ...previous, [key]: checked };
+  const previous = stored ?? { visual_motion: true, haptic_motion: true, voice_uri: null };
+  const next = { ...previous, [key]: value };
   publishAccessibilitySettings(next);
   try {
     const response = await fetch("/api/controls/accessibility-settings", {
@@ -59,6 +70,7 @@ export async function saveAccessibilitySetting(
 export function resetAccessibilitySettingsForTests() {
   stored = null;
   loading = null;
+  requestGeneration += 1;
   notify();
 }
 
@@ -101,7 +113,7 @@ export function useAccessibilitySettings(): AccessibilitySettingsState {
   }, []);
 
   return {
-    ...(stored ?? { visual_motion: !reducedMotion, haptic_motion: true }),
+    ...(stored ?? { visual_motion: !reducedMotion, haptic_motion: true, voice_uri: null }),
     loaded: stored !== null,
   };
 }

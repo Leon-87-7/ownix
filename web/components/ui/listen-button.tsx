@@ -4,8 +4,16 @@ import { Square, Volume2 } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useSpeech } from '@/lib/hooks/useSpeech';
 
-export function ListenButton({ text, ariaLabel }: { text: string; ariaLabel: string }) {
-  const { supported, speaking, toggle } = useSpeech(text);
+export function ListenButton({
+  text,
+  ariaLabel,
+  voiceURI,
+}: {
+  text: string;
+  ariaLabel: string;
+  voiceURI?: string | null;
+}) {
+  const { supported, speaking, toggle } = useSpeech(text, voiceURI);
   if (!supported || !text.trim()) return null;
 
   const label = speaking ? 'Stop' : ariaLabel;

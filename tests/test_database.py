@@ -1702,15 +1702,35 @@ async def test_accessibility_settings_roundtrip_and_normalizes_invalid_values(
     db_path = tmp_path / "accessibility-settings.db"
     monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
     await database.init_db()
-    defaults = {"visual_motion": True, "haptic_motion": True}
+    defaults = {"visual_motion": True, "haptic_motion": True, "voice_uri": None}
     assert await database.get_accessibility_settings(42) == defaults
     saved = await database.set_accessibility_settings(
-        42, visual_motion=False, haptic_motion=True
+        42, visual_motion=False, haptic_motion=True, voice_uri="Microsoft Zira Desktop"
     )
+    assert saved == {
+        "visual_motion": False,
+        "haptic_motion": True,
+        "voice_uri": "Microsoft Zira Desktop",
+    }
     assert await database.get_accessibility_settings(42) == saved
-    for malformed in ('{"visual_motion":false}', '{"visual_motion":"no"}', "{not-json"):
+    for malformed in (
+        '{"visual_motion":false}',
+        '{"visual_motion":"no"}',
+        "{not-json",
+        '{"visual_motion":true,"haptic_motion":true,"voice_uri":123}',
+    ):
         await database.set_user_setting(42, "dashboard_accessibility_settings", malformed)
         assert await database.get_accessibility_settings(42) == defaults
+    # A row saved before this feature shipped has no voice_uri key at all —
+    # must be treated as "no preference", not fall back to defaults wholesale.
+    await database.set_user_setting(
+        42, "dashboard_accessibility_settings", '{"visual_motion":false,"haptic_motion":false}'
+    )
+    assert await database.get_accessibility_settings(42) == {
+        "visual_motion": False,
+        "haptic_motion": False,
+        "voice_uri": None,
+    }
 
 
 @pytest.mark.asyncio

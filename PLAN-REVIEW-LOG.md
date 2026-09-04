@@ -93,3 +93,30 @@ VERDICT: APPROVED
 ---
 
 **Outcome: APPROVED after 4 rounds.** See the plan file's own "Self-Review" section (rounds 1-3 notes) for the condensed rationale behind every accepted/rejected finding.
+
+## Act 3 — Build
+
+### Round 1 — Codex build
+
+Thread ID: `01a06e76-03fe-7430-ac28-0f22fc697825`. Model: gpt-5.5 (reasoning_effort=high), `codex exec --yolo`. All 7 tasks implemented in one pass, no fix rounds needed. ~16m18s, 229k tokens.
+
+Files changed: `src/database.py`, `src/api/controls.py`, `tests/test_database.py`, `tests/test_controls_validation.py`, `web/lib/hooks/useAccessibilitySettings.ts(.test.ts)`, `web/lib/hooks/useSpeechVoices.ts(.test.ts)` (new), `web/lib/hooks/useSpeech.ts(.test.ts)`, `web/components/ui/listen-button.tsx(.test.tsx)`, `web/app/(dashboard)/controls/page.tsx(.test.tsx)`.
+
+Codex-reported deviations (all minor, no scope change):
+- Task 1/2 red-phase failures tripped on slightly different assertions than the plan predicted (earlier sequential edits exposed the missing layer sooner) — still proved the intended missing behavior.
+- Task 3 test fixture needed a fresh `Response` per mocked fetch call; reusing one caused `Body is unusable`.
+- Task 7 test cleanup needed explicit `cleanup()` before `vi.unstubAllGlobals()`, otherwise unmount effects ran after `speechSynthesis` had already been removed.
+
+No `git add`/`git commit` was run, per the build constraints (commits happen after human review).
+
+### Claude's verdict (round 1)
+
+Read the full diff against the spec file-by-file: backend (`src/database.py`, `src/api/controls.py`) and all frontend hooks/components match the plan's code blocks verbatim, including the `voice_uri` normalization exception, the generic `saveAccessibilitySetting<K>`, `publishAccessibilitySettingsFromExternalWrite`, `useSpeechVoices`'s `Intl.DisplayNames` try/catch, and the Controls page's `isPersistedVoiceInstalled`/"Unavailable voice" handling. Diff scope is exactly the plan's Key Paths — no unrelated files touched, no unrequested abstractions.
+
+Verified proof independently (not trusting Codex's pasted output):
+- `python -m pytest tests/test_database.py tests/test_controls_validation.py -q` → 92 passed.
+- `npx vitest run` (the 5 targeted spec files) → 75 passed.
+- Full `npx vitest run` (regression check beyond the plan's own proof scope, since `useAccessibilitySettings` is a shared singleton consumed by `usePressFeedback`/`useHapticFeedback` elsewhere) → 801 passed, 2 failed on 5s timeouts in `feed/page.test.tsx` and `intake/page.test.tsx` (neither touched by this diff). Re-ran both in isolation → both pass (48/48). Confirmed as resource-contention flakiness from the full-suite run, not a regression.
+- `npm run lint` → 0 errors, 87 pre-existing-pattern warnings (one in the new `useSpeechVoices.ts` matches an identical `react-hooks/set-state-in-effect` warning already present in `useVisualViewport.ts` — consistent with existing codebase posture, not a new problem).
+
+No fix round needed. Verdict: approved, pending human sign-off on the diff.

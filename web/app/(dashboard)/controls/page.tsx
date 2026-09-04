@@ -20,10 +20,16 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TagForm, DEFAULT_COLOR } from "@/components/ui/tag-form";
 import { useReducedMotion } from "@/lib/hooks/useReducedMotion";
 import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
+import { useSpeechVoices, groupVoicesByLanguage } from "@/lib/hooks/useSpeechVoices";
+import { ListenButton } from "@/components/ui/listen-button";
 import {
-  publishAccessibilitySettings,
+  publishAccessibilitySettingsFromExternalWrite,
   type AccessibilitySettings,
 } from "@/lib/hooks/useAccessibilitySettings";
+
+const VOICE_PREVIEW_TEXT = "This is how enrichment will sound.";
+const VOICE_SELECT_CLASS =
+  "h-10 flex-1 rounded-md border border-line bg-canvas px-3 text-sm text-ink outline-none transition-ui focus:border-signal disabled:cursor-not-allowed disabled:text-muted disabled:opacity-70";
 
 function TagPill({
   tag,
@@ -395,14 +401,35 @@ function AccessibilitySection() {
   const [settings, setSettings] = useState<AccessibilitySettings>({
     visual_motion: true,
     haptic_motion: true,
+    voice_uri: null,
   });
   // Only true once a real GET response has applied, so a failed initial
   // load can't leave the checkboxes editable against the hardcoded
-  // { true, true } placeholder above.
+  // { true, true, null } placeholder above.
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const pressFeedback = usePressFeedback();
+  const { supported: speechSupported, voices } = useSpeechVoices();
+  const voiceGroups = groupVoicesByLanguage(voices);
+  // Guards against an older overlapping update() call (e.g. toggling a
+  // checkbox right after picking a voice) resolving last and clobbering a
+  // newer save's result — mirrors saveAccessibilitySetting's own
+  // requestGeneration pattern in useAccessibilitySettings.ts, needed here too
+  // now that a row's onChange can fire faster than a round trip resolves.
+  const generationRef = useRef(0);
+  // The persisted voice_uri may not be among voices on this browser/device
+  // (set on another machine, or the voice was uninstalled). Silently showing
+  // "System default" while the stored value is still the missing URI is a
+  // dead end: the select's value already equals "" then, so choosing
+  // "System default" from the list is a no-op click (onChange only fires on
+  // an actual value change) and the stale URI is never cleared. Instead,
+  // render it as its own disabled option so it's visibly the current
+  // selection, and picking "System default" (a real value change) fires
+  // onChange and persists null like any other pick.
+  const isPersistedVoiceInstalled = voiceGroups.some((group) =>
+    group.voices.some((voice) => voice.voiceURI === settings.voice_uri),
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -415,7 +442,7 @@ function AccessibilitySection() {
       .then((value) => {
         if (!controller.signal.aborted) {
           setSettings(value);
-          publishAccessibilitySettings(value);
+          publishAccessibilitySettingsFromExternalWrite(value);
           setLoaded(true);
         }
       })
@@ -434,11 +461,15 @@ function AccessibilitySection() {
     return () => controller.abort();
   }, []);
 
-  const toggle = async (key: keyof AccessibilitySettings, checked: boolean) => {
+  const update = async <K extends keyof AccessibilitySettings>(
+    key: K,
+    value: AccessibilitySettings[K],
+  ) => {
+    const generation = ++generationRef.current;
     const previous = settings;
-    const next = { ...settings, [key]: checked };
+    const next = { ...settings, [key]: value };
     setSettings(next);
-    publishAccessibilitySettings(next);
+    publishAccessibilitySettingsFromExternalWrite(next);
     setSaving(true);
     setError(undefined);
     try {
@@ -447,18 +478,20 @@ function AccessibilitySection() {
         next,
         "Failed to save accessibility settings",
       );
+      if (generation !== generationRef.current) return;
       setSettings(saved);
-      publishAccessibilitySettings(saved);
+      publishAccessibilitySettingsFromExternalWrite(saved);
     } catch (caught) {
+      if (generation !== generationRef.current) return;
       setSettings(previous);
-      publishAccessibilitySettings(previous);
+      publishAccessibilitySettingsFromExternalWrite(previous);
       setError(
         caught instanceof Error
           ? caught.message
           : "Failed to save accessibility settings",
       );
     } finally {
-      setSaving(false);
+      if (generation === generationRef.current) setSaving(false);
     }
   };
 
@@ -485,7 +518,7 @@ function AccessibilitySection() {
               type="checkbox"
               checked={settings[key]}
               disabled={!loaded || saving}
-              onChange={(event) => void toggle(key, event.target.checked)}
+              onChange={(event) => void update(key, event.target.checked)}
               className="h-4 w-4 accent-signal active:scale-[0.96] motion-reduce:active:scale-100"
             />
             <span className="font-medium">{label}</span>
@@ -493,6 +526,50 @@ function AccessibilitySection() {
           <p className="ml-7 mt-1.5 text-xs text-muted">{description}</p>
         </div>
       ))}
+      {speechSupported && (
+        <div>
+          <label
+            htmlFor="accessibility-voice-select"
+            className="text-sm font-medium text-ink"
+          >
+            Voice
+          </label>
+          <p className="mt-1.5 text-xs text-muted">
+            Choose which installed voice narrates text aloud. System default
+            uses your browser&apos;s normal voice.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              id="accessibility-voice-select"
+              value={settings.voice_uri ?? ""}
+              disabled={!loaded || saving}
+              onChange={(event) => void update("voice_uri", event.target.value || null)}
+              className={VOICE_SELECT_CLASS}
+            >
+              <option value="">System default</option>
+              {settings.voice_uri && !isPersistedVoiceInstalled && (
+                <option value={settings.voice_uri} disabled>
+                  Unavailable voice
+                </option>
+              )}
+              {voiceGroups.map((group) => (
+                <optgroup key={group.lang} label={group.label}>
+                  {group.voices.map((voice) => (
+                    <option key={voice.voiceURI} value={voice.voiceURI}>
+                      {voice.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <ListenButton
+              text={VOICE_PREVIEW_TEXT}
+              ariaLabel="Preview voice"
+              voiceURI={settings.voice_uri}
+            />
+          </div>
+        </div>
+      )}
       {error && (
         <p className="ml-7 text-sm text-status-error" role="alert">
           {error}

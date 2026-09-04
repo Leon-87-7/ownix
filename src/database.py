@@ -1814,20 +1814,31 @@ async def set_brain_links_view(
 
 
 _ACCESSIBILITY_SETTINGS_KEY = "dashboard_accessibility_settings"
-_DEFAULT_ACCESSIBILITY_SETTINGS = {"visual_motion": True, "haptic_motion": True}
+_DEFAULT_ACCESSIBILITY_SETTINGS: dict[str, bool | str | None] = {
+    "visual_motion": True,
+    "haptic_motion": True,
+    "voice_uri": None,
+}
 
 
-def _normalize_accessibility_settings(value: object) -> dict[str, bool]:
+def _normalize_accessibility_settings(value: object) -> dict[str, bool | str | None]:
     if not isinstance(value, dict):
         return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
     visual_motion = value.get("visual_motion")
     haptic_motion = value.get("haptic_motion")
+    voice_uri = value.get("voice_uri", None)
     if not isinstance(visual_motion, bool) or not isinstance(haptic_motion, bool):
         return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
-    return {"visual_motion": visual_motion, "haptic_motion": haptic_motion}
+    if voice_uri is not None and not isinstance(voice_uri, str):
+        return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
+    return {
+        "visual_motion": visual_motion,
+        "haptic_motion": haptic_motion,
+        "voice_uri": voice_uri,
+    }
 
 
-async def get_accessibility_settings(chat_id: int) -> dict[str, bool]:
+async def get_accessibility_settings(chat_id: int) -> dict[str, bool | str | None]:
     value = await get_user_setting(chat_id, _ACCESSIBILITY_SETTINGS_KEY)
     if value is None:
         return dict(_DEFAULT_ACCESSIBILITY_SETTINGS)
@@ -1838,10 +1849,19 @@ async def get_accessibility_settings(chat_id: int) -> dict[str, bool]:
     return _normalize_accessibility_settings(parsed)
 
 
+# voice_uri's length isn't re-validated here — this module trusts its only
+# caller (the /api/controls PUT route, Task 2) to have already applied
+# AccessibilitySettingsIn's max_length=512 bound. Route any other future
+# write of this setting through that same API rather than duplicating the
+# bound at this layer.
 async def set_accessibility_settings(
-    chat_id: int, *, visual_motion: bool, haptic_motion: bool
-) -> dict[str, bool]:
-    settings_value = {"visual_motion": visual_motion, "haptic_motion": haptic_motion}
+    chat_id: int, *, visual_motion: bool, haptic_motion: bool, voice_uri: str | None
+) -> dict[str, bool | str | None]:
+    settings_value: dict[str, bool | str | None] = {
+        "visual_motion": visual_motion,
+        "haptic_motion": haptic_motion,
+        "voice_uri": voice_uri,
+    }
     await set_user_setting(
         chat_id, _ACCESSIBILITY_SETTINGS_KEY, json.dumps(settings_value, separators=(",", ":"))
     )

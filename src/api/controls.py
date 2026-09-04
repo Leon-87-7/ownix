@@ -51,6 +51,7 @@ class RecoverySettingsIn(BaseModel):
 class AccessibilitySettingsIn(BaseModel):
     visual_motion: bool
     haptic_motion: bool
+    voice_uri: str | None = Field(max_length=512)
 
 
 def _normalize_domain(raw: str) -> str:
@@ -204,7 +205,7 @@ async def update_recovery_settings(body: RecoverySettingsIn, request: Request) -
 
 
 @controls_router.get("/accessibility-settings")
-async def get_accessibility_settings(request: Request) -> dict[str, bool]:
+async def get_accessibility_settings(request: Request) -> dict[str, bool | str | None]:
     chat_id: int = request.state.user["id"]
     return await database.get_accessibility_settings(chat_id)
 
@@ -212,10 +213,11 @@ async def get_accessibility_settings(request: Request) -> dict[str, bool]:
 @controls_router.put("/accessibility-settings")
 async def update_accessibility_settings(
     body: AccessibilitySettingsIn, request: Request
-) -> dict[str, bool]:
+) -> dict[str, bool | str | None]:
     chat_id: int = request.state.user["id"]
     return await database.set_accessibility_settings(
         chat_id,
         visual_motion=body.visual_motion,
         haptic_motion=body.haptic_motion,
+        voice_uri=body.voice_uri,
     )

@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSpeech } from './useSpeech';
+import {
+  publishAccessibilitySettings,
+  resetAccessibilitySettingsForTests,
+} from './useAccessibilitySettings';
 
 class MockUtterance {
   onstart: (() => void) | null = null;
   onend: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  voice: SpeechSynthesisVoice | null = null;
   constructor(public text: string) {}
 }
 
@@ -21,6 +26,7 @@ function installSpeech() {
       current = utterance;
       utterance.onstart?.();
     }),
+    getVoices: vi.fn(() => [] as SpeechSynthesisVoice[]),
   };
   vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance);
   vi.stubGlobal('speechSynthesis', synthesis);
@@ -39,6 +45,7 @@ function installPendingSpeech() {
     speak: vi.fn((utterance: MockUtterance) => {
       current = utterance;
     }),
+    getVoices: vi.fn(() => [] as SpeechSynthesisVoice[]),
   };
   vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance);
   vi.stubGlobal('speechSynthesis', synthesis);
@@ -48,6 +55,10 @@ function installPendingSpeech() {
 beforeEach(() => {
   vi.unstubAllGlobals();
   delete (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+  resetAccessibilitySettingsForTests();
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    new Response(JSON.stringify({ visual_motion: true, haptic_motion: true, voice_uri: null })),
+  ));
 });
 
 describe('useSpeech', () => {
@@ -150,5 +161,47 @@ describe('useSpeech', () => {
     act(() => second.result.current.toggle());
     expect(first.result.current.speaking).toBe(false);
     expect(second.result.current.speaking).toBe(true);
+  });
+
+  it('sets the utterance voice from the persisted accessibility setting', async () => {
+    const synthesis = installSpeech();
+    const enVoice = { voiceURI: 'en-voice', name: 'En Voice', lang: 'en-US' } as SpeechSynthesisVoice;
+    synthesis.getVoices.mockReturnValue([enVoice]);
+    act(() => publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: 'en-voice' }));
+    const { result } = renderHook(() => useSpeech('Hello'));
+    await waitFor(() => expect(result.current.supported).toBe(true));
+    act(() => result.current.toggle());
+    expect(synthesis.speak.mock.calls[0][0].voice).toBe(enVoice);
+  });
+
+  it('prefers an explicit voice override over the persisted setting', async () => {
+    const synthesis = installSpeech();
+    const overrideVoice = { voiceURI: 'override', name: 'Override', lang: 'en-GB' } as SpeechSynthesisVoice;
+    synthesis.getVoices.mockReturnValue([overrideVoice]);
+    act(() => publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: 'persisted' }));
+    const { result } = renderHook(() => useSpeech('Hello', 'override'));
+    await waitFor(() => expect(result.current.supported).toBe(true));
+    act(() => result.current.toggle());
+    expect(synthesis.speak.mock.calls[0][0].voice).toBe(overrideVoice);
+  });
+
+  it('leaves the default voice unset when the persisted voice is not installed', async () => {
+    const synthesis = installSpeech();
+    synthesis.getVoices.mockReturnValue([]);
+    act(() => publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: 'missing' }));
+    const { result } = renderHook(() => useSpeech('Hello'));
+    await waitFor(() => expect(result.current.supported).toBe(true));
+    act(() => result.current.toggle());
+    expect(synthesis.speak.mock.calls[0][0].voice).toBeNull();
+  });
+
+  it('leaves the default voice unset for an explicit null override (System default)', async () => {
+    const synthesis = installSpeech();
+    act(() => publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: 'persisted' }));
+    const { result } = renderHook(() => useSpeech('Hello', null));
+    await waitFor(() => expect(result.current.supported).toBe(true));
+    act(() => result.current.toggle());
+    expect(synthesis.speak.mock.calls[0][0].voice).toBeNull();
+    expect(synthesis.getVoices).not.toHaveBeenCalled();
   });
 });
