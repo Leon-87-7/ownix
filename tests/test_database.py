@@ -1758,7 +1758,13 @@ async def test_failed_migration_restores_snapshot_and_reraises(tmp_path, monkeyp
         await conn.execute(f"PRAGMA user_version = {old_version}")
         await conn.commit()
 
-    async def fail(_conn):
+    async def fail(conn):
+        # Commit a real mutation before raising -- if _restore_database_file() never
+        # actually ran, this probe would still be visible afterward and the test would
+        # pass either way, proving nothing about the restore itself.
+        await conn.execute("CREATE TABLE _test_probe (x INTEGER)")
+        await conn.execute("INSERT INTO _test_probe VALUES (1)")
+        await conn.commit()
         raise RuntimeError("forced migration failure")
 
     original_step = database._MIGRATIONS[old_version]
@@ -1771,6 +1777,12 @@ async def test_failed_migration_restores_snapshot_and_reraises(tmp_path, monkeyp
 
     async with aiosqlite.connect(db_path) as conn:
         assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == old_version
+        probe = await (
+            await conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='_test_probe'"
+            )
+        ).fetchone()
+        assert probe is None, "restore should have reverted the probe mutation"
 
 
 @pytest.mark.asyncio

@@ -1504,9 +1504,13 @@ def _restore_database_file(backup_path: Path, db_path: Path) -> int:
             closing(sqlite3.connect(restore_tmp)) as destination,
         ):
             source.backup(destination)
-        os.replace(restore_tmp, db_path)
+        # Remove db_path's own pre-restore sidecars *before* the swap, not after: if the
+        # process dies between the two steps, a stale -wal from the OLD file sitting next to
+        # the NEW (restored) file is exactly the mismatch SQLite's WAL recovery can't tell
+        # apart from a legitimate in-progress write, risking corruption on next open.
         for suffix in ("-wal", "-shm"):
             db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
+        os.replace(restore_tmp, db_path)
         return version
     except Exception:
         restore_tmp = db_path.with_name(f".{db_path.name}.restore")

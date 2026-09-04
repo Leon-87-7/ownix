@@ -1,6 +1,20 @@
 import sqlite3
 
+import pytest
+
 from scripts.db_snapshot import create_sanitized_snapshot
+
+
+def test_snapshot_rejects_output_path_matching_source(tmp_path):
+    source = tmp_path / "source.db"
+    with sqlite3.connect(source) as conn:
+        conn.executescript("CREATE TABLE jobs (id TEXT PRIMARY KEY); INSERT INTO jobs VALUES ('a');")
+
+    with pytest.raises(ValueError, match="must differ"):
+        create_sanitized_snapshot(source, source)
+
+    with sqlite3.connect(source) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (1,)
 
 
 def test_snapshot_scrubs_sensitive_columns_and_samples_rows(tmp_path):

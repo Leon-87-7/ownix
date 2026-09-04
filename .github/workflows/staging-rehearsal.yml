@@ -44,6 +44,8 @@ jobs:
             python -m scripts.db_snapshot data/jobs.db data-staging/jobs.db
             docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
               --profile staging up -d api worker
-            docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \
-              exec -T api python -c 'import asyncio; from src.database import init_db; asyncio.run(init_db())'
+            # api's own lifespan already runs init_db() on startup (the only migration owner
+            # -- see #518); wait for its healthcheck instead of calling init_db() a second
+            # time from here, which would race api's own in-process migration.
+            timeout 120 sh -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" vig-api-staging)" = "healthy" ]; do sleep 2; done'
           REMOTE

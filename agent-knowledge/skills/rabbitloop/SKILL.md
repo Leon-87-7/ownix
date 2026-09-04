@@ -160,9 +160,13 @@ sit under a `success` conclusion. Always also pull the check run's annotations, 
 per-line findings the summary only counts:
 
 ```bash
+set -euo pipefail
+
 # `gh api --paginate --jq` applies the filter to each page independently, not to the
 # combined result — select+emit matching objects per page, then slurp the concatenated
-# stream into one array before checking uniqueness across the *whole* result.
+# stream into one array before checking uniqueness across the *whole* result. `pipefail`
+# alone only changes which exit code the pipe reports — it still needs `set -e` to
+# actually abort here, and a failed `gh api` must not be silently read as "zero matches".
 RUN_ID=$(gh api --paginate "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" --per-page 100 \
   --jq '.check_runs[] | select(.app.slug == "codacy-production" and .name == "Codacy Static Code Analysis")' \
   | jq -s 'if length == 1 then .[0].id else "" end')

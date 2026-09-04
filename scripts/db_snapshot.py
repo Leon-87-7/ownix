@@ -113,6 +113,8 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
         raise ValueError("rows_per_table must be non-negative")
     if not source.is_file():
         raise FileNotFoundError(f"source database does not exist: {source}")
+    if source.resolve() == output.resolve():
+        raise ValueError("output database must differ from source database")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
 

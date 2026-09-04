@@ -16,10 +16,11 @@ single-node availability boundary established by ADR-0001.
 ## Decision
 
 Every new `_MIGRATIONS` entry must have a one-line rollback comment immediately
-above it. Use `-- rollback: restore backup` for a destructive or rebuild step and
-name the inverse operation (for example `-- rollback: DROP COLUMN x`) for a safely
-reversible additive step. The automatic pre-migration snapshot remains the primary
-rollback mechanism.
+above it. Use `# rollback: restore backup` for a destructive or rebuild step and
+name the inverse operation (for example `# rollback: DROP COLUMN x`) for a safely
+reversible additive step — `_MIGRATIONS` entries are Python source, so the marker
+must be a Python comment (`#`); `--` is a SQL comment and would be a syntax error
+here. The automatic pre-migration snapshot remains the primary rollback mechanism.
 
 Breaking removals follow deprecate-then-drop across releases. Release N soft-marks
 or renames retained data with a `_deprecated_*` name while compatible code stops
