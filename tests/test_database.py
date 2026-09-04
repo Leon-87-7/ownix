@@ -1711,3 +1711,125 @@ async def test_accessibility_settings_roundtrip_and_normalizes_invalid_values(
     for malformed in ('{"visual_motion":false}', '{"visual_motion":"no"}', "{not-json"):
         await database.set_user_setting(42, "dashboard_accessibility_settings", malformed)
         assert await database.get_accessibility_settings(42) == defaults
+
+
+@pytest.mark.asyncio
+async def test_pending_migration_creates_one_valid_pre_mutation_backup(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    await database.init_db()
+
+    backups = list((tmp_path / "backups").glob("*.db"))
+    assert len(backups) == 1
+    async with aiosqlite.connect(backups[0]) as conn:
+        assert (await (await conn.execute("PRAGMA integrity_check")).fetchone())[0] == "ok"
+        assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == (
+            len(database._MIGRATIONS) - 1
+        )
+
+
+@pytest.mark.asyncio
+async def test_fresh_and_current_databases_do_not_create_backups(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    await database.init_db()
+    assert not (tmp_path / "backups").exists()
+
+
+@pytest.mark.asyncio
+async def test_failed_migration_restores_snapshot_and_reraises(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    old_version = len(database._MIGRATIONS) - 1
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {old_version}")
+        await conn.commit()
+
+    async def fail(conn):
+        # Commit a real mutation before raising -- if _restore_database_file() never
+        # actually ran, this probe would still be visible afterward and the test would
+        # pass either way, proving nothing about the restore itself.
+        await conn.execute("CREATE TABLE _test_probe (x INTEGER)")
+        await conn.execute("INSERT INTO _test_probe VALUES (1)")
+        await conn.commit()
+        raise RuntimeError("forced migration failure")
+
+    original_step = database._MIGRATIONS[old_version]
+    database._MIGRATIONS[old_version] = fail
+    try:
+        with pytest.raises(RuntimeError, match="forced migration failure"):
+            await database.init_db()
+    finally:
+        database._MIGRATIONS[old_version] = original_step
+
+    async with aiosqlite.connect(db_path) as conn:
+        assert (await (await conn.execute("PRAGMA user_version")).fetchone())[0] == old_version
+        probe = await (
+            await conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='_test_probe'"
+            )
+        ).fetchone()
+        assert probe is None, "restore should have reverted the probe mutation"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_returns_immediately_when_current(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+
+    await asyncio.wait_for(database.wait_for_schema_ready(timeout_seconds=5), timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_times_out_when_stale(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    with pytest.raises(TimeoutError):
+        await database.wait_for_schema_ready(timeout_seconds=0.3, poll_interval_seconds=0.1)
+
+
+@pytest.mark.asyncio
+async def test_wait_for_schema_ready_returns_once_peer_finishes_migrating(tmp_path, monkeypatch):
+    from src import database
+
+    db_path = tmp_path / "jobs.db"
+    monkeypatch.setattr(database.settings, "DB_PATH", str(db_path))
+    await database.init_db()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS) - 1}")
+        await conn.commit()
+
+    wait_task = asyncio.create_task(
+        database.wait_for_schema_ready(timeout_seconds=5, poll_interval_seconds=0.1)
+    )
+    await asyncio.sleep(0.2)
+    assert not wait_task.done(), "should still be waiting for the peer's migration"
+
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"PRAGMA user_version = {len(database._MIGRATIONS)}")
+        await conn.commit()
+
+    await asyncio.wait_for(wait_task, timeout=5)

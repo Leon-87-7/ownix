@@ -380,7 +380,11 @@ async def reap_stale_jobs() -> None:
 
 async def loop() -> None:
     log.info("worker_started")
-    await database.init_db()  # idempotent — safe if api container ran it first
+    # api is the sole migration owner (its init_db() can back up, migrate, and restore
+    # on failure). worker only waits for that to finish — it never runs init_db() itself,
+    # so it structurally cannot race api's migration, regardless of container restart
+    # timing. See #518.
+    await database.wait_for_schema_ready()
 
     from src.processors import prd as _prd
 

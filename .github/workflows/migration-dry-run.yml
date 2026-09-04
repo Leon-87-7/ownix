@@ -1,0 +1,39 @@
+name: Migration dry run
+
+on:
+  pull_request:
+    paths:
+      - "src/database.py"
+      - "scripts/db_snapshot.py"
+      - "tests/fixtures/sanitized-production.db"
+      - ".github/workflows/migration-dry-run.yml"
+  workflow_dispatch:
+
+jobs:
+  migrate-sanitized-snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - name: Exercise the real startup migration path
+        env:
+          DB_PATH: ${{ runner.temp }}/jobs.db
+          TELEGRAM_BOT_TOKEN: migration-dry-run
+          TELEGRAM_WEBHOOK_SECRET: migration-dry-run-secret
+        run: |
+          cp tests/fixtures/sanitized-production.db "$DB_PATH"
+          python - <<'PY'
+          import asyncio
+          import sqlite3
+          from src.database import _MIGRATIONS, init_db
+
+          asyncio.run(init_db())
+          with sqlite3.connect("${{ runner.temp }}/jobs.db") as connection:
+              assert connection.execute("PRAGMA user_version").fetchone()[0] == len(_MIGRATIONS)
+              assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+          PY

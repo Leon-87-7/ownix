@@ -126,3 +126,40 @@ an **external uptime monitor** (cron-job.org, every 2 min) hitting
 `https://api.leondev.xyz/health` — an in-repo GitHub Actions cron was
 considered and rejected (5-min floor, unreliable timing, auto-disables
 after 60 days idle). See the runbook for the exact cron-job.org config.
+
+---
+
+## 9. Database backup & rollback
+
+Startup creates one WAL-consistent snapshot in `data/backups/` before any pending
+migration can mutate an existing database. The ten newest migration snapshots are
+retained. **Rolling back an image tag does not revert an applied schema; restoring
+the SQLite file is the database rollback lever.**
+
+From the deployment directory on the single VPS:
+
+1. Stop every database writer before touching the file:
+   ```bash
+   docker compose stop api worker
+   ```
+2. Inspect the versioned snapshots and select the intended pre-migration file:
+   ```bash
+   ls -lt data/backups/jobs_v*_to_v*.db
+   ```
+3. Restore it (the command validates the backup before replacing `DB_PATH` and
+   removes stale `jobs.db-wal` / `jobs.db-shm` sidecars):
+   ```bash
+   docker compose run --rm --no-deps \
+     -e DB_PATH=/app/data/jobs.db api \
+     python -m scripts.db_restore /app/data/backups/<backup-file>.db
+   ```
+4. Treat the script's `integrity_check=ok` and reported `user_version` as the
+   required verification. On any non-zero exit, leave the writers stopped and
+   investigate; an invalid backup does not clobber the live file.
+5. Restart both writers and watch startup logs:
+   ```bash
+   docker compose up -d api worker
+   docker compose logs --tail=100 api worker
+   ```
+
+Do not run the restore script while either writer is active.
