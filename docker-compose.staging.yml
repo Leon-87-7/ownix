@@ -5,7 +5,8 @@ services:
     profiles: ["staging"]
     container_name: vig-api-staging
     image: ${VIG_IMAGE:-vig-app}
-    env_file: .env.staging
+    env_file: !override
+      - .env.staging
     environment:
       DB_PATH: /app/data/jobs.db
     ports: !override
@@ -19,7 +20,8 @@ services:
     profiles: ["staging"]
     container_name: vig-worker-staging
     image: ${VIG_IMAGE:-vig-app}
-    env_file: .env.staging
+    env_file: !override
+      - .env.staging
     environment:
       DB_PATH: /app/data/jobs.db
     volumes: !override

@@ -1,7 +1,5 @@
 import sqlite3
 
-import pytest
-
 from scripts.db_snapshot import create_sanitized_snapshot
 
 
@@ -36,7 +34,7 @@ def test_snapshot_scrubs_sensitive_columns_and_samples_rows(tmp_path):
         assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
 
-def test_snapshot_fails_on_orphaned_foreign_key_after_pruning(tmp_path):
+def test_snapshot_removes_orphans_left_by_independent_per_table_pruning(tmp_path):
     source = tmp_path / "source.db"
     output = tmp_path / "snapshot.db"
     with sqlite3.connect(source) as conn:
@@ -53,5 +51,9 @@ def test_snapshot_fails_on_orphaned_foreign_key_after_pruning(tmp_path):
             """
         )
 
-    with pytest.raises(RuntimeError, match="foreign_key_check"):
-        create_sanitized_snapshot(source, output, rows_per_table=1)
+    create_sanitized_snapshot(source, output, rows_per_table=1)
+
+    with sqlite3.connect(output) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM job_thumbnails").fetchone() == (0,)
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)

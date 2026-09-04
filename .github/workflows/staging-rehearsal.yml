@@ -35,6 +35,7 @@ jobs:
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i /tmp/staging_key -o StrictHostKeyChecking=yes "$STAGING_HOST" \
             "export VIG_IMAGE='$REQUESTED_IMAGE'; bash -s" <<'REMOTE'
+            set -euo pipefail
             cd /opt/ownix
             mkdir -p data-staging
             docker compose -p vig-staging -f docker-compose.yml -f docker-compose.staging.yml \

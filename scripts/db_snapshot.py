@@ -72,9 +72,24 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
             if "job_thumbnails" in tables:
                 dst.execute("UPDATE job_thumbnails SET bytes = X''")
             dst.commit()
-            fk_violations = dst.execute("PRAGMA foreign_key_check").fetchall()
-            if fk_violations:
-                raise RuntimeError(f"snapshot foreign_key_check failed: {fk_violations!r}")
+            # Each table was pruned independently, so a retained child row can reference a
+            # parent row another table's own pruning excluded -- not corruption, just sampling.
+            # Remove those orphans rather than failing the export; re-check until stable in
+            # case removing one orphan's row makes it a broken parent for another table.
+            for _ in range(len(tables) + 1):
+                violations = dst.execute("PRAGMA foreign_key_check").fetchall()
+                if not violations:
+                    break
+                for table, rowid, *_rest in violations:
+                    if rowid is None or table not in tables:
+                        raise RuntimeError(f"snapshot foreign_key_check failed: {violations!r}")
+                    dst.execute(  # nosec B608
+                        f'DELETE FROM "{table}" WHERE rowid = ?',  # nosec B608
+                        (rowid,),
+                    )
+                dst.commit()
+            else:
+                raise RuntimeError("snapshot foreign_key_check did not converge")
             result = dst.execute("PRAGMA integrity_check").fetchone()
             if result != ("ok",):
                 raise RuntimeError(f"snapshot integrity_check failed: {result!r}")
