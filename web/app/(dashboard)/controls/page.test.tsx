@@ -137,10 +137,12 @@ describe('ControlsPage', () => {
 
     const select = await section('Accessibility').findByLabelText('Voice') as HTMLSelectElement;
     expect(within(select).getByText('System default')).toBeTruthy();
-    // Intl.DisplayNames(['en'], {type:'language'}).of('en-US') resolves to
-    // "American English" under Node/browser ICU data, not a literal
-    // "English (United States)" — assert the real resolved label.
-    expect(within(select).getByRole('group', { name: 'American English' })).toBeTruthy();
+    // Derive the expected label from the same API groupVoicesByLanguage uses
+    // at runtime, rather than hardcoding "American English" — Intl's
+    // resolved display name for a locale isn't guaranteed portable across
+    // ICU implementations/versions (see useSpeechVoices.test.ts).
+    const expectedLabel = new Intl.DisplayNames(['en'], { type: 'language' }).of('en-US');
+    expect(within(select).getByRole('group', { name: expectedLabel })).toBeTruthy();
     expect(within(select).getByText('Google US English')).toBeTruthy();
     expect(within(select).getByText('Daniel')).toBeTruthy();
 
