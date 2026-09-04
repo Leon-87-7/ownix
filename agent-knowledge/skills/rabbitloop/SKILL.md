@@ -160,14 +160,18 @@ sit under a `success` conclusion. Always also pull the check run's annotations, 
 per-line findings the summary only counts:
 
 ```bash
-RUN_ID=$(gh api "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" \
-  --jq '[.check_runs[] | select(.app.slug == "codacy-production" and .name == "Codacy Static Code Analysis")] | if length == 1 then .[0].id else "" end')
-if [ -z "$RUN_ID" ]; then
-  echo "Codacy annotation run id ambiguous or missing — do not assume zero annotations; block the loop until resolved."
-else
-  gh api "repos/{owner}/{repo}/check-runs/$RUN_ID/annotations" \
-    --jq '.[] | {path, line: .start_line, level: .annotation_level, message}'
+# `gh api --paginate --jq` applies the filter to each page independently, not to the
+# combined result — select+emit matching objects per page, then slurp the concatenated
+# stream into one array before checking uniqueness across the *whole* result.
+RUN_ID=$(gh api --paginate "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" --per-page 100 \
+  --jq '.check_runs[] | select(.app.slug == "codacy-production" and .name == "Codacy Static Code Analysis")' \
+  | jq -s 'if length == 1 then .[0].id else "" end')
+if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+  echo "Codacy annotation run id ambiguous or missing — do not assume zero annotations." >&2
+  exit 1
 fi
+gh api --paginate "repos/{owner}/{repo}/check-runs/$RUN_ID/annotations" --per-page 100 \
+  --jq '.[] | {path, line: .start_line, level: .annotation_level, message}'
 ```
 
 Treat every annotation as an actionable finding — fix it in this iteration's batch — regardless of
