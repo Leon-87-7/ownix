@@ -515,6 +515,7 @@ describe('stripMarkdown', () => {
   it('strips inline-code backticks', () => expect(stripMarkdown('Use `npm test` now')).toBe('Use npm test now'))
   it('replaces links with their labels', () => expect(stripMarkdown('[Ownix](https://ownix.dev)')).toBe('Ownix'))
   it('replaces a link whose URL has balanced parentheses', () => expect(stripMarkdown('[Foo](https://en.wikipedia.org/wiki/Foo_(bar))')).toBe('Foo'))
+  it('replaces a link whose URL has deeply nested balanced parentheses', () => expect(stripMarkdown('[Foo](https://example.com/Foo_(bar_(baz)))')).toBe('Foo'))
   it('replaces an image with its alt text', () => expect(stripMarkdown('![a chart](chart.png)')).toBe('a chart'))
   it('joins non-blank lines with sentence separators', () => expect(stripMarkdown('One\n\nTwo')).toBe('One. Two'))
   it('does not strip a mid-line hyphen', () => expect(stripMarkdown('well-known fact')).toBe('well-known fact'))
