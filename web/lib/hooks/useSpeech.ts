@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// ponytail: module-scoped, shared by every useSpeech instance. Browsers
+// don't reliably fire onend/onerror for a queued-but-not-started utterance
+// dropped by a global cancel() (e.g. clicking a different listen button),
+// so the button that queued it needs an explicit nudge to drop "speaking".
+let activeClear: (() => void) | null = null;
+
 export function useSpeech(text: string) {
   // ponytail: starts false so server and first client render match; flips
   // true post-mount, avoiding a hydration mismatch on supported browsers.
@@ -19,7 +25,13 @@ export function useSpeech(text: string) {
 
   useEffect(() => {
     return () => {
-      if (speakingRef.current) window.speechSynthesis.cancel();
+      // speakingRef only stays true here if nothing else has claimed
+      // activeClear since (any other toggle() would have cleared us), so
+      // it's safe to drop it unconditionally.
+      if (speakingRef.current) {
+        window.speechSynthesis.cancel();
+        activeClear = null;
+      }
     };
   }, []);
 
@@ -28,6 +40,8 @@ export function useSpeech(text: string) {
 
     const wasSpeaking = speaking;
     window.speechSynthesis.cancel();
+    activeClear?.();
+    activeClear = null;
     utteranceRef.current = null;
     if (wasSpeaking) {
       speakingRef.current = false;
@@ -41,6 +55,7 @@ export function useSpeech(text: string) {
       utteranceRef.current = null;
       speakingRef.current = false;
       setSpeaking(false);
+      if (activeClear === clear) activeClear = null;
     };
     utterance.onend = clear;
     utterance.onerror = clear;
@@ -49,6 +64,7 @@ export function useSpeech(text: string) {
     // speak() can queue without starting immediately, and a queued utterance
     // still needs to be cancelable (on unmount or a second click).
     utteranceRef.current = utterance;
+    activeClear = clear;
     speakingRef.current = true;
     setSpeaking(true);
     window.speechSynthesis.speak(utterance);

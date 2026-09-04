@@ -140,4 +140,15 @@ describe('useSpeech', () => {
     unmount();
     expect(synthesis.cancel).toHaveBeenCalledTimes(2);
   });
+
+  it('clears a queued utterance on another instance when a different button interrupts it', () => {
+    installPendingSpeech();
+    const first = renderHook(() => useSpeech('First'));
+    const second = renderHook(() => useSpeech('Second'));
+    act(() => first.result.current.toggle());
+    expect(first.result.current.speaking).toBe(true);
+    act(() => second.result.current.toggle());
+    expect(first.result.current.speaking).toBe(false);
+    expect(second.result.current.speaking).toBe(true);
+  });
 });

@@ -192,7 +192,7 @@ export function stripMarkdown(text: string): string {
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/__(.+?)__/g, '$1')
       .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/_([^_]+)_/g, '$1')
+      .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
       .replace(/`([^`]+)`/g, '$1'))
     .join('. ')
 }

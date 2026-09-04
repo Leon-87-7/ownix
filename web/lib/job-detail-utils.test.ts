@@ -519,6 +519,8 @@ describe('stripMarkdown', () => {
   it('does not strip an unpaired asterisk', () => expect(stripMarkdown('value * unknown')).toBe('value * unknown'))
   it('does not strip a non-list-marker number', () => expect(stripMarkdown('2026 results')).toBe('2026 results'))
   it('strips a numbered marker before bold markup', () => expect(stripMarkdown('1. **First**')).toBe('First'))
+  it('does not strip underscores from a snake_case identifier', () => expect(stripMarkdown('foo_bar_baz')).toBe('foo_bar_baz'))
+  it('does not strip underscores from a snake_case file name', () => expect(stripMarkdown('see my_file_name.py')).toBe('see my_file_name.py'))
 })
 
 describe('isSpeakable', () => {
