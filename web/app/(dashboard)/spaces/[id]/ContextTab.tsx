@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import { useSpaceContext } from '@/lib/hooks/useSpaceContext';
 import { SkeletonLine } from '@/components/feed/feed-states';
 import { ReorderButtons } from '@/components/ui/reorder-buttons';
+import { ListenButton } from '@/components/ui/listen-button';
+import { stripMarkdown } from '@/lib/job-detail-utils';
 
 const MarkdownEditor = dynamic(() => import('@/components/ui/markdown-editor'), {
   ssr: false,
@@ -60,6 +62,10 @@ export function ContextTab({ spaceId }: { spaceId: string }) {
                   onBlur={(e) => updateBlob(blob.id, e.target.value, blob.content)}
                   className="flex-1 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
                   placeholder="Context name"
+                />
+                <ListenButton
+                  text={stripMarkdown(blob.content)}
+                  ariaLabel={`Listen to ${blob.name || 'context'}`}
                 />
                 <button
                   onClick={() => deleteBlob(blob.id)}

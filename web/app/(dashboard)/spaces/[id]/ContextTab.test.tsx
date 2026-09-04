@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ContextTab } from './ContextTab';
 
@@ -48,6 +48,34 @@ function setupMocks(overrides: Partial<ReturnType<typeof useSpaceContext>> = {})
 beforeEach(() => { setupMocks(); });
 
 describe('ContextTab', () => {
+  it('renders a listen button for each context blob', () => {
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak: vi.fn() });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn());
+    render(<ContextTab spaceId="s1" />);
+    expect(screen.getByRole('button', { name: 'Listen to Research Notes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Listen to Summary' })).toBeInTheDocument();
+  });
+
+  it('speaks context content without markdown formatting', () => {
+    const speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    setupMocks({ blobs: [{ ...BLOBS[0], content: '# Notes\n- **First** item' }] });
+    render(<ContextTab spaceId="s1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to Research Notes' }));
+    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Notes. First item' }));
+  });
+
+  it('renders no listen button for a blob with blank content', () => {
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak: vi.fn() });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn());
+    setupMocks({ blobs: [{ ...BLOBS[0], name: 'Empty', content: '   ' }] });
+    render(<ContextTab spaceId="s1" />);
+    expect(screen.queryByRole('button', { name: /listen to empty/i })).not.toBeInTheDocument();
+  });
+
   it('shows loading skeleton when loading', () => {
     setupMocks({ loading: true, blobs: [] });
     render(<ContextTab spaceId="s1" />);

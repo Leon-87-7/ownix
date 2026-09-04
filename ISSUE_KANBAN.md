@@ -105,6 +105,11 @@ Ordered by unblocked-first, then dependency chain.
 | [#581](https://github.com/Leon-87-7/ownix/issues/581) | Screenshot capture: /screenshots command (Telegram + dashboard composer) | Screenshots | #580 |
 | [#582](https://github.com/Leon-87-7/ownix/issues/582) | Screenshot capture: job purge deletes the screenshots subfolder | Screenshots | #580 |
 | [#583](https://github.com/Leon-87-7/ownix/issues/583) | Screenshot capture: persist video duration, gate trigger UI proactively | Long video | #580 |
+| [#594](https://github.com/Leon-87-7/ownix/issues/594) | feat(web): add stripMarkdown and isSpeakable utilities for TTS | Web / Listen Button | — |
+| [#595](https://github.com/Leon-87-7/ownix/issues/595) | feat(web): add useSpeech hook wrapping the browser TTS API | Web / Listen Button | — |
+| [#596](https://github.com/Leon-87-7/ownix/issues/596) | feat(web): add ListenButton component | Web / Listen Button | #595 |
+| [#597](https://github.com/Leon-87-7/ownix/issues/597) | feat(web): add listen button to job detail enrichment fields | Web / Listen Button | #594, #596 |
+| [#598](https://github.com/Leon-87-7/ownix/issues/598) | feat(web): add listen button to Space context blobs | Web / Listen Button | #594, #596 |
 
 ---
 
@@ -647,6 +652,15 @@ Long-video screenshot capture (spec #579 — ADR-0054, ADR-0055, ADR-0056; grill
 └── #583 Persist video duration, gate trigger UI proactively ◄── #580
 Critical path: #580 → {#581, #582, #583} (all three parallel once #580 lands)
 Note: #579 is the parent spec issue (not a build slice) — see docs/adr/0054-screenshot-capture-per-job-drive-subfolder.md, 0055-screenshot-capture-two-layer-detection.md, 0056-screenshot-capture-trigger-mirrors-prd-not-checklists.md, and CONTEXT.md `Screenshot capture`.
+
+Listen button — per-field TTS on job detail + Space context blobs (docs/superpowers/plans/2026-09-04-listen-button.md — ADR-0059; CONTEXT.md `Listen button`)
+#594 stripMarkdown + isSpeakable utilities (root, unblocked)
+#595 useSpeech hook wrapping browser speechSynthesis (root, unblocked)
+└── #596 ListenButton component ◄── #595
+    ├── #597 Wire into job detail enrichment fields ◄── also #594
+    └── #598 Wire into Space context blobs ◄── also #594
+Critical path: {#594, #595} → #596 → {#597, #598}
+Note: v1 is browser-native Web Speech API only — no Fish.Audio, no backend, per ADR-0059.
 ```
 
 ---

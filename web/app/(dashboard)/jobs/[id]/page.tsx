@@ -44,6 +44,8 @@ import {
   jobScopeQuery,
   downloadMarkdownFile,
   isSafeHttpUrl,
+  isSpeakable,
+  stripMarkdown,
 } from '@/lib/job-detail-utils';
 import { useChecklists } from '@/lib/hooks/useChecklists';
 import { useCopyFeedback } from '@/lib/hooks/useCopyFeedback';
@@ -51,6 +53,7 @@ import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
 import { CopyButton } from '@/components/ui/copy-button';
+import { ListenButton } from '@/components/ui/listen-button';
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
@@ -286,16 +289,22 @@ function FieldCard({
   value: string;
   render: RenderType;
 }) {
+  const speakText = isSpeakable(render)
+    ? stripMarkdown(fieldCopyText(value, render))
+    : '';
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-mono-label font-medium uppercase tracking-wider text-muted">
           {label}
         </span>
-        <CopyButton
-          value={fieldCopyText(value, render)}
-          ariaLabel={`Copy ${label}`}
-        />
+        <div className="flex items-center gap-1.5">
+          <ListenButton text={speakText} ariaLabel={`Listen to ${label}`} />
+          <CopyButton
+            value={fieldCopyText(value, render)}
+            ariaLabel={`Copy ${label}`}
+          />
+        </div>
       </div>
       <FieldBody
         value={value}

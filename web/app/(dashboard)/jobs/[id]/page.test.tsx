@@ -170,6 +170,41 @@ beforeEach(() => {
 });
 
 describe('JobDetailPage', () => {
+  it('offers speech for speakable enrichment fields', () => {
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak: vi.fn() });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn());
+    render(<JobDetailPage />);
+    expect(screen.getByRole('button', { name: 'Listen to Objective' })).toBeInTheDocument();
+  });
+
+  it('speaks the stripped field text when its listen button is clicked', () => {
+    const speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to Objective' }));
+    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Learn ML basics' }));
+  });
+
+  it('does not offer speech for links or code fields', () => {
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak: vi.fn() });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn());
+    setupMocks({
+      job: {
+        ...JOB,
+        content_type: 'short',
+        summary: 'A summary',
+        code: 'console.log("hello")',
+        links: '[{"url":"https://example.com"}]',
+      },
+    });
+    render(<JobDetailPage />);
+    expect(screen.queryByRole('button', { name: 'Listen to Code' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Listen to Links Found' })).not.toBeInTheDocument();
+  });
+
   it.each(['link', 'article', 'repo'])('uses link tags for a resolved %s job', (contentType) => {
     setupMocks({ job: { ...JOB, content_type: contentType, link_id: 'link-1' } });
     render(<JobDetailPage />);
