@@ -16,7 +16,7 @@
 - **Reads enrichment on job detail, never the transcript, links, or code.** A `FieldCard` gets a listen button only when its `render` type is `text`, `list`, or `json`.
 - **Reads the context blob on a Space page** — one listen button per blob in `ContextTab`, reading `blob.content` (the user's own writing), which is the deliberate inverse of job detail (Ownix's understanding vs. the user's own words).
 - **Text sent to speech must be markdown-stripped.** Reuse the existing `fieldCopyText()` flattening, then a new `stripMarkdown()` — the Web Speech API (and Fish.Audio, the future upgrade) has no built-in markdown handling.
-- **Only one utterance plays at a time, page-wide.** Every `toggle()` call cancels whatever else is speaking before starting (or stopping) its own utterance — no page-level shared state needed; this falls out of `speechSynthesis`'s own single global queue plus each utterance's own `onend`/`onerror` callbacks.
+- **Only one utterance plays at a time, page-wide.** Every `toggle()` call cancels whatever else is speaking before starting (or stopping) its own utterance. This mostly falls out of `speechSynthesis`'s own single global queue plus each utterance's own `onend`/`onerror` callbacks, but browsers don't reliably fire those callbacks for a queued-but-not-started utterance dropped by `cancel()` — so `useSpeech` also keeps one small module-scoped ref to let one instance's toggle reset another's stale state.
 - **No `restricted`-mode gate.** Restricted/preview visitors already see the same enrichment text unfiltered; the listen button reads text already on the page.
 - **Match existing UI conventions exactly.** Same button chrome as `CopyButton` (`web/components/ui/copy-button.tsx`), same `Tooltip` usage, no new CSS animation (icon swap only, same as Copy/Check).
 
@@ -297,38 +297,71 @@ Expected: FAIL with "Failed to resolve import `./useSpeech`" (the file doesn't e
 
 Create `web/lib/hooks/useSpeech.ts`:
 
+Updated after implementation: browsers can queue an utterance without
+starting it immediately, so `speaking` must flip true the moment `speak()`
+is called — not on `onstart` — or a queued-but-not-started utterance can't
+be canceled on unmount or a rapid second click. A module-scoped
+"active clear" ref also lets one hook instance reset another's stale
+queued/speaking state when a different listen button interrupts it, since
+browsers don't reliably fire `onend`/`onerror` for a queued utterance
+dropped by a global `cancel()`. Final code:
+
 ```ts
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-function isSupported(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window;
-}
+let activeClear: (() => void) | null = null;
 
-/** Speaks `text` via the browser's native TTS. Every toggle() cancels
- * whatever else is speaking anywhere on the page first — the browser's
- * speechSynthesis queue is a single global, so this is enough to guarantee
- * only one utterance ever plays, with no shared React state required: a
- * cancelled utterance's own onend/onerror fires and flips its owning
- * instance's `speaking` back to false. */
 export function useSpeech(text: string) {
+  const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const supported = isSupported();
+  const speakingRef = useRef(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  useEffect(() => {
+    setSupported(typeof window !== 'undefined' && 'speechSynthesis' in window);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (speakingRef.current) {
+        window.speechSynthesis.cancel();
+        activeClear = null;
+      }
+    };
+  }, []);
 
   const toggle = useCallback(() => {
     if (!supported) return;
-    const synth = window.speechSynthesis;
-    if (speaking) {
-      synth.cancel();
+
+    const wasSpeaking = speaking;
+    window.speechSynthesis.cancel();
+    activeClear?.();
+    activeClear = null;
+    utteranceRef.current = null;
+    if (wasSpeaking) {
+      speakingRef.current = false;
+      setSpeaking(false);
       return;
     }
-    synth.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    synth.speak(utterance);
+    const clear = () => {
+      if (utteranceRef.current !== utterance) return;
+      utteranceRef.current = null;
+      speakingRef.current = false;
+      setSpeaking(false);
+      if (activeClear === clear) activeClear = null;
+    };
+    utterance.onend = clear;
+    utterance.onerror = clear;
+
+    utteranceRef.current = utterance;
+    activeClear = clear;
+    speakingRef.current = true;
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   }, [speaking, supported, text]);
 
   return { supported, speaking, toggle };
@@ -673,6 +706,18 @@ Add to `web/app/(dashboard)/spaces/[id]/ContextTab.test.tsx`, inside the `descri
     render(<ContextTab spaceId="s1" />);
     expect(screen.getByRole('button', { name: 'Listen to Research Notes' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Listen to Summary' })).toBeTruthy();
+  });
+
+  it('speaks context content without markdown formatting', () => {
+    const speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', { cancel: vi.fn(), speak });
+    vi.stubGlobal('SpeechSynthesisUtterance', vi.fn(function (this: { text: string }, text: string) {
+      this.text = text;
+    }));
+    setupMocks({ blobs: [{ ...BLOBS[0], content: '# Notes\n- **First** item' }] });
+    render(<ContextTab spaceId="s1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Listen to Research Notes' }));
+    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Notes. First item' }));
   });
 
   it('renders no listen button for a blob with blank content', () => {

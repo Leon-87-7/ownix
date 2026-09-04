@@ -25,8 +25,10 @@ With no emotion tags in scope, none of that backend/quota engineering buys anyth
 ## Decision
 
 v1 uses the browser-native **Web Speech API** (`speechSynthesis` +
-`SpeechSynthesisUtterance`) client-side. Zero backend, zero API key, zero concurrency
-limit, zero cost. Voice quality is generic/OS-dependent instead of Fish.Audio's AI voice.
+`SpeechSynthesisUtterance`) client-side. Zero backend, zero API key, zero server-side
+quota, zero cost — though only one browser utterance can play at a time regardless
+(`useSpeech` cancels the queue before speaking, so a second click interrupts rather
+than queuing). Voice quality is generic/OS-dependent instead of Fish.Audio's AI voice.
 
 ## Consequences
 

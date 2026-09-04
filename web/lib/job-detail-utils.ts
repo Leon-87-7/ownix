@@ -188,7 +188,7 @@ export function stripMarkdown(text: string): string {
     .map((line) => line
       .replace(/^#{1,6}\s+/, '')
       .replace(/^(?:[-*+]|\d+\.)\s+/, '')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/!?\[([^\]]*)\]\([^()]*(?:\([^()]*\)[^()]*)*\)/g, '$1')
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/__(.+?)__/g, '$1')
       .replace(/\*([^*]+)\*/g, '$1')

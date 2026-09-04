@@ -103,20 +103,30 @@ Create `web/lib/hooks/useSpeech.ts`:
   unsupported browser).
 - `toggle()` always calls `speechSynthesis.cancel()` first, then — unless it
   was the thing already speaking — constructs a `new SpeechSynthesisUtterance(text)`
-  with `onstart`/`onend`/`onerror` wired to flip local `speaking` state, and
-  calls `speechSynthesis.speak(utterance)`.
-- No shared state across hook instances — rely on `speechSynthesis`'s own
-  global queue plus each utterance's own callbacks.
+  and calls `speechSynthesis.speak(utterance)`. `speaking` flips true as soon
+  as the utterance is queued (not on `onstart`), since `speak()` can queue
+  without starting immediately and a merely-queued utterance still needs to
+  be cancelable on unmount or a rapid second click; `onend`/`onerror` flip it
+  back false, guarded by an utterance-identity check so a stale callback
+  can't clobber a newer utterance's state.
+- A module-scoped "active clear" ref lets one hook instance's `toggle()`
+  reset another instance's stale queued/speaking state when a different
+  listen button interrupts it — browsers don't reliably fire
+  `onend`/`onerror` for a queued-but-not-started utterance dropped by a
+  global `cancel()`.
 
-Full implementation and full test suite (6 cases, including the
-cross-instance interruption test) are in the plan file, Task 2, Steps 1 and
-3. Use them verbatim — `web/lib/hooks/` already exists with sibling hooks
-(confirmed: `useCopyFeedback.ts` et al.), consistent with this new file's
-location.
+Full implementation and full test suite (12 cases, covering the async-onstart
+lifecycle and cross-instance interruption) are in the plan file, Task 2,
+Steps 1 and 3. Use them verbatim — `web/lib/hooks/` already exists with
+sibling hooks (confirmed: `useCopyFeedback.ts` et al.), consistent with this
+new file's location.
 
-**Test coverage:** all 6 cases in the plan's `describe('useSpeech', ...)`
+**Test coverage:** all 12 cases in the plan's `describe('useSpeech', ...)`
 block — unsupported, supported, first-toggle cancel-then-speak, second-toggle
-stop, no-op when unsupported, cross-instance interruption.
+stop, no-op when unsupported, cancel-on-unmount (mid-speech and not-speaking),
+cross-instance interruption, plus the pending/async-onstart variants of
+queue-as-speaking, second-toggle-before-onstart, unmount-before-onstart, and
+cross-instance interruption before onstart.
 
 ### #596 — `ListenButton` component (plan Task 3)
 
