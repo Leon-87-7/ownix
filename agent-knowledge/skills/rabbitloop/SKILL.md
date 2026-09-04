@@ -16,8 +16,9 @@ allowed-tools: Bash(gh:*) Bash(git:*)
 # Rabbitloop
 
 Iteratively fix a GitHub PR until **every gate** passes: CodeRabbit reports zero actionable
-comments (and zero unresolved threads), Codacy's check run concludes `success`, and both
-mutation-testing check runs (`frontend-mutation`, `backend-mutation`) conclude `success`.
+comments (and zero unresolved threads), Codacy's check run concludes `success` with zero check-run
+annotations, and both mutation-testing check runs (`frontend-mutation`, `backend-mutation`)
+conclude `success`.
 
 > **Four gates, one loop.** Each iteration triggers CodeRabbit, waits for all four gates, gathers
 > every actionable finding across them, fixes them in one batch, then pushes once so a single push
@@ -29,7 +30,7 @@ mutation-testing check runs (`frontend-mutation`, `backend-mutation`) conclude `
 | Gate                | Source                                          | Completion signal                                          | Pass condition |
 | ------------------- | ------------------------------------------------ | ---------------------------------------------------------- | -------------- |
 | CodeRabbit          | `coderabbitai[bot]`                              | Commit status context `CodeRabbit`; PR review whose body starts `Actionable comments posted: N` | `Actionable comments posted: 0` and no unresolved inline threads |
-| Codacy              | `codacy-production[bot]`                         | Check run `Codacy Static Code Analysis` completes; AI Reviewer posts a PR review whose body starts `### Pull Request Overview` | Check conclusion `success` and no unresolved inline threads |
+| Codacy              | `codacy-production[bot]`                         | Check run `Codacy Static Code Analysis` completes; AI Reviewer posts a PR review whose body starts `### Pull Request Overview` | Check conclusion `success`, zero check-run annotations, and no unresolved inline threads — a `success` conclusion does not by itself mean zero annotations, see below |
 | Mutation — frontend | check run `frontend-mutation` (workflow "Mutation Testing") | Check run completes (Stryker on `web/`)         | Check conclusion `success` — mutation score at or above Stryker's `break: 50` threshold (`web/stryker.config.mjs`), **not** zero survivors |
 | Mutation — backend  | check run `backend-mutation` (workflow "Mutation Testing")  | Check run completes (cosmic-ray on `src/`)      | Check conclusion `success` — `cosmic-ray exec` finished without crashing; **there is no score threshold wired up for backend at all**, so this passes even with a high survival rate |
 
@@ -151,9 +152,27 @@ gh api "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" \
   --jq '.check_runs[] | select(.app.slug == "codacy-production") | .output | {title, summary}'
 ```
 
-A `success` conclusion titled "Your pull request is up to standards!" passes even if the summary
-lists complexity/clone deltas — those are informational. A failing conclusion means the summary
-(and inline comments) contain the gate-breaking issues.
+A `success` conclusion titled "Your pull request is up to standards!" tolerates *complexity/clone*
+deltas in the summary — those are informational regardless of conclusion. It does **not** mean
+there are no real findings: Codacy's own severity threshold for failing the check is higher than
+"this is a real issue," so a security/quality finding (SQL injection, hardcoded secret, etc.) can
+sit under a `success` conclusion. Always also pull the check run's annotations, which carry the
+per-line findings the summary only counts:
+
+```bash
+RUN_ID=$(gh api "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" \
+  --jq '[.check_runs[] | select(.app.slug == "codacy-production" and .name == "Codacy Static Code Analysis")] | if length == 1 then .[0].id else "" end')
+if [ -z "$RUN_ID" ]; then
+  echo "Codacy annotation run id ambiguous or missing — do not assume zero annotations; block the loop until resolved."
+else
+  gh api "repos/{owner}/{repo}/check-runs/$RUN_ID/annotations" \
+    --jq '.[] | {path, line: .start_line, level: .annotation_level, message}'
+fi
+```
+
+Treat every annotation as an actionable finding — fix it in this iteration's batch — regardless of
+the check run's overall conclusion color. A failing conclusion additionally means the summary text
+itself names gate-breaking issues on top of whatever the annotations list.
 
 **Codacy AI Reviewer** — latest `codacy-production[bot]` PR review; the body is a prose
 `### Pull Request Overview` (no counter — the inline threads are the findings):
@@ -236,15 +255,17 @@ totals before comparing scores:
 Stop the loop if **any** of these are true:
 
 - **All** gates pass: CodeRabbit reports **`Actionable comments posted: 0`** with **zero unresolved
-  inline threads**; the Codacy check concluded **`success`** with **zero unresolved inline
-  threads**; both mutation check runs concluded **`success`** — per their own CI-defined pass
-  condition (§ How each gate signals): frontend at/above Stryker's `break: 50` floor, backend just
-  `cosmic-ray exec` finishing without crashing, regardless of survivors. (Skip whichever gate is
-  not installed — an absent gate does not block the exit.)
+  inline threads**; the Codacy check concluded **`success`** with **zero check-run annotations**
+  and **zero unresolved inline threads** — the conclusion color alone is not sufficient, an
+  annotation is a real finding regardless of it; both mutation check runs concluded **`success`** —
+  per their own CI-defined pass condition (§ How each gate signals): frontend at/above Stryker's
+  `break: 50` floor, backend just `cosmic-ray exec` finishing without crashing, regardless of
+  survivors. (Skip whichever gate is not installed — an absent gate does not block the exit.)
 - Max iterations reached (report current state).
 
-Do **not** exit while any gate's check run is still non-`success` (or, for CodeRabbit/Codacy,
-still has unresolved threads) — e.g. a green Codacy check and zero CodeRabbit comments don't matter
+Do **not** exit while any gate's check run is still non-`success`, still carries an annotation
+(Codacy), or still has unresolved threads (CodeRabbit/Codacy) — e.g. a green Codacy check and zero
+CodeRabbit comments don't matter
 if `frontend-mutation` is still below the break threshold. But once a mutation check run itself
 concludes `success`, it counts — don't keep looping on it because survivors remain; survivor counts
 only feed the informational baseline comparison above, never this exit check.
