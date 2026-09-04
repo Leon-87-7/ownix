@@ -57,3 +57,38 @@ def test_snapshot_removes_orphans_left_by_independent_per_table_pruning(tmp_path
         assert conn.execute("SELECT COUNT(*) FROM job_thumbnails").fetchone() == (0,)
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
         assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+
+
+def test_snapshot_repairs_multi_level_orphan_chain(tmp_path):
+    source = tmp_path / "source.db"
+    output = tmp_path / "snapshot.db"
+    with sqlite3.connect(source) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE jobs (id TEXT PRIMARY KEY);
+            CREATE TABLE job_thumbnails (
+                job_id TEXT PRIMARY KEY,
+                bytes BLOB NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES jobs(id)
+            );
+            CREATE TABLE job_tags (
+                job_id TEXT PRIMARY KEY,
+                ref_thumbnail TEXT,
+                FOREIGN KEY (ref_thumbnail) REFERENCES job_thumbnails(job_id)
+            );
+            INSERT INTO jobs VALUES ('keep'), ('drop');
+            INSERT INTO job_thumbnails VALUES ('drop', X'01');
+            INSERT INTO job_tags VALUES ('tag1', 'drop');
+            """
+        )
+
+    # Pruning job_thumbnails to 1 row only removes it once jobs' own pruning has already
+    # dropped 'drop' -- so job_tags' orphan (referencing job_thumbnails('drop')) only
+    # becomes visible on a second foreign_key_check pass, not the first.
+    create_sanitized_snapshot(source, output, rows_per_table=1)
+
+    with sqlite3.connect(output) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM job_thumbnails").fetchone() == (0,)
+        assert conn.execute("SELECT COUNT(*) FROM job_tags").fetchone() == (0,)
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)

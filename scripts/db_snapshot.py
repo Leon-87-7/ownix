@@ -144,9 +144,11 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
             dst.commit()
             # Each table was pruned independently, so a retained child row can reference a
             # parent row another table's own pruning excluded -- not corruption, just sampling.
-            # Remove those orphans rather than failing the export; re-check until stable in
-            # case removing one orphan's row makes it a broken parent for another table.
-            for _ in range(len(tables) + 1):
+            # Remove those orphans rather than failing the export; re-check until clean, since
+            # removing one orphan can expose another one level down (a self-referential chain).
+            # This always terminates: every pass deletes every violation it finds, so total row
+            # count strictly decreases pass over pass in a finite database.
+            while True:
                 violations = dst.execute("PRAGMA foreign_key_check").fetchall()
                 if not violations:
                     break
@@ -156,8 +158,6 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
                         raise RuntimeError(f"snapshot foreign_key_check failed: {violations!r}")
                     dst.execute(query, (rowid,))
                 dst.commit()
-            else:
-                raise RuntimeError("snapshot foreign_key_check did not converge")
             result = dst.execute("PRAGMA integrity_check").fetchone()
             if result != ("ok",):
                 raise RuntimeError(f"snapshot integrity_check failed: {result!r}")
