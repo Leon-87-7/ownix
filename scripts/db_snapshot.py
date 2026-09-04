@@ -51,9 +51,14 @@ def create_sanitized_snapshot(source: Path, output: Path, rows_per_table: int = 
                 if not _IDENTIFIER_RE.match(table):
                     raise ValueError(f"unsupported table name: {table!r}")
                 quoted = f'"{table}"'
-                dst.execute(
-                    f"DELETE FROM {quoted} WHERE rowid NOT IN "
-                    f"(SELECT rowid FROM {quoted} ORDER BY rowid LIMIT ?)",
+                # SQLite has no bind-parameter syntax for identifiers (only values), so the
+                # table name must be formatted into the query text. `table` is not
+                # user-controlled: it comes from this connection's own `sqlite_master` and is
+                # checked against `_IDENTIFIER_RE` above, so this isn't the injection shape the
+                # static analyzer's heuristic is built to catch.
+                dst.execute(  # nosec B608
+                    f"DELETE FROM {quoted} WHERE rowid NOT IN "  # nosec B608
+                    f"(SELECT rowid FROM {quoted} ORDER BY rowid LIMIT ?)",  # nosec B608
                     (rows_per_table,),
                 )
             if "users" in tables:
