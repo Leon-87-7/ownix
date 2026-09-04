@@ -36,6 +36,8 @@ services:
         condition: service_started
       transcript-service:
         condition: service_healthy
+      api:
+        condition: service_healthy
     restart: unless-stopped
     command: python -m src.worker
     networks:
