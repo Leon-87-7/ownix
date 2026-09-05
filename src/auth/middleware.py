@@ -14,7 +14,7 @@ COOKIE_NAME = "vig_session"
 _BEARER_PREFIX = "bearer "
 
 # Paths that bypass the session gate entirely
-_OPEN_PATHS = frozenset(["/webhook", "/webhook/ops", "/health"])
+_OPEN_PATHS = frozenset(["/webhook", "/webhook/ops", "/webhook/email-digest", "/health"])
 
 # Login/bootstrap endpoints — must be reachable without a session.
 _OPEN_API_PATHS = frozenset(

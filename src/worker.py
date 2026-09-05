@@ -7,6 +7,7 @@ Task discriminators handled by _dispatch:
     - 'repo'            → processors.repo.run
     - 'document'        → processors.document.run
     - 'link'            → processors.link.run
+    - 'email_digest'    → processors.email_digest.run (content_type stays 'link')
     - 'bookmarks'       → processors.bookmarks.run (content_type stays 'link' — #492, ADR-0048),
                           which chains 'bookmarks_enrich' on success
     - 'bookmarks_enrich' → brain.refresh_links_for_job (#496) — rowless (ADR-0046)
@@ -121,6 +122,7 @@ _PROCESSOR_MODULES = {
     "repo": "src.processors.repo",
     "document": "src.processors.document",
     "link": "src.processors.link",
+    "email_digest": "src.processors.email_digest",
     "enrichment": "src.processors.enrichment",
 }
 
@@ -178,6 +180,11 @@ _handle_document = _make_handler(
 )
 _handle_link = _make_handler(
     "link", "link_processor_error", "❌ Link pipeline failed. Please try again."
+)
+_handle_email_digest = _make_handler(
+    "email_digest",
+    "email_digest_processor_error",
+    "❌ Newsletter digest processing failed. Please try again from the dashboard.",
 )
 _handle_enrichment = _make_handler(
     "enrichment",
@@ -314,6 +321,7 @@ _TASK_HANDLERS = {
     "repo": _handle_repo,
     "document": _handle_document,
     "link": _handle_link,
+    "email_digest": _handle_email_digest,
     "bookmarks": _handle_bookmarks,
     "bookmarks_enrich": _handle_bookmarks_enrich,
     "prd_auto": _handle_prd_auto,

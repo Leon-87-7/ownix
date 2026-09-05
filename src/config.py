@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # --- Required at startup (slice #1) ---
     TELEGRAM_BOT_TOKEN: str = Field(min_length=1)
     TELEGRAM_WEBHOOK_SECRET: str = Field(min_length=1)
+    EMAIL_WEBHOOK_SECRET: str = Field(min_length=1)
     REDIS_URL: str = "redis://redis:6379/0"
     DB_PATH: str = "/app/data/jobs.db"
     LOG_LEVEL: str = "INFO"
