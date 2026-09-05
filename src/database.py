@@ -298,6 +298,49 @@ CREATE TABLE IF NOT EXISTS context_blobs (
 );
 CREATE INDEX IF NOT EXISTS idx_context_blobs_space_id ON context_blobs(space_id);
 
+-- Newsletter subscriptions route inbound email aliases into one persistent Space.
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+    id               TEXT PRIMARY KEY,
+    chat_id          INTEGER NOT NULL,
+    name             TEXT NOT NULL,
+    sender_email     TEXT NOT NULL,
+    alias_local_part TEXT NOT NULL UNIQUE,
+    space_id         TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_chat_id
+    ON newsletter_subscriptions(chat_id);
+
+-- Lightweight links extracted from a digest. Only explicit promotion creates jobs.
+CREATE TABLE IF NOT EXISTS digest_candidates (
+    id            TEXT PRIMARY KEY,
+    space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    url           TEXT NOT NULL,
+    canonical_url TEXT NOT NULL,
+    title         TEXT,
+    thumbnail_url TEXT,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    job_id        TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK(status IN ('pending','promoting','promoted','dismissed')),
+    UNIQUE(space_id, canonical_url)
+);
+CREATE INDEX IF NOT EXISTS idx_digest_candidates_space_status
+    ON digest_candidates(space_id, status, created_at);
+
+-- Durable email payload storage, cleared after successful digest processing.
+CREATE TABLE IF NOT EXISTS email_digest_payloads (
+    job_id          TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+    receipt_key     TEXT NOT NULL,
+    subscription_id TEXT REFERENCES newsletter_subscriptions(id) ON DELETE SET NULL,
+    subject         TEXT,
+    html            TEXT,
+    text            TEXT,
+    UNIQUE(subscription_id, receipt_key)
+);
+CREATE INDEX IF NOT EXISTS idx_email_digest_payloads_subscription_id
+    ON email_digest_payloads(subscription_id);
+
 CREATE TABLE IF NOT EXISTS document_outputs (
     id          TEXT PRIMARY KEY,
     job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -1440,6 +1483,47 @@ async def _migrate_v43_v44(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_v43_v44)
+
+# v44 → v45: newsletter email digest subscriptions, candidates, and payloads.
+# rollback: DROP TABLE email_digest_payloads; DROP TABLE digest_candidates; DROP TABLE newsletter_subscriptions.
+_MIGRATIONS.append(
+    [
+        """CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+        id               TEXT PRIMARY KEY,
+        chat_id          INTEGER NOT NULL,
+        name             TEXT NOT NULL,
+        sender_email     TEXT NOT NULL,
+        alias_local_part TEXT NOT NULL UNIQUE,
+        space_id         TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )""",
+        "CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_chat_id ON newsletter_subscriptions(chat_id)",
+        """CREATE TABLE IF NOT EXISTS digest_candidates (
+        id            TEXT PRIMARY KEY,
+        space_id      TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+        url           TEXT NOT NULL,
+        canonical_url TEXT NOT NULL,
+        title         TEXT,
+        thumbnail_url TEXT,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        job_id        TEXT REFERENCES jobs(id) ON DELETE SET NULL,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CHECK(status IN ('pending','promoting','promoted','dismissed')),
+        UNIQUE(space_id, canonical_url)
+    )""",
+        "CREATE INDEX IF NOT EXISTS idx_digest_candidates_space_status ON digest_candidates(space_id, status, created_at)",
+        """CREATE TABLE IF NOT EXISTS email_digest_payloads (
+        job_id          TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+        receipt_key     TEXT NOT NULL,
+        subscription_id TEXT REFERENCES newsletter_subscriptions(id) ON DELETE SET NULL,
+        subject         TEXT,
+        html            TEXT,
+        text            TEXT,
+        UNIQUE(subscription_id, receipt_key)
+    )""",
+        "CREATE INDEX IF NOT EXISTS idx_email_digest_payloads_subscription_id ON email_digest_payloads(subscription_id)",
+    ]
+)
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -2951,13 +3035,417 @@ async def update_space(
 
 async def delete_space(*, chat_id: int, space_id: str) -> bool:
     """DELETE a space owned by chat_id. Returns True if deleted."""
-    return (
-        await _execute_rowcount(
-            "DELETE FROM spaces WHERE id = ? AND chat_id = ?",
-            (space_id, chat_id),
-        )
-        > 0
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await conn.execute(
+                """UPDATE email_digest_payloads
+                      SET subject = NULL, html = NULL, text = NULL
+                    WHERE subscription_id IN (
+                        SELECT id FROM newsletter_subscriptions
+                         WHERE space_id = ? AND chat_id = ?
+                    )""",
+                (space_id, chat_id),
+            )
+            cur = await conn.execute(
+                "DELETE FROM spaces WHERE id = ? AND chat_id = ?",
+                (space_id, chat_id),
+            )
+            await conn.commit()
+            return cur.rowcount > 0
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Newsletter digest subscriptions
+# ---------------------------------------------------------------------------
+
+
+def generate_newsletter_alias_local_part() -> str:
+    """Opaque catch-all local-part with ~128 bits of capability-token entropy."""
+    return f"u_{secrets.token_urlsafe(16)}"
+
+
+async def create_newsletter_subscription(
+    *, chat_id: int, name: str, sender_email: str, alias_local_part: str | None = None
+) -> dict:
+    """Create a subscription and its backing Space in one transaction."""
+    subscription_id = generate_id()
+    space_id = generate_id()
+    alias = alias_local_part or generate_newsletter_alias_local_part()
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await conn.execute(
+                "INSERT INTO spaces (id, chat_id, name, color, icon) VALUES (?, ?, ?, ?, ?)",
+                (space_id, chat_id, name, "#6366f1", "newspaper"),
+            )
+            await conn.execute(
+                """INSERT INTO newsletter_subscriptions
+                   (id, chat_id, name, sender_email, alias_local_part, space_id)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (subscription_id, chat_id, name, sender_email.lower(), alias, space_id),
+            )
+            cur = await conn.execute(
+                """SELECT id, chat_id, name, sender_email, alias_local_part, space_id, created_at
+                   FROM newsletter_subscriptions WHERE id = ?""",
+                (subscription_id,),
+            )
+            row = await cur.fetchone()
+            await conn.commit()
+            return dict(row)  # type: ignore[arg-type]
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+async def list_newsletter_subscriptions(chat_id: int) -> list[dict]:
+    return await _fetch_dicts(
+        """SELECT ns.id, ns.chat_id, ns.name, ns.sender_email, ns.alias_local_part,
+                  ns.space_id, ns.created_at,
+                  COALESCE(SUM(CASE WHEN dc.status = 'pending' THEN 1 ELSE 0 END), 0)
+                      AS pending_count,
+                  COALESCE(SUM(CASE WHEN dc.status = 'promoting' THEN 1 ELSE 0 END), 0)
+                      AS promoting_count,
+                  COALESCE(SUM(CASE WHEN dc.status = 'promoted' THEN 1 ELSE 0 END), 0)
+                      AS promoted_count,
+                  COALESCE(SUM(CASE WHEN dc.status = 'dismissed' THEN 1 ELSE 0 END), 0)
+                      AS dismissed_count,
+                  COUNT(dc.id) AS candidate_count,
+                  COALESCE((
+                      SELECT COUNT(*)
+                        FROM email_digest_payloads edp
+                        JOIN jobs j ON j.id = edp.job_id
+                       WHERE edp.subscription_id = ns.id
+                         AND j.status = 'error'
+                         AND j.url LIKE 'email_digest:%'
+                  ), 0) AS error_count
+             FROM newsletter_subscriptions ns
+             LEFT JOIN digest_candidates dc ON dc.space_id = ns.space_id
+            WHERE ns.chat_id = ?
+            GROUP BY ns.id
+            ORDER BY ns.created_at DESC, ns.id DESC""",
+        (chat_id,),
     )
+
+
+async def get_newsletter_subscription(subscription_id: str, chat_id: int) -> dict | None:
+    row = await _fetch_one(
+        """SELECT id, chat_id, name, sender_email, alias_local_part, space_id, created_at
+           FROM newsletter_subscriptions
+          WHERE id = ? AND chat_id = ?""",
+        (subscription_id, chat_id),
+    )
+    return dict(row) if row else None
+
+
+async def get_newsletter_subscription_by_alias(alias_local_part: str) -> dict | None:
+    row = await _fetch_one(
+        """SELECT id, chat_id, name, sender_email, alias_local_part, space_id, created_at
+           FROM newsletter_subscriptions
+          WHERE alias_local_part = ?""",
+        (alias_local_part,),
+    )
+    return dict(row) if row else None
+
+
+async def update_newsletter_subscription(
+    *, subscription_id: str, chat_id: int, name: str, sender_email: str
+) -> dict | None:
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await conn.execute(
+                """SELECT space_id FROM newsletter_subscriptions
+                   WHERE id = ? AND chat_id = ?""",
+                (subscription_id, chat_id),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                await conn.commit()
+                return None
+            await conn.execute(
+                """UPDATE newsletter_subscriptions
+                      SET name = ?, sender_email = ?
+                    WHERE id = ? AND chat_id = ?""",
+                (name, sender_email.lower(), subscription_id, chat_id),
+            )
+            await conn.execute(
+                """UPDATE spaces
+                      SET name = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND chat_id = ?""",
+                (name, row["space_id"], chat_id),
+            )
+            cur = await conn.execute(
+                """SELECT id, chat_id, name, sender_email, alias_local_part, space_id, created_at
+                   FROM newsletter_subscriptions WHERE id = ?""",
+                (subscription_id,),
+            )
+            updated = await cur.fetchone()
+            await conn.commit()
+            return dict(updated) if updated else None
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+async def delete_newsletter_subscription(*, subscription_id: str, chat_id: int) -> bool:
+    """Delete the backing Space and clear any retained failed payload content."""
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = await conn.execute(
+                """SELECT space_id FROM newsletter_subscriptions
+                   WHERE id = ? AND chat_id = ?""",
+                (subscription_id, chat_id),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                await conn.commit()
+                return False
+            await conn.execute(
+                "UPDATE email_digest_payloads SET subject = NULL, html = NULL, text = NULL "
+                "WHERE subscription_id = ?",
+                (subscription_id,),
+            )
+            delete_cur = await conn.execute(
+                "DELETE FROM spaces WHERE id = ? AND chat_id = ?",
+                (row["space_id"], chat_id),
+            )
+            await conn.commit()
+            return delete_cur.rowcount > 0
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+async def get_email_digest_receipt(subscription_id: str, receipt_key: str) -> dict | None:
+    row = await _fetch_one(
+        """SELECT j.id, j.chat_id, j.url, j.content_type, j.status, j.title,
+                  edp.subscription_id, edp.receipt_key
+             FROM email_digest_payloads edp
+             JOIN jobs j ON j.id = edp.job_id
+            WHERE edp.subscription_id = ? AND edp.receipt_key = ?
+            ORDER BY j.created_at DESC, j.id DESC
+            LIMIT 1""",
+        (subscription_id, receipt_key),
+    )
+    return dict(row) if row else None
+
+
+async def create_email_digest_receipt_job(
+    *,
+    subscription: dict,
+    receipt_key: str,
+    receipt_url: str,
+    subject: str | None,
+    html: str | None,
+    text: str | None,
+    daily_cap: int,
+) -> dict:
+    """Create the receipt job and payload atomically, or return a dedup/cap result."""
+    async with connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            existing_cur = await conn.execute(
+                """SELECT j.id, j.chat_id, j.url, j.content_type, j.status, j.title
+                     FROM email_digest_payloads edp
+                     JOIN jobs j ON j.id = edp.job_id
+                    WHERE edp.subscription_id = ? AND edp.receipt_key = ?
+                    LIMIT 1""",
+                (subscription["id"], receipt_key),
+            )
+            existing = await existing_cur.fetchone()
+            if existing is not None:
+                await conn.commit()
+                return {"status": "deduped", "job": dict(existing)}
+
+            count_cur = await conn.execute(
+                """SELECT COUNT(*) AS n
+                     FROM email_digest_payloads edp
+                     JOIN jobs j ON j.id = edp.job_id
+                    WHERE edp.subscription_id = ?
+                      AND j.created_at >= datetime('now', '-24 hours')""",
+                (subscription["id"],),
+            )
+            count_row = await count_cur.fetchone()
+            if int(count_row["n"] if count_row else 0) >= daily_cap:
+                await conn.commit()
+                return {"status": "over_cap", "job": None}
+
+            job_id = generate_id()
+            title = f"Newsletter digest: {(subject or 'Untitled').strip() or 'Untitled'}"
+            await conn.execute(
+                """INSERT INTO jobs (id, chat_id, url, content_type, status, title)
+                   VALUES (?, ?, ?, 'link', 'pending', ?)""",
+                (job_id, subscription["chat_id"], receipt_url, title[:500]),
+            )
+            await conn.execute(
+                """INSERT INTO email_digest_payloads
+                   (job_id, receipt_key, subscription_id, subject, html, text)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (job_id, receipt_key, subscription["id"], subject, html, text),
+            )
+            job_cur = await conn.execute(
+                "SELECT id, chat_id, url, content_type, status, title FROM jobs WHERE id = ?",
+                (job_id,),
+            )
+            job = await job_cur.fetchone()
+            await conn.commit()
+            log.info(
+                "email_digest_receipt_created",
+                job_id=job_id,
+                subscription_id=subscription["id"],
+            )
+            return {"status": "created", "job": dict(job)}
+        except aiosqlite.IntegrityError:
+            await conn.rollback()
+            existing = await get_email_digest_receipt(subscription["id"], receipt_key)
+            if existing is not None:
+                return {"status": "deduped", "job": existing}
+            raise
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+async def claim_email_digest_job(job_id: str) -> bool:
+    changed = await _execute_rowcount(
+        """UPDATE jobs
+              SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND status IN ('pending', 'error')""",
+        (job_id,),
+    )
+    return changed == 1
+
+
+async def get_email_digest_payload(job_id: str) -> dict | None:
+    row = await _fetch_one(
+        """SELECT edp.job_id, edp.receipt_key, edp.subscription_id, edp.subject,
+                  edp.html, edp.text, ns.space_id, ns.chat_id, ns.name AS subscription_name
+             FROM email_digest_payloads edp
+             LEFT JOIN newsletter_subscriptions ns ON ns.id = edp.subscription_id
+            WHERE edp.job_id = ?""",
+        (job_id,),
+    )
+    return dict(row) if row else None
+
+
+async def clear_email_digest_payload(job_id: str) -> None:
+    await _execute_rowcount(
+        "UPDATE email_digest_payloads SET subject = NULL, html = NULL, text = NULL "
+        "WHERE job_id = ?",
+        (job_id,),
+    )
+
+
+async def insert_digest_candidate(
+    *, space_id: str, url: str, canonical_url: str, title: str | None = None
+) -> str | None:
+    candidate_id = generate_id()
+    async with connection() as conn:
+        cur = await conn.execute(
+            """INSERT OR IGNORE INTO digest_candidates
+               (id, space_id, url, canonical_url, title)
+               VALUES (?, ?, ?, ?, ?)""",
+            (candidate_id, space_id, url, canonical_url, title),
+        )
+        await conn.commit()
+        if cur.rowcount != 1:
+            return None
+        return candidate_id
+
+
+async def update_digest_candidate_preview(
+    *, candidate_id: str, title: str | None, thumbnail_url: str | None
+) -> None:
+    await _execute_rowcount(
+        """UPDATE digest_candidates
+              SET title = COALESCE(?, title), thumbnail_url = COALESCE(?, thumbnail_url)
+            WHERE id = ?""",
+        (title, thumbnail_url, candidate_id),
+    )
+
+
+async def list_digest_candidates(space_id: str) -> list[dict]:
+    return await _fetch_dicts(
+        """SELECT id, space_id, url, canonical_url, title, thumbnail_url, status,
+                  job_id, created_at
+             FROM digest_candidates
+            WHERE space_id = ?
+            ORDER BY created_at DESC, id DESC""",
+        (space_id,),
+    )
+
+
+async def get_digest_candidate(space_id: str, candidate_id: str) -> dict | None:
+    row = await _fetch_one(
+        """SELECT id, space_id, url, canonical_url, title, thumbnail_url, status,
+                  job_id, created_at
+             FROM digest_candidates
+            WHERE id = ? AND space_id = ?""",
+        (candidate_id, space_id),
+    )
+    return dict(row) if row else None
+
+
+async def claim_digest_candidate(*, space_id: str, candidate_id: str) -> bool:
+    changed = await _execute_rowcount(
+        """UPDATE digest_candidates
+              SET status = 'promoting'
+            WHERE id = ? AND space_id = ? AND status = 'pending'""",
+        (candidate_id, space_id),
+    )
+    return changed == 1
+
+
+async def mark_digest_candidate_promoted(
+    *, space_id: str, candidate_id: str, job_id: str
+) -> bool:
+    changed = await _execute_rowcount(
+        """UPDATE digest_candidates
+              SET status = 'promoted', job_id = ?
+            WHERE id = ? AND space_id = ? AND status = 'promoting'""",
+        (job_id, candidate_id, space_id),
+    )
+    return changed == 1
+
+
+async def reset_digest_candidate_pending(*, space_id: str, candidate_id: str) -> None:
+    await _execute_rowcount(
+        """UPDATE digest_candidates
+              SET status = 'pending'
+            WHERE id = ? AND space_id = ? AND status = 'promoting'""",
+        (candidate_id, space_id),
+    )
+
+
+async def dismiss_digest_candidate(*, space_id: str, candidate_id: str) -> bool:
+    changed = await _execute_rowcount(
+        """UPDATE digest_candidates
+              SET status = 'dismissed'
+            WHERE id = ? AND space_id = ? AND status IN ('pending', 'promoting')""",
+        (candidate_id, space_id),
+    )
+    return changed == 1
+
+
+async def latest_retryable_email_digest_job(subscription_id: str) -> dict | None:
+    row = await _fetch_one(
+        """SELECT j.id, j.chat_id, j.status, j.updated_at
+             FROM email_digest_payloads edp
+             JOIN jobs j ON j.id = edp.job_id
+            WHERE edp.subscription_id = ?
+              AND j.url LIKE 'email_digest:%'
+              AND j.status = 'error'
+              AND (edp.subject IS NOT NULL OR edp.html IS NOT NULL OR edp.text IS NOT NULL)
+            ORDER BY j.updated_at DESC, j.id DESC
+            LIMIT 1""",
+        (subscription_id,),
+    )
+    return dict(row) if row else None
 
 
 async def count_job_links(job_id: str) -> int:

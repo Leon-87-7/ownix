@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   GripVertical,
   FileCode2,
+  Newspaper,
   ShieldUser,
   LogOut,
   Unplug,
@@ -39,6 +40,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/intake', label: 'Intake', icon: Inbox },
   { href: '/feed', label: 'Feed', icon: Rss },
+  { href: '/newsletter-digest', label: 'Digest', icon: Newspaper },
   { href: '/doc-parser', label: 'Docs', icon: FileCode2 },
   { href: '/brain', label: 'Brain', icon: Brain },
   { href: '/spaces', label: 'Collections', icon: LayoutGrid },

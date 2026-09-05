@@ -79,7 +79,7 @@ async def get_job_stats(
 
     async with database.connection() as conn:
         # Status breakdown — scoped to content_type when a tab is active.
-        status_conditions = ["chat_id = ?", "status != 'cancelled'"]
+        status_conditions = ["chat_id = ?", "status != 'cancelled'", "url NOT LIKE 'email_digest:%'"]
         status_params: list = [chat_id]
         if content_type is not None:
             status_conditions.append("content_type = ?")
@@ -96,7 +96,9 @@ async def get_job_stats(
 
         # Content-type breakdown — always global so the tab count chips stay correct.
         cur2 = await conn.execute(
-            "SELECT content_type, COUNT(*) AS cnt FROM jobs WHERE chat_id = ? AND status != 'cancelled' GROUP BY content_type",
+            "SELECT content_type, COUNT(*) AS cnt FROM jobs "
+            "WHERE chat_id = ? AND status != 'cancelled' AND url NOT LIKE 'email_digest:%' "
+            "GROUP BY content_type",
             (chat_id,),
         )
         rows2 = await cur2.fetchall()
@@ -333,7 +335,7 @@ def _job_scope_where(
 ) -> tuple[str, list]:
     """Feed-scope filter shared by list_jobs and get_adjacent_jobs — the two must
     agree on what's visible or prev/next navigation drifts from the feed."""
-    conditions = ["chat_id = ?"]
+    conditions = ["chat_id = ?", "url NOT LIKE 'email_digest:%'"]
     params: list = [chat_id]
     if content_type is not None:
         conditions.append("content_type = ?")

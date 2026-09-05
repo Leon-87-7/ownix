@@ -439,3 +439,59 @@ progressively narrower, consistent with genuine convergence rather than
 disagreement. Round 7's five implementation-discipline notes carry forward
 as a checklist for whichever build path is chosen next, not as open plan
 issues.
+
+## Act 3 — Build
+
+Built via `/codex-build` (Codex-types-Claude-verifies): Codex CLI 0.142.5,
+model `gpt-5.5` (reasoning_effort=high), thread `01a07345-4c5f-7000-95f2-
+fd990fe8abb3`. PROOF_CMD: `python -m pytest tests -q` + `npm run test:run --
+newsletter-digest`.
+
+### Round 1 — Codex build
+
+Implemented the full plan: schema migration (v44→v45), the Cloudflare Worker
+source (`ops/email-worker/`, not deployed), `EMAIL_WEBHOOK_SECRET`, the
+webhook (`src/api/email_webhook.py`), the processor
+(`src/processors/email_digest.py`), promotion + subscription API
+(`src/api/newsletter_digest.py`), the recovery-panel and Feed-visibility
+fixes in the shared `_scope_where`/`_job_scope_where` helpers, and the
+frontend (`web/app/(dashboard)/newsletter-digest/` + `web/components/
+newsletter-digest/`). The background run was killed externally partway
+through its own fix pass (not by user request) — its last captured proof run
+showed 2 failing frontend test files and 1 failing backend test.
+
+### Claude's verdict (round 1)
+
+Before assuming those failures were still live, re-ran the scoped proof
+commands directly: both the JSX parse-error and the test-assertion mismatch
+Codex had flagged were already fixed in the working tree (files inspected
+directly, not just Codex's claim) — `tests/test_email_digest.py` and the
+scoped frontend suite (`npm run test:run -- newsletter-digest`) both passed
+clean on first re-run. Read the diff file-by-file instead of trusting the
+partial run: schema/migration, the receipt-transaction concurrency logic
+(job-created-before-payload, `BEGIN IMMEDIATE`, `IntegrityError`→dedup
+fallback), the webhook (dedup-before-cap ordering, envelope-based alias
+lookup, sender noise-filter), the processor (atomic claim first, non-fatal
+per-candidate/per-blob failure handling, success-gated payload clearing),
+promotion (atomic candidate claim, document-vs-`POST /api/jobs` branching,
+ownership scoping), the Feed-visibility fix (confirmed `_job_scope_where` is
+in fact the single function backing both `list_jobs` and
+`get_adjacent_jobs`, per its own docstring — not assumed), and a sample
+frontend component against `web/CLAUDE.md`/`DESIGN.md` conventions — all
+matched the plan faithfully.
+
+Full suite run (`python -m pytest tests -q --timeout=120`, run directly, not
+delegated) surfaced one real regression Codex's own proof commands never
+caught: `tests/test_jobs_api.py::test_job_scope_where_defaults_exclude_
+cancelled` hard-coded the exact SQL string produced by `_job_scope_where`,
+which the plan's own Feed-visibility fix correctly changed. Fixed directly
+(updated the two hard-coded WHERE-string assertions to include the new
+`url NOT LIKE 'email_digest:%'` clause) rather than resuming Codex for a
+3-line mechanical fix. Re-ran `tests/test_jobs_api.py` (48 passed) and the
+full suite again (1430 passed, 0 failed) plus `npm run lint` (0 errors, 2 new
+warnings in the newsletter-digest components matching a pre-existing
+`react-hooks/set-state-in-effect` pattern already present in three other
+files in this codebase — not a new issue class, left as-is).
+
+**Status: verified, not yet committed.** Awaiting human diff sign-off before
+any commit — per this skill's hard rule, Codex does not commit.

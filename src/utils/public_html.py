@@ -165,6 +165,38 @@ async def fetch_public_html(
             await active_client.aclose()
 
 
+async def resolve_public_redirect_url(
+    url: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> str | None:
+    """Resolve public redirects and return the terminal URL without MIME gating."""
+    owns_client = client is None
+    active_client = client or httpx.AsyncClient(
+        timeout=httpx.Timeout(5.0),
+        follow_redirects=False,
+        headers={"User-Agent": _USER_AGENT},
+    )
+
+    async def on_success(response: httpx.Response) -> str:
+        return str(response.url)
+
+    try:
+        return await _fetch_pinned(
+            url,
+            client=active_client,
+            log_prefix="public_redirect",
+            on_empty_redirect=lambda response: str(response.url),
+            on_success=on_success,
+        )
+    except Exception as exc:
+        log.info("public_redirect.fetch_failed", url=url, error=str(exc)[:120])
+        return None
+    finally:
+        if owns_client:
+            await active_client.aclose()
+
+
 async def fetch_public_image(
     url: str,
     *,

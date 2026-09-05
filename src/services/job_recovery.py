@@ -24,7 +24,7 @@ def _validate_content_type(content_type: str | None) -> str | None:
 
 
 def _scope_where(chat_id: int, content_type: str | None) -> tuple[str, list[Any]]:
-    conditions = ["chat_id = ?"]
+    conditions = ["chat_id = ?", "url NOT LIKE 'email_digest:%'"]
     params: list[Any] = [chat_id]
     if content_type:
         conditions.append("content_type = ?")

@@ -9,7 +9,11 @@ from src.config import Settings
 
 
 def _base_env(**overrides: str) -> dict[str, str]:
-    env = {"TELEGRAM_BOT_TOKEN": "123:ABC", "TELEGRAM_WEBHOOK_SECRET": "s3cr3t"}
+    env = {
+        "TELEGRAM_BOT_TOKEN": "123:ABC",
+        "TELEGRAM_WEBHOOK_SECRET": "s3cr3t",
+        "EMAIL_WEBHOOK_SECRET": "email-s3cr3t",
+    }
     env.update(overrides)
     return env
 
@@ -17,6 +21,11 @@ def _base_env(**overrides: str) -> dict[str, str]:
 def test_settings_rejects_empty_webhook_secret() -> None:
     with pytest.raises(ValidationError):
         Settings(**_base_env(TELEGRAM_WEBHOOK_SECRET=""))
+
+
+def test_settings_rejects_empty_email_webhook_secret() -> None:
+    with pytest.raises(ValidationError):
+        Settings(**_base_env(EMAIL_WEBHOOK_SECRET=""))
 
 
 def test_settings_rejects_empty_bot_token() -> None:
@@ -27,6 +36,7 @@ def test_settings_rejects_empty_bot_token() -> None:
 def test_settings_accepts_nonempty_required_fields() -> None:
     s = Settings(**_base_env())
     assert s.TELEGRAM_WEBHOOK_SECRET == "s3cr3t"
+    assert s.EMAIL_WEBHOOK_SECRET == "email-s3cr3t"
     assert s.TELEGRAM_BOT_TOKEN == "123:ABC"
 
 
@@ -41,6 +51,7 @@ def test_settings_loads_local_env_file_after_base_env(tmp_path, monkeypatch) -> 
             [
                 "TELEGRAM_BOT_TOKEN=123:ABC",
                 "TELEGRAM_WEBHOOK_SECRET=s3cr3t",
+                "EMAIL_WEBHOOK_SECRET=email-s3cr3t",
                 "GOOGLE_DRIVE_FOLDER_BRAIN=prod-folder",
                 "DB_PATH=/app/data/jobs.db",
             ]

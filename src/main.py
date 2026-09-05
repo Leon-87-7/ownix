@@ -12,10 +12,12 @@ from src import database, job_queue as queue
 from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router
+from src.api.email_webhook import router as email_webhook_router
 from src.api.extension_auth import extension_auth_router
 from src.api.google_oauth import google_oauth_router
 from src.api.intake import intake_router
 from src.api.jobs import jobs_router
+from src.api.newsletter_digest import newsletter_digest_router
 from src.api.parsed import parsed_router
 from src.api.preview import preview_router
 from src.api.spaces import spaces_router
@@ -173,10 +175,12 @@ if settings.DASHBOARD_URL:
         allow_headers=["*"],
     )
 app.include_router(webhook.router)
+app.include_router(email_webhook_router)
 app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)
 app.include_router(jobs_router)
+app.include_router(newsletter_digest_router)
 app.include_router(intake_router)
 app.include_router(extension_auth_router)
 app.include_router(google_oauth_router)
