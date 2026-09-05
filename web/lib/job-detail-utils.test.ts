@@ -16,6 +16,8 @@ import {
   downloadMarkdownFile,
   ENRICHMENT_FIELDS,
   SHORT_FIELDS,
+  stripMarkdown,
+  isSpeakable,
 } from '@/lib/job-detail-utils'
 
 // --- downloadMarkdownFile ---
@@ -499,5 +501,39 @@ describe('buildMarkdown', () => {
   it('joins sections with a blank line between them', () => {
     const md = buildMarkdown(baseJob)
     expect(md).toContain('## Topic\nFinance\n\n## Objective\nLearn investing')
+  })
+})
+
+describe('stripMarkdown', () => {
+  it('strips heading markers', () => expect(stripMarkdown('### Heading')).toBe('Heading'))
+  it('strips bullet markers', () => expect(stripMarkdown('- One\n* Two\n+ Three')).toBe('One. Two. Three'))
+  it('strips numbered-list markers', () => expect(stripMarkdown('1. One\n2. Two')).toBe('One. Two'))
+  it('strips bold asterisks', () => expect(stripMarkdown('**bold**')).toBe('bold'))
+  it('strips bold underscores', () => expect(stripMarkdown('__bold__')).toBe('bold'))
+  it('strips italic asterisks', () => expect(stripMarkdown('*italic*')).toBe('italic'))
+  it('strips italic underscores', () => expect(stripMarkdown('_italic_')).toBe('italic'))
+  it('strips inline-code backticks', () => expect(stripMarkdown('Use `npm test` now')).toBe('Use npm test now'))
+  it('replaces links with their labels', () => expect(stripMarkdown('[Ownix](https://ownix.dev)')).toBe('Ownix'))
+  it('replaces a link whose URL has balanced parentheses', () => expect(stripMarkdown('[Foo](https://en.wikipedia.org/wiki/Foo_(bar))')).toBe('Foo'))
+  it('replaces a link whose URL has deeply nested balanced parentheses', () => expect(stripMarkdown('[Foo](https://example.com/Foo_(bar_(baz)))')).toBe('Foo'))
+  it('replaces an image with its alt text', () => expect(stripMarkdown('![a chart](chart.png)')).toBe('a chart'))
+  it('joins non-blank lines with sentence separators', () => expect(stripMarkdown('One\n\nTwo')).toBe('One. Two'))
+  it('does not strip a mid-line hyphen', () => expect(stripMarkdown('well-known fact')).toBe('well-known fact'))
+  it('does not strip an unpaired asterisk', () => expect(stripMarkdown('value * unknown')).toBe('value * unknown'))
+  it('does not strip a non-list-marker number', () => expect(stripMarkdown('2026 results')).toBe('2026 results'))
+  it('strips a numbered marker before bold markup', () => expect(stripMarkdown('1. **First**')).toBe('First'))
+  it('does not strip underscores from a snake_case identifier', () => expect(stripMarkdown('foo_bar_baz')).toBe('foo_bar_baz'))
+  it('does not strip underscores from a snake_case file name', () => expect(stripMarkdown('see my_file_name.py')).toBe('see my_file_name.py'))
+})
+
+describe('isSpeakable', () => {
+  it.each([
+    ['text', true],
+    ['list', true],
+    ['json', true],
+    ['links', false],
+    ['code', false],
+  ] as const)('returns %s for %s fields', (render, expected) => {
+    expect(isSpeakable(render)).toBe(expected)
   })
 })

@@ -179,3 +179,57 @@ export function buildMarkdown(job: JobDetail): string {
   }
   return parts.join('\n\n')
 }
+
+// Regex can't count arbitrarily-nested parens, so a Markdown link/image's
+// destination — which can itself contain balanced parens, e.g. a Wikipedia
+// URL like `Foo_(bar_(baz))` — needs an actual balanced scan instead.
+function stripMarkdownLinks(line: string): string {
+  let result = ''
+  let i = 0
+  while (i < line.length) {
+    const isImage = line[i] === '!' && line[i + 1] === '['
+    const start = isImage ? i + 1 : i
+    if (line[start] === '[') {
+      const closeBracket = line.indexOf(']', start + 1)
+      if (closeBracket !== -1 && line[closeBracket + 1] === '(') {
+        let depth = 0
+        let j = closeBracket + 1
+        for (; j < line.length; j++) {
+          if (line[j] === '(') depth++
+          else if (line[j] === ')') {
+            depth--
+            if (depth === 0) break
+          }
+        }
+        if (depth === 0 && j < line.length) {
+          result += line.slice(start + 1, closeBracket)
+          i = j + 1
+          continue
+        }
+      }
+    }
+    result += line[i]
+    i++
+  }
+  return result
+}
+
+export function stripMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => stripMarkdownLinks(line
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^(?:[-*+]|\d+\.)\s+/, ''))
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
+      .replace(/`([^`]+)`/g, '$1'))
+    .join('. ')
+}
+
+export function isSpeakable(render: RenderType): boolean {
+  return render === 'text' || render === 'list' || render === 'json'
+}

@@ -140,7 +140,7 @@ The recommendation is **also stamped on each brief** as its `> **Grill:**`
 callout (see the house structure) so it survives the chat session — the
 summary echoes it, TASK.md records it. Pick via this mapping:
 
-- Leans on a third-party API/SDK/integration → **`/grill-with-search-docs`**
+- Leans on a third-party API/SDK/integration → **`/grill-search`**
 - Leans on this repo's domain model / ADRs / terminology → **`/grill-with-docs`**
 - Pure product/UX with no external or domain-model hinge → **`/grilling`**
 
