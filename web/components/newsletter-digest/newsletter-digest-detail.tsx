@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Newspaper, RotateCcw } from 'lucide-react';
 import { PageHeader, PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
@@ -26,21 +26,27 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
   const [error, setError] = useState<string | null>(null);
   const [busyCandidateId, setBusyCandidateId] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  // Guards against a stale load() — from a prior subscriptionId — resolving after
+  // a newer one has already started and overwriting its state with old data.
+  const requestIdRef = useRef(0);
 
   async function load() {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const [nextSubscription, nextCandidates] = await Promise.all([
         fetchNewsletterSubscription(subscriptionId),
         fetchDigestCandidates(subscriptionId),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setSubscription(nextSubscription);
       setCandidates(nextCandidates);
       setError(null);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Could not load newsletter digest');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }
 

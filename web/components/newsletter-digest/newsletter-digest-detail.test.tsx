@@ -72,4 +72,24 @@ describe('NewsletterDigestDetail', () => {
 
     await waitFor(() => expect(screen.getByRole('link', { name: 'Open job' })).toHaveAttribute('href', '/jobs/job_1'));
   });
+
+  it('discards a stale response after subscriptionId changes before it resolves', async () => {
+    let resolveFirst!: (value: NewsletterSubscription) => void;
+    const firstPromise = new Promise<NewsletterSubscription>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.spyOn(api, 'fetchNewsletterSubscription')
+      .mockImplementationOnce(() => firstPromise)
+      .mockResolvedValueOnce({ ...subscription, id: 'sub_2', name: 'Second Newsletter' });
+    vi.spyOn(api, 'fetchDigestCandidates').mockResolvedValue([]);
+
+    const { rerender } = render(<NewsletterDigestDetail subscriptionId="sub_1" />);
+    rerender(<NewsletterDigestDetail subscriptionId="sub_2" />);
+
+    await waitFor(() => expect(screen.getByText('Second Newsletter')).toBeInTheDocument());
+
+    resolveFirst({ ...subscription, id: 'sub_1', name: 'First Newsletter' });
+    await waitFor(() => expect(screen.getByText('Second Newsletter')).toBeInTheDocument());
+    expect(screen.queryByText('First Newsletter')).not.toBeInTheDocument();
+  });
 });
