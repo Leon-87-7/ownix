@@ -3133,9 +3133,18 @@ async def list_newsletter_subscriptions(chat_id: int) -> list[dict]:
 
 async def get_newsletter_subscription(subscription_id: str, chat_id: int) -> dict | None:
     row = await _fetch_one(
-        """SELECT id, chat_id, name, sender_email, alias_local_part, space_id, created_at
-           FROM newsletter_subscriptions
-          WHERE id = ? AND chat_id = ?""",
+        """SELECT ns.id, ns.chat_id, ns.name, ns.sender_email, ns.alias_local_part,
+                  ns.space_id, ns.created_at,
+                  COALESCE((
+                      SELECT COUNT(*)
+                        FROM email_digest_payloads edp
+                        JOIN jobs j ON j.id = edp.job_id
+                       WHERE edp.subscription_id = ns.id
+                         AND j.status = 'error'
+                         AND j.url LIKE 'email_digest:%'
+                  ), 0) AS error_count
+             FROM newsletter_subscriptions ns
+            WHERE ns.id = ? AND ns.chat_id = ?""",
         (subscription_id, chat_id),
     )
     return dict(row) if row else None

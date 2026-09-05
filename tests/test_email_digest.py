@@ -9,6 +9,7 @@ import pytest
 from src import database
 from src.api import email_webhook, newsletter_digest
 from src.config import settings
+from src.processors import email_digest
 from src.services import job_recovery
 
 pytestmark = pytest.mark.asyncio
@@ -154,6 +155,34 @@ async def test_subscription_delete_clears_failed_payload_content(tmp_path, monke
         (created["job"]["id"],),
     )
     assert dict(row) == {"subscription_id": None, "subject": None, "html": None, "text": None}
+
+
+async def test_text_only_digest_extracts_candidate_links(tmp_path, monkeypatch) -> None:
+    await _init_db(tmp_path, monkeypatch)
+    sub = await _subscription()
+    created = await database.create_email_digest_receipt_job(
+        subscription=sub,
+        receipt_key="text-only",
+        receipt_url="email_digest:textonly",
+        subject="Issue",
+        html="",
+        text="Check this out: https://example.com/article?utm_source=x",
+        daily_cap=20,
+    )
+    monkeypatch.setattr(
+        email_digest,
+        "resolve_public_redirect_url",
+        AsyncMock(return_value="https://example.com/article?utm_source=x"),
+    )
+    monkeypatch.setattr(email_digest, "fetch_public_html", AsyncMock(return_value=None))
+    monkeypatch.setattr(email_digest.gemini, "generate", AsyncMock(return_value="Summary"))
+
+    await email_digest.run(created["job"])
+
+    candidates = await database.list_digest_candidates(sub["space_id"])
+    assert len(candidates) == 1
+    assert candidates[0]["url"] == "https://example.com/article?utm_source=x"
+    assert (await database.get_job(created["job"]["id"]))["status"] == "done"
 
 
 async def test_document_candidate_promotion_delegates_to_doc_parser(tmp_path, monkeypatch) -> None:

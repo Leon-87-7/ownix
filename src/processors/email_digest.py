@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -28,6 +29,7 @@ _UNSUBSCRIBE_MARKERS = (
     "email preferences",
     "subscription preferences",
 )
+_TEXT_URL_RE = re.compile(r"https?://[^\s<>\"')\]]+")
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,11 @@ def extract_digest_links(html: str) -> list[DigestLink]:
     parser = _DigestLinkParser()
     parser.feed(html or "")
     return parser.links
+
+
+def extract_text_links(text: str) -> list[DigestLink]:
+    """Bare URLs from a plain-text digest, which carries no anchor text."""
+    return [DigestLink(match, "") for match in _TEXT_URL_RE.findall(text or "")]
 
 
 def strip_html_text(html: str) -> str:
@@ -305,6 +312,8 @@ async def run(job: dict) -> None:
         headers={"User-Agent": "vig-public-html/1.0 (+https://github.com/Leon-87-7/vig)"},
     ) as client:
         links = await _extract_resolved_links(html, client=client)
+        if not links and text:
+            links = await _resolve_links(extract_text_links(text), client=client)
         await _insert_candidates(payload["space_id"], links, client)
     await _create_context_blob(payload["space_id"], subject, text, html)
     await database.clear_email_digest_payload(job_id)
