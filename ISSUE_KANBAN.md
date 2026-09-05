@@ -69,6 +69,13 @@
 | [#562](https://github.com/Leon-87-7/ownix/issues/562) | feat(tags): extend job/link tag merge to article jobs with not-yet-linked fallback | Jobs / Tags | #561 |
 | [#563](https://github.com/Leon-87-7/ownix/issues/563) | feat(tags): extend job/link tag merge to repo jobs | Jobs / Tags | #562 |
 | [#560](https://github.com/Leon-87-7/ownix/issues/560) | ci(mutation): fail backend-mutation below an 85% mutation score | CI / Mutation | — |
+| [#600](https://github.com/Leon-87-7/ownix/issues/600) | feat(newsletter-digest): subscription management (alias generation, Space linkage) | Newsletter Digest / Subscriptions | — |
+| [#601](https://github.com/Leon-87-7/ownix/issues/601) | feat(newsletter-digest): inbound webhook + receipt job creation | Newsletter Digest / Webhook | #600 |
+| [#602](https://github.com/Leon-87-7/ownix/issues/602) | feat(newsletter-digest): processor — link extraction into candidates + Gemini context blob | Newsletter Digest / Processor | #601 |
+| [#603](https://github.com/Leon-87-7/ownix/issues/603) | feat(newsletter-digest): candidate promotion + dismissal | Newsletter Digest / Promotion | #602, #600 |
+| [#604](https://github.com/Leon-87-7/ownix/issues/604) | feat(web): newsletter-digest detail page — candidate feed + context blobs | Web / Newsletter Digest | #603, #602 |
+| [#605](https://github.com/Leon-87-7/ownix/issues/605) | fix(job-recovery): exclude email_digest receipt jobs from generic recovery; add dedicated retry | Newsletter Digest / Recovery | #602 |
+| [#606](https://github.com/Leon-87-7/ownix/issues/606) | ops(email-worker): Cloudflare Worker + catch-all Email Routing runbook [HITL] | Ops / Email Worker | #601 |
 ---
 
 ## Ready for Agent
@@ -661,6 +668,17 @@ Listen button — per-field TTS on job detail + Space context blobs (docs/superp
     └── #598 Wire into Space context blobs ◄── also #594
 Critical path: {#594, #595} → #596 → {#597, #598}
 Note: v1 is browser-native Web Speech API only — no Fish.Audio, no backend, per ADR-0059.
+
+Email digest pipeline (PLAN.md — approved after 7 rounds of Codex review, PLAN-REVIEW-LOG.md; research: docs/research/2026-09-05-email-digest-claudex-research.md)
+#600 Newsletter subscription management (root, unblocked)
+└── #601 Inbound webhook + receipt job creation ◄── #600
+    ├── #602 Processor — link extraction into candidates + Gemini context blob ◄── #601
+    │   ├── #603 Candidate promotion + dismissal ◄── also #600
+    │   │   └── #604 Newsletter-digest detail page (candidate feed UI) ◄── also #602
+    │   └── #605 Recovery/retry safety net (job_recovery.py) ◄── #602
+    └── #606 Cloudflare Worker + Email Routing runbook [HITL] ◄── #601
+Critical path: #600 → #601 → #602 → {#603 → #604, #605}; #606 parallel off #601
+Note: candidates are non-committal — no link is auto-processed; #603's promote action is the only trigger for real pipeline work (ADR-0051 Second-Law framing). #606 is HITL — the Cloudflare dashboard catch-all rule needs the user's own account access.
 ```
 
 ---
