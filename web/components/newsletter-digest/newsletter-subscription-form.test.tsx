@@ -27,4 +27,33 @@ describe('NewsletterSubscriptionForm', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('Alias already exists');
   });
+
+  it('clears the fields after a successful submit', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(true);
+    render(<NewsletterSubscriptionForm onSubmit={onSubmit} />);
+
+    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
+    const senderInput = screen.getByLabelText('Sender email') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Morning Brief' } });
+    fireEvent.change(senderInput, { target: { value: 'editor@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(nameInput.value).toBe(''));
+    expect(senderInput.value).toBe('');
+  });
+
+  it('preserves the fields after a failed submit', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(false);
+    render(<NewsletterSubscriptionForm onSubmit={onSubmit} />);
+
+    const nameInput = screen.getByLabelText('Name') as HTMLInputElement;
+    const senderInput = screen.getByLabelText('Sender email') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'Morning Brief' } });
+    fireEvent.change(senderInput, { target: { value: 'editor@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(nameInput.value).toBe('Morning Brief');
+    expect(senderInput.value).toBe('editor@example.com');
+  });
 });

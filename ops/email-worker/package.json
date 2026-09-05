@@ -6,11 +6,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "postal-mime": "latest"
+    "postal-mime": "^3.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "latest",
-    "typescript": "latest",
-    "wrangler": "latest"
+    "@cloudflare/workers-types": "^5.20260905.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.129.0"
   }
 }

@@ -9,7 +9,7 @@ export function NewsletterSubscriptionForm({
   submitting = false,
   error,
 }: {
-  onSubmit: (input: { name: string; sender_email: string }) => Promise<void> | void;
+  onSubmit: (input: { name: string; sender_email: string }) => Promise<boolean> | boolean;
   submitting?: boolean;
   error?: string | null;
 }) {
@@ -18,9 +18,11 @@ export function NewsletterSubscriptionForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit({ name: name.trim(), sender_email: sender.trim().toLowerCase() });
-    setName('');
-    setSender('');
+    const succeeded = await onSubmit({ name: name.trim(), sender_email: sender.trim().toLowerCase() });
+    if (succeeded) {
+      setName('');
+      setSender('');
+    }
   }
 
   return (

@@ -124,6 +124,38 @@ async def test_generic_recovery_excludes_email_digest_receipts(tmp_path, monkeyp
     assert (await database.get_job(normal_job))["status"] == "cancelled"
 
 
+async def test_stale_email_digest_job_reaped_without_false_notification(tmp_path, monkeypatch) -> None:
+    await _init_db(tmp_path, monkeypatch)
+    enqueue = AsyncMock()
+    send_message = AsyncMock()
+    monkeypatch.setattr(job_recovery.queue, "enqueue", enqueue)
+    monkeypatch.setattr("src.telegram.sender.send_message", send_message)
+
+    digest_job = await database.create_job(
+        chat_id=123,
+        url="email_digest:stale123",
+        content_type="link",
+        status="processing",
+    )
+    async with database.connection() as conn:
+        await conn.execute(
+            "UPDATE jobs SET updated_at = datetime('now', '-20 minutes') WHERE id = ?",
+            (digest_job,),
+        )
+        await conn.commit()
+
+    retried = await job_recovery.retry_error(123)
+
+    # Reaped to 'error' (so the dedicated newsletter-digest retry can find it)...
+    assert (await database.get_job(digest_job))["status"] == "error"
+    assert retried["reaped"] == 1
+    # ...but never claimed as generic error work, and never falsely told the user
+    # it was "re-queued automatically" — it wasn't.
+    assert retried["replaced"] == 0
+    enqueue.assert_not_awaited()
+    send_message.assert_not_awaited()
+
+
 async def test_subscription_delete_clears_failed_payload_content(tmp_path, monkeypatch) -> None:
     await _init_db(tmp_path, monkeypatch)
     sub = await _subscription()

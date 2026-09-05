@@ -38,14 +38,16 @@ export function NewsletterDigestDashboard() {
     void load();
   }, []);
 
-  async function handleCreate(input: { name: string; sender_email: string }) {
+  async function handleCreate(input: { name: string; sender_email: string }): Promise<boolean> {
     setSubmitting(true);
     setFormError(null);
     try {
       const created = await createNewsletterSubscription(input);
       setSubscriptions((current) => [created, ...current]);
+      return true;
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not add newsletter');
+      return false;
     } finally {
       setSubmitting(false);
     }

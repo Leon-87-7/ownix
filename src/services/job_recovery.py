@@ -222,7 +222,12 @@ async def retry_error(chat_id: int, content_type: str | None = None) -> dict[str
     reaped = await database.fetch_and_mark_stale_jobs(
         STALE_MINUTES, chat_id=chat_id, content_type=content_type
     )
-    notifications_sent = await _notify_reaped_jobs(reaped, chat_id)
+    # A reaped email-digest receipt job is deliberately excluded from _claim_error_rows
+    # below (see _scope_where), so retry_error never actually re-queues it — telling
+    # the user it was "re-queued automatically" here would be false. It still shows up
+    # as an error via the dedicated newsletter-digest retry action instead.
+    notifiable_reaped = [row for row in reaped if not row["url"].startswith("email_digest:")]
+    notifications_sent = await _notify_reaped_jobs(notifiable_reaped, chat_id)
     rows = await _claim_error_rows(chat_id, content_type)
     # Every claimed row is currently 'cancelled'. Track those not yet given a final
     # disposition so a mid-batch queue failure can restore the whole tail to 'error'

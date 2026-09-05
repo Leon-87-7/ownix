@@ -51,6 +51,7 @@ docs/features/*
 docs/brand/*
 web/node_modules/
 web/.next/
+ops/email-worker/node_modules/
 
 # Local dev mock snapshot of real data (regenerate from data/jobs.db)
 web/public/seed.json

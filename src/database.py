@@ -2268,8 +2268,16 @@ async def fetch_and_mark_stale_jobs(
 
     Selects jobs stuck in ``processing``/``enriching`` whose ``updated_at`` is older
     than ``stale_minutes``, flips them to ``error``, and increments ``attempt`` — all
-    in one transaction. Returns ``[{"id", "chat_id", "status"}, ...]`` where ``status``
-    is the value BEFORE the reset, so callers can route per-state notifications.
+    in one transaction. Returns ``[{"id", "chat_id", "status", "url"}, ...]`` where
+    ``status`` is the value BEFORE the reset, so callers can route per-state
+    notifications — ``url`` lets a caller identify synthetic receipt jobs (e.g.
+    ``email_digest:%``) that need different notification handling than a real job.
+
+    Deliberately still reaps ``email_digest`` receipt jobs to ``error`` — skipping
+    them here would leave a crashed digest stuck ``processing`` forever, since the
+    dashboard's dedicated per-feature retry only looks for ``error`` rows. Callers
+    that special-case receipt jobs (see ``job_recovery.retry_error``) do so on top
+    of this reap, not by excluding them from it.
 
     Run once at worker startup (see ``worker.reap_stale_jobs``). ADR-0010.
     """
@@ -2286,7 +2294,7 @@ async def fetch_and_mark_stale_jobs(
     where = " AND ".join(conditions)
     async with connection() as conn:
         cursor = await conn.execute(
-            f"SELECT id, chat_id, status FROM jobs WHERE {where}", tuple(params)
+            f"SELECT id, chat_id, status, url FROM jobs WHERE {where}", tuple(params)
         )
         rows = [dict(row) for row in await cursor.fetchall()]
         if rows:
