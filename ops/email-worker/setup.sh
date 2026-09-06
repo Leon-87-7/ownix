@@ -14,9 +14,9 @@ set -euo pipefail
 
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
   BOLD=$(tput bold); DIM=$(tput dim); RESET=$(tput sgr0)
-  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1)
+  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3)
 else
-  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""; RED=""
+  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""
 fi
 
 # Author sets this at the top of the stages section.
@@ -203,16 +203,21 @@ confirm "Logged in to Cloudflare?" || { warn "re-run this script once you're log
 # ── Stage 2: generate + store the shared secret ───────────────────────────
 stage "Generate the shared webhook secret"
 say "This value authenticates POSTs from the Worker to your API's /webhook/email-digest route."
-if command -v openssl >/dev/null 2>&1; then
-  EMAIL_WEBHOOK_SECRET=$(openssl rand -hex 32)
+EMAIL_WEBHOOK_SECRET=$(_existing EMAIL_WEBHOOK_SECRET || true)
+if [[ -z "$EMAIL_WEBHOOK_SECRET" ]]; then
+  if command -v openssl >/dev/null 2>&1; then
+    EMAIL_WEBHOOK_SECRET=$(openssl rand -hex 32)
+  else
+    EMAIL_WEBHOOK_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+  fi
+  write_env EMAIL_WEBHOOK_SECRET "$EMAIL_WEBHOOK_SECRET"
 else
-  EMAIL_WEBHOOK_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+  note "reusing EMAIL_WEBHOOK_SECRET from $ENV_FILE — rerun with a fresh ENV_FILE to rotate it"
 fi
-write_env EMAIL_WEBHOOK_SECRET "$EMAIL_WEBHOOK_SECRET"
 step "Setting it as the Worker's OWNIX_EMAIL_SECRET binding via wrangler secret put."
 ( cd "$SCRIPT_DIR" && printf '%s' "$EMAIL_WEBHOOK_SECRET" | npx wrangler secret put OWNIX_EMAIL_SECRET )
-note "value (also needed on the production VPS .env): $EMAIL_WEBHOOK_SECRET"
-SKIPPED+=("Set EMAIL_WEBHOOK_SECRET=<value above> in the production VPS .env — not reachable from this machine")
+note "Copy EMAIL_WEBHOOK_SECRET from $ENV_FILE to the production VPS .env using an approved secret-transfer process before deploying, so the API and Worker agree on the same value."
+SKIPPED+=("Set EMAIL_WEBHOOK_SECRET from $ENV_FILE in the production VPS .env — not reachable from this machine")
 warn "remember to set that same value in the production VPS .env before mail flows in production"
 
 # ── Stage 3: confirm webhook URL, then deploy ─────────────────────────────

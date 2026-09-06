@@ -2294,6 +2294,8 @@ async def fetch_and_mark_stale_jobs(
     where = " AND ".join(conditions)
     async with connection() as conn:
         cursor = await conn.execute(
+            # nosec B608 -- `where` is built only from static clause literals above;
+            # every actual value is bound through `params` as a `?` placeholder.
             f"SELECT id, chat_id, status, url FROM jobs WHERE {where}", tuple(params)
         )
         rows = [dict(row) for row in await cursor.fetchall()]
