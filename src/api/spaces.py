@@ -17,7 +17,7 @@ from src.utils.logger import get_logger
 SpaceIcon = Literal[
     "folder", "star", "bookmark", "globe", "zap", "heart", "code", "music",
     "film", "camera", "coffee", "flame", "rocket", "target", "compass",
-    "anchor", "crown", "diamond", "shield", "lightbulb",
+    "anchor", "crown", "diamond", "shield", "lightbulb", "newspaper",
 ]
 
 log = get_logger(__name__)

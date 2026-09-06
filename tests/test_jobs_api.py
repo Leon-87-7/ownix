@@ -300,11 +300,14 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
 
 def test_job_scope_where_defaults_exclude_cancelled() -> None:
     where, params = jobs._job_scope_where(1, None, None)
-    assert where == "chat_id = ? AND status != 'cancelled'"
+    assert where == "chat_id = ? AND url NOT LIKE 'email_digest:%' AND status != 'cancelled'"
     assert params == [1]
 
     where, params = jobs._job_scope_where(1, "short", "error")
-    assert where == "chat_id = ? AND content_type = ? AND status = ?"
+    assert (
+        where
+        == "chat_id = ? AND url NOT LIKE 'email_digest:%' AND content_type = ? AND status = ?"
+    )
     assert params == [1, "short", "error"]
 
 

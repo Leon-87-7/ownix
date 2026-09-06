@@ -1,0 +1,6 @@
+name = "ownix-email-digest"
+main = "src/index.ts"
+compatibility_date = "2026-09-05"
+
+[vars]
+OWNIX_EMAIL_WEBHOOK_URL = "https://api.leondev.xyz/webhook/email-digest"

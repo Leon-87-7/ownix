@@ -14,6 +14,7 @@ import pytest
 _TEST_ENV = {
     "TELEGRAM_BOT_TOKEN": "test-token",
     "TELEGRAM_WEBHOOK_SECRET": "test-secret",
+    "EMAIL_WEBHOOK_SECRET": "test-email-secret",
     "REDIS_URL": "redis://localhost:6379/0",
     "DB_PATH": ":memory:",
     "LOG_LEVEL": "WARNING",

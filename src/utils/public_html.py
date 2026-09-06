@@ -74,8 +74,8 @@ async def _fetch_pinned(
     *,
     client: httpx.AsyncClient,
     log_prefix: str,
-    on_empty_redirect: Callable[[httpx.Response], object],
-    on_success: Callable[[httpx.Response], Awaitable[object]],
+    on_empty_redirect: Callable[[httpx.Response, str], object],
+    on_success: Callable[[httpx.Response, str], Awaitable[object]],
 ) -> object:
     """Follow only-public redirects to a pinned IP, then hand the terminal response
     to a caller-supplied handler. Shared by fetch_public_html and fetch_public_image.
@@ -84,6 +84,10 @@ async def _fetch_pinned(
     check cannot swap in a private address. Preserves the original hostname in
     Host and (for HTTPS) SNI so the remote server and TLS certificate validation
     use the right name.
+
+    Handlers receive ``target``, the last hostname-based URL actually requested,
+    not ``response.url`` — the request itself goes to the pinned IP, so
+    ``response.url`` would otherwise leak the resolved IP into the caller.
     """
     target = url
     for _ in range(_MAX_REDIRECTS + 1):
@@ -109,11 +113,11 @@ async def _fetch_pinned(
             if response.is_redirect:
                 location = response.headers.get("location", "")
                 if not location:
-                    return on_empty_redirect(response)
+                    return on_empty_redirect(response, target)
                 target = urljoin(target, location)
                 continue
             response.raise_for_status()
-            return await on_success(response)
+            return await on_success(response, target)
     return None
 
 
@@ -130,12 +134,12 @@ async def fetch_public_html(
         headers={"User-Agent": _USER_AGENT},
     )
 
-    async def on_success(response: httpx.Response) -> PublicHtmlResult | None:
+    async def on_success(response: httpx.Response, final_url: str) -> PublicHtmlResult | None:
         content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
         if content_type and content_type not in {"text/html", "application/xhtml+xml"}:
             log.info(
                 "public_html.content_type_rejected",
-                url=str(response.url)[:200],
+                url=final_url[:200],
                 content_type=content_type[:80],
             )
             return None
@@ -147,18 +151,50 @@ async def fetch_public_html(
             chunks.append(chunk[:remaining])
             remaining -= len(chunks[-1])
         markup = b"".join(chunks).decode("utf-8", errors="replace")
-        return PublicHtmlResult(html=markup, final_url=str(response.url))
+        return PublicHtmlResult(html=markup, final_url=final_url)
 
     try:
         return await _fetch_pinned(
             url,
             client=active_client,
             log_prefix="public_html",
-            on_empty_redirect=lambda response: PublicHtmlResult(html="", final_url=str(response.url)),
+            on_empty_redirect=lambda response, final_url: PublicHtmlResult(html="", final_url=final_url),
             on_success=on_success,
         )
     except Exception as exc:
         log.info("public_html.fetch_failed", url=url, error=str(exc)[:120])
+        return None
+    finally:
+        if owns_client:
+            await active_client.aclose()
+
+
+async def resolve_public_redirect_url(
+    url: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> str | None:
+    """Resolve public redirects and return the terminal URL without MIME gating."""
+    owns_client = client is None
+    active_client = client or httpx.AsyncClient(
+        timeout=httpx.Timeout(5.0),
+        follow_redirects=False,
+        headers={"User-Agent": _USER_AGENT},
+    )
+
+    async def on_success(response: httpx.Response, final_url: str) -> str:
+        return final_url
+
+    try:
+        return await _fetch_pinned(
+            url,
+            client=active_client,
+            log_prefix="public_redirect",
+            on_empty_redirect=lambda response, final_url: final_url,
+            on_success=on_success,
+        )
+    except Exception as exc:
+        log.info("public_redirect.fetch_failed", url=url, error=str(exc)[:120])
         return None
     finally:
         if owns_client:
@@ -184,12 +220,12 @@ async def fetch_public_image(
         headers={"User-Agent": _USER_AGENT},
     )
 
-    async def on_success(response: httpx.Response) -> PublicImageResult | None:
+    async def on_success(response: httpx.Response, final_url: str) -> PublicImageResult | None:
         content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if content_type not in _ALLOWED_IMAGE_TYPES:
             log.info(
                 "public_image.content_type_rejected",
-                url=str(response.url)[:200],
+                url=final_url[:200],
                 content_type=content_type[:80],
             )
             return None
@@ -207,7 +243,7 @@ async def fetch_public_image(
             url,
             client=active_client,
             log_prefix="public_image",
-            on_empty_redirect=lambda response: None,
+            on_empty_redirect=lambda response, final_url: None,
             on_success=on_success,
         )
     except Exception as exc:

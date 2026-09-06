@@ -51,7 +51,7 @@ async def test_reaps_stale_processing(temp_db):
 
     rows = await db.fetch_and_mark_stale_jobs()
 
-    assert rows == [{"id": "J_PROC", "chat_id": 100, "status": "processing"}]
+    assert rows == [{"id": "J_PROC", "chat_id": 100, "status": "processing", "url": "http://x"}]
     job = await db.get_job("J_PROC")
     assert job["status"] == "error"
     assert job["attempt"] == 2  # incremented exactly once
@@ -64,7 +64,7 @@ async def test_reaps_stale_enriching(temp_db):
 
     rows = await db.fetch_and_mark_stale_jobs()
 
-    assert rows == [{"id": "J_ENR", "chat_id": 200, "status": "enriching"}]
+    assert rows == [{"id": "J_ENR", "chat_id": 200, "status": "enriching", "url": "http://x"}]
     assert (await db.get_job("J_ENR"))["status"] == "error"
 
 

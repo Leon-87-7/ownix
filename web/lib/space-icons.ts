@@ -4,6 +4,7 @@
 import {
   Folder, Star, Bookmark, Globe, Zap, Heart, Code, Music, Film, Camera,
   Coffee, Flame, Rocket, Target, Compass, Anchor, Crown, Diamond, Shield, Lightbulb,
+  Newspaper,
 } from "lucide-react";
 
 type IconCmp = typeof Folder;
@@ -29,6 +30,7 @@ export const SPACE_ICONS: { name: string; Icon: IconCmp }[] = [
   { name: "diamond", Icon: Diamond },
   { name: "shield", Icon: Shield },
   { name: "lightbulb", Icon: Lightbulb },
+  { name: "newspaper", Icon: Newspaper },
 ];
 
 export const DEFAULT_SPACE_ICON: IconCmp = Folder;
