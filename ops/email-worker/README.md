@@ -5,7 +5,13 @@ incoming MIME message with `postal-mime`, keeps Cloudflare's envelope recipient
 as `envelopeTo`, and forwards JSON to `/webhook/email-digest` with the shared
 secret header.
 
-Manual deploy checklist:
+Run `./setup.sh` in this folder for an interactive walkthrough of the steps
+below (install, Cloudflare login, secret generation, deploy, and the Email
+Routing catch-all rule) — it opens each dashboard page for you and remembers
+values already saved, so re-runs (e.g. secret rotation) pick up where you
+left off.
+
+Manual deploy checklist (what the script above automates):
 
 1. Install dependencies in this folder: `npm install`.
 2. Log in to Cloudflare: `npx wrangler login`.
