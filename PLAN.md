@@ -1,489 +1,449 @@
-# Plan: Email digest pipeline (newsletter → curated candidate feed)
+# Plan: Newsletter digest reads public archives, not email (ADR-0060)
 
-_Locked via claudex-loop — by Claude + Leon_
+_Round 7 — revised by Claude after Codex round 7. This revision is UNREVIEWED by Codex._
 
 ## Goal
 
-Let a user route a newsletter subscription (by giving out an Ownix-generated
-inbound alias, either as the subscribe-form address or as a forwarding
-target) into Ownix. Each incoming digest email is parsed for real content
-links (resolving ESP tracking-redirect wrappers to actual destinations),
-which surface as lightweight, non-committal **candidates** in a new
-`newsletter-digest` dashboard page — a feed the user can click into and
-individually promote to a real job (full auto-routed pipeline processing,
-identical to a manual paste) — alongside a Gemini-authored editorial summary
-of that issue. Candidates accumulate per-newsletter (one Space per
-subscription, growing over time), not per-issue. No link is ever processed,
-enriched, or spent-on automatically — only the deliberate per-candidate
-"create job" click triggers real pipeline work, preserving the same
-human-judgment boundary the existing `Ctrl+Shift+1` capture command and
-ADR-0051 already establish elsewhere in this codebase.
+#607 shipped the newsletter digest as an inbound-mail pipeline: one generated alias per
+subscription, a Cloudflare Email Routing catch-all on `leondev.xyz` into a Worker, and
+`POST /webhook/email-digest` which drops any message whose `from` doesn't match the
+subscription's registered `sender_email` (`src/api/email_webhook.py:83`). It has never
+ingested a single issue, and cannot be onboarded without a human hand-wiring the Cloudflare
+zone per alias — Gmail's forwarding-verification code arrives from
+`forwarding-noreply@google.com` and is silently dropped by that same sender check, and the
+alias is rejected by newsletter signup forms because `leondev.xyz` is a catch-all domain.
+That fails the stated requirement: identical behaviour for 1 user and 500, no human
+operation.
+
+Replace the transport: **follow each newsletter's public web presence** — its feed where one
+exists, its archive page otherwise — poll every 4 hours via Jina Reader, and feed new issues
+into the existing candidate pipeline. Delete the email path.
+Decision record: `docs/adr/0060-newsletter-digest-reads-public-archives.md`.
+Domain terms: `CONTEXT.md` → **Watched newsletter**, **Issue**, **Issue watermark**.
+Superseded plan: `docs/plans/2026-09-05-email-digest-inbound-alias-superseded.md`.
+
+### Verified evidence (2026-09-06/07)
+
+| Newsletter   | Sender                         | Archive                               | Issue URLs     | Feed | Jina |
+| ------------ | ------------------------------ | ------------------------------------- | -------------- | ---- | ---- |
+| AlphaSignal  | `news@alphasignal.ai`          | `alphasignal.ai` (403s raw fetch)     | `/news/<slug>` | ✅ `feed.xml`, `atom.xml` | ✅ |
+| Sloth Bytes  | `slothbytes@tx2.beehiiv.com`   | `www.slothbytes.dev` + beehiiv mirror | `/p/<slug>`    | ✗    | ✅   |
+| Import React | `importreact@mail.beehiiv.com` | `importreact.beehiiv.com`             | `/p/<slug>`    | ✗    | ✅   |
+
+- A fetched Sloth Bytes issue carried every section and every outbound link with UTM intact —
+  the same payload `email_digest.py` extracts from an email body today.
+- **Jina `X-Return-Format: html` verified**: 200, 666 KB of real HTML, `<a href="/p/…">`
+  anchors intact. Hrefs are **relative**, so extraction resolves against the base URL.
+- **Feed coverage is 1 of 3, not 0.** An earlier "no feeds anywhere" reading was a false
+  negative from AlphaSignal's 403 to raw curl. Re-checked through Jina: AlphaSignal's feed is
+  live; both beehiiv publications return the beehiiv HTML app shell, so their 404s are real.
+- **Issue URL shape is publisher-specific** (`/p/` vs `/news/`) — discovered at resolve time,
+  stored per publication, never hardcoded.
 
 ## Approach
 
-### 1. Schema (new migration)
+### 1. Schema
 
-- `newsletter_subscriptions`: `id`, `chat_id`, `name` (user label), `sender_email`
-  (lowercase, allowlisted From address), `alias_local_part` (opaque token,
-  globally unique, **~22 base64url chars, ~130 bits** — revised up from an
-  initial 8-char draft per Codex round 1: a public catch-all address with no
-  inbound rate limit needs real capability-secret entropy, not a display
-  token), `space_id` (FK → `spaces.id`, `ON DELETE CASCADE`), `created_at`.
-  One row per registered newsletter.
-- `digest_candidates`: `id`, `space_id` (FK → `spaces.id`, `ON DELETE CASCADE`),
-  `url` (the actual resolved, post-redirect destination — **left intact**,
-  this is what gets displayed/clicked/promoted), `canonical_url` (same URL
-  with common tracking query params — `utm_*`/`fbclid`/`gclid`/`mc_[ce]id`/`_ga` —
-  **`ref` deliberately excluded from the strip-list** (Codex round 4: I'd
-  kept `ref` in the denylist even after round 3 named it as semantically
-  risky — stripping it into the dedup key can collapse two genuinely
-  different destinations into one `canonical_url`, silently dropping the
-  second as a false-positive duplicate; only params with no observed
-  semantic role — pure analytics tags — get stripped) — stripped, used
-  **only** for the uniqueness check; Codex round 2 flagged repeat-issue
-  dedup breaking on varying tracking params, and round 3 walked back my
-  round-2 call to store one column only: the real, unmodified resolved URL
-  has to survive intact for display/promotion — only the dedup key gets
-  canonicalized), `title`,
-  `thumbnail_url` (both nullable, from a cheap OG fetch), `status`
-  (`pending` / `promoting` / `promoted` / `dismissed`), `job_id` (nullable,
-  set on promotion), `created_at`. `UNIQUE(space_id, canonical_url)` guards
-  re-insertion of an already-seen candidate on a later issue. The
-  `promoting` state is a claim lock — see step 5.
-- `email_digest_payloads`: `job_id` (PK, FK → `jobs.id`, `ON DELETE CASCADE`),
-  `receipt_key` (the `sha256(alias_token + ":" + message_id)` value itself,
-  **`UNIQUE(subscription_id, receipt_key)` at the DB level** — Codex round 5:
-  `find_recent_job_by_url()` is app-level read-then-write with no DB
-  constraint behind it, so two truly concurrent deliveries of the same
-  `Message-ID` — a real possibility with retry-happy mail infrastructure —
-  could both pass the check and create duplicate receipt jobs/processing
-  runs. **Correction to my own round-5 fix** (Codex round 6: `job_id` is a
-  non-null FK to `jobs.id`, so this row cannot be inserted *before* the job
-  row exists — my round-5 wording was self-contradictory): the job row is
-  created **first**, then this payload/receipt row is inserted **in the
-  same transaction**; if the `UNIQUE(subscription_id, receipt_key)`
-  constraint rejects it (a genuinely concurrent duplicate), the whole
-  transaction rolls back — including the just-created job row, so no orphan
-  job survives — and the `IntegrityError` is the signal to look up and
-  reuse the existing `job_id` via `receipt_key` instead of creating a second
-  one), `subscription_id` (FK → `newsletter_subscriptions.id`, **nullable, `ON
-  DELETE SET NULL`** — Codex round 4: with FK enforcement on, a plain
-  cascade-less reference would make subscription deletion fail outright
-  once a payload row references it; `SET NULL` lets the subscription go
-  while the row survives for existing cap-accounting purposes, which stop
-  mattering once the subscription itself is gone. Kept even after content is
-  cleared — Codex round 2: needed so a subscription's daily issue-count cap
-  can be counted, since a receipt job itself carries no subscription
-  reference), `subject`, `html`, `text` (all three **nulled out
-  by the processor once step 8 completes** — Codex round 2: indefinite
-  retention of full newsletter HTML/text is unnecessary exposure of
-  potentially-personal content; matches ADR-0048's "the HTML is not
-  persisted" precedent, just deferred one step since the processor needs the
-  body during the run). Inserted in the **same transaction** as the receipt
-  job row (step 3) — durable storage, not Redis (Codex round 1: a Redis-only
-  payload can be dequeued-before-written or dropped by a TTL/restart; the
-  job row and its payload must land atomically together, same transaction,
-  before enqueue).
-- Creating a subscription creates its Space in the same transaction
-  (`icon = 'newspaper'`, default color) — reuses the existing `spaces` table,
-  no new "collection" concept. **Deleting a subscription explicitly deletes
-  its Space too** (the FK cascade only runs Space→subscription, not the
-  reverse — Codex round 1) — the subscription route's `DELETE` handler
-  deletes the Space row itself, cascading normally into `space_urls`/
-  `context_blobs`/the subscription row. **Receipt jobs (`email_digest:<hash>`)
-  are deliberately left behind** — Codex round 2 raised these as orphaned
-  after subscription deletion, but this matches existing product philosophy
-  exactly: deleting a Space today never deletes its pinned jobs either (only
-  the `space_urls` pin — CONTEXT.md's [[Job delete]]/[[Space]] entries:
-  "the card is a receipt, not a container"). **Retained failed-run payloads
-  are force-cleared on subscription deletion** (Codex round 5 caught a real
-  contradiction: I'd written "payload content is already nulled by the time
-  a subscription is deleted," but a failed, not-yet-retried digest job
-  deliberately keeps its payload for retry — those two statements collide
-  exactly there). Resolution: the subscription's `DELETE` route nulls any
-  remaining `email_digest_payloads.subject/html/text` for that
-  `subscription_id` as part of the same deletion — a failed, un-retried
-  digest's content doesn't survive deleting the subscription it belongs to,
-  same as everything else that subscription owns. So nothing sensitive
-  lingers in every case, not just the already-processed one — an inert job
-  row is the same harmless residue Bookmark import already leaves behind
-  indefinitely.
+Applied in **both** places, because this repo creates fresh databases from `SCHEMA_SQL`
+(`src/database.py:301`) independently of `_MIGRATIONS` — a migration alone leaves new installs
+on the old schema. Each `_MIGRATIONS.append` entry carries the `# rollback:` comment ADR-0058
+requires, and a test asserts fresh-`SCHEMA_SQL` and fully-migrated databases produce identical
+`sqlite_master` output.
 
-### 2. Inbound transport (outside the Python repo)
+- `publications` — **shared across tenants, no `chat_id`**:
+  `id TEXT PK`, `archive_url TEXT NOT NULL UNIQUE`, `feed_url TEXT`,
+  `issue_path_prefix TEXT` (e.g. `/p/`, `/news/` — learned at resolve time),
+  `fetched_title TEXT`, `last_resolved_at TIMESTAMP`, `last_successful_poll_at TIMESTAMP`,
+  `next_poll_after TIMESTAMP`, `poll_lease_until TIMESTAMP`,
+  `poll_failures INTEGER NOT NULL DEFAULT 0`, `created_at`.
+  `fetched_title` is **scraped metadata, never user-facing** — the display name lives on the
+  watch, so no tenant ever writes a shared row.
+- `publication_issues` — shared seen-set, one row per published issue:
+  `publication_id TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE`,
+  `slug TEXT NOT NULL`, `url TEXT NOT NULL`, `title TEXT`, `published_at TEXT`,
+  `source_order INTEGER NOT NULL`, `first_seen_at TIMESTAMP NOT NULL`,
+  `body_html TEXT`, `body_fetched_at TIMESTAMP`, `skip_reason TEXT`,
+  `PRIMARY KEY (publication_id, slug)`.
+  Replaces a single `latest_slug` watermark.
+  **The issue body is stored once here, not per watcher.** A fetched page is hundreds of KB;
+  duplicating it across 500 watchers' payload rows would put hundreds of MB through SQLite for
+  one issue, and failed rows would retain it. Per-watch payloads reference the issue instead of
+  copying it. **`body_html` is cleared only when a DB predicate proves no live delivery still
+  needs it**, and that predicate has *two* halves — checking only the first is a race:
+  1. **no live watch is still missing a payload row** for this `(publication_id, slug)` — the
+     same missing-delivery definition §4 step 4 uses for repair; and
+  2. every existing payload row for it, whose watch still exists, is a `done` job or an
+     intentionally cancelled/dismissed one.
 
-- **Cloudflare Email Routing**: one catch-all rule on `leondev.xyz` → one
-  Worker (plus-addressing is not usable here — Cloudflare collapses
-  `user+detail@` to the `user@` rule, so the opaque token must be the whole
-  local-part).
-- **Worker** (`ops/email-worker/`, new small TS project, Wrangler-deployed —
-  not part of Docker Compose): uses `postal-mime` to parse `message.raw` into
-  `{subject, html, text, messageId}`, **plus `from` sent as the normalized
-  lowercase addr-spec only** — `parsedEmail.from.address.toLowerCase()`, not
-  the raw `From` header string (Codex round 4: `postal-mime` returns `from`
-  as a structured `{name, address}` object; forwarding anything other than
-  the bare address risks the Python side's case-insensitive compare failing
-  on a display-name-inclusive or differently-encoded string) — *inside the
-  Worker*, then
-  `fetch()`s that JSON — **plus `envelopeTo: message.to`, read directly off
-  the Workers runtime's `ForwardableEmailMessage` object, not off postal-
-  mime's parsed header** (Codex round 2: a parsed MIME `To:` header is
-  unreliable for catch-all/BCC/forwarded mail — the envelope recipient
-  Cloudflare itself used to route the message is the only fact the alias
-  lookup can trust) — to `POST https://api.leondev.xyz/webhook/email-digest`
-  with header `X-Ownix-Email-Secret: <shared secret>`. Parsing happens once,
-  in the Worker — the Python side never touches raw MIME.
-- **Trust boundary**: a shared-secret header checked with
-  `secrets.compare_digest`, exactly mirroring the existing
-  `TELEGRAM_WEBHOOK_SECRET` / `OPS_WEBHOOK_SECRET` pattern
-  (`src/telegram/webhook.py:2005/2117`). SPF/DKIM verdicts are not reliably
-  exposed to a Worker (confirmed via research — a documented
-  `cloudflare/workerd` gap), so authenticity is *not* checked that way.
-- New setting: `EMAIL_WEBHOOK_SECRET: str = Field(min_length=1)` in
-  `src/config.py` — **required at startup**, matching `TELEGRAM_WEBHOOK_SECRET`'s
-  fail-fast pattern rather than `OPS_WEBHOOK_SECRET`'s optional-with-warning
-  one (Codex round 2: an unset-secret behavior was previously unspecified;
-  the weaker existing precedent has a latent gap where an absent header
-  against an unset secret both compare equal-empty, which this feature
-  should not copy).
+  Half 2 alone passes vacuously when payload rows do not exist yet — a fast first watcher could
+  finish and clear the body before later watchers' rows are created, and a crash after storing
+  `body_html` but before any payload creation would look "clean" with zero rows. Clearing at
+  fan-out or enqueue completion is likewise wrong: it strips the body out from under jobs that
+  are merely *created*, and makes every errored digest permanently unretryable — the failure
+  mode the superseded plan explicitly refused to accept.
+  `source_order` is the item's index in the fetched
+  document, and **both feeds and archive pages list newest first**, so index 0 is the newest.
+  Processing order (oldest first) is therefore
+  `ORDER BY parsed published_at ASC NULLS LAST, source_order DESC, first_seen_at ASC` — the
+  `DESC` on `source_order` is not a typo, it reverses the source's newest-first ordering.
+  `skip_reason` marks an issue **terminally skipped** (e.g. `oversize`) so it stops being
+  selected as outstanding work. Without it, an issue that permanently exceeds the fetch cap is
+  re-attempted every poll forever and, having no body, blocks body-cleanup accounting.
+- `newsletter_watches` — per tenant:
+  `id TEXT PK`, `chat_id INTEGER NOT NULL`, `publication_id TEXT NOT NULL REFERENCES
+  publications(id) ON DELETE CASCADE`, `space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE
+  CASCADE`, `name TEXT NOT NULL` (the user's own label), `watched_from TIMESTAMP NOT NULL`,
+  `created_at`, `UNIQUE(chat_id, publication_id)`, indexed on `publication_id`.
+  **`watched_from` is a timestamp, not a slug** — slugs are publisher strings with no
+  chronological order, so the fan-out filter compares
+  `publication_issues.first_seen_at > watched_from`.
+- `email_digest_payloads`: replace `subscription_id` with `watch_id TEXT REFERENCES
+  newsletter_watches(id) ON DELETE SET NULL` plus `publication_id`, `slug TEXT` and
+  `context_md TEXT`, unique on **`(watch_id, slug)`** — per watcher, since fan-out creates one
+  job per watcher per issue. Retains `job_id TEXT PK REFERENCES jobs(id) ON DELETE CASCADE` and
+  the null-content-on-success behaviour from the superseded plan. The body columns
+  (`subject`/`html`/`text`) are **dropped** — the body is read from
+  `publication_issues.body_html` via `(publication_id, slug)` rather than copied per watcher.
+  That read is a real dependency, so it gets a real constraint: a **composite
+  `FOREIGN KEY (publication_id, slug) REFERENCES publication_issues(publication_id, slug)`**,
+  `ON DELETE RESTRICT`, preventing a payload from pointing at an issue body that no longer
+  exists. Indexed on `watch_id` **and on `(publication_id, slug)`** — the latter is what the
+  missing-delivery repair join, the body-cleanup predicate, and retry's body lookup all key on,
+  and none of them are served by the `watch_id` index.
+  `context_md` holds the **per-issue Gemini editorial blob, generated once and persisted here**
+  — the worker calls processors with only the job dict, so a precomputed value cannot ride the
+  task envelope. Persisting it also makes retry cheap: a re-driven job re-reads the stored
+  context instead of regenerating it. `context_md` is **cleared on success** and retained only
+  on error rows, which is what keeps a failed digest retryable.
+  **A null `context_md` never triggers per-job generation.** Context is owned entirely by the
+  poll worker; `run()` inserts the stored text when present and inserts nothing when absent. It
+  must not fall back to `_create_context_blob()`, or a Gemini failure during polling would
+  silently become one Gemini call per watcher — the exact cost this design exists to avoid. No
+  `context_status` flag is needed once generation is unconditionally the poller's job.
+- **Teardown migration**, in this order: delete legacy `email_digest:%` receipt jobs and their
+  `email_digest_payloads` rows; then for every `newsletter_subscriptions` row delete its backing
+  `spaces` row (cascading `space_urls`, `context_blobs`, `digest_candidates`, and the
+  subscription); then `DROP TABLE newsletter_subscriptions`. Order matters — dropping the table
+  first orphans every space and candidate, because the cascade runs spaces→subscription, not the
+  reverse. Legacy receipt jobs are deleted rather than carried, because their payload rows
+  cannot satisfy the new `(watch_id, slug)` shape.
+- `digest_candidates` otherwise **untouched** — `UNIQUE(space_id, canonical_url)` already gives
+  cross-issue dedup and the `pending/promoting/promoted/dismissed` claim lock stands.
 
-### 3. Webhook (new `src/api/email_webhook.py`, mounted in `main.py`)
+### 2. Archive resolver (`src/services/newsletter_archive.py`, new)
 
-**Must be added to `_OPEN_PATHS` in `src/auth/middleware.py`** (currently
-`frozenset(["/webhook", "/webhook/ops", "/health"])`) — otherwise the session
-middleware blocks it exactly like every other `/api/*` route (Codex round 1:
-this was missing from the original draft entirely).
+Pure resolution, no writes. Given whatever the user typed, returns
+`(archive_url, feed_url | None, issue_path_prefix, fetched_title, recent_issues)`:
 
-`POST /webhook/email-digest`:
-1. Check `X-Ownix-Email-Secret` via `compare_digest` — reject (log + 200, to
-   avoid Cloudflare retry-storms on a rejected message) if missing/wrong.
-2. Extract the alias token from **`envelopeTo`** (not a parsed header — see
-   above); look up `newsletter_subscriptions` by `alias_local_part`. No
-   match → log + 200, silently drop (no enumeration signal).
-3. Check `from` (case-insensitive) against the subscription's `sender_email`.
-   Mismatch → log + 200, drop. **Note this is a noise filter, not
-   authentication** (Codex round 1): a parsed `From` header is trivially
-   spoofable by anyone who already has the alias, so this only raises the
-   bar for an opportunistic/leaked-alias sender, not a targeted one. The
-   alias's own entropy (above) is the actual security boundary; the sender
-   check just keeps an honest subscription's candidate feed clean of
-   unrelated mail.
-4. Enforce a **payload byte-size cap** (e.g. 2 MB combined `html`+`text` —
-   generous for any real newsletter, defense-in-depth under Cloudflare's own
-   25 MiB message cap). **The 50-link-per-issue cap lives in the processor
-   (step 3 below), not here** (Codex round 2 correction: the webhook never
-   parses HTML, so it cannot count links — only the processor, which does
-   the extraction, can enforce that cap).
-5. Compute the receipt identity key (`sha256(alias_token + ":" + message_id)`,
-   same formula step 6 uses for the job's `url`) and check for an existing
-   job with that URL **before** applying the daily-issue cap (Codex round 4:
-   my round-3 fix put the cap check ahead of the dedup check, so a
-   legitimate retry of an already-accepted message could get silently
-   dropped by a full cap instead of recognized as the duplicate it is — only
-   a genuinely new message counts against the **per-subscription daily
-   issue-count cap** (20 receipt jobs per rolling 24h, counted via
-   `email_digest_payloads.subscription_id` joined to `jobs.created_at`).
-   Reject over-cap *new* deliveries with log + 200.
-6. Create one receipt job — same shape as Bookmark import (ADR-0048):
-   `content_type='link'`,
-   `url='email_digest:<sha256(alias_token + ":" + message_id)[:16]>'` — using
-   the email's `Message-ID` (forwarded by the Worker), not a timestamp
-   (Codex round 2: `received_at` isn't a stable identity, so a Cloudflare
-   Worker retry of the same delivery would have created a second receipt job
-   and a second processing pass; hashing the actual `Message-ID` makes a
-   retried delivery collide with the existing job, and existing job-URL
-   dedup — `find_recent_job_by_url` — handles the rest for free, same as
-   every other pipeline's dedup, no new mechanism needed. A missing
-   `Message-ID` — rare, but not impossible — falls back to hashing the raw
-   `html`/`text` content instead of a timestamp, preserving the same
-   stable-identity property) — and insert its `email_digest_payloads` row
-   (including `subscription_id`, indexed —
-   `CREATE INDEX idx_email_digest_payloads_subscription_id ON
-   email_digest_payloads(subscription_id)`, Codex round 3: the daily-cap
-   count needs this or it's a growing unindexed scan) **in the same
-   transaction**, via the existing shared job-creation core extended to
-   accept an optional payload-insert callback (or a small dedicated insert
-   wrapping both writes in one `async with database.transaction()`), so the
-   payload is durably committed *before* the task is enqueued — never a
-   separate after-the-fact write. Enqueue
-   `{"task": "email_digest", "job_id": ..., "subscription_id": ...}` only
-   after that commit succeeds. **If the URL-dedup hit finds an existing job
-   still in `pending`** (Codex round 3: a crash between this commit and the
-   Redis push would otherwise leave a retried delivery silently deduping
-   against a job that was never actually queued) — re-push the task
-   envelope for that existing job_id instead of treating the duplicate as
-   fully handled. A narrow, targeted fix for this one task's duplicate-
-   delivery path, not an attempt to close the general lost-enqueue window
-   every `create_and_enqueue_job` caller already lives with today.
+1. Input looks like a URL → strip query string, strip a trailing issue path → root.
+   (Real-world observed input is a "view in browser" link:
+   `https://www.slothbytes.dev/p/next-js-16-3?utm_source=…`.)
+   Input looks like an email → probe `[f"{local}.{root}", root, domain]`, `root` being the
+   sender domain minus its leading label. Verified 3/3 against the table above.
+2. **Prefer a feed — as a page, not as XML.** Look for
+   `<link rel="alternate" type="application/(rss|atom)+xml">` on the root, then try
+   `/feed.xml`, `/atom.xml`, `/feed`, `/rss`. Fetch each candidate through the **same** Jina
+   `X-Return-Format: html` path as everything else: verified, Jina renders
+   `alphasignal.ai/feed.xml` into clean HTML carrying **100 distinct `/news/` permalinks** with
+   titles in `<h3><a>`. No XML parser is introduced, and feed and archive share one
+   fetch-and-extract code path. Acceptance is the same test used for archives — **≥2 distinct
+   issue links** — which is what correctly rejects beehiiv's `/feed`, since a 200 proves nothing
+   (Jina renders 404s as 200, and beehiiv returns its HTML app shell there).
+3. **Otherwise scrape the archive.** Collect same-origin links, group by first path segment,
+   and take the segment with the most distinct dated children as `issue_path_prefix`. This
+   yields `/p/` for beehiiv and `/news/` for AlphaSignal with no hardcoded provider list.
+   Accept only if ≥2 distinct issue links are found.
+4. **Canonicalize** to the host the publisher advertises: read `<link rel="canonical">` /
+   `og:url` from one issue page and derive the root from it. This collapses
+   `slothbytes.beehiiv.com` onto `www.slothbytes.dev` *before* a `publications` row exists.
 
-### 4. Worker task (new `src/processors/email_digest.py`, new discriminator
-in `_TASK_HANDLERS`, `worker.py`)
+**Abuse controls** — this endpoint turns user input into server-paid remote fetches. A **pure
+public-URL validator** (scheme in `http`/`https`, hostname resolves to a public address) is
+applied to the *target* URL **before** the `r.jina.ai/<url>` string is constructed. This is
+deliberately separate from `public_html._fetch_pinned`, which pins *direct* httpx connections
+and does not protect a fetch made through a third-party proxy. Plus: max 4 probe fetches per
+request and a per-`chat_id` rate limit.
 
-0. **First action, before touching the payload**: atomically claim the job —
-   `UPDATE jobs SET status='processing' WHERE id=? AND status IN
-   ('pending','error')`, no-op (return immediately) if the update matched
-   nothing. Codex round 5: the webhook's "re-push on `pending`" duplicate
-   handling (step 6) can't tell a genuinely-never-enqueued job apart from
-   one that's validly queued but just hasn't started yet — both look
-   `pending`. Rather than trying to make that distinction perfect at the
-   webhook layer, the processor makes running the same task envelope twice
-   (from any source — a legitimate re-push, a Cloudflare Worker retry, the
-   dedicated manual retry action) safe by construction: only one concurrent
-   run ever gets past this claim. Mirrors the same atomic-slot-lock idiom
-   used for candidate promotion and PRD generation.
-1. Read `{subject, html, text}` back from `email_digest_payloads` by `job_id`.
-2. Extract `<a href>` links from `html` via a small new `HTMLParser` subclass
-   (mirrors `_BookmarkParser` in `src/utils/bookmarks_html.py` — no new
-   dependency).
-3. Drop non-content links: tracking-pixel `<img>` sources (not links to begin
-   with — irrelevant to `<a>` extraction, but any 1x1-image-hosting domains
-   seen in `href`s get filtered too), unsubscribe/manage-preferences links,
-   and the "view online"/"view in browser" wrapper link itself (matched by
-   anchor text, case-insensitive) — held aside rather than discarded. Cap
-   the surviving link list at 50 (step 3's per-issue budget).
-4. Resolve each remaining link's real destination via a **new small
-   content-type-agnostic redirect resolver** added to `src/utils/public_html.py`
-   (built on the existing `_fetch_pinned`, same SSRF-pinning/3-hop-cap
-   machinery, but returning `str(response.url)` on the first non-redirect
-   response regardless of content type — Codex round 2: `fetch_public_html`
-   itself rejects any terminal response that isn't `text/html`, so a direct
-   PDF/document link behind an ESP tracking wrapper would silently vanish
-   here even though `detect_pipeline()` can classify document URLs fine once
-   promoted). Confirmed: plain HTTP redirect-following is sufficient for
-   Mailchimp/Beehiiv/ConvertKit/Substack wrappers — no JS rendering needed.
-5. **If zero usable links resolved after step 4**, fetch the held-aside "view
-   online" link's landing page via `fetch_public_html` (this step *does*
-   need the HTML body, unlike step 4) and re-run steps 2–4 against its HTML.
-6. Insert surviving links as `digest_candidates` rows: `url` = the resolved
-   destination as-is, `canonical_url` = the same with tracking query params
-   stripped (round 3: stripping only feeds the dedup key, never the stored/
-   clickable URL) — capped at 50 per issue (Codex round 2: this cap belongs
-   here, where extraction happens, not in the webhook). `INSERT OR IGNORE`
-   on the `UNIQUE(space_id, canonical_url)` constraint handles repeat-issue
-   dedup for free. For each newly-inserted row, fetch OG title/image via the
-   existing `src/utils/og_image.py` (reused from the Link pipeline).
-7. One Gemini call: `subject` + cleaned `text`/stripped-`html` → short
-   editorial framing of the issue. Insert as a new `context_blobs` row for
-   the space (existing multi-blob, ordered support — each issue appends its
-   own blob rather than overwriting one).
-8. Null out `email_digest_payloads.subject/html/text` for this `job_id`
-   (Codex round 2: no reason to keep full newsletter content around once
-   candidates/blob are extracted — matches ADR-0048's "the HTML is not
-   persisted" precedent, just deferred until the processing run that needs
-   the body has finished). The row itself (now just `job_id`+`subscription_id`)
-   stays, so the daily-cap count in webhook step 4 keeps working. Mark the
-   receipt job `done`. Non-fatal failures (Gemini down, OG fetch fails for a
-   given link) degrade per-candidate/per-blob, not job-fatal — same posture
-   as `Short transcript step`/`Enrichment`'s non-fatal design.
+Resolver results are cached by **normalized** query with a **short TTL**, and every cache hit is
+re-validated against the public-URL check before use — a cache keyed on raw user input and
+trusted blindly would serve one user a stale or mirror-shaped resolution after canonicalization
+behaviour changes, across tenants.
 
-### 5. Promotion (extends `src/api/spaces.py` or a small new
-`src/api/newsletter_digest.py` — TBD at implementation time, whichever the
-existing route module organization favors)
+### 3. Poll scheduler (`src/main.py`)
 
-- `POST /api/newsletter-digest/{sub_id}/candidates/{candidate_id}/promote`:
-  first **atomically claims** the candidate — `UPDATE digest_candidates SET
-  status='promoting' WHERE id=? AND status='pending'`, proceeding only if the
-  update actually matched a row — before doing anything else, so two
-  concurrent clicks (or a click racing a repeat-issue re-scan) can't both
-  pass and create duplicate jobs (Codex round 1: `create_and_enqueue_job`'s
-  own dedup is read-before-write with no unique constraint backing it, so
-  the race has to be closed at the candidate-claim layer instead). This
-  mirrors the existing atomic-slot-lock pattern PRD generation already uses
-  (`prd_auto_status`, PRD.md §14.4: `UPDATE ... SET status='generating' WHERE
-  status IS NULL OR status='error'`). Then runs `detect_pipeline()` on the
-  candidate's `url` and branches: **`document` → delegates to
-  `POST /api/parsed/url`** (`upload_url`, `src/api/parsed.py:123`) — verified
-  `POST /api/jobs` itself hard-rejects document pipeline with a 422
-  ("Document URLs belong in the Doc Parser", `src/api/jobs.py:214`), so a
-  document candidate promoted through that handler would simply fail (Codex
-  round 3); **everything else → the exact same handler `POST /api/jobs`
-  uses** (allowed-domain lookup, template rules included — Codex round 1: a
-  bare `detect_pipeline()` + `create_and_enqueue_job()` call would silently
-  diverge from what a human pasting that URL through the dashboard actually
-  gets), not a reimplementation of its logic. On success: set
-  `digest_candidates.status='promoted'`, `job_id=<new job>`, and pin into
-  `space_urls` (so it now also shows in the Space's own URLs tab via the
-  existing `/spaces/{id}` surface). On failure: reset `status` back to
-  `pending` so the claim isn't a permanent dead end.
-- `DELETE .../candidates/{candidate_id}`: dismiss (status='dismissed', stays
-  in the dedup set so it never resurfaces from a later issue).
+A 15-minute `AsyncIOScheduler` job beside `_drain_purge_outbox` / `_reap_intake_state` selects
+publications that are **due, unleased, and watched**:
 
-**Ownership on every new route** (Codex round 2: `sub_id`/`candidate_id` in a
-raw path param is an IDOR risk without an explicit gate): every
-`newsletter-digest` route loads `newsletter_subscriptions` scoped by
-`(id, chat_id)` first — mirroring the existing `_get_owned_space` pattern in
-`src/api/spaces.py` — and candidate lookups are constrained through that
-subscription's `space_id`, never a bare `candidate_id` alone.
+```sql
+WHERE (next_poll_after IS NULL OR next_poll_after < :now)
+  AND (poll_lease_until IS NULL OR poll_lease_until < :now)
+  AND EXISTS (SELECT 1 FROM newsletter_watches w WHERE w.publication_id = publications.id)
+ORDER BY next_poll_after LIMIT :per_tick_cap
+```
 
-### 6. Subscription management API
+`IS NULL` on both time clauses matters — a newly created publication has neither, and a `<`
+comparison alone would never claim it. Spreading is done by the **per-tick cap plus
+`ORDER BY`**, not by delayed delivery: the queue is a plain Redis list (`LPUSH`) with no
+scheduled-task support, so "enqueue with jitter" is not available. Fixed 4h cadence; no
+adaptive per-newsletter cadence (rejected: observed Sloth Bytes gaps run 2–14 days, no rhythm).
 
-- `POST /api/newsletter-digest`: `{name, sender_email}` → generates
-  `alias_local_part`, creates the Space, returns the full alias
-  (`u_xxxxxxxx@leondev.xyz`) for the user to paste into the newsletter's
-  subscribe form or their own forwarding rule.
-- `GET /api/newsletter-digest`: list subscriptions (name, alias, Space id,
-  candidate counts).
-- `GET /api/newsletter-digest/{id}/candidates`: the candidate feed.
-- Context blobs need no new endpoints — reuse the existing
-  `/api/spaces/{id}/blobs` CRUD as-is.
+### 4. Poll worker (`src/processors/newsletter_poll.py`)
 
-### 7. Frontend (`web/app/(dashboard)/newsletter-digest/`, new route)
+Envelope: `{"task": "newsletter_poll", "job_id": <publication_id>}`. Two worker changes, both
+following existing precedent: `newsletter_poll` joins `_ROWLESS_TASKS` (`src/worker.py:333`,
+alongside `job_purge` and `bookmarks_enrich`), **and** `_TASK_HANDLERS` gains a dedicated
+`_handle_newsletter_poll(task)` that reads `task["job_id"]` as a publication id and does **not**
+go through `_make_handler()`'s job-load path. Carrying the operated-on id in `job_id` is the
+established convention for rowless tasks and satisfies `job_queue.enqueue()`'s hard check
+(`src/job_queue.py:57`) without touching the shared envelope contract.
 
-- Index: list of subscriptions, each showing its alias (copy button), name,
-  candidate count; an "add newsletter" form (name + sender email → alias).
-- Detail (`/newsletter-digest/[id]`): candidate feed (clickable cards —
-  title/thumbnail/URL — each with a "Create job" button and a dismiss
-  action) plus the Context list (reusing the same `MarkdownEditor` component
-  Space's Context tab already uses) rendered read-mostly (auto-generated,
-  editable like any other blob).
-- New page, not a variant of `/spaces/[id]` — candidates aren't jobs, so the
-  existing Space detail page's URLs tab (which only ever lists pinned jobs)
-  doesn't fit; a promoted candidate does show up there too, automatically,
-  via the `space_urls` pin in step 5.
+1. **Lease**: `UPDATE publications SET poll_lease_until = :now_plus_10m WHERE id = ?
+   AND (poll_lease_until IS NULL OR poll_lease_until < :now)
+   AND (next_poll_after IS NULL OR next_poll_after < :now)`. No match → another worker owns it,
+   **or it is not due yet** — the second clause is what stops a duplicate queued envelope from
+   re-polling immediately after a successful run.
+2. Fetch `feed_url` if set, else the archive root via Jina with `X-Return-Format: html`.
+   Extract issue links using `issue_path_prefix`, resolving **relative hrefs against the base
+   URL**. Every Jina fetch — archive, feed and issue alike — goes through **one shared
+   byte-counted streaming helper that aborts the response at 4 MB + 1** and never materialises
+   the body, mirroring the 2 MB cap the deleted webhook enforced (`email_webhook.py:118-125`).
+   Streaming is the requirement, not the cap: `fetch_markdown`'s current
+   read-the-whole-response shape would take the full memory hit *before* any size check could
+   reject it, so a "cap" implemented on top of it would prevent the SQLite row but not the
+   memory spike.
+   An **issue** that exceeds the cap is marked `skip_reason = 'oversize'` and treated as
+   terminal: fan-out continues with the remaining issues rather than aborting the run, and the
+   skipped issue stops appearing as outstanding work. Otherwise a single permanently-oversized
+   issue would be re-fetched every four hours forever and, having no body, would sit
+   indefinitely in the way of that issue's body-cleanup accounting.
+3. `INSERT OR IGNORE` every discovered issue into `publication_issues` (recording
+   `source_order`). This is the **seen-set, not the work list**.
+4. **Compute outstanding work as missing deliveries**, not as newly-inserted issues: join **all**
+   `publication_issues` for this publication against live `newsletter_watches` where
+   `watched_from < issue.first_seen_at`, and select the `(watch_id, slug)` pairs with **no
+   `email_digest_payloads` row**. Using "rows that just inserted" instead would lose an issue
+   permanently whenever a run crashes after inserting the issue row but before fanning out — the
+   seen-set would already claim it as handled. **No recency window**: a bounded "last N days"
+   scan silently gives up on any outage longer than N, and the join is cheap (issues × watches
+   for one publication, both small, both indexed). The same scan re-enqueues payloads whose
+   `jobs` row has been `pending` past a threshold, repairing a crash between commit and enqueue
+   (see §5).
+5. For each outstanding issue, oldest first: fetch the issue page **once**; generate the Gemini
+   editorial context **once**, **best-effort** — a Gemini failure sets `context_md = NULL` and
+   fan-out proceeds, matching `_create_context_blob`'s existing non-fatal posture rather than
+   sinking the whole delivery. Then, per watcher, create the `jobs` row **and** its
+   `email_digest_payloads` row **in one transaction**. A `UNIQUE(watch_id, slug)` violation
+   rolls the whole transaction back — disposing of the just-created job row, so no orphan
+   survives — and that watcher is skipped. The payload row cannot be inserted first and checked:
+   `job_id` is a non-null PK/FK, so the job must exist before the payload does. This is the same
+   commit-or-rollback idiom the superseded plan used for duplicate deliveries.
+   **All payload rows for an issue are created before any of their jobs is enqueued.** Enqueuing
+   as you go lets a fast job finish, run the cleanup predicate, and clear `body_html` while later
+   watchers still have no payload row — the body then vanishes before they are served.
+6. On success: clear lease, set `last_successful_poll_at`, `next_poll_after = now + 4h`, reset
+   `poll_failures`. On failure: clear lease, increment `poll_failures`, set
+   `next_poll_after = now + min(4h × 2^poll_failures, 24h)`. The **lease** prevents concurrent
+   polls; `next_poll_after` governs retry — so a failed run is not hidden for four hours.
+
+### 5. Reuse the digest processor
+
+`src/processors/email_digest.py` keeps `extract_digest_links`, `canonicalize_candidate_url`,
+`_resolve_links`, `_insert_candidates`, `_create_context_blob`, `run`. Two changes only:
+
+- `run()` reads `email_digest_payloads.context_md` and **skips `_create_context_blob` when it
+  is present**, inserting the stored text as the space's `context_blobs` row instead. Without
+  this, `run()`'s per-job context generation makes step 4's "one Gemini call per issue" false —
+  it would be one per watcher. The value is read from the payload row rather than passed as an
+  argument because the worker calls processors with only the job dict.
+- `latest_retryable_email_digest_job(watch_id)` is redefined against the new schema, and because
+  `context_md` is persisted, a retried job needs no regeneration.
+- Its input is an archive-fetched issue body rather than an email body.
+
+Module name and the `email_digest` task discriminator are retained (see decisions).
+
+**Enqueue durability:** a Redis push cannot join a SQLite transaction. No outbox is added. The
+plan reuses this codebase's existing posture — commit job + payload, then enqueue, and on
+enqueue failure mark the job `error` (`src/api/email_webhook.py:143-147` does exactly this
+today) so `POST /api/newsletter-digest/{id}/retry` can re-drive it. The gap that posture leaves
+— a **crash** between commit and enqueue, leaving a job stuck `pending` that generic recovery
+skips because it excludes `email_digest:%` — is closed by §4 step 4's scan, which re-enqueues
+payloads whose job has been `pending` past a threshold. That is why an outbox is unnecessary
+here: unlike the webhook, a poller already runs periodically and can repair itself.
+
+### 6. First watch = watermark + latest issue only
+
+`POST /api/newsletter-digest` **re-resolves `archive_url` server-side** (see §8), seeds
+`publication_issues` from that result, and inserts the watch row with `watched_from` already
+set — all in one transaction. There is therefore no window in which the watch is poll-visible
+but unseeded, so a concurrent poll cannot fan out the back catalogue to a half-created watcher.
+
+The newest issue is then ingested as an **explicit delivery keyed by `(watch_id, slug)`**, not
+as a consequence of the `watched_from` filter. Both timestamps are written in the same
+transaction, so `watched_from < first_seen_at` can collapse at clock precision and silently skip
+the very issue that is supposed to prove the feature works.
+
+That explicit delivery goes through the **same skip-aware ingestion path** as the poller: an
+issue carrying a `skip_reason` is passed over and the next-newest is used. Bypassing the check
+here would hand a brand-new watcher the one issue the system has already given up on.
+
+### 7. Delete the email path
+
+`ops/email-worker/` (5 files, 331 lines) · `src/api/email_webhook.py` (149) ·
+`src/main.py:15` import + `:178` `include_router` · `src/auth/middleware.py:17`
+(`/webhook/email-digest` out of `_OPEN_PATHS`) · `src/config.py:23` (`EMAIL_WEBHOOK_SECRET`) ·
+webhook-path tests in `tests/test_email_digest.py` and `tests/test_config.py` · the Cloudflare
+catch-all rule and its docs.
+
+One **fix**, not a deletion: `worker.reap_stale_jobs()` (`src/worker.py:352`) still offers a
+generic `reprocess:{job_id}` button for stale `processing` rows. Only the dashboard recovery
+path special-cases `email_digest:%`, so a stalled digest job currently gets a reprocess button
+that would re-drive it as a plain link job against a non-fetchable sentinel URL. The reaper must
+suppress generic reprocess notifications for `email_digest:%` and defer to the digest retry path,
+matching what `job_recovery.py:27,229` already do. Recovery point pinned in ADR-0060: commit `e0df28f`. Full revert
+was considered and rejected — `e0df28f` is 5,147 insertions of which ~4,500 (the entire `web/`
+dashboard, the extraction processor, the schema, the redirect resolver) are kept and built on.
+
+### 8. API + web
+
+- `POST /api/newsletter-digest/resolve` → `{query}` ⇒
+  `{archive_url, feed_url, issue_path_prefix, fetched_title, recent_issues[]}`.
+  **Read-only, creates nothing**, rate-limited per chat.
+- `POST /api/newsletter-digest` → `{archive_url, name}` ⇒ **re-resolves `archive_url`
+  server-side** to obtain `feed_url`, `issue_path_prefix` and the current issue list, then
+  creates or reuses the `publications` row via an **atomic upsert-or-select helper** and creates
+  the watch per step 6. Two users adding the same newsletter simultaneously race on
+  `archive_url UNIQUE`, so the helper inserts-or-returns the existing row in one statement.
+  Metadata is then reconciled rather than frozen: a *missing* `feed_url` / `issue_path_prefix` /
+  `fetched_title` is always filled, and an existing one is **replaced when the resolver returns
+  a validated value and `last_resolved_at` is older than a cooldown** (stamping
+  `last_resolved_at` on write). Fill-only-if-missing would preserve a wrong `feed_url` or
+  `issue_path_prefix` forever after a resolver mistake or a publisher restructuring; the
+  cooldown is what stops two users adding the same newsletter from ping-ponging its metadata.
+  Re-resolving is
+  deliberate: the resolve response is not carried in the request and must not be trusted from
+  the client. A short-lived resolver token was considered and rejected — it adds cache-expiry
+  semantics to save one fetch on a rare action.
+- `PUT` edits the watch's `name` only. Candidate list/promote/dismiss and `/retry` unchanged,
+  as is the ownership gate (`_get_owned_subscription` → `_get_owned_watch`, same `(id, chat_id)`
+  shape).
+- Subscribe form: one field → resolve → confirmation card listing recent issue titles → confirm.
+- **`Dismiss rest (N)`** on the candidate list. An issue yields ~15 candidates and the real
+  interaction is "promote the two worth keeping, clear the remainder", so the button loops the
+  existing per-candidate `DELETE`. It needs **one small backend change**, not zero:
+  `dismiss_digest_candidate` currently accepts `status IN ('pending','promoting')`
+  (`src/database.py:3448`), so a bulk loop over a UI snapshot could dismiss a candidate that
+  turned `promoting` in the meantime — flipping it to `dismissed` while its job is being
+  created. Bulk dismiss therefore uses a **pending-only** variant (`status = 'pending'`),
+  exposed as a flag on the existing endpoint; single-card dismiss keeps today's behaviour.
+  A batch *endpoint* is still deliberately not added: it would impose all-or-nothing semantics
+  that are wrong here (one candidate failing must not roll back the others) to save round-trips
+  that do not matter at this size. The **count goes in the label** as the guard —
+  `CONTEXT.md`'s [[Job delete]] entry records a Bookmark import card where one misclick took
+  hundreds of links — but no confirm modal, since dismissal is a soft status flip that leaves
+  the row in the dedup set.
+
+The invariant is that **the poll loop never runs in the API process**. A bounded, rate-limited,
+user-initiated resolver fetch is explicitly allowed.
+
+### 9. Tests
+
+Migration teardown (no orphaned spaces/candidates/legacy jobs) · fresh-`SCHEMA_SQL` vs migrated
+schema parity · `newsletter_poll` queue-envelope contract and `_handle_newsletter_poll` dispatch
+· first-poll claim on `NULL` columns · poll idempotency across a replayed envelope ·
+multi-watcher fan-out (N jobs, 1 fetch, 1 Gemini call) · lease contention between two workers ·
+failure backoff advancing `next_poll_after` · lease refusing a not-yet-due publication ·
+watch-creation/poll race · first-watch explicit delivery when `watched_from` equals the issue's
+`first_seen_at` · duplicate fan-out rolling back job **and** payload together, leaving no orphan
+job · retry reading persisted `context_md` without a second Gemini call · issue ordering when
+`published_at` is missing or malformed, including the newest-first source reversal · resolver
+abuse limits (scheme, private host, probe cap, rate limit) · resolver cache re-validation ·
+feed-vs-scrape selection including beehiiv's "200 but an HTML app shell" `/feed` ·
+`issue_path_prefix` discovery against captured `/p/` and `/news/` fixtures ·
+**crash-recovery: issue rows inserted but fan-out never ran → next poll still delivers** ·
+**job committed but never enqueued → next poll re-enqueues the stale pending payload** ·
+**Gemini failure still produces candidates, with `context_md` NULL** and **no per-watcher
+Gemini fallback** · concurrent `POST` for the same `archive_url` yielding one publication row ·
+oversized Jina response rejected before storage · `reap_stale_jobs()` suppressing generic
+reprocess for `email_digest:%` · delivery repair after an outage longer than any recency window ·
+`Dismiss rest` clearing only `pending` candidates — explicitly **not** a candidate that turned
+`promoting` after the UI snapshot — and surviving a partial failure mid-loop · `body_html`
+surviving until every live delivery is terminal, and an errored digest still being retryable
+afterwards · **`body_html` NOT cleared while a live watch still lacks a payload row**, including
+the zero-payload-rows case after a crash · composite FK rejecting a payload whose issue row is
+gone · oversized issue marked terminal-skipped without aborting the rest of the run, **and
+skipped by first-watch delivery too** · streaming fetch aborting at 4 MB + 1 without
+materialising the body · publication metadata refreshed after the cooldown but not ping-ponged
+by two concurrent adds.
 
 ## Key decisions & tradeoffs
 
-- **Candidates, not auto-created jobs.** Every extracted link is a cheap,
-  non-committal row; only an explicit per-item click spends a real job/
-  pipeline run. Resolves the ADR-0051 Second-Law tension directly — the
-  subscription itself is the deliberate act; per-link processing stays a
-  second deliberate act, same as everywhere else in the codebase.
-- **One persistent Space per newsletter**, keyed by registered sender
-  identity, not one Space per issue — avoids a dated-Space flood (the same
-  hoarding-graveyard failure mode ADR-0051's brand rationale already named).
-- **Allowlist-gated aliases**: a subscription registers its sender email
-  upfront; mail from any other sender to that alias is silently dropped.
-  Bounds the blast radius of a leaked/guessed alias token.
-- **"View online" fallback fetch, not a v1 gap**: when a newsletter (the
-  documented Substack "everything behind one wrapper link" pattern) yields
-  zero inline content links, the pipeline follows that link and re-extracts
-  — adds one conditional fetch, no new fetch mechanism (reuses existing
-  page-fetch utilities).
-- **Gemini-authored context blob**, one call per incoming issue — matches
-  how context blobs work everywhere else in Spaces (the user's own editorial
-  lens) and is the part of the feature that actually solves "subscribes and
-  never reads it."
-- **MIME parsing happens once, in the Cloudflare Worker** (via `postal-mime`),
-  not duplicated in Python — the webhook receives already-clean
-  `{from, to, subject, html, text}` JSON, so no `email.message` parsing is
-  needed on the Python side at all (narrower than the original assumption of
-  reusing stdlib `email` parsing).
-- **Trust boundary is a shared secret, not SPF/DKIM inspection** — Cloudflare
-  Workers don't reliably expose a usable authentication verdict; this
-  mirrors the codebase's existing webhook-secret pattern instead of adding a
-  new, weaker home-grown check.
-
-## Assumptions
-
-1. Spaces (`spaces`/`space_urls`/`context_blobs`) is the right data
-   foundation — reused, not reinvented. New page, not new tables for the
-   Space concept itself. — confirmed by user
-2. Inbound transport: Cloudflare Email Routing catch-all → Worker → new
-   authenticated webhook, not Gmail OAuth polling (blocked by the existing
-   restricted-scope rejection in `docs/ops/oauth-verification.md`) and not a
-   third-party mail provider account. — confirmed by user; mechanics
-   verified via research (`docs/research/2026-09-05-email-digest-claudex-research.md`)
-3. New sibling worker task (`email_digest`), not a new `content_type` (SQLite
-   `CHECK` can't be altered) and not a branch in an existing processor. —
-   confirmed by user, precedent ADR-0048
-4. Extracted links are non-committal candidates; promotion reuses the normal
-   manual-submission path (`detect_pipeline` + `create_and_enqueue_job`). —
-   corrected by user (originally assumed auto-job-creation)
-5. Redirect-resolution reuses `src/utils/public_html.py`'s existing helper,
-   not a new HTTP client. — confirmed by user
-6. No new Python dependency (stdlib `HTMLParser` for link extraction; MIME
-   parsing moved entirely into the Worker's `postal-mime`, so not even
-   stdlib `email` parsing is needed on the Python side). — refined during
-   planning
-7. No existing skill in `agent-knowledge/skills/` or `~/.claude/skills/`
-   targets email/newsletter ingestion specifically; `brand-lens` is relevant
-   background (Second-Law framing) but nothing to auto-load into the build.
-   — skill inventory scan
-8. Per-newsletter allowlist (sender email registered at subscription-creation
-   time), not an open-to-any-sender alias. — confirmed by user
-9. "View online" landing-page fallback fetch is in scope for v1, not
-   deferred. — confirmed by user
-10. Context blob is Gemini-authored per issue, not a literal subject/body
-    dump. — confirmed by user
+- **`publications` / `publication_issues` are shared across tenants with no `chat_id`.** The
+  entire scale-proof claim: a public archive is byte-identical for every viewer, so one fetch
+  serves every watcher and polling load scales with distinct publications (~hundreds), not
+  users. ADR-0043 rejected a shared-row design for `links` because that row held
+  **user-visible content** a tenant's re-scrape could mutate; these rows hold fetch bookkeeping
+  no tenant writes — which is why the display name moved to `newsletter_watches.name` and the
+  scraped one is `fetched_title`.
+  **Amendment:** `publication_issues.body_html` means a shared row now also holds *transient
+  fetched publisher content*, weakening the original "bookkeeping only" phrasing. It still
+  clears the ADR-0043 bar for a different reason: the body is publisher-authored, byte-identical
+  for every viewer, written only by the poller, never edited by a tenant, and cleared once
+  delivered. What ADR-0043 forbade was a shared row a tenant's own action could mutate under
+  another tenant — which this is not. The alternative, copying a several-hundred-KB body into
+  every watcher's payload row, was rejected on cost.
+- **Feed where available, archive scrape otherwise — one code path, no XML parser.** 1 of 3 real
+  publications has a feed. Feed-only leaves the beehiiv majority unreachable; scrape-only throws
+  away the cheapest and most complete source where it exists. Both are fetched through the same
+  Jina HTML path and validated by the same rule (≥2 distinct issue links), because Jina renders
+  a feed into clean HTML — verified at 100 permalinks for AlphaSignal.
+- **Issue URL prefix is learned, not hardcoded.** `/p/` (beehiiv) vs `/news/` (AlphaSignal) —
+  discovered by grouping same-origin links at resolve time and stored per publication.
+- **Jina fetched with `X-Return-Format: html`** (verified) so `extract_digest_links` is reused
+  unchanged, rather than maintaining a second Markdown parser.
+- **The `email_digest:` job-URL sentinel is deliberately kept**, despite email being gone. It
+  is load-bearing in 8 production sites — `src/api/jobs.py:82,100,338`,
+  `src/services/job_recovery.py:27,229`, `src/database.py:3133,3154,3460` — excluding receipt
+  jobs from the Feed and from generic recovery retry (the `content_type='link'` mis-retry trap
+  the superseded plan documented). Renaming buys nothing functional and touches 8 call sites plus
+  test assertions. (The "and it would need a data migration" leg of this argument no longer
+  applies — legacy receipt rows are now deleted outright.) A comment records why the name lies.
+- **Issue identity is `(publication_id, slug)`**; mirrors are collapsed by publisher-advertised
+  canonical URL at resolve time, not by a `publication_aliases` table. No collision has been
+  observed; add the table if a real case appears.
+- **No durable outbox.** Reuse the existing commit-then-enqueue-then-mark-error posture plus the
+  existing retry endpoint, rather than new infrastructure for one task.
 
 ## Risks / open questions
 
-- **Cloudflare Worker deployment is outside this repo's normal build/deploy
-  path** (Wrangler, Cloudflare dashboard catch-all rule) — genuinely new ops
-  surface, not something a `docker-compose up` or CI run touches. Needs a
-  short runbook in `docs/ops/` and is not automatable by an agent session
-  the way the rest of this plan is.
-- **Sender-match granularity**: matching `from` against a single registered
-  `sender_email` assumes a newsletter's sending address is stable per
-  issue. Some ESPs vary the sending subdomain per campaign — if that turns
-  out to be common for newsletters people actually use, the allowlist may
-  need to loosen to a domain-suffix match instead of an exact address match.
-  Flagged for Codex/implementation-time attention rather than resolved here.
-- **`digest_candidates` OG-fetch cost**: fetching title/thumbnail per
-  candidate at ingest time is one more network call per link per issue
-  (bounded by a single newsletter's typical link count, now further bounded
-  by the 50-link cap — not the 300+ scale ADR-0048 had to defer for). Should
-  stay cheap, but worth confirming against a real multi-link newsletter
-  during implementation.
-- **Receipt-job Feed visibility: firm decision, not deferred** (Codex rounds
-  1/3/4 went back and forth on this — settling it here rather than leaving
-  it as "check at implementation time"): `email_digest:<hash>` receipt jobs
-  are **excluded entirely from the Feed** — a `url NOT LIKE 'email_digest:%'`
-  predicate placed in **whichever shared job-scope query underlies list,
-  count, and adjacent (prev/next) navigation alike** (Codex round 5: hiding
-  it only in `list_jobs()` would still leave a receipt job reachable via
-  detail-page prev/next or counted elsewhere if those use a different query
-  path — needs locating precisely at implementation time, but the predicate
-  belongs in the shared scope, not duplicated ad hoc per entry point), not
-  just a rendering tweak — rather than shown-but-special-cased like
-  Bookmark import's receipt card. Unlike a bookmark import (a card the user
-  meaningfully recognizes — "Bookmarks 8/6/26"), a digest receipt job is
-  pure internal plumbing the user experiences entirely through the new
-  `newsletter-digest` page; a stray `email_digest:<hash>` row in the main
-  Feed adds nothing and is confusing clutter, so it doesn't need the
-  half-solved non-navigable-card treatment ADR-0048 settled for at all.
-- **Failed-digest retry: a real gap in the generic Recovery panel, worked
-  around, not silently relied on.** Read `src/services/job_recovery.py`
-  directly (Codex round 4 pushed on this rather than accepting "payloads
-  persist" as sufficient): `retry_error()` maps a job's retry task via
-  `task_for_content_type(row_content_type)`, keyed **only on `content_type`**
-  — but `content_type='link'` is now shared by three different real tasks
-  (`link`, `bookmarks`, `email_digest`), which that lookup cannot
-  distinguish. Retrying an errored `email_digest` receipt job through the
-  generic panel today would incorrectly re-enqueue it as a plain `link` job
-  against a non-fetchable `email_digest:<hash>` URL. Fix, scoped to this
-  feature: exclude `url LIKE 'email_digest:%'` from **every** consumer of
-  `_scope_where()` in `job_recovery.py` — `recovery_summary()`,
-  `retry_pending()`, and `_claim_error_rows()`/`retry_error()` alike (Codex
-  round 5: my round-4 fix only patched `_claim_error_rows()`; `retry_pending()`
-  has the identical content_type-keyed blind spot for stuck-pending rows,
-  and letting `recovery_summary()` count a job the panel can't actually fix
-  correctly is its own small honesty gap) — cleanest added once, in the
-  shared `_scope_where()` helper itself, not duplicated per function — so
-  they're correctly left alone as `error`/`pending` rather than mis-retried,
-  and add one dedicated "Retry" action in the new `newsletter-digest`
-  page/API — scoped
-  specifically to `email_digest`-task error jobs — that re-enqueues the
-  **same** `job_id` (not `retry_error`'s create-a-new-job-row shape, which
-  is what makes its content_type-keyed task lookup necessary in the first
-  place). Note: `bookmarks` jobs already have this exact same
-  mis-retry exposure today, pre-existing and out of scope for this plan to
-  fix — flagged, not silently inherited without comment. Payload retention
-  on a failed run (step 8's clear only fires on success) is what makes this
-  dedicated retry possible at all; clearing unconditionally in a `finally`
-  (considered per Codex round 3) was rejected because it would make a
-  failed digest permanently unrecoverable, no better than losing the email
-  — matching the same posture every other pipeline already has toward its
-  own retry inputs (e.g. a failed document job's GCS blob persists until
-  retried or deleted too).
+- **Feed and archive granularity differ.** AlphaSignal's feed entries are individual news
+  stories (`/news/<slug>`), while Sloth Bytes' are whole issues (`/p/<slug>`) containing ~15
+  links. So "one issue → many candidates" holds for beehiiv but degenerates to "one story → one
+  candidate" for AlphaSignal. The mechanics work either way; whether the AlphaSignal shape is
+  *useful* is unvalidated.
+- **Jina rate limits and cost.** ~1,800 fetches/day at 300 publications, flat in user count,
+  past the free tier. `poll_failures` now drives backoff, but there is still no user-visible
+  "this newsletter stopped updating" signal after repeated failures.
+- **Archive pagination.** Archive roots show ~6 issues behind "Load more". `publication_issues`
+  makes replay safe but not recovery — a scrape-only publication outpacing its visible window
+  between polls still loses issues silently. Largely mitigated where a feed exists: AlphaSignal's
+  carries 100 entries against its archive page's 6.
+- **Publication orphaning.** Nothing deletes a `publications` row when its last watch goes; the
+  poll query skips watchless rows, so they are inert but accumulate.
+- **Slug is publisher-controlled** — an edited slug reads as a new issue and re-ingests.
+- **Fan-out still runs candidate extraction and OG fetches per watcher per issue.** The archive
+  fetch, issue fetch and Gemini call are shared; extraction is not.
+- **Canonical-URL collapsing depends on publishers setting it correctly**, which not all do.
 
 ## Out of scope
 
-- Gmail/IMAP polling of a user's real inbox (blocked by the restricted-scope
-  decision).
-- Full pipeline processing (transcripts, article enrichment) automatically
-  triggered on digest arrival — only on explicit promotion.
-- A digest-specific export (Spaces' existing export already covers whatever
-  ends up pinned via `space_urls`).
-- Rate limiting beyond the per-subscription daily issue cap and the
-  per-issue link cap (both now specified above) — e.g. cross-subscription
-  global throttling, or anything account-wide — is not designed for here.
+- Gmail OAuth ingestion for email-only newsletters — recorded in ADR-0060 as the fallback, but
+  taking it reverses the standing no-restricted-scope decision in `docs/ops/oauth-verification.md`.
+- Back-catalogue import; adaptive poll cadence.
+- **Per-card multi-select checkboxes, and batch promotion.** `Dismiss rest` covers the observed
+  interaction; a selection toolbar is only worth building if dismissing a *subset* rather than
+  the remainder turns out to be common. Batch promote is rejected outright rather than deferred:
+  each promotion spends real pipeline work, so a "promote all" button is auto-processing with
+  one extra click of ceremony — the exact line ADR-0051 and this feature's per-candidate
+  judgement rule exist to hold.
+- Reusing the inbound-email channel for intake (rejected in ADR-0060; recovery at `e0df28f`).
+- Fixing the pre-existing `bookmarks` mis-retry exposure the superseded plan flagged.
