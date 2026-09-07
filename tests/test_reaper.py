@@ -26,7 +26,7 @@ async def temp_db():
 
 async def _insert_job(
     db, job_id: str, chat_id: int, status: str, *, minutes_ago: float,
-    content_type: str = "long", attempt: int = 1,
+    content_type: str = "long", attempt: int = 1, url: str = "http://x",
 ) -> None:
     ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).strftime(
         "%Y-%m-%d %H:%M:%S"
@@ -35,7 +35,7 @@ async def _insert_job(
         await conn.execute(
             "INSERT INTO jobs (id, chat_id, url, content_type, status, attempt, "
             "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (job_id, chat_id, "http://x", content_type, status, attempt, ts, ts),
+            (job_id, chat_id, url, content_type, status, attempt, ts, ts),
         )
         await conn.commit()
 
@@ -134,6 +134,36 @@ async def test_reap_notifies_per_state(temp_db):
     # enriching → the existing enrichment_retry button
     enr = by_chat[200]
     assert enr.kwargs["buttons"][0][0]["callback_data"] == "enrichment_retry:20260524_120000_ENRC"
+
+
+@pytest.mark.asyncio
+async def test_reap_suppresses_generic_reprocess_for_email_digest_jobs(temp_db):
+    """Issue #612. A newsletter-digest job keeps the `email_digest:` URL sentinel
+    (ADR-0060 retains it — 8 production sites depend on it), which is not a
+    fetchable URL. A generic `reprocess:` button would re-drive it as a plain
+    link job against that sentinel, so the reaper must stay silent here and
+    leave recovery to the digest retry path, as job_recovery.py already does."""
+    from src import database as db, worker
+    await _insert_job(
+        db, "20260907_120000_DIGEST", 100, "processing",
+        minutes_ago=20, content_type="link", url="email_digest:watch_1:issue-a",
+    )
+    await _insert_job(db, "20260907_120000_LINK", 200, "processing", minutes_ago=20)
+
+    with patch("src.telegram.sender.send_message", new=AsyncMock()) as send_msg, \
+         patch("src.telegram.sender.send_inline_keyboard", new=AsyncMock()) as send_kb:
+        await worker.reap_stale_jobs()
+
+    send_msg.assert_not_called()
+    # Only the ordinary link job is notified; the digest job is suppressed.
+    assert send_kb.call_count == 1
+    assert send_kb.call_args_list[0].args[0] == 200
+    assert (
+        send_kb.call_args_list[0].kwargs["buttons"][0][0]["callback_data"]
+        == "reprocess:20260907_120000_LINK"
+    )
+    # Suppressing the notification does not stop the row itself being reaped.
+    assert (await db.get_job("20260907_120000_DIGEST"))["status"] == "error"
 
 
 @pytest.mark.asyncio

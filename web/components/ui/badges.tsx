@@ -18,6 +18,14 @@ const STATUS_COLORS: Record<string, string> = {
   transcript_done: "bg-status-enriching-tint text-status-enriching",
   error: "bg-status-error-tint text-status-error",
   cancelled: "bg-status-cancelled-tint text-status-cancelled",
+  // Digest-candidate statuses. Without these all three fell through to the
+  // neutral "cancelled" gray, so a successfully promoted candidate looked
+  // identical to a dismissed one — against DESIGN.md's rule that badge colour
+  // reinforces meaning. Promoted reuses `done` because it IS the terminal
+  // success here; promoting reuses the in-flight `processing` hue.
+  promoting: "bg-status-processing-tint text-status-processing",
+  promoted: "bg-status-done-tint text-status-done",
+  dismissed: "bg-status-cancelled-tint text-status-cancelled",
 };
 
 const badgeBase = "inline-block rounded px-1.5 py-0.5 font-mono text-mono-label font-medium tracking-wider";

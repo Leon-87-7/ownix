@@ -69,6 +69,23 @@ async def _resolve_safe_public_url(url: str) -> tuple[str, str] | None:
         return None
 
 
+async def is_public_url(url: str) -> bool:
+    """True when *url* is safe to hand to a third-party fetch proxy.
+
+    The single public-URL rule for the newsletter feature (ADR-0060): scheme
+    is http/https, the port is the scheme's default, the hostname resolves,
+    and every resolved address is globally routable.
+
+    Deliberately separate from `_fetch_pinned`, which pins a *direct* httpx
+    connection to a resolved IP. Pinning protects a connection we open
+    ourselves; it does nothing for a fetch made through `r.jina.ai`, where the
+    proxy — not us — opens the connection to the target. This function is the
+    check that must run *before* such a proxy URL is constructed, so it shares
+    the resolver rather than the transport.
+    """
+    return await _resolve_safe_public_url(url) is not None
+
+
 async def _fetch_pinned(
     url: str,
     *,

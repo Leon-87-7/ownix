@@ -14,6 +14,8 @@ Task discriminators handled by _dispatch:
     - 'prd_auto'        → processors.prd.run_auto
     - 'prd_auto_resend' → processors.prd.run_auto_resend
     - 'prd_intent'      → processors.prd.run_intent
+    - 'newsletter_poll' → processors.newsletter_poll.run (job_id carries a
+                          publications.id, not a jobs.id — rowless, #610)
 
 On startup runs prd.reaper() + prd.reaper_intent() to release stale 'generating' PRD locks.
 """
@@ -314,6 +316,16 @@ async def _handle_job_purge(task: dict) -> None:
     await purge.run(task)
 
 
+async def _handle_newsletter_poll(task: dict) -> None:
+    """`task["job_id"]` carries a `publications.id`, not a `jobs.id` — the
+    same rowless-task convention `job_purge`/`bookmarks_enrich` already use
+    (ADR-0060, PLAN.md §4, issue #610). Does not go through `_make_handler`'s
+    job-load path since there is no job row to load."""
+    from src.processors import newsletter_poll
+
+    await newsletter_poll.run(task["job_id"])
+
+
 _TASK_HANDLERS = {
     "enrichment": _handle_enrichment,
     "video": _handle_video,
@@ -328,11 +340,13 @@ _TASK_HANDLERS = {
     "prd_auto_resend": _handle_prd_auto_resend,
     "prd_intent": _handle_prd_intent,
     "job_purge": _handle_job_purge,
+    "newsletter_poll": _handle_newsletter_poll,
 }
 
 _ROWLESS_TASKS = {
     "job_purge",  # operates on a job that is already deleted
     "bookmarks_enrich",  # #496: must still enrich links whose job was deleted (ADR-0046)
+    "newsletter_poll",  # #610: job_id carries a publication id, not a jobs row
 }
 
 
@@ -374,7 +388,16 @@ async def reap_stale_jobs() -> None:
                     f"{tag}\n⚠️ Enrichment was interrupted by a restart.",
                     buttons=[[{"text": "🔄 Retry", "callback_data": f"enrichment_retry:{job_id}"}]],
                 )
-            else:  # 'processing' — the Retry button re-submits the stored URL as a
+            elif not row["url"].startswith("email_digest:"):
+                # Newsletter-digest jobs keep the `email_digest:` URL sentinel
+                # even though inbound email is gone (ADR-0060, #612) — it stays
+                # load-bearing in the Feed and generic-recovery filters that
+                # exclude receipt jobs. A generic reprocess here would re-drive
+                # one as a plain link job against a non-fetchable sentinel URL,
+                # so suppress it and defer to the digest retry path, matching
+                # what job_recovery.py:27,229 already do.
+                #
+                # 'processing' — the Retry button re-submits the stored URL as a
                 # fresh job (same as resending the link), so the orphaned row's
                 # Drive file / Sheets row are never re-touched.
                 await send_inline_keyboard(

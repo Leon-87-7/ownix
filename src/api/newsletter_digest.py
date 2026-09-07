@@ -1,8 +1,15 @@
-"""Newsletter digest subscription and candidate-management API."""
+"""Newsletter digest watch and candidate-management API (ADR-0060, PLAN.md §6/§8).
+
+A [[Watched newsletter]] follows a publication's public archive rather than
+an inbound-email alias (issue #609). `resolve_newsletter` is read-only and
+creates nothing; `create_watch` re-resolves the given `archive_url`
+server-side rather than trusting the client's earlier resolve response, then
+creates (or reuses) the shared `publications` row, seeds its issue seen-set,
+and inserts the watch with its explicit first-issue delivery — all in one
+transaction (`database.create_newsletter_watch`).
+"""
 
 from __future__ import annotations
-
-import re
 
 import aiosqlite
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -12,119 +19,179 @@ from src import database, job_queue as queue
 from src.api.jobs import JobCreateRequest, create_job
 from src.api.parsed import UrlIn as ParsedUrlIn
 from src.api.parsed import upload_url
+from src.services import newsletter_archive
 from src.utils.validators import detect_pipeline
 
 newsletter_digest_router = APIRouter(prefix="/api/newsletter-digest", tags=["newsletter-digest"])
 
-_ALIAS_DOMAIN = "leondev.xyz"
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+class ResolveIn(BaseModel):
+    query: str = Field(..., min_length=1, max_length=320)
 
 
-class SubscriptionIn(BaseModel):
+class RecentIssueOut(BaseModel):
+    slug: str
+    title: str
+    url: str
+
+
+class ResolveOut(BaseModel):
+    archive_url: str
+    feed_url: str | None
+    issue_path_prefix: str
+    fetched_title: str
+    recent_issues: list[RecentIssueOut]
+
+
+def _name_not_blank(value: str) -> str:
+    if not value.strip():
+        raise ValueError("name must not be blank")
+    return value
+
+
+class WatchCreateIn(BaseModel):
+    archive_url: str = Field(..., min_length=1, max_length=2048)
     name: str = Field(..., min_length=1, max_length=120)
-    sender_email: str = Field(..., min_length=3, max_length=320)
 
     @field_validator("name")
     @classmethod
-    def name_not_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("name must not be blank")
-        return value
+    def _name_not_blank(cls, value: str) -> str:
+        return _name_not_blank(value)
 
-    @field_validator("sender_email")
+
+class WatchUpdateIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("name")
     @classmethod
-    def sender_email_valid(cls, value: str) -> str:
-        email = value.strip().lower()
-        if not _EMAIL_RE.match(email):
-            raise ValueError("sender_email must be an email address")
-        return email
+    def _name_not_blank(cls, value: str) -> str:
+        return _name_not_blank(value)
 
 
-def _with_alias(subscription: dict) -> dict:
-    return {
-        **subscription,
-        "alias": f"{subscription['alias_local_part']}@{_ALIAS_DOMAIN}",
-    }
+async def _get_owned_watch(watch_id: str, chat_id: int) -> dict:
+    watch = await database.get_newsletter_watch(watch_id, chat_id)
+    if watch is None:
+        raise HTTPException(status_code=404, detail="Newsletter watch not found")
+    return watch
 
 
-async def _get_owned_subscription(subscription_id: str, chat_id: int) -> dict:
-    subscription = await database.get_newsletter_subscription(subscription_id, chat_id)
-    if subscription is None:
-        raise HTTPException(status_code=404, detail="Newsletter subscription not found")
-    return subscription
+async def _resolve_or_422(query: str, *, chat_id: int) -> newsletter_archive.NewsletterResolution:
+    try:
+        return await newsletter_archive.resolve_newsletter_archive(query, chat_id=chat_id)
+    except newsletter_archive.NewsletterResolutionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _resolve_out(result: newsletter_archive.NewsletterResolution) -> ResolveOut:
+    return ResolveOut(
+        archive_url=result.archive_url,
+        feed_url=result.feed_url,
+        issue_path_prefix=result.issue_path_prefix,
+        fetched_title=result.fetched_title,
+        recent_issues=[
+            RecentIssueOut(slug=issue.slug, title=issue.title, url=issue.url)
+            for issue in result.recent_issues
+        ],
+    )
+
+
+@newsletter_digest_router.post("/resolve")
+async def resolve_newsletter(body: ResolveIn, request: Request) -> ResolveOut:
+    """Resolve a newsletter's public archive from a URL or sender email.
+
+    Read-only — creates nothing. Rate-limited per chat inside
+    `newsletter_archive.resolve_newsletter_archive` (PLAN.md §2 / issue #608).
+    """
+    chat_id: int = request.state.user["id"]
+    result = await _resolve_or_422(body.query.strip(), chat_id=chat_id)
+    return _resolve_out(result)
+
+
+async def _enqueue_delivery(*, job_id: str, watch_id: str) -> None:
+    """Commit → enqueue → mark-error posture (PLAN.md §5, mirrors
+    `email_webhook.py`'s enqueue-failure handling): a Redis push cannot join
+    the SQLite transaction that already created the job/payload rows."""
+    try:
+        await queue.enqueue({"task": "email_digest", "job_id": job_id, "watch_id": watch_id})
+    except Exception:
+        await database.update_job_status(job_id, "error")
 
 
 @newsletter_digest_router.post("", status_code=201)
-async def create_subscription(body: SubscriptionIn, request: Request) -> dict:
+async def create_watch(body: WatchCreateIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
+    # Re-resolve server-side — the client's earlier /resolve response (if any)
+    # is never trusted for archive_url, feed_url, issue_path_prefix, etc.
+    resolution = await _resolve_or_422(body.archive_url.strip(), chat_id=chat_id)
+
     try:
-        subscription = await database.create_newsletter_subscription(
+        watch = await database.create_newsletter_watch(
             chat_id=chat_id,
             name=body.name.strip(),
-            sender_email=body.sender_email,
+            archive_url=resolution.archive_url,
+            feed_url=resolution.feed_url,
+            issue_path_prefix=resolution.issue_path_prefix,
+            fetched_title=resolution.fetched_title,
+            recent_issues=[
+                {"slug": issue.slug, "title": issue.title, "url": issue.url}
+                for issue in resolution.recent_issues
+            ],
         )
     except aiosqlite.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail="Newsletter subscription already exists") from exc
-    return _with_alias(subscription)
+        raise HTTPException(status_code=409, detail="Already watching this newsletter") from exc
+
+    delivery_job_id = watch.pop("delivery_job_id", None)
+    if delivery_job_id:
+        await _enqueue_delivery(job_id=delivery_job_id, watch_id=watch["id"])
+    return watch
 
 
 @newsletter_digest_router.get("")
-async def list_subscriptions(request: Request) -> list[dict]:
+async def list_watches(request: Request) -> list[dict]:
     chat_id: int = request.state.user["id"]
-    return [_with_alias(row) for row in await database.list_newsletter_subscriptions(chat_id)]
+    return await database.list_newsletter_watches(chat_id)
 
 
-@newsletter_digest_router.get("/{subscription_id}")
-async def get_subscription(subscription_id: str, request: Request) -> dict:
+@newsletter_digest_router.get("/{watch_id}")
+async def get_watch(watch_id: str, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
-    return _with_alias(await _get_owned_subscription(subscription_id, chat_id))
+    return await _get_owned_watch(watch_id, chat_id)
 
 
-@newsletter_digest_router.put("/{subscription_id}")
-async def update_subscription(
-    subscription_id: str, body: SubscriptionIn, request: Request
-) -> dict:
+@newsletter_digest_router.put("/{watch_id}")
+async def update_watch(watch_id: str, body: WatchUpdateIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
-    await _get_owned_subscription(subscription_id, chat_id)
-    try:
-        subscription = await database.update_newsletter_subscription(
-            subscription_id=subscription_id,
-            chat_id=chat_id,
-            name=body.name.strip(),
-            sender_email=body.sender_email,
-        )
-    except aiosqlite.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail="Newsletter subscription already exists") from exc
-    if subscription is None:
-        raise HTTPException(status_code=404, detail="Newsletter subscription not found")
-    return _with_alias(subscription)
-
-
-@newsletter_digest_router.delete("/{subscription_id}", status_code=204)
-async def delete_subscription(subscription_id: str, request: Request) -> Response:
-    chat_id: int = request.state.user["id"]
-    await _get_owned_subscription(subscription_id, chat_id)
-    deleted = await database.delete_newsletter_subscription(
-        subscription_id=subscription_id,
-        chat_id=chat_id,
+    await _get_owned_watch(watch_id, chat_id)
+    watch = await database.update_newsletter_watch_name(
+        watch_id=watch_id, chat_id=chat_id, name=body.name.strip()
     )
+    if watch is None:
+        raise HTTPException(status_code=404, detail="Newsletter watch not found")
+    return watch
+
+
+@newsletter_digest_router.delete("/{watch_id}", status_code=204)
+async def delete_watch(watch_id: str, request: Request) -> Response:
+    chat_id: int = request.state.user["id"]
+    await _get_owned_watch(watch_id, chat_id)
+    deleted = await database.delete_newsletter_watch(watch_id=watch_id, chat_id=chat_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Newsletter subscription not found")
+        raise HTTPException(status_code=404, detail="Newsletter watch not found")
     return Response(status_code=204)
 
 
-@newsletter_digest_router.get("/{subscription_id}/candidates")
-async def list_candidates(subscription_id: str, request: Request) -> list[dict]:
+@newsletter_digest_router.get("/{watch_id}/candidates")
+async def list_candidates(watch_id: str, request: Request) -> list[dict]:
     chat_id: int = request.state.user["id"]
-    subscription = await _get_owned_subscription(subscription_id, chat_id)
-    return await database.list_digest_candidates(subscription["space_id"])
+    watch = await _get_owned_watch(watch_id, chat_id)
+    return await database.list_digest_candidates(watch["space_id"])
 
 
-@newsletter_digest_router.post("/{subscription_id}/candidates/{candidate_id}/promote")
-async def promote_candidate(subscription_id: str, candidate_id: str, request: Request) -> dict:
+@newsletter_digest_router.post("/{watch_id}/candidates/{candidate_id}/promote")
+async def promote_candidate(watch_id: str, candidate_id: str, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
-    subscription = await _get_owned_subscription(subscription_id, chat_id)
-    space_id = subscription["space_id"]
+    watch = await _get_owned_watch(watch_id, chat_id)
+    space_id = watch["space_id"]
 
     claimed = await database.claim_digest_candidate(space_id=space_id, candidate_id=candidate_id)
     if not claimed:
@@ -158,31 +225,43 @@ async def promote_candidate(subscription_id: str, candidate_id: str, request: Re
         raise
 
 
-@newsletter_digest_router.delete("/{subscription_id}/candidates/{candidate_id}", status_code=204)
-async def dismiss_candidate(subscription_id: str, candidate_id: str, request: Request) -> Response:
+@newsletter_digest_router.delete("/{watch_id}/candidates/{candidate_id}", status_code=204)
+async def dismiss_candidate(
+    watch_id: str,
+    candidate_id: str,
+    request: Request,
+    pending_only: bool = False,
+) -> Response:
+    """`pending_only=true` is what `Dismiss rest` sends (issue #613), so a bulk
+    loop working from a UI snapshot cannot dismiss a candidate that turned
+    `promoting` after that snapshot was taken. A batch *endpoint* is
+    deliberately not added: it would impose all-or-nothing semantics that are
+    wrong here, since one candidate failing must not roll back the others.
+    """
     chat_id: int = request.state.user["id"]
-    subscription = await _get_owned_subscription(subscription_id, chat_id)
+    watch = await _get_owned_watch(watch_id, chat_id)
     dismissed = await database.dismiss_digest_candidate(
-        space_id=subscription["space_id"],
+        space_id=watch["space_id"],
         candidate_id=candidate_id,
+        pending_only=pending_only,
     )
     if not dismissed:
         raise HTTPException(status_code=404, detail="Candidate not found")
     return Response(status_code=204)
 
 
-@newsletter_digest_router.post("/{subscription_id}/retry")
-async def retry_digest(subscription_id: str, request: Request) -> dict:
+@newsletter_digest_router.post("/{watch_id}/retry")
+async def retry_digest(watch_id: str, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
-    await _get_owned_subscription(subscription_id, chat_id)
-    job = await database.latest_retryable_email_digest_job(subscription_id)
+    await _get_owned_watch(watch_id, chat_id)
+    job = await database.latest_retryable_email_digest_job(watch_id)
     if job is None:
         raise HTTPException(status_code=404, detail="No retryable digest job")
     await queue.enqueue(
         {
             "task": "email_digest",
             "job_id": job["id"],
-            "subscription_id": subscription_id,
+            "watch_id": watch_id,
         }
     )
     return {"job_id": job["id"], "status": "queued"}

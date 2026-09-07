@@ -4,28 +4,31 @@ import { useEffect, useState } from 'react';
 import { Newspaper } from 'lucide-react';
 import { PageHeader, PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
-import { NewsletterSubscriptionCard } from '@/components/newsletter-digest/newsletter-subscription-card';
-import { NewsletterSubscriptionForm } from '@/components/newsletter-digest/newsletter-subscription-form';
+import { NewsletterWatchCard } from '@/components/newsletter-digest/newsletter-watch-card';
+import { NewsletterArchiveResolver } from '@/components/newsletter-digest/newsletter-archive-resolver';
 import {
-  createNewsletterSubscription,
-  deleteNewsletterSubscription,
-  fetchNewsletterSubscriptions,
+  createNewsletterWatch,
+  deleteNewsletterWatch,
+  fetchNewsletterWatches,
+  resolveNewsletterArchive,
   retryEmailDigest,
-  type NewsletterSubscription,
+  type NewsletterArchiveResolution,
+  type NewsletterWatch,
 } from '@/lib/newsletter-digest';
 
 export function NewsletterDigestDashboard() {
-  const [subscriptions, setSubscriptions] = useState<NewsletterSubscription[]>([]);
+  const [watches, setWatches] = useState<NewsletterWatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
 
   async function load() {
     setLoading(true);
     try {
-      setSubscriptions(await fetchNewsletterSubscriptions());
+      setWatches(await fetchNewsletterWatches());
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load newsletters');
@@ -38,27 +41,30 @@ export function NewsletterDigestDashboard() {
     void load();
   }, []);
 
-  async function handleCreate(input: { name: string; sender_email: string }): Promise<boolean> {
+  async function handleConfirm(resolution: NewsletterArchiveResolution, name: string) {
     setSubmitting(true);
     setFormError(null);
     try {
-      const created = await createNewsletterSubscription(input);
-      setSubscriptions((current) => [created, ...current]);
-      return true;
+      const created = await createNewsletterWatch({ archive_url: resolution.archive_url, name });
+      setWatches((current) => [created, ...current]);
+      // Remount the resolver so it drops back to its empty input state.
+      setFormKey((key) => key + 1);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not add newsletter');
-      return false;
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Delete this newsletter feed and its candidates?')) return;
+    if (!window.confirm('Stop watching this newsletter and delete its candidates?')) return;
     setBusyId(id);
+    setFormError(null);
     try {
-      await deleteNewsletterSubscription(id);
-      setSubscriptions((current) => current.filter((item) => item.id !== id));
+      await deleteNewsletterWatch(id);
+      setWatches((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not stop watching that newsletter');
     } finally {
       setBusyId(null);
     }
@@ -66,9 +72,12 @@ export function NewsletterDigestDashboard() {
 
   async function handleRetry(id: string) {
     setBusyId(id);
+    setFormError(null);
     try {
       await retryEmailDigest(id);
       await load();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not retry that digest');
     } finally {
       setBusyId(null);
     }
@@ -89,14 +98,23 @@ export function NewsletterDigestDashboard() {
       <PageHeader
         icon={Newspaper}
         title="Newsletter Digest"
-        description="Route newsletter issues into Ownix, review extracted candidates, then create jobs deliberately."
+        description="Watch a newsletter's public archive, review extracted candidates, then create jobs deliberately."
       />
 
-      <NewsletterSubscriptionForm
-        onSubmit={handleCreate}
+      <NewsletterArchiveResolver
+        key={formKey}
+        onResolve={resolveNewsletterArchive}
+        onConfirm={handleConfirm}
+        // Without this the Confirm button never reflects the in-flight POST,
+        // so a double-click fires createNewsletterWatch twice.
         submitting={submitting}
-        error={formError}
       />
+      {formError && (
+        <p role="alert" className="text-sm text-status-error">
+          {formError}
+        </p>
+      )}
+      {submitting && <p className="text-sm text-muted">Adding newsletter...</p>}
 
       {error && (
         <p role="alert" className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
@@ -104,23 +122,23 @@ export function NewsletterDigestDashboard() {
         </p>
       )}
 
-      {subscriptions.length === 0 ? (
+      {watches.length === 0 ? (
         <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
           <p className="text-sm font-medium text-ink">No newsletters yet</p>
           <p className="mt-1 text-sm text-body">
-            Add a sender to generate an Ownix alias for that newsletter.
+            Find a newsletter&apos;s public archive above to start watching it.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {subscriptions.map((subscription) => (
-            <NewsletterSubscriptionCard
-              key={subscription.id}
-              subscription={subscription}
+          {watches.map((watch) => (
+            <NewsletterWatchCard
+              key={watch.id}
+              watch={watch}
               onDelete={handleDelete}
               onRetry={handleRetry}
-              deleting={busyId === subscription.id}
-              retrying={busyId === subscription.id}
+              deleting={busyId === watch.id}
+              retrying={busyId === watch.id}
             />
           ))}
         </div>

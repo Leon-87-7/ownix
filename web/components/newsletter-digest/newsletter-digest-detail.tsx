@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Newspaper, RotateCcw } from 'lucide-react';
+import { Newspaper, RotateCcw, Trash2 } from 'lucide-react';
 import { PageHeader, PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
@@ -12,19 +12,20 @@ import { NewsletterContextList } from '@/components/newsletter-digest/newsletter
 import {
   dismissDigestCandidate,
   fetchDigestCandidates,
-  fetchNewsletterSubscription,
+  fetchNewsletterWatch,
   promoteDigestCandidate,
   retryEmailDigest,
   type DigestCandidate,
-  type NewsletterSubscription,
+  type NewsletterWatch,
 } from '@/lib/newsletter-digest';
 
 export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: string }) {
-  const [subscription, setSubscription] = useState<NewsletterSubscription | null>(null);
+  const [watch, setWatch] = useState<NewsletterWatch | null>(null);
   const [candidates, setCandidates] = useState<DigestCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyCandidateId, setBusyCandidateId] = useState<string | null>(null);
+  const [dismissingRest, setDismissingRest] = useState(false);
   const [retrying, setRetrying] = useState(false);
   // Guards against a stale load() — from a prior subscriptionId — resolving after
   // a newer one has already started and overwriting its state with old data.
@@ -34,12 +35,12 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const [nextSubscription, nextCandidates] = await Promise.all([
-        fetchNewsletterSubscription(subscriptionId),
+      const [nextWatch, nextCandidates] = await Promise.all([
+        fetchNewsletterWatch(subscriptionId),
         fetchDigestCandidates(subscriptionId),
       ]);
       if (requestId !== requestIdRef.current) return;
-      setSubscription(nextSubscription);
+      setWatch(nextWatch);
       setCandidates(nextCandidates);
       setError(null);
     } catch (err) {
@@ -56,6 +57,11 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
 
   const visibleCandidates = useMemo(
     () => candidates.filter((candidate) => candidate.status !== 'dismissed'),
+    [candidates],
+  );
+
+  const pendingCandidates = useMemo(
+    () => candidates.filter((candidate) => candidate.status === 'pending'),
     [candidates],
   );
 
@@ -93,6 +99,46 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
     }
   }
 
+  async function handleDismissRest() {
+    // Loops the existing per-candidate DELETE rather than adding a batch
+    // endpoint: all-or-nothing semantics are wrong here, so a failure partway
+    // through keeps everything already dismissed and surfaces the error.
+    const requestId = requestIdRef.current;
+    const targets = pendingCandidates;
+    setDismissingRest(true);
+    setError(null);
+    let dismissed = 0;
+    let failure: unknown = null;
+    for (const candidate of targets) {
+      try {
+        await dismissDigestCandidate(subscriptionId, candidate.id, true);
+        dismissed += 1;
+        // Only flip a row that is still pending: a concurrent promote may have
+        // moved it on, and the server's pending-only guard would have rejected
+        // our DELETE in that case anyway.
+        setCandidates((current) =>
+          current.map((item) =>
+            item.id === candidate.id && item.status === 'pending'
+              ? { ...item, status: 'dismissed' }
+              : item,
+          ),
+        );
+      } catch (err) {
+        // Keep going: one candidate failing (e.g. it turned `promoting`) must
+        // not strand the rest still pending.
+        failure = err;
+      }
+    }
+    // A load() for a different watch may have started while we were looping —
+    // same guard load() uses, so its state never lands on another watch's view.
+    if (requestId !== requestIdRef.current) return;
+    if (failure) {
+      const reason = failure instanceof Error ? failure.message : 'Some candidates failed';
+      setError(`Dismissed ${dismissed} of ${targets.length}. ${reason}`);
+    }
+    setDismissingRest(false);
+  }
+
   async function handleRetry() {
     setRetrying(true);
     try {
@@ -115,7 +161,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
     );
   }
 
-  if (!subscription) {
+  if (!watch) {
     return (
       <PageShell>
         <p className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
@@ -136,13 +182,9 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
       </Link>
       <PageHeader
         icon={Newspaper}
-        title={subscription.name}
-        description={
-          <span className="font-mono text-label">
-            {subscription.sender_email} to {subscription.alias}
-          </span>
-        }
-        action={<CopyButton value={subscription.alias} ariaLabel="Copy alias" label="Copy alias" />}
+        title={watch.name}
+        description={<span className="font-mono text-label">{watch.archive_url}</span>}
+        action={<CopyButton value={watch.archive_url} ariaLabel="Copy archive URL" label="Copy URL" />}
       />
 
       {error && (
@@ -151,7 +193,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
         </p>
       )}
 
-      {(subscription.error_count ?? 0) > 0 && (
+      {(watch.error_count ?? 0) > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-status-error-tint px-4 py-3">
           <p className="text-sm text-status-error">
             A digest issue failed before its payload was cleared.
@@ -172,15 +214,43 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-headline font-semibold text-ink">Candidates</h2>
-            <span className="font-mono text-label text-muted tabular-nums">
-              {visibleCandidates.length} visible
-            </span>
+            <div className="flex items-center gap-3">
+              {pendingCandidates.length > 0 && (
+                // The count in the label is the guard — no confirm modal, since
+                // dismissal is a soft status flip that leaves the row in the
+                // dedup set (CONTEXT.md, [[Job delete]]).
+                // Real button chrome and an error-hover: this is the most
+                // destructive control in the feature and the count is its only
+                // guard, so it must not read as ambient metadata next to the
+                // "N visible" counter. The count itself is mono/tabular —
+                // DESIGN.md's Mono Fact Rule — because the number IS the guard.
+                <button
+                  type="button"
+                  onClick={handleDismissRest}
+                  disabled={dismissingRest || busyCandidateId !== null}
+                  className="flex h-8 items-center gap-1.5 rounded-md border border-line px-3 text-label font-medium text-muted transition-ui hover:border-status-error hover:text-status-error disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  {dismissingRest ? (
+                    'Dismissing...'
+                  ) : (
+                    <>
+                      Dismiss rest{' '}
+                      <span className="font-mono tabular-nums">({pendingCandidates.length})</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <span className="font-mono text-label text-muted tabular-nums">
+                {visibleCandidates.length} visible
+              </span>
+            </div>
           </div>
           {visibleCandidates.length === 0 ? (
             <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
               <p className="text-sm font-medium text-ink">No candidates yet</p>
               <p className="mt-1 text-sm text-body">
-                Incoming issues will appear here after the email digest worker runs.
+                Incoming issues will appear here after the newsletter poll worker runs.
               </p>
             </div>
           ) : (
@@ -191,7 +261,10 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
                   candidate={candidate}
                   onPromote={handlePromote}
                   onDismiss={handleDismiss}
-                  busy={busyCandidateId === candidate.id}
+                  // Locked during a bulk dismiss too: otherwise a card the
+                  // loop is about to DELETE stays clickable, and only the
+                  // server's pending-only guard prevents the collision.
+                  busy={dismissingRest || busyCandidateId === candidate.id}
                 />
               ))}
             </div>
@@ -200,7 +273,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
 
         <aside className="space-y-3">
           <h2 className="text-headline font-semibold text-ink">Context</h2>
-          <NewsletterContextList spaceId={subscription.space_id} />
+          <NewsletterContextList spaceId={watch.space_id} />
         </aside>
       </div>
     </PageShell>

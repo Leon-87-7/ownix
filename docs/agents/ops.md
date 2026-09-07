@@ -163,3 +163,49 @@ From the deployment directory on the single VPS:
    ```
 
 Do not run the restore script while either writer is active.
+
+---
+
+## 10. Cloudflare Email Routing — retiring inbound mail (ADR-0060)
+
+#607 shipped the newsletter digest as an inbound-mail pipeline: an Email
+Routing **catch-all** on `leondev.xyz` fed the `ownix-email-digest` Worker,
+which POSTed to `/webhook/email-digest`. ADR-0060 replaced that with
+public-archive polling, and #612 deleted the repo half — `ops/email-worker/`,
+`src/api/email_webhook.py`, the route, and `EMAIL_WEBHOOK_SECRET`.
+
+The Cloudflare half needs dashboard access, so it is a human step. Run:
+
+```bash
+bash docs/ops/retire-email-routing.sh
+```
+
+Six stages, each opening the right dashboard page and confirming before
+anything irreversible:
+
+1. Delete the catch-all routing rule.
+2. Delete the `ownix-email-digest` Worker (disposing of its `OWNIX_EMAIL_SECRET`).
+3. Verify the destination inbox.
+4. Create `contact.me@leondev.xyz` → destination (a **specific** address).
+5. Strip the dead `EMAIL_WEBHOOK_SECRET` from `.env`.
+6. Verify delivery and, separately, that the catch-all is really gone.
+
+Two things about this order are deliberate and worth not "improving":
+
+- **Catch-all before Worker.** The API route is already deleted, so every
+  message the catch-all currently accepts is handed to a Worker that fails.
+  Removing the Worker first leaves a window where mail is accepted and then
+  black-holed; removing the rule first makes it bounce, which is honest and
+  visible to the sender.
+- **The bounce test is the real check.** Confirming `contact.me@` delivers only
+  proves the new rule works. Sending to a random address at the domain and
+  getting a bounce is what proves the catch-all is gone.
+
+**Keep it a specific address, never a catch-all.** Catch-all domains are
+rejected by third-party signup validators — one of the two walls that made
+#607 impossible to onboard — and they collect spam for every address anyone
+guesses.
+
+`contact.me@leondev.xyz` is the public contact on the privacy, terms and
+accessibility pages. Do not publish it until stage 6 passes; an address that
+does not deliver is worse than none.

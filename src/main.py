@@ -12,7 +12,6 @@ from src import database, job_queue as queue
 from src.api.auth import auth_router
 from src.api.brain import brain_router
 from src.api.controls import controls_router
-from src.api.email_webhook import router as email_webhook_router
 from src.api.extension_auth import extension_auth_router
 from src.api.google_oauth import google_oauth_router
 from src.api.intake import intake_router
@@ -107,6 +106,31 @@ async def _reap_intake_state() -> None:
         log.exception("intake_state_reap_failed")
 
 
+_NEWSLETTER_POLL_TICK_CAP = 25
+
+
+async def _enqueue_due_newsletter_polls() -> None:
+    """Enqueue watched, due, unleased publications for polling (ADR-0060,
+    PLAN.md §3, issue #610). Runs every 15 minutes; spreading load across the
+    4h poll cadence is done via the per-tick cap plus `ORDER BY
+    next_poll_after` in `list_due_unleased_watched_publication_ids`, not
+    delayed delivery — the queue is a plain Redis list with no scheduled-task
+    support, so "enqueue with jitter" is not available.
+    """
+    try:
+        publication_ids = await database.list_due_unleased_watched_publication_ids(
+            limit=_NEWSLETTER_POLL_TICK_CAP
+        )
+    except Exception:
+        log.exception("newsletter_poll_scan_failed")
+        return
+    for publication_id in publication_ids:
+        try:
+            await queue.enqueue({"task": "newsletter_poll", "job_id": publication_id})
+        except Exception:
+            log.exception("newsletter_poll_enqueue_failed", publication_id=publication_id)
+
+
 async def _drain_purge_outbox() -> None:
     """Drain pending purge tasks from the outbox to Redis.
 
@@ -144,6 +168,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     scheduler.add_job(_drain_purge_outbox, "interval", seconds=30)
     # Reap expired dashboard/Telegram pending intake state every 60 seconds.
     scheduler.add_job(_reap_intake_state, "interval", seconds=60)
+    # Poll watched newsletter publications every 15 minutes (ADR-0060, #610).
+    scheduler.add_job(_enqueue_due_newsletter_polls, "interval", minutes=15)
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         await brain.init_db()
         scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
@@ -175,7 +201,6 @@ if settings.DASHBOARD_URL:
         allow_headers=["*"],
     )
 app.include_router(webhook.router)
-app.include_router(email_webhook_router)
 app.include_router(auth_router)
 app.include_router(brain_router)
 app.include_router(controls_router)

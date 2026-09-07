@@ -76,6 +76,13 @@
 | [#604](https://github.com/Leon-87-7/ownix/issues/604) | feat(web): newsletter-digest detail page — candidate feed + context blobs | Web / Newsletter Digest | #603, #602 |
 | [#605](https://github.com/Leon-87-7/ownix/issues/605) | fix(job-recovery): exclude email_digest receipt jobs from generic recovery; add dedicated retry | Newsletter Digest / Recovery | #602 |
 | [#606](https://github.com/Leon-87-7/ownix/issues/606) | ops(email-worker): Cloudflare Worker + catch-all Email Routing runbook [HITL] | Ops / Email Worker | #601 |
+| [#608](https://github.com/Leon-87-7/ownix/issues/608) | feat(newsletter-digest): resolve a newsletter's archive from a URL or sender address | Newsletter Digest / Resolver | — |
+| [#609](https://github.com/Leon-87-7/ownix/issues/609) | feat(newsletter-digest): watch a newsletter and deliver its latest issue | Newsletter Digest / Watches | #608 |
+| [#610](https://github.com/Leon-87-7/ownix/issues/610) | feat(newsletter-digest): poll watched publications every 4 hours and fan out | Newsletter Digest / Poller | #609 |
+| [#611](https://github.com/Leon-87-7/ownix/issues/611) | feat(newsletter-digest): reclaim issue bodies and skip oversized issues | Newsletter Digest / Storage | #610 |
+| [#612](https://github.com/Leon-87-7/ownix/issues/612) | refactor(newsletter-digest): retire the inbound-email transport [HITL] | Newsletter Digest / Email removal | #610 |
+| [#613](https://github.com/Leon-87-7/ownix/issues/613) | feat(web): dismiss remaining candidates in one action | Web / Newsletter Digest | — |
+
 ---
 
 ## Ready for Agent
@@ -679,6 +686,16 @@ Email digest pipeline (PLAN.md — approved after 7 rounds of Codex review, PLAN
     └── #606 Cloudflare Worker + Email Routing runbook [HITL] ◄── #601
 Critical path: #600 → #601 → #602 → {#603 → #604, #605}; #606 parallel off #601
 Note: candidates are non-committal — no link is auto-processed; #603's promote action is the only trigger for real pipeline work (ADR-0051 Second-Law framing). #606 is HITL — the Cloudflare dashboard catch-all rule needs the user's own account access.
+
+Newsletter archive polling (PLAN.md — round 7, PLAN-REVIEW-LOG.md; decision: docs/adr/0060-newsletter-digest-reads-public-archives.md; handoff: docs/cloud-patch/2026-09-07-newsletter-archive-polling.md)
+#608 Resolve a newsletter's archive from a URL or sender address (root, unblocked)
+└── #609 Watch a newsletter and deliver its latest issue ◄── #608
+    └── #610 Poll watched publications every 4 hours and fan out ◄── #609
+        ├── #611 Reclaim issue bodies and skip oversized issues ◄── #610
+        └── #612 Retire the inbound-email transport [HITL] ◄── #610
+#613 Dismiss remaining candidates in one action (root, unblocked — works against the candidate list already shipped in e0df28f)
+Critical path: #608 → #609 → #610 → {#611, #612}; #613 parallel (unblocked)
+Note: supersedes the #600–#606 block above per ADR-0060 — that block's inbound-alias transport is exactly what #612 deletes, and its "PLAN.md" now lives at docs/plans/2026-09-05-email-digest-inbound-alias-superseded.md. #612 is HITL — removing the Cloudflare catch-all rule needs the user's own account access. publications/publication_issues are shared across tenants with no chat_id: one fetch serves every watcher, so polling load scales with distinct publications, not users.
 ```
 
 ---

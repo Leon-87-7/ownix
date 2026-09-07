@@ -14,9 +14,9 @@ set -euo pipefail
 
 if [[ -t 1 ]] && command -v tput >/dev/null 2>&1 && [[ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]]; then
   BOLD=$(tput bold); DIM=$(tput dim); RESET=$(tput sgr0)
-  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3)
+  BLUE=$(tput setaf 4); GREEN=$(tput setaf 2); YELLOW=$(tput setaf 3); RED=$(tput setaf 1)
 else
-  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""
+  BOLD=""; DIM=""; RESET=""; BLUE=""; GREEN=""; YELLOW=""; RED=""
 fi
 
 # Author sets this at the top of the stages section.
@@ -184,59 +184,132 @@ finish() {
 # Replace the example below. Set TOTAL_STAGES to match the stages you write.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=4
+TOTAL_STAGES=6
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="$REPO_ROOT/.env"
+ZONE="leondev.xyz"
+CONTACT_LOCAL="contact.me"
+WORKER_NAME="ownix-email-digest"
+EMAIL_ROUTING_URL="https://dash.cloudflare.com/?to=/:account/$ZONE/email/routing/routes"
+DESTINATIONS_URL="https://dash.cloudflare.com/?to=/:account/$ZONE/email/routing/destination-addresses"
+WORKERS_URL="https://dash.cloudflare.com/?to=/:account/workers/services/view/$WORKER_NAME"
 
-banner "Ownix Email Digest Worker setup"
+banner "Retire inbound email routing ($ZONE)"
 
-# ── Stage 1: install + login ──────────────────────────────────────────────
-stage "Install dependencies + Cloudflare login"
-say "Installs the Worker's npm deps, then logs Wrangler into your Cloudflare account."
-( cd "$SCRIPT_DIR" && npm install )
-step "A browser tab will open — approve the Cloudflare login there."
-( cd "$SCRIPT_DIR" && npx wrangler login ) || warn "wrangler login exited non-zero — confirm below whether it actually completed"
-confirm "Logged in to Cloudflare?" || { warn "re-run this script once you're logged in"; exit 1; }
-
-# ── Stage 2: generate + store the shared secret ───────────────────────────
-stage "Generate the shared webhook secret"
-say "This value authenticates POSTs from the Worker to your API's /webhook/email-digest route."
-EMAIL_WEBHOOK_SECRET=$(_existing EMAIL_WEBHOOK_SECRET || true)
-if [[ -z "$EMAIL_WEBHOOK_SECRET" ]]; then
-  if command -v openssl >/dev/null 2>&1; then
-    EMAIL_WEBHOOK_SECRET=$(openssl rand -hex 32)
-  else
-    EMAIL_WEBHOOK_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-  fi
-  write_env EMAIL_WEBHOOK_SECRET "$EMAIL_WEBHOOK_SECRET"
+# ── 1. Catch-all first ────────────────────────────────────────────────────
+stage "Delete the catch-all rule"
+say "ADR-0060 replaced inbound mail with public-archive polling, so the"
+say "catch-all that fed the $WORKER_NAME Worker has to go."
+say ""
+say "This is FIRST on purpose: the API route it posts to (/webhook/email-digest)"
+say "is already deleted, so every message the catch-all accepts right now is"
+say "handed to a Worker that fails. Removing the rule before the Worker means"
+say "there is never a window where mail is accepted and then black-holed."
+open_url "$EMAIL_ROUTING_URL"
+step "Open the 'Routing rules' tab."
+step "Find the catch-all row (Custom address: *@$ZONE → Send to a Worker)."
+step "Use the row's ⋯ menu → Delete, or toggle catch-all off."
+if confirm "Catch-all deleted (or already gone)?"; then
+  note "catch-all cleared"
 else
-  note "reusing EMAIL_WEBHOOK_SECRET from $ENV_FILE — rerun with a fresh ENV_FILE to rotate it"
+  SKIPPED+=("Delete the Email Routing catch-all rule for $ZONE")
+  warn "left in place — mail to $ZONE will keep hitting a dead Worker"
 fi
-step "Setting it as the Worker's OWNIX_EMAIL_SECRET binding via wrangler secret put."
-( cd "$SCRIPT_DIR" && printf '%s' "$EMAIL_WEBHOOK_SECRET" | npx wrangler secret put OWNIX_EMAIL_SECRET )
-note "Copy EMAIL_WEBHOOK_SECRET from $ENV_FILE to the production VPS .env using an approved secret-transfer process before deploying, so the API and Worker agree on the same value."
-SKIPPED+=("Set EMAIL_WEBHOOK_SECRET from $ENV_FILE in the production VPS .env — not reachable from this machine")
-warn "remember to set that same value in the production VPS .env before mail flows in production"
+pause
 
-# ── Stage 3: confirm webhook URL, then deploy ─────────────────────────────
-stage "Confirm webhook URL, then deploy"
-CONFIGURED_URL=$(grep -E '^OWNIX_EMAIL_WEBHOOK_URL' "$SCRIPT_DIR/wrangler.toml" | sed -E 's/.*"(.*)"/\1/')
-say "wrangler.toml currently points the Worker at:"
-note "  $CONFIGURED_URL"
-confirm "Is that the correct production API host?" || { warn "edit ops/email-worker/wrangler.toml's OWNIX_EMAIL_WEBHOOK_URL, then re-run this script"; exit 1; }
-step "Deploying the Worker with Wrangler."
-( cd "$SCRIPT_DIR" && npx wrangler deploy )
+# ── 2. The Worker ─────────────────────────────────────────────────────────
+stage "Delete the $WORKER_NAME Worker"
+say "The Worker parsed inbound MIME and POSTed it to the API with a shared"
+say "secret. Both ends are gone from the repo, so deleting it also disposes of"
+say "the OWNIX_EMAIL_SECRET binding — one less live credential to rotate."
+say ""
+say "If you prefer the CLI: cd into a checkout of the old ops/email-worker and"
+say "run 'npx wrangler delete'. The directory is deleted on this branch, so the"
+say "dashboard is usually the easier path now."
+open_url "$WORKERS_URL"
+step "Settings → scroll to the bottom → Delete."
+step "Confirm by typing the Worker name when prompted."
+if confirm "Worker deleted (or already gone)?"; then
+  note "worker removed"
+else
+  SKIPPED+=("Delete the Cloudflare Worker $WORKER_NAME")
+fi
+pause
 
-# ── Stage 4: Cloudflare Email Routing catch-all ───────────────────────────
-stage "Cloudflare Email Routing — catch-all rule"
-say "Point incoming mail for leondev.xyz at this Worker."
-open_url "https://dash.cloudflare.com/"
-step "Select the leondev.xyz zone → Email → Email Routing."
-step "If routing isn't enabled yet, click 'Enable Email Routing' (Cloudflare adds the MX/TXT records for you)."
-step "Under 'Routing rules', create/edit the catch-all rule: Action = 'Send to a Worker', Destination = ownix-email-digest."
-step "Save the rule."
-confirm "Catch-all rule saved and pointing at ownix-email-digest?" || warn "finish this in the dashboard before relying on the pipeline"
+# ── 3. Destination address ────────────────────────────────────────────────
+stage "Verify the destination inbox"
+say "Forwarding only works to an address Cloudflare has verified. This was"
+say "likely done during the original setup, but it costs nothing to confirm."
+open_url "$DESTINATIONS_URL"
+step "Check your personal inbox is listed with status 'Verified'."
+step "If it is missing: 'Add destination address' → enter it → open the"
+step "  confirmation email Cloudflare sends → click the verify link."
+ask CONTACT_DESTINATION "Which verified inbox should mail forward to?"
+if [[ -z "$CONTACT_DESTINATION" ]]; then
+  SKIPPED+=("Record the destination inbox for $CONTACT_LOCAL@$ZONE")
+  warn "no destination recorded — stage 4 still needs one"
+fi
+pause
+
+# ── 4. The PO box ─────────────────────────────────────────────────────────
+stage "Create $CONTACT_LOCAL@$ZONE"
+say "A SPECIFIC address, not a catch-all. Two reasons that matters:"
+say "  • Catch-all domains are what third-party signup validators reject —"
+say "    one of the two walls that killed the #607 alias approach."
+say "  • A catch-all collects spam for every address anyone guesses."
+say ""
+say "This replaces your personal Gmail on the privacy, terms and accessibility"
+say "pages, so the address is about to become public. That is the point of a"
+say "PO box — but it is also why it should forward, not be a real mailbox."
+open_url "$EMAIL_ROUTING_URL"
+step "Routing rules → 'Create address'."
+step "Custom address: $CONTACT_LOCAL   Domain: $ZONE"
+step "Action: 'Send to an email' → ${CONTACT_DESTINATION:-your verified inbox}"
+step "Save."
+if confirm "Rule for $CONTACT_LOCAL@$ZONE created?"; then
+  write_env OWNIX_CONTACT_EMAIL "$CONTACT_LOCAL@$ZONE"
+  note "recorded for the mailto: swap on the legal pages"
+else
+  SKIPPED+=("Create the $CONTACT_LOCAL@$ZONE routing rule")
+fi
+pause
+
+# ── 5. Drop the dead secret ───────────────────────────────────────────────
+stage "Remove EMAIL_WEBHOOK_SECRET from the API env"
+say "src/config.py no longer declares this field. Pydantic is configured with"
+say "extra='ignore', so a leftover line is inert rather than fatal — but it is"
+say "a live shared secret for a webhook that no longer exists."
+say ""
+if [[ -f .env ]] && grep -qE '^EMAIL_WEBHOOK_SECRET=' .env; then
+  step "Found EMAIL_WEBHOOK_SECRET in ./.env"
+  if confirm "Remove that line now?"; then
+    tmp=$(mktemp)
+    grep -vE '^EMAIL_WEBHOOK_SECRET=' .env > "$tmp" && mv "$tmp" .env
+    note "removed from .env — restart the api/worker containers to pick it up"
+  else
+    SKIPPED+=("Remove EMAIL_WEBHOOK_SECRET from .env")
+  fi
+else
+  note "not present in ./.env — nothing to remove"
+fi
+step "Also check any other place the API's env is set (host .env, systemd unit,"
+step "  or your compose override) and drop it there too."
+pause
+
+# ── 6. Prove it ───────────────────────────────────────────────────────────
+stage "Verify"
+say "Two checks — the second is the one people forget."
+say ""
+step "1. Send a test mail to $CONTACT_LOCAL@$ZONE from any account."
+step "   It should land in ${CONTACT_DESTINATION:-your inbox} within a minute."
+step "2. Send one to something random, e.g. zzz-test-$RANDOM@$ZONE."
+step "   It MUST bounce. If it is delivered, the catch-all is still active"
+step "   and stage 1 did not take."
+say ""
+if confirm "Test address delivers AND the random address bounces?"; then
+  note "inbound mail retired; $CONTACT_LOCAL@$ZONE is live"
+else
+  SKIPPED+=("Re-check Email Routing — verification did not pass")
+  warn "do not update the legal pages until the forward actually works"
+fi
 
 finish
