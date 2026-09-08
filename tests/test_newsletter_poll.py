@@ -543,6 +543,22 @@ async def test_extract_issue_links_ignores_cross_origin_matches(tmp_path, monkey
     assert [i["slug"] for i in issues] == ["real-issue"]
 
 
+async def test_extract_issue_links_ignores_same_host_scheme_downgrade(
+    tmp_path, monkeypatch
+) -> None:
+    """A same-host link that downgrades http://<->https:// is a different
+    origin and must not be treated as matching the base URL's scheme."""
+    from src.processors import newsletter_poll
+
+    html = (
+        '<a href="https://x.example/p/real-issue">Real</a>'
+        '<a href="http://x.example/p/downgraded">Downgraded</a>'
+    )
+    issues = newsletter_poll._extract_issue_links(html, "https://x.example", "/p/")
+
+    assert [i["slug"] for i in issues] == ["real-issue"]
+
+
 async def test_poll_refuses_a_non_public_publication_url(tmp_path, monkeypatch) -> None:
     """Council review, blocker. The resolver validates once at watch creation;
     this fetch then recurs every 4h forever, unattended, with no probe cap and

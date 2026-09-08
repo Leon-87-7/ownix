@@ -279,17 +279,18 @@ say "src/config.py no longer declares this field. Pydantic is configured with"
 say "extra='ignore', so a leftover line is inert rather than fatal — but it is"
 say "a live shared secret for a webhook that no longer exists."
 say ""
-if [[ -f .env ]] && grep -qE '^EMAIL_WEBHOOK_SECRET=' .env; then
-  step "Found EMAIL_WEBHOOK_SECRET in ./.env"
+if [[ -f "$ENV_FILE" ]] && grep -qE '^EMAIL_WEBHOOK_SECRET=' "$ENV_FILE"; then
+  step "Found EMAIL_WEBHOOK_SECRET in $ENV_FILE"
   if confirm "Remove that line now?"; then
     tmp=$(mktemp)
-    grep -vE '^EMAIL_WEBHOOK_SECRET=' .env > "$tmp" && mv "$tmp" .env
-    note "removed from .env — restart the api/worker containers to pick it up"
+    grep -vE '^EMAIL_WEBHOOK_SECRET=' "$ENV_FILE" > "$tmp" || true
+    mv "$tmp" "$ENV_FILE"
+    note "removed from $ENV_FILE — restart the api/worker containers to pick it up"
   else
-    SKIPPED+=("Remove EMAIL_WEBHOOK_SECRET from .env")
+    SKIPPED+=("Remove EMAIL_WEBHOOK_SECRET from $ENV_FILE")
   fi
 else
-  note "not present in ./.env — nothing to remove"
+  note "not present in $ENV_FILE — nothing to remove"
 fi
 step "Also check any other place the API's env is set (host .env, systemd unit,"
 step "  or your compose override) and drop it there too."

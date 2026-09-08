@@ -139,4 +139,33 @@ describe('NewsletterDigestDetail', () => {
     expect(screen.queryByText('A useful post')).not.toBeInTheDocument();
     expect(screen.getByText('Second post')).toBeInTheDocument();
   });
+
+  it('clears the bulk-dismiss guard for the next watch after subscriptionId changes mid-dismiss (#614)', async () => {
+    const second = { ...candidate, id: 'cand_2', title: 'Second post' };
+    const third = { ...candidate, id: 'cand_3', title: 'Third post' };
+    let resolveDismiss!: () => void;
+    const dismissPromise = new Promise<void>((resolve) => {
+      resolveDismiss = resolve;
+    });
+    vi.spyOn(api, 'fetchNewsletterWatch').mockResolvedValue({ ...watch, error_count: 0 });
+    vi.spyOn(api, 'fetchDigestCandidates')
+      .mockResolvedValueOnce([candidate, second])
+      .mockResolvedValueOnce([third]);
+    vi.spyOn(api, 'dismissDigestCandidate').mockReturnValueOnce(dismissPromise);
+
+    const { rerender } = render(<NewsletterDigestDetail subscriptionId="watch_1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss rest (2)' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Dismissing...' })).toBeInTheDocument());
+
+    rerender(<NewsletterDigestDetail subscriptionId="watch_2" />);
+    await waitFor(() => expect(screen.getByText('Third post')).toBeInTheDocument());
+
+    resolveDismiss();
+
+    // The stale watch_1 dismiss loop must not leave watch_2's guard stuck busy.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Dismiss rest (1)' })).not.toBeDisabled(),
+    );
+  });
 });

@@ -98,9 +98,9 @@ requires, and a test asserts fresh-`SCHEMA_SQL` and fully-migrated databases pro
   chronological order, so the fan-out filter compares
   `publication_issues.first_seen_at > watched_from`.
 - `email_digest_payloads`: replace `subscription_id` with `watch_id TEXT REFERENCES
-  newsletter_watches(id) ON DELETE SET NULL` plus `publication_id`, `slug TEXT` and
-  `context_md TEXT`, unique on **`(watch_id, slug)`** — per watcher, since fan-out creates one
-  job per watcher per issue. Retains `job_id TEXT PK REFERENCES jobs(id) ON DELETE CASCADE` and
+  newsletter_watches(id) ON DELETE SET NULL` (nullable, for `ON DELETE SET NULL`) plus
+  `publication_id TEXT NOT NULL`, `slug TEXT NOT NULL` and `context_md TEXT`, unique on
+  **`(watch_id, slug)`** — per watcher, since fan-out creates one job per watcher per issue. Retains `job_id TEXT PK REFERENCES jobs(id) ON DELETE CASCADE` and
   the null-content-on-success behaviour from the superseded plan. The body columns
   (`subject`/`html`/`text`) are **dropped** — the body is read from
   `publication_issues.body_html` via `(publication_id, slug)` rather than copied per watcher.
@@ -161,7 +161,12 @@ Pure resolution, no writes. Given whatever the user typed, returns
 public-URL validator** (scheme in `http`/`https`, hostname resolves to a public address) is
 applied to the *target* URL **before** the `r.jina.ai/<url>` string is constructed. This is
 deliberately separate from `public_html._fetch_pinned`, which pins *direct* httpx connections
-and does not protect a fetch made through a third-party proxy. Plus: max 4 probe fetches per
+and does not protect a fetch made through a third-party proxy. **Known gap:** that validator
+only covers the initial URL — Jina does not re-validate its own redirect hops, and it exposes no
+documented header to disable or constrain that. Accepted as residual risk for now; tracked in
+#615 rather than closed here, since closing it means either dropping Jina for these fetches
+(losing JS-rendering/anti-bot coverage some publishers require) or a local rendering fallback.
+Plus: max 4 probe fetches per
 request and a per-`chat_id` rate limit.
 
 Resolver results are cached by **normalized** query with a **short TTL**, and every cache hit is

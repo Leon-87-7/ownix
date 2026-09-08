@@ -117,6 +117,11 @@ async def fetch_raw(
     to fetch feed/archive/issue pages as rendered HTML so no XML parser is
     ever needed for RSS/Atom feeds. On a non-200 response the body is not
     read at all; the caller decides how to react to the status code.
+
+    Callers gate the *original* URL through `is_public_url()`, but Jina does
+    not re-validate its own redirect hops (known gap, no documented header to
+    disable it — tracked in #615) — accepted residual risk, not something
+    this function can close.
     """
     jina_url = _JINA_BASE + quote(url, safe="")
     headers: dict[str, str] = {"Accept": "text/plain"}

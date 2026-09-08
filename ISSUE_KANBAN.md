@@ -676,7 +676,7 @@ Listen button — per-field TTS on job detail + Space context blobs (docs/superp
 Critical path: {#594, #595} → #596 → {#597, #598}
 Note: v1 is browser-native Web Speech API only — no Fish.Audio, no backend, per ADR-0059.
 
-Email digest pipeline (PLAN.md — approved after 7 rounds of Codex review, PLAN-REVIEW-LOG.md; research: docs/research/2026-09-05-email-digest-claudex-research.md)
+Email digest pipeline [SUPERSEDED by ADR-0060, see the Newsletter archive polling block below — #612 retires this block's inbound-alias transport; all seven issues below are closed] (PLAN.md — approved after 7 rounds of Codex review, PLAN-REVIEW-LOG.md; research: docs/research/2026-09-05-email-digest-claudex-research.md)
 #600 Newsletter subscription management (root, unblocked)
 └── #601 Inbound webhook + receipt job creation ◄── #600
     ├── #602 Processor — link extraction into candidates + Gemini context blob ◄── #601

@@ -138,6 +138,8 @@ async def create_watch(body: WatchCreateIn, request: Request) -> dict:
             ],
         )
     except aiosqlite.IntegrityError as exc:
+        if "newsletter_watches" not in str(exc):
+            raise
         raise HTTPException(status_code=409, detail="Already watching this newsletter") from exc
 
     delivery_job_id = watch.pop("delivery_job_id", None)
@@ -162,9 +164,12 @@ async def get_watch(watch_id: str, request: Request) -> dict:
 async def update_watch(watch_id: str, body: WatchUpdateIn, request: Request) -> dict:
     chat_id: int = request.state.user["id"]
     await _get_owned_watch(watch_id, chat_id)
-    watch = await database.update_newsletter_watch_name(
-        watch_id=watch_id, chat_id=chat_id, name=body.name.strip()
-    )
+    try:
+        watch = await database.update_newsletter_watch_name(
+            watch_id=watch_id, chat_id=chat_id, name=body.name.strip()
+        )
+    except aiosqlite.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="A Space with that name already exists") from exc
     if watch is None:
         raise HTTPException(status_code=404, detail="Newsletter watch not found")
     return watch

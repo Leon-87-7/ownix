@@ -74,7 +74,9 @@ def _extract_issue_links(html: str, base_url: str, issue_path_prefix: str | None
         log.info("newsletter_poll.no_issue_path_prefix", base_url=base_url[:200])
         return []
 
-    base_netloc = urlsplit(base_url).netloc.lower()
+    base_parts = urlsplit(base_url)
+    base_scheme = base_parts.scheme.lower()
+    base_netloc = base_parts.netloc.lower()
     seen: dict[str, dict] = {}
     order: list[str] = []
     links: list[DigestLink] = extract_digest_links(html)
@@ -86,7 +88,7 @@ def _extract_issue_links(html: str, base_url: str, issue_path_prefix: str | None
         parts = urlsplit(resolved)
         if parts.scheme not in {"http", "https"}:
             continue
-        if parts.netloc.lower() != base_netloc:
+        if parts.scheme != base_scheme or parts.netloc.lower() != base_netloc:
             continue
         if not parts.path.startswith(prefix):
             continue

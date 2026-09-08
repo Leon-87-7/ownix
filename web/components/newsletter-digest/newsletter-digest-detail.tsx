@@ -131,7 +131,10 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
     }
     // A load() for a different watch may have started while we were looping —
     // same guard load() uses, so its state never lands on another watch's view.
-    if (requestId !== requestIdRef.current) return;
+    if (requestId !== requestIdRef.current) {
+      setDismissingRest(false);
+      return;
+    }
     if (failure) {
       const reason = failure instanceof Error ? failure.message : 'Some candidates failed';
       setError(`Dismissed ${dismissed} of ${targets.length}. ${reason}`);
