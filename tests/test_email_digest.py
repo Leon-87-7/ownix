@@ -1,18 +1,34 @@
+"""Newsletter digest processor / candidate-promotion regression tests.
+
+Note (issue #609): the inbound-email receipt flow (`newsletter_subscriptions`,
+`create_email_digest_receipt_job`, `email_webhook.receive_email_digest`) was
+retired by the ADR-0060 migration to public-archive watches — those tests
+moved to `tests/test_newsletter_watch.py`, which covers the new
+`newsletter_watches` / `publications` schema this file's helpers now build
+on. `src/api/email_webhook.py` itself is left in place (out of scope for this
+slice) but its DB-backed helpers no longer have a table to read from; nothing
+here exercises it. The `job_recovery` / stale-job-reaping tests below key
+only on the `jobs.url LIKE 'email_digest:%'` sentinel, which is unaffected by
+the schema change, so they are unchanged.
+"""
+
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from src import database
-from src.api import email_webhook, newsletter_digest
-from src.config import settings
+from src.api import newsletter_digest
 from src.processors import email_digest
 from src.services import job_recovery
 
 pytestmark = pytest.mark.asyncio
+
+_ISSUES = [
+    {"slug": "issue-1", "title": "Issue 1", "url": "https://example.com/p/issue-1"},
+]
 
 
 async def _init_db(tmp_path, monkeypatch) -> None:
@@ -22,79 +38,16 @@ async def _init_db(tmp_path, monkeypatch) -> None:
     await database.init_db()
 
 
-async def _subscription(name: str = "Signals") -> dict:
-    return await database.create_newsletter_subscription(
-        chat_id=123,
+async def _watch(name: str = "Signals", chat_id: int = 123, archive_url: str = "https://example.com") -> dict:
+    return await database.create_newsletter_watch(
+        chat_id=chat_id,
         name=name,
-        sender_email="editor@example.com",
-        alias_local_part=f"u_{name.lower()}",
+        archive_url=archive_url,
+        feed_url=None,
+        issue_path_prefix="/p/",
+        fetched_title="Example",
+        recent_issues=_ISSUES,
     )
-
-
-def _payload(sub: dict, message_id: str = "<digest@example.com>") -> email_webhook.EmailDigestPayload:
-    return email_webhook.EmailDigestPayload.model_validate(
-        {
-            "envelopeTo": f"{sub['alias_local_part']}@leondev.xyz",
-            "from": "Editor <editor@example.com>",
-            "subject": "Issue 1",
-            "html": '<a href="https://example.com/a?utm_source=x">A</a>',
-            "text": "A",
-            "messageId": message_id,
-        }
-    )
-
-
-async def test_concurrent_duplicate_receipt_creates_one_job(tmp_path, monkeypatch) -> None:
-    await _init_db(tmp_path, monkeypatch)
-    sub = await _subscription()
-    key = email_webhook.receipt_key(
-        sub["alias_local_part"],
-        "<same@example.com>",
-        subject="Issue",
-        html="<p>body</p>",
-        text="body",
-    )
-
-    async def create() -> dict:
-        return await database.create_email_digest_receipt_job(
-            subscription=sub,
-            receipt_key=key,
-            receipt_url=f"email_digest:{key[:16]}",
-            subject="Issue",
-            html="<p>body</p>",
-            text="body",
-            daily_cap=20,
-        )
-
-    results = await asyncio.gather(create(), create())
-
-    assert sorted(result["status"] for result in results) == ["created", "deduped"]
-    row = await database._fetch_one("SELECT COUNT(*) AS n FROM email_digest_payloads")
-    assert row["n"] == 1
-    row = await database._fetch_one("SELECT COUNT(*) AS n FROM jobs WHERE url LIKE 'email_digest:%'")
-    assert row["n"] == 1
-
-
-async def test_duplicate_pending_receipt_repushes_same_job(tmp_path, monkeypatch) -> None:
-    await _init_db(tmp_path, monkeypatch)
-    sub = await _subscription()
-    enqueue = AsyncMock()
-    monkeypatch.setattr(email_webhook.queue, "enqueue", enqueue)
-
-    body = _payload(sub)
-    first = await email_webhook.receive_email_digest(
-        body,
-        x_ownix_email_secret=settings.EMAIL_WEBHOOK_SECRET,
-    )
-    second = await email_webhook.receive_email_digest(
-        body,
-        x_ownix_email_secret=settings.EMAIL_WEBHOOK_SECRET,
-    )
-
-    assert first["job_id"] == second["job_id"]
-    assert second["deduped"] is True
-    assert enqueue.await_count == 2
-    assert enqueue.await_args_list[0].args[0]["job_id"] == enqueue.await_args_list[1].args[0]["job_id"]
 
 
 async def test_generic_recovery_excludes_email_digest_receipts(tmp_path, monkeypatch) -> None:
@@ -156,50 +109,19 @@ async def test_stale_email_digest_job_reaped_without_false_notification(tmp_path
     send_message.assert_not_awaited()
 
 
-async def test_subscription_delete_clears_failed_payload_content(tmp_path, monkeypatch) -> None:
+async def test_digest_run_extracts_candidates_from_issue_body(tmp_path, monkeypatch) -> None:
+    """`run()` reads the issue body from `publication_issues.body_html` via
+    the payload's `(publication_id, slug)` join — never from a per-job
+    subject/html/text column, which the #609 migration drops."""
     await _init_db(tmp_path, monkeypatch)
-    sub = await _subscription()
-    key = email_webhook.receipt_key(
-        sub["alias_local_part"],
-        "<failed@example.com>",
-        subject="Issue",
-        html="<p>secret</p>",
-        text="secret",
-    )
-    created = await database.create_email_digest_receipt_job(
-        subscription=sub,
-        receipt_key=key,
-        receipt_url=f"email_digest:{key[:16]}",
-        subject="Issue",
-        html="<p>secret</p>",
-        text="secret",
-        daily_cap=20,
-    )
-    await database.update_job_status(created["job"]["id"], "error")
-
-    assert await database.delete_newsletter_subscription(
-        subscription_id=sub["id"],
-        chat_id=123,
-    )
-
-    row = await database._fetch_one(
-        "SELECT subscription_id, subject, html, text FROM email_digest_payloads WHERE job_id = ?",
-        (created["job"]["id"],),
-    )
-    assert dict(row) == {"subscription_id": None, "subject": None, "html": None, "text": None}
-
-
-async def test_text_only_digest_extracts_candidate_links(tmp_path, monkeypatch) -> None:
-    await _init_db(tmp_path, monkeypatch)
-    sub = await _subscription()
-    created = await database.create_email_digest_receipt_job(
-        subscription=sub,
-        receipt_key="text-only",
-        receipt_url="email_digest:textonly",
-        subject="Issue",
-        html="",
-        text="Check this out: https://example.com/article?utm_source=x",
-        daily_cap=20,
+    watch = await _watch()
+    job_id = watch["delivery_job_id"]
+    await database._execute_rowcount(
+        "UPDATE publication_issues SET body_html = ? WHERE publication_id = ? AND slug = 'issue-1'",
+        (
+            '<a href="https://example.com/article?utm_source=x">Article</a>',
+            watch["publication_id"],
+        ),
     )
     monkeypatch.setattr(
         email_digest,
@@ -207,21 +129,21 @@ async def test_text_only_digest_extracts_candidate_links(tmp_path, monkeypatch) 
         AsyncMock(return_value="https://example.com/article?utm_source=x"),
     )
     monkeypatch.setattr(email_digest, "fetch_public_html", AsyncMock(return_value=None))
-    monkeypatch.setattr(email_digest.gemini, "generate", AsyncMock(return_value="Summary"))
 
-    await email_digest.run(created["job"])
+    job = await database.get_job(job_id)
+    await email_digest.run(job)
 
-    candidates = await database.list_digest_candidates(sub["space_id"])
+    candidates = await database.list_digest_candidates(watch["space_id"])
     assert len(candidates) == 1
     assert candidates[0]["url"] == "https://example.com/article?utm_source=x"
-    assert (await database.get_job(created["job"]["id"]))["status"] == "done"
+    assert (await database.get_job(job_id))["status"] == "done"
 
 
 async def test_document_candidate_promotion_delegates_to_doc_parser(tmp_path, monkeypatch) -> None:
     await _init_db(tmp_path, monkeypatch)
-    sub = await _subscription()
+    watch = await _watch()
     candidate_id = await database.insert_digest_candidate(
-        space_id=sub["space_id"],
+        space_id=watch["space_id"],
         url="https://example.com/report.pdf",
         canonical_url="https://example.com/report.pdf",
         title="Report",
@@ -237,16 +159,16 @@ async def test_document_candidate_promotion_delegates_to_doc_parser(tmp_path, mo
     monkeypatch.setattr(newsletter_digest, "create_job", create_job)
     request = SimpleNamespace(state=SimpleNamespace(user={"id": 123}))
 
-    result = await newsletter_digest.promote_candidate(sub["id"], candidate_id, request)
+    result = await newsletter_digest.promote_candidate(watch["id"], candidate_id, request)
 
     assert result["job_id"] == job_id
     upload_url.assert_awaited_once()
     create_job.assert_not_awaited()
-    candidate = await database.get_digest_candidate(sub["space_id"], candidate_id)
+    candidate = await database.get_digest_candidate(watch["space_id"], candidate_id)
     assert candidate["status"] == "promoted"
     assert candidate["job_id"] == job_id
     row = await database._fetch_one(
         "SELECT 1 FROM space_urls WHERE space_id = ? AND job_id = ?",
-        (sub["space_id"], job_id),
+        (watch["space_id"], job_id),
     )
     assert row is not None

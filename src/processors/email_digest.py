@@ -12,9 +12,10 @@ import httpx
 from src import database
 from src.services import gemini
 from src.services.gemini import GeminiUnavailableError
+from src.services.jina import JinaFetchError, JinaOversizeError, fetch_html
 from src.utils.logger import get_logger
 from src.utils.og_image import extract_essential_og
-from src.utils.public_html import fetch_public_html, resolve_public_redirect_url
+from src.utils.public_html import fetch_public_html, is_public_url, resolve_public_redirect_url
 
 log = get_logger(__name__)
 
@@ -284,7 +285,62 @@ async def _create_context_blob(space_id: str, subject: str, text: str, html: str
         await database.create_context_blob(space_id=space_id, name=name, content=content.strip())
 
 
+async def _fetch_missing_issue_body(job_id: str, payload: dict) -> str:
+    """Fetch an issue body that is not stored yet and persist it on the shared
+    `publication_issues` row. Returns the body, or `""` after marking the job
+    `error` — in which case the caller must stop.
+
+    Goes through the same public-URL check and streaming byte cap as every
+    other Jina fetch in this feature, so a stored issue URL cannot become an
+    unvalidated proxy fetch here either.
+    """
+    issue_url = payload.get("issue_url")
+    if not issue_url:
+        await database.update_job_status(
+            job_id, "error", error_msg="Newsletter issue body is empty"
+        )
+        return ""
+    if not await is_public_url(issue_url):
+        log.warning("email_digest.issue_url_rejected", job_id=job_id, url=issue_url[:200])
+        await database.update_job_status(
+            job_id, "error", error_msg="Newsletter issue URL is not publicly fetchable"
+        )
+        return ""
+    try:
+        html = await fetch_html(issue_url)
+    except JinaOversizeError:
+        # Terminal for this issue, exactly as the poller treats it (#611).
+        await database.mark_publication_issue_oversize(payload["publication_id"], payload["slug"])
+        await database.update_job_status(
+            job_id, "error", error_msg="Newsletter issue is too large to fetch"
+        )
+        return ""
+    except JinaFetchError as exc:
+        # Transient — leave the job retryable rather than terminal.
+        await database.update_job_status(
+            job_id, "error", error_msg=f"Could not fetch newsletter issue ({exc})"
+        )
+        return ""
+    if not html:
+        await database.update_job_status(
+            job_id, "error", error_msg="Newsletter issue body is empty"
+        )
+        return ""
+    await database.set_publication_issue_body(payload["publication_id"], payload["slug"], html)
+    log.info("email_digest.issue_body_fetched", job_id=job_id, bytes=len(html))
+    return html
+
+
 async def run(job: dict) -> None:
+    """Extract candidates from a watched newsletter issue's fetched body.
+
+    The body lives once in `publication_issues.body_html` (never copied per
+    watcher, PLAN.md §1) and is read via the payload's `(publication_id,
+    slug)` join. The per-issue editorial context is likewise generated once
+    by the poll worker and persisted on `context_md`: a null `context_md`
+    never triggers a per-job `_create_context_blob` call here, or one Gemini
+    failure during polling would silently become one Gemini call per watcher.
+    """
     job_id = job["id"]
     claimed = await database.claim_email_digest_job(job_id)
     if not claimed:
@@ -295,16 +351,24 @@ async def run(job: dict) -> None:
     if payload is None:
         raise RuntimeError("email digest payload missing")
     if payload.get("space_id") is None:
+        # The watch was deleted before this job ran (watch_id -> NULL).
         await database.clear_email_digest_payload(job_id)
         await database.update_job_status(job_id, "done")
         return
 
-    subject = payload.get("subject") or ""
-    html = payload.get("html") or ""
-    text = payload.get("text") or ""
-    if not html and not text:
-        await database.update_job_status(job_id, "error", error_msg="Email digest payload is empty")
-        return
+    html = payload.get("body_html") or ""
+    if not html:
+        # Fetch-and-store on demand. The poller stores the body before fanning
+        # out, but two paths legitimately arrive here without one: a watch's
+        # explicit first delivery (`create_newsletter_watch` seeds issues from
+        # the resolver, which never fetches bodies), and any delivery created
+        # after `reclaim_publication_issue_bodies` cleared the body for an
+        # earlier round of watchers. Erroring instead would be terminal — the
+        # payload row already exists, so the missing-delivery scan will never
+        # pick this pair up again and no poll would ever fetch the body.
+        html = await _fetch_missing_issue_body(job_id, payload)
+        if not html:
+            return
 
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(5.0),
@@ -312,10 +376,17 @@ async def run(job: dict) -> None:
         headers={"User-Agent": "vig-public-html/1.0 (+https://github.com/Leon-87-7/vig)"},
     ) as client:
         links = await _extract_resolved_links(html, client=client)
-        if not links and text:
-            links = await _resolve_links(extract_text_links(text), client=client)
         await _insert_candidates(payload["space_id"], links, client)
-    await _create_context_blob(payload["space_id"], subject, text, html)
+
+    context_md = payload.get("context_md")
+    if context_md:
+        name = (payload.get("issue_title") or payload.get("watch_name") or "Digest context")
+        await database.create_context_blob(
+            space_id=payload["space_id"],
+            name=name.strip()[:200],
+            content=context_md.strip(),
+        )
+
     await database.clear_email_digest_payload(job_id)
     await database.update_job_status(job_id, "done")
     log.info("email_digest.done", job_id=job_id, candidates=len(links))

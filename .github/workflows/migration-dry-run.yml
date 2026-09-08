@@ -25,7 +25,6 @@ jobs:
           DB_PATH: ${{ runner.temp }}/jobs.db
           TELEGRAM_BOT_TOKEN: migration-dry-run
           TELEGRAM_WEBHOOK_SECRET: migration-dry-run-secret
-          EMAIL_WEBHOOK_SECRET: migration-dry-run-secret
         run: |
           cp tests/fixtures/sanitized-production.db "$DB_PATH"
           python - <<'PY'
