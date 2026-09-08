@@ -1641,60 +1641,10 @@ async def _migrate_email_digest_subscriptions_candidates_payloads(
 
 _MIGRATIONS.append(_migrate_email_digest_subscriptions_candidates_payloads)
 
-# Newsletter digest moves from inbound email to public-archive polling
-# (ADR-0060, PLAN.md §1 / issue #609). newsletter_subscriptions never
-# successfully ingested an issue, so its rows are dropped, not migrated.
-# Teardown order matters: legacy email_digest:% jobs and their payload rows
-# first (jobs.id -> email_digest_payloads.job_id cascades), then each
-# subscription's backing Space (spaces -> digest_candidates/space_urls/
-# context_blobs/newsletter_subscriptions all cascade on space_id), then the
-# now-empty newsletter_subscriptions table itself. Dropping the table first
-# would orphan every space and candidate, because the cascade runs
-# spaces -> subscription, not the reverse. email_digest_payloads is then
-# rebuilt: subject/html/text drop (the issue body now lives once in
-# publication_issues.body_html); watch_id/publication_id/slug/context_md are
-# added, with the composite FK the missing-delivery join and body-cleanup
-# predicate both key on.
-# rollback: restore backup
-async def _migrate_newsletter_archive_polling(conn: aiosqlite.Connection) -> None:
-    await conn.execute("BEGIN IMMEDIATE")
-    try:
-        table_cur = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        table_names = {row[0] for row in await table_cur.fetchall()}
-
-        # Guarded rather than unconditional: some existing migration tests
-        # build a minimal ad-hoc `jobs`/`spaces` shape (just enough columns
-        # for the one migration under test) and replay the *entire* chain
-        # from an old user_version, so a bare `DELETE FROM jobs WHERE
-        # url LIKE ...` would 500 on "no such column: url" against a fixture
-        # that never had a url column to begin with. A real database has
-        # always had both, so this only ever short-circuits synthetic tests.
-        if "jobs" in table_names and "url" in await _table_columns(conn, "jobs"):
-            await conn.execute("DELETE FROM jobs WHERE url LIKE 'email_digest:%'")
-        if "newsletter_subscriptions" in table_names and "spaces" in table_names:
-            await conn.execute(
-                "DELETE FROM spaces WHERE id IN (SELECT space_id FROM newsletter_subscriptions)"
-            )
-        await conn.execute("DROP TABLE IF EXISTS newsletter_subscriptions")
-        await conn.execute("DROP TABLE IF EXISTS email_digest_payloads")
-
-        # Same string objects SCHEMA_SQL splices in for a fresh install — kept
-        # identical on purpose so a migrated database's sqlite_master output
-        # matches a fresh one exactly (issue #609 acceptance criteria).
-        await conn.execute(_PUBLICATIONS_TABLE_SQL)
-        await conn.execute(_PUBLICATION_ISSUES_TABLE_SQL)
-        await conn.execute(_NEWSLETTER_WATCHES_TABLE_SQL)
-        await conn.execute(_NEWSLETTER_WATCHES_INDEX_SQL)
-        await conn.execute(_EMAIL_DIGEST_PAYLOADS_TABLE_SQL)
-        await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
-        await conn.execute(_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL)
-        await conn.commit()
-    except Exception:
-        await conn.rollback()
-        raise
-
-
-_MIGRATIONS.append(_migrate_newsletter_archive_polling)
+# _migrate_newsletter_archive_polling (issue #609) moved further down in this
+# file, appended after every other pre-existing migration instead of here —
+# see the comment at its new location for why appending in file order,
+# not "near the related code", is the only safe place to add one.
 
 
 async def _run_migrations(conn: aiosqlite.Connection) -> None:
@@ -4250,3 +4200,74 @@ _MIGRATIONS.append([
 _MIGRATIONS.append([
     "ALTER TABLE jobs ADD COLUMN transcript_drive_url TEXT",
 ])
+
+# Newsletter digest moves from inbound email to public-archive polling
+# (ADR-0060, PLAN.md §1 / issue #609). newsletter_subscriptions never
+# successfully ingested an issue, so its rows are dropped, not migrated.
+# Teardown order matters: legacy email_digest:% jobs and their payload rows
+# first (jobs.id -> email_digest_payloads.job_id cascades), then each
+# subscription's backing Space (spaces -> digest_candidates/space_urls/
+# context_blobs/newsletter_subscriptions all cascade on space_id), then the
+# now-empty newsletter_subscriptions table itself. Dropping the table first
+# would orphan every space and candidate, because the cascade runs
+# spaces -> subscription, not the reverse. email_digest_payloads is then
+# rebuilt: subject/html/text drop (the issue body now lives once in
+# publication_issues.body_html); watch_id/publication_id/slug/context_md are
+# added, with the composite FK the missing-delivery join and body-cleanup
+# predicate both key on.
+#
+# 2026-09-08 production incident: this migration originally lived right
+# after _migrate_email_digest_subscriptions_candidates_payloads (near the
+# top of the migrations section), which put it at list-index 46 — BEHIND
+# the two migrations above (screenshot capture / transcript_drive_url),
+# which sit lower in this file despite predating it. Since _MIGRATIONS'
+# runtime order is file position, not the version numbers named in each
+# migration's own comment, that placement put this migration at a version
+# slot production had already passed (current_version=48 at the time),
+# so `_run_migrations`' `_MIGRATIONS[current_version:]` slice skipped it
+# forever — email_digest_payloads never got rebuilt with watch_id, and
+# every startup crashed downstream when other code assumed it had run.
+# Appending a new migration ANYWHERE other than after the last existing
+# `_MIGRATIONS.append(...)` call in file order silently reassigns every
+# migration physically after it to a different version number than
+# production already recorded. Always append here, at the true end.
+# rollback: restore backup
+async def _migrate_newsletter_archive_polling(conn: aiosqlite.Connection) -> None:
+    await conn.execute("BEGIN IMMEDIATE")
+    try:
+        table_cur = await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        table_names = {row[0] for row in await table_cur.fetchall()}
+
+        # Guarded rather than unconditional: some existing migration tests
+        # build a minimal ad-hoc `jobs`/`spaces` shape (just enough columns
+        # for the one migration under test) and replay the *entire* chain
+        # from an old user_version, so a bare `DELETE FROM jobs WHERE
+        # url LIKE ...` would 500 on "no such column: url" against a fixture
+        # that never had a url column to begin with. A real database has
+        # always had both, so this only ever short-circuits synthetic tests.
+        if "jobs" in table_names and "url" in await _table_columns(conn, "jobs"):
+            await conn.execute("DELETE FROM jobs WHERE url LIKE 'email_digest:%'")
+        if "newsletter_subscriptions" in table_names and "spaces" in table_names:
+            await conn.execute(
+                "DELETE FROM spaces WHERE id IN (SELECT space_id FROM newsletter_subscriptions)"
+            )
+        await conn.execute("DROP TABLE IF EXISTS newsletter_subscriptions")
+        await conn.execute("DROP TABLE IF EXISTS email_digest_payloads")
+
+        # Same string objects SCHEMA_SQL splices in for a fresh install — kept
+        # identical on purpose so a migrated database's sqlite_master output
+        # matches a fresh one exactly (issue #609 acceptance criteria).
+        await conn.execute(_PUBLICATIONS_TABLE_SQL)
+        await conn.execute(_PUBLICATION_ISSUES_TABLE_SQL)
+        await conn.execute(_NEWSLETTER_WATCHES_TABLE_SQL)
+        await conn.execute(_NEWSLETTER_WATCHES_INDEX_SQL)
+        await conn.execute(_EMAIL_DIGEST_PAYLOADS_TABLE_SQL)
+        await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
+        await conn.execute(_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL)
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
+
+
+_MIGRATIONS.append(_migrate_newsletter_archive_polling)
