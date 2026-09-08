@@ -40,7 +40,7 @@ function installMedia(coarse: boolean, reducedMotion = false) {
 }
 
 describe("usePressFeedback", () => {
-  it("animates touch input but not a desktop mouse", async () => {
+  it("animates on pointer-down for both a desktop mouse and touch (apple-design skill §1: respond on press, for every pointer type)", async () => {
     installMedia(false);
     const animate = vi.fn();
     const target = { animate } as unknown as HTMLElement;
@@ -52,14 +52,14 @@ describe("usePressFeedback", () => {
         currentTarget: target,
       } as never),
     );
-    expect(animate).not.toHaveBeenCalled();
+    expect(animate).toHaveBeenCalledOnce();
     act(() =>
       result.current.onPointerDown({
         pointerType: "touch",
         currentTarget: target,
       } as never),
     );
-    expect(animate).toHaveBeenCalledOnce();
+    expect(animate).toHaveBeenCalledTimes(2);
   });
 
   it("suppresses feedback when visual motion is disabled", () => {

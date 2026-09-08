@@ -59,7 +59,11 @@ export function Tooltip({
           align={align}
           sideOffset={8}
           collisionPadding={12}
-          className={`z-50 max-w-xs rounded-md border border-line bg-raised px-2 py-1 text-xs leading-snug text-ink shadow-overlay data-[state=closed]:animate-tooltip-out data-[state=delayed-open]:animate-tooltip-in data-[state=instant-open]:animate-tooltip-in motion-reduce:animate-none ${
+          // Scale from the trigger, not the tooltip's own center — apple-design
+          // skill §7 (anchor interactions to their source). Radix computes this
+          // origin from the actual side/align/collision result each render.
+          style={{ transformOrigin: 'var(--radix-tooltip-content-transform-origin)' }}
+          className={`material-chip z-50 max-w-xs rounded-md border border-line bg-[rgb(32_35_41/var(--material-opacity))] px-2 py-1 text-xs leading-snug text-ink shadow-overlay contrast-more:border-line-strong data-[state=closed]:animate-material-out data-[state=delayed-open]:animate-material-in data-[state=instant-open]:animate-material-in motion-reduce:animate-none ${
             mono ? 'break-words font-mono [text-wrap:pretty]' : 'font-sans'
           }`}
         >

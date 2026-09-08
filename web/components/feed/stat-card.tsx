@@ -22,7 +22,7 @@ export function StatCard({ label, value, tooltip, valueClass = "text-ink", class
           {label}
         </span>
       </Tooltip>
-      <span className={`text-stat font-semibold leading-tight tabular-nums ${valueClass}`}>
+      <span className={`text-stat tracking-stat font-semibold leading-tight tabular-nums ${valueClass}`}>
         {value}
       </span>
     </div>

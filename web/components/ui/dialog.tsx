@@ -41,10 +41,10 @@ export function DialogContent({
       : undefined;
   return (
     <RadixDialog.Portal>
-      <RadixDialog.Overlay className="fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
+      <RadixDialog.Overlay className="material-overlay fixed inset-0 z-50 bg-[rgb(13_14_16/var(--material-opacity))] data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
       <RadixDialog.Content
         aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface p-5 shadow-overlay data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none focus:outline-none ${className}`}
+        className={`material-overlay fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-lg border border-line bg-[rgb(22_24_28/var(--material-opacity))] p-5 shadow-overlay contrast-more:border-line-strong data-[state=closed]:animate-material-out data-[state=open]:animate-material-in motion-reduce:animate-none focus:outline-none ${className}`}
         style={{ ...viewportStyle, ...style }}
         {...props}
       >

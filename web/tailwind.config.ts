@@ -98,8 +98,29 @@ const config: Config = {
         stat: '1.75rem', // 28px — DESIGN.md Stat Value
         display: '1.5rem', // 24px — DESIGN.md Display
       },
+      // Tracking is size-specific (DESIGN.md §4 Motion / apple-design skill
+      // §15): negative on large display text, ~0 through body/UI sizes,
+      // slightly positive on the smallest dense text. Keyed to the same
+      // fontSize role names above — pair `text-stat` with `tracking-stat`.
+      letterSpacing: {
+        micro: '0.01em',
+        'mono-label': '0.01em',
+        label: '0',
+        button: '0',
+        copy: '0',
+        prose: '0',
+        title: '0',
+        lead: '-0.005em',
+        headline: '-0.01em',
+        stat: '-0.02em',
+        display: '-0.02em',
+      },
       transitionTimingFunction: {
         'out-quart': 'cubic-bezier(0.25, 1, 0.5, 1)',
+        // Reserved for moments a user's own gesture directly drove (DESIGN.md
+        // §4 Motion) — a press-release or selection fill, never programmatic
+        // fade-ins. Not used by default anywhere.
+        spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
       boxShadow: {
         // The one shadow in the system (DESIGN.md Plate Rule): overlays only.
@@ -109,7 +130,16 @@ const config: Config = {
       animation: {
         'tooltip-in': 'tooltip-in 140ms ease-out both',
         'tooltip-out': 'tooltip-out 100ms ease-out both',
-        'slide-up-in': 'slide-up-in 180ms ease-out both',
+        // Overlay content surfaces (dialog/tooltip/dropdown): fade + scale
+        // together, critically damped — no overshoot, this is programmatic
+        // materialize-in, not a gesture the user drove (DESIGN.md §4 Motion).
+        'material-in': 'material-in 160ms cubic-bezier(0.25, 1, 0.5, 1) both',
+        'material-out': 'material-out 120ms cubic-bezier(0.25, 1, 0.5, 1) both',
+        // Sheets get the skill's own drawer/sheet table entry (damping ~0.8):
+        // a small overshoot on arrival earns it because a sheet's whole
+        // presentation is a direct, physical response to the trigger tap —
+        // exit stays critically damped, unchanged below.
+        'slide-up-in': 'slide-up-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
         'slide-up-out': 'slide-up-out 140ms ease-out both',
       },
     },

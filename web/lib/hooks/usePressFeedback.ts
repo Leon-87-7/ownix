@@ -32,9 +32,9 @@ export function usePressFeedback(): {
     [visualMotion],
   );
   return {
+    // apple-design skill §1: respond on pointer-down for every pointer type,
+    // not just touch — a mouse click deserves the same instant feedback.
     onPointerDown: (event) => {
-      const coarse = window.matchMedia?.("(pointer: coarse)").matches;
-      if (event.pointerType !== "touch" && !coarse) return;
       pointerTouchAt.current = Date.now();
       press(event.currentTarget);
     },

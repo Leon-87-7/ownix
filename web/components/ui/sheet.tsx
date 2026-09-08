@@ -15,9 +15,9 @@ export function SheetContent({
   const pressFeedback = usePressFeedback();
   return (
     <RadixDialog.Portal>
-      <RadixDialog.Overlay className="fixed inset-0 z-50 bg-canvas/70 backdrop-blur-sm data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
+      <RadixDialog.Overlay className="material-overlay fixed inset-0 z-50 bg-[rgb(13_14_16/var(--material-opacity))] data-[state=closed]:animate-tooltip-out data-[state=open]:animate-tooltip-in motion-reduce:animate-none" />
       <RadixDialog.Content
-        className={`fixed inset-x-0 bottom-0 z-50 w-full rounded-t-2xl border border-line bg-surface p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-overlay data-[state=closed]:animate-slide-up-out data-[state=open]:animate-slide-up-in motion-reduce:animate-none focus:outline-none ${className}`}
+        className={`material-overlay fixed inset-x-0 bottom-0 z-50 w-full rounded-t-2xl border border-line bg-[rgb(22_24_28/var(--material-opacity))] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-overlay contrast-more:border-line-strong data-[state=closed]:animate-slide-up-out data-[state=open]:animate-slide-up-in motion-reduce:animate-none focus:outline-none ${className}`}
         {...props}
       >
         {children}

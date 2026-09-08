@@ -831,7 +831,7 @@ export default async function LandingPage() {
                   <span className="mb-1 block font-mono text-mono-label font-medium uppercase tracking-[0.4px] text-muted">
                     {cap}
                   </span>
-                  <span className="text-stat font-semibold leading-[1.1] text-ink tabular-nums">
+                  <span className="text-stat tracking-stat font-semibold leading-[1.1] text-ink tabular-nums">
                     <CountUp
                       value={val}
                       delay={i * 80}

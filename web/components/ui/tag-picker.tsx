@@ -221,7 +221,8 @@ export function TagMenu({
           <DropdownMenu.Content
             align="end"
             sideOffset={4}
-            className="z-50 w-52 overflow-hidden rounded-md border border-line bg-surface shadow-lg"
+            style={{ transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)' }}
+            className="material-overlay z-50 w-52 overflow-hidden rounded-md border border-line bg-[rgb(22_24_28/var(--material-opacity))] shadow-overlay contrast-more:border-line-strong data-[state=closed]:animate-material-out data-[state=open]:animate-material-in motion-reduce:animate-none"
           >
             <div className="max-h-60 overflow-auto p-1">
               {allTags.length === 0 && (

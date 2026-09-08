@@ -373,6 +373,34 @@ toasts.
 **The Plate Rule.** Depth is stacked plates and hairlines. Resting cards do not
 float. Overlays do.
 
+### Materials
+
+The Overlay tier (dialogs, dropdown menus, tooltips, toasts) is translucent,
+not opaque: `backdrop-filter: blur(...) saturate(...)` over the canvas behind
+it, so content keeps moving underneath. This is additive to the Plate Rule,
+not a replacement — resting plates stay flat; only the tier that already
+earns a shadow also earns a material. Under
+`prefers-reduced-transparency: reduce`, materials fall back to a solid
+background (no blur); under `prefers-contrast: more`, their border
+strengthens.
+
+### Motion
+
+- **Response starts on pointer-down, not release.** Every interactive
+  element gives feedback the instant it's pressed — never only on the
+  completed click/tap.
+- **Default transitions are critically damped:** no overshoot, ~150–250ms,
+  `out-quart`. This is still the house style for state changes, hovers, and
+  fades.
+- **A small overshoot is earned, not decorative.** Reserve it for moments
+  the user's own action directly drove — a press-release, a selection fill,
+  a drag-release — never for a menu that simply faded in. (`SegmentedTabs`'
+  bottom-to-top fill is the reference implementation.) This narrows, not
+  replaces, the "no bouncy motion" rule below: bounce that isn't a direct
+  echo of the user's gesture is still off-limits.
+- **`prefers-reduced-motion: reduce` is mandatory**, already enforced
+  globally in `globals.css`.
+
 ## 5. Components
 
 ### Buttons
@@ -471,7 +499,7 @@ vocabulary. If the gradient animates, it must freeze to a static wash under
 ### Don't:
 
 - **Don't** make Ownix feel like a cluttered admin panel. Density needs hierarchy: quiet surfaces, clear ownership state, restrained amber.
-- **Don't** make it toy-like: no mascots, oversized emoji, bouncy motion, jokey copy, or rounded-everything.
+- **Don't** make it toy-like: no mascots, oversized emoji, jokey copy, or rounded-everything. Bounce is allowed only where §4 Motion earns it — a direct echo of the user's own gesture, never decorative or on programmatic/fade-in UI.
 - **Don't** use Index Amber decoratively, on inactive states, in status badges, or on disabled controls.
 - **Don't** put pending yellow on clickable controls.
 - **Don't** use gradient text. The Brain gradient is a backdrop for Brain surfaces, never text fill or button treatment.

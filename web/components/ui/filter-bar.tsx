@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { usePressFeedback } from '@/lib/hooks/usePressFeedback';
 
 function isEditableShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -173,11 +174,13 @@ function FilterButton({
   active: boolean;
   onClick: () => void;
 }) {
+  const pressFeedback = usePressFeedback();
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      {...pressFeedback}
       className={`h-7 rounded-md px-3 text-button font-medium transition-ui ${
         active
           ? 'bg-contrasignal-deep text-onsignal hover:bg-contrasignal'

@@ -379,7 +379,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
                   <p className="font-mono text-label text-muted">
                     <DateTime iso={asUtcIso(issue.created_at)} />
                   </p>
-                  <h2 className="mt-1 text-headline font-semibold text-balance text-ink">
+                  <h2 className="mt-1 text-headline tracking-headline font-semibold text-balance text-ink">
                     {issue.name}
                   </h2>
                   {issue.source_url && (
