@@ -1475,3 +1475,114 @@ and enqueues enrichment on the existing job.
     already on this page (Checklists, delete).
 
 **Open questions:** none — fully resolved in grill.
+
+## 36. Local rendering fallback for SSRF-safe newsletter fetches (closes #615's redirect gap)
+
+> **Grill:** `/grill-search` — the open questions hinge on a headless-browser
+> SDK's navigation/redirect-interception API (Playwright vs. alternatives),
+> not repo-internal domain modeling.
+
+> **Grounded:** 2026-09-08
+
+> **Source:** filed as issue [#615](https://github.com/Leon-87-7/ownix/issues/615)
+> during rabbitloop on PR #614 (newsletter archive polling). This brief covers
+> only the "invest in a local fallback" branch of that issue's suggested next
+> step — the other branch (accept the residual risk, do nothing) is a
+> product call the grill should still surface as a live alternative to
+> building anything at all.
+
+Newsletter/issue pages are fetched through `r.jina.ai` via `fetch_raw()` /
+`fetch_html()` (`src/services/jina.py:99-183`), called from
+`src/services/newsletter_archive.py` (feed/archive/issue resolution,
+`:303,307,329,343`) and `src/processors/newsletter_poll.py` (the 4-hourly
+poll, `:191,259`). `is_public_url()` (`src/utils/public_html.py:72-86`)
+validates the URL **once**, before it's handed to Jina — but Jina itself has a
+documented gap (CVE-2026-85699, jina-ai/reader#1252/#1253): it does not
+re-validate the public/global-address policy on each hop of a subsequent HTTP
+redirect, so a publisher page that redirects (or is hijacked to redirect) to
+an internal address or cloud metadata endpoint can cause Jina to fetch and
+return that content to us. Checked Jina's documented headers (`x-engine`,
+`x-proxy-url`, `x-respond-with`, `x-no-cache`, …) — none disable or
+re-validate redirects on Jina's side.
+
+`_fetch_pinned()` (`public_html.py:89-138`) already does the **safe** version
+of this — direct httpx, IP-pinned, revalidates the public-address policy on
+*every* redirect hop — but it is plain HTTP: no JS rendering, no anti-bot
+handling. That matters because at least one real publisher needs both:
+AlphaSignal 403s a raw server fetch, and beehiiv archives render client-side
+(`PLAN.md`'s verified-evidence table, `PLAN.md:27-30`). Jina is in the stack
+specifically because it clears both bars. **Reuse, don't fork:** whatever
+local-render approach ships should reproduce `_fetch_pinned`'s per-hop
+revalidation loop, not reinvent it — the redirect-safety logic already
+exists, it just needs a JS-capable transport underneath it instead of raw
+httpx.
+
+No headless-browser dependency (Playwright, Puppeteer, Selenium) exists
+anywhere in this repo today (checked `requirements-dev.txt`,
+`requirements.txt`, `docker-compose.yml`). The closest architectural
+precedent is `transcript_server.py` — a Flask+waitress sidecar (runs on the
+host or as the `transcript-service` docker container) that does its own
+single-shot `ipaddress`-based URL validation (`_validate_public_http_url`,
+`transcript_server.py:71`) before handing a URL to yt-dlp. A local-render
+service would likely follow the same sidecar shape, not run in-process in the
+`api`/`worker` containers — but that's exactly the kind of deployment-shape
+call this brief should not settle (new dependency, new resource footprint on
+whatever host runs it).
+
+**Wanted:** a way to fetch newsletter/issue pages that need JS rendering or
+anti-bot bypass (AlphaSignal, beehiiv) without inheriting Jina's redirect
+gap — closing the residual-risk half of #615 — *or*, if the grill lands on
+accepting the risk instead, a documented decision saying so with nothing
+built.
+
+**Backend / Infra**
+
+- Pick the local-render mechanism and deployment shape (new dependency,
+  where it runs) — this is the load-bearing open question, not scope to
+  assume.
+- Whatever ships must re-validate the public-address policy
+  (`_resolve_safe_public_url`, `public_html.py:40-69`) on the **initial**
+  navigation and on **every** subsequent redirect hop the renderer follows —
+  the exact thing Jina doesn't do. `_fetch_pinned`'s loop is the shape to
+  match, not necessarily the code to reuse verbatim (it's synchronous
+  per-hop httpx; a browser SDK's navigation/redirect events work
+  differently).
+- Same operational bounds `fetch_raw` already enforces on Jina —
+  `_MAX_JINA_BYTES` byte cap (`jina.py:21`) and a request timeout — need an
+  equivalent on whichever path replaces it, so a local render can't hang or
+  balloon memory the way an unbounded headless-browser fetch could.
+- Decide the routing rule once the mechanism exists: local-render as the
+  **default** for these two call sites (replacing Jina outright and retiring
+  the gap entirely), or as a **fallback** invoked only when Jina fails or
+  only for publishers known to need it (AlphaSignal/beehiiv), with Jina
+  staying primary elsewhere. This decision determines whether #615 closes
+  fully or partially.
+
+**Open questions** (resolve in grill)
+
+- **Accept vs. build** — is the residual risk (Jina's own SSRF exposure; no
+  secrets cross the redirect, per #615) actually worth closing, or does this
+  stay accepted and #615 closes with no code change? Surface this as a real
+  option, not a foregone conclusion.
+- **Tool choice** — Playwright (Chromium/Firefox/WebKit, mature Python async
+  API, request/response interception hooks) vs. an alternative — which one's
+  navigation API actually lets a caller intercept and validate a redirect
+  *before* the browser follows it, rather than only inspecting it after the
+  fact? This is the crux the local fetch primitive depends on and needs
+  verifying against real SDK docs, not assumed.
+- **Deployment shape** — new sidecar service (transcript_server.py
+  precedent: host-run or a new `docker-compose.yml` service) vs. in-process
+  in `api`/`worker` (heavier container image, headless Chromium's memory
+  footprint inside processes that also handle request/queue traffic)?
+- **Cost/resource footprint** — headless Chromium is far heavier than a
+  Jina HTTP call (memory, cold-start latency, browser-process lifecycle) —
+  is that acceptable for a 4-hourly poll across however many watched
+  publications exist, or does it need to stay narrowly scoped to specific
+  known-blocked hosts rather than becoming the default path?
+- **Routing rule** — default-replaces-Jina vs. fallback-on-failure vs.
+  publisher-allowlist-only (see Backend/Infra above) — which, and does it
+  fully or only partially close #615?
+- Does the local-render path need its own abuse controls (the `/resolve`
+  endpoint's max-4-probes-per-request + per-`chat_id` rate limit,
+  `PLAN.md:169-170`), or does it inherit them for free by sitting behind the
+  same call sites?
