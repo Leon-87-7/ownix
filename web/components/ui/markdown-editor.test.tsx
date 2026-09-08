@@ -5,6 +5,13 @@ import MarkdownEditor from './markdown-editor';
 
 vi.mock('@milkdown/crepe', () => ({
   Crepe: class {
+    static Feature = {
+      Toolbar: 'toolbar',
+      BlockEdit: 'block-edit',
+      LinkTooltip: 'link-tooltip',
+      Placeholder: 'placeholder',
+    };
+    setReadonly = vi.fn();
     on() {}
     async create() {}
     destroy() {}
@@ -24,5 +31,11 @@ describe('MarkdownEditor', () => {
       'sm:[&_.milkdown_.ProseMirror]:px-[120px]',
       'sm:[&_.milkdown_.ProseMirror]:py-[60px]',
     );
+  });
+
+  it('renders without editing chrome or a label when readOnly', () => {
+    render(<MarkdownEditor initialMarkdown="Readable note" readOnly label="" />);
+
+    expect(screen.queryByText('Notes')).not.toBeInTheDocument();
   });
 });

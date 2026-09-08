@@ -26,8 +26,8 @@ import { useSpaceContext } from '@/lib/hooks/useSpaceContext';
 const mockUseSpaceContext = vi.mocked(useSpaceContext);
 
 const BLOBS = [
-  { id: 'b1', space_id: 's1', name: 'Research Notes', content: 'Some notes', sort_order: 1, created_at: '', updated_at: '' },
-  { id: 'b2', space_id: 's1', name: 'Summary', content: 'Summary content', sort_order: 2, created_at: '', updated_at: '' },
+  { id: 'b1', space_id: 's1', name: 'Research Notes', content: 'Some notes', source_url: null, sort_order: 1, created_at: '', updated_at: '' },
+  { id: 'b2', space_id: 's1', name: 'Summary', content: 'Summary content', source_url: null, sort_order: 2, created_at: '', updated_at: '' },
 ];
 
 function setupMocks(overrides: Partial<ReturnType<typeof useSpaceContext>> = {}) {

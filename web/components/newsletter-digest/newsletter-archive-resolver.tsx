@@ -117,7 +117,7 @@ export function NewsletterArchiveResolver({
             disabled={resolving}
             className="h-9 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:scale-[0.96] active:bg-signal-deep disabled:bg-surface disabled:text-muted"
           >
-            {resolving ? 'Looking...' : 'Find'}
+            {resolving ? <span className="ownix-shimmer">Looking...</span> : 'Find'}
           </button>
         </form>
       ) : (
@@ -177,7 +177,7 @@ export function NewsletterArchiveResolver({
               disabled={!onConfirm || !name.trim() || submitting}
               className="h-9 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:scale-[0.96] active:bg-signal-deep disabled:bg-surface disabled:text-muted"
             >
-              {submitting ? 'Adding...' : 'Confirm'}
+              {submitting ? <span className="ownix-shimmer">Adding...</span> : 'Confirm'}
             </button>
             <button
               type="button"

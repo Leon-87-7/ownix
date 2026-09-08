@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@/test/render';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewsletterDigestDetail } from './newsletter-digest-detail';
 import * as api from '@/lib/newsletter-digest';
 import type { DigestCandidate, NewsletterWatch } from '@/lib/newsletter-digest';
+import { useSpaceContext } from '@/lib/hooks/useSpaceContext';
 
-vi.mock('./newsletter-context-list', () => ({
-  NewsletterContextList: ({ spaceId }: { spaceId: string }) => (
-    <div data-testid="context-list">{spaceId}</div>
-  ),
+vi.mock('@/lib/hooks/useSpaceContext', () => ({ useSpaceContext: vi.fn() }));
+
+const mockedUseSpaceContext = vi.mocked(useSpaceContext);
+
+vi.mock('next/dynamic', () => ({
+  default: () =>
+    function MockMarkdownEditor({ initialMarkdown }: { initialMarkdown: string }) {
+      return <div data-testid="markdown-editor">{initialMarkdown}</div>;
+    },
 }));
 
 const watch: NewsletterWatch = {
@@ -39,19 +45,32 @@ const candidate: DigestCandidate = {
   created_at: '2026-09-05 10:00:00',
 };
 
+beforeEach(() => {
+  mockedUseSpaceContext.mockReturnValue({
+    blobs: [],
+    loading: false,
+    blobError: null,
+    setBlobError: vi.fn(),
+    addBlob: vi.fn(),
+    updateBlob: vi.fn(),
+    deleteBlob: vi.fn(),
+    reorderBlob: vi.fn(),
+    patchBlobName: vi.fn(),
+  });
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('NewsletterDigestDetail', () => {
-  it('loads candidates and the digest context panel for the watch space', async () => {
+  it('loads candidates for the watch', async () => {
     vi.spyOn(api, 'fetchNewsletterWatch').mockResolvedValue(watch);
     vi.spyOn(api, 'fetchDigestCandidates').mockResolvedValue([candidate]);
 
     render(<NewsletterDigestDetail subscriptionId="watch_1" />);
 
     await waitFor(() => expect(screen.getByText('A useful post')).toBeInTheDocument());
-    expect(screen.getByTestId('context-list')).toHaveTextContent('space_1');
     expect(screen.getByRole('button', { name: 'Retry digest' })).toBeInTheDocument();
   });
 
@@ -167,5 +186,85 @@ describe('NewsletterDigestDetail', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Dismiss rest (1)' })).not.toBeDisabled(),
     );
+  });
+
+  it('renders issues newest-first, nesting candidates under the newest one only', async () => {
+    vi.spyOn(api, 'fetchNewsletterWatch').mockResolvedValue({ ...watch, error_count: 0 });
+    vi.spyOn(api, 'fetchDigestCandidates').mockResolvedValue([candidate]);
+    mockedUseSpaceContext.mockReturnValue({
+      blobs: [
+        {
+          id: 'blob_older',
+          space_id: 'space_1',
+          name: 'Older issue',
+          content: 'Older note',
+          source_url: 'https://older.example.com/p/older',
+          sort_order: 0,
+          created_at: '2026-09-01 10:00:00',
+          updated_at: '2026-09-01 10:00:00',
+        },
+        {
+          id: 'blob_newest',
+          space_id: 'space_1',
+          name: 'Newest issue',
+          content: 'Newest note',
+          source_url: 'https://newest.example.com/p/newest',
+          sort_order: 1,
+          created_at: '2026-09-05 10:00:00',
+          updated_at: '2026-09-05 10:00:00',
+        },
+      ],
+      loading: false,
+      blobError: null,
+      setBlobError: vi.fn(),
+      addBlob: vi.fn(),
+      updateBlob: vi.fn(),
+      deleteBlob: vi.fn(),
+      reorderBlob: vi.fn(),
+      patchBlobName: vi.fn(),
+    });
+
+    render(<NewsletterDigestDetail subscriptionId="watch_1" />);
+
+    await waitFor(() => expect(screen.getByText('Newest issue')).toBeInTheDocument());
+    // Newest-first order: the newest issue's heading precedes the older one's.
+    const headings = screen.getAllByRole('heading', { level: 2 });
+    const order = headings.map((h) => h.textContent);
+    expect(order.indexOf('Newest issue')).toBeLessThan(order.indexOf('Older issue'));
+
+    expect(screen.getByRole('link', { name: /newest\.example\.com/i })).toHaveAttribute(
+      'href',
+      'https://newest.example.com/p/newest',
+    );
+    // Only the newest issue nests the candidate list.
+    expect(screen.getByText('Links from this issue')).toBeInTheDocument();
+    expect(screen.getByText('A useful post')).toBeInTheDocument();
+  });
+
+  it('switches candidates between the preview card and the dense list row', async () => {
+    vi.spyOn(api, 'fetchNewsletterWatch').mockResolvedValue({ ...watch, error_count: 0 });
+    vi.spyOn(api, 'fetchDigestCandidates').mockResolvedValue([candidate]);
+
+    render(<NewsletterDigestDetail subscriptionId="watch_1" />);
+
+    await waitFor(() => expect(screen.getByText('A useful post')).toBeInTheDocument());
+    // Default is grid — the card shows a "Create job" affordance either way,
+    // so assert on the layout buttons' pressed state instead.
+    expect(screen.getByRole('button', { name: 'Grid layout' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'List layout' }));
+
+    expect(screen.getByRole('button', { name: 'List layout' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Grid layout' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByText('A useful post')).toBeInTheDocument();
   });
 });

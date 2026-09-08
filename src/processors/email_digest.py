@@ -385,6 +385,7 @@ async def run(job: dict) -> None:
             space_id=payload["space_id"],
             name=name.strip()[:200],
             content=context_md.strip(),
+            source_url=payload.get("issue_url"),
         )
 
     await database.clear_email_digest_payload(job_id)

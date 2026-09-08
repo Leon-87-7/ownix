@@ -59,7 +59,7 @@ export function NewsletterWatchCard({
               className="flex h-8 items-center gap-1.5 rounded-md border border-line px-2.5 text-button font-medium text-ink transition-ui hover:bg-surface active:scale-[0.96] disabled:text-muted"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              {retrying ? 'Retrying...' : 'Retry'}
+              {retrying ? <span className="ownix-shimmer">Retrying...</span> : 'Retry'}
             </button>
           )}
           {onDelete && (

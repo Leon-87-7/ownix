@@ -8,6 +8,7 @@ interface ContextBlob {
   space_id: string;
   name: string;
   content: string;
+  source_url: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;

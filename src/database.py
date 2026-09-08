@@ -359,11 +359,14 @@ CREATE TABLE IF NOT EXISTS space_urls (
 );
 
 -- Per-space editorial context documents (issue #93 / S7).
+-- source_url: the newsletter issue (or other origin) a blob was generated
+-- from, so the UI can link back to it. NULL for manually-authored blobs.
 CREATE TABLE IF NOT EXISTS context_blobs (
     id         TEXT PRIMARY KEY,
     space_id   TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
     content    TEXT NOT NULL DEFAULT '',
+    source_url TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -4120,16 +4123,18 @@ async def list_space_urls(space_id: str, chat_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-async def create_context_blob(*, space_id: str, name: str, content: str = "") -> dict:
+async def create_context_blob(
+    *, space_id: str, name: str, content: str = "", source_url: str | None = None
+) -> dict:
     """INSERT a context blob; auto-assigns sort_order = max+1. Returns the row."""
     blob_id = generate_id()
     return await _insert_returning(
-        """INSERT INTO context_blobs (id, space_id, name, content, sort_order)
-           VALUES (?, ?, ?, ?, COALESCE(
+        """INSERT INTO context_blobs (id, space_id, name, content, source_url, sort_order)
+           VALUES (?, ?, ?, ?, ?, COALESCE(
                (SELECT MAX(sort_order) FROM context_blobs WHERE space_id = ?), 0
            ) + 1)""",
-        (blob_id, space_id, name, content, space_id),
-        "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+        (blob_id, space_id, name, content, source_url, space_id),
+        "SELECT id, space_id, name, content, source_url, sort_order, created_at, updated_at "
         "FROM context_blobs WHERE id = ?",
         (blob_id,),
     )
@@ -4138,7 +4143,7 @@ async def create_context_blob(*, space_id: str, name: str, content: str = "") ->
 async def list_context_blobs(space_id: str) -> list[dict]:
     """Return all context blobs for a space ordered by sort_order."""
     return await _fetch_dicts(
-        "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+        "SELECT id, space_id, name, content, source_url, sort_order, created_at, updated_at "
         "FROM context_blobs WHERE space_id = ? ORDER BY sort_order ASC",
         (space_id,),
     )
@@ -4151,7 +4156,7 @@ async def list_context_blobs(space_id: str) -> list[dict]:
 async def get_context_blob(blob_id: str) -> dict | None:
     """Return a single context blob by PK, or None."""
     row = await _fetch_one(
-        "SELECT id, space_id, name, content, sort_order, created_at, updated_at "
+        "SELECT id, space_id, name, content, source_url, sort_order, created_at, updated_at "
         "FROM context_blobs WHERE id = ?",
         (blob_id,),
     )
@@ -4271,3 +4276,29 @@ async def _migrate_newsletter_archive_polling(conn: aiosqlite.Connection) -> Non
 
 
 _MIGRATIONS.append(_migrate_newsletter_archive_polling)
+
+# Context blobs gain source_url so the dashboard can link a Gemini-authored
+# context note back to the newsletter issue it was generated from (#614
+# follow-up). Always append new migrations here, at the true end of this
+# file — see the 2026-09-08 incident note above _migrate_newsletter_archive_polling.
+# Guarded like that migration: some tests replay the full chain from a
+# synthetic old-version fixture that never created context_blobs at all
+# (it's built at v13->v14, long after the versions those fixtures start from).
+async def _migrate_context_blobs_source_url(conn: aiosqlite.Connection) -> None:
+    table_cur = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='context_blobs'"
+    )
+    if await table_cur.fetchone() is None:
+        return
+    # A fresh install runs SCHEMA_SQL (which already has source_url) before
+    # replaying every migration from version 0, so this guard is required,
+    # not defensive extra.
+    col_cur = await conn.execute("PRAGMA table_info(context_blobs)")
+    columns = {row[1] for row in await col_cur.fetchall()}
+    if "source_url" in columns:
+        return
+    await conn.execute("ALTER TABLE context_blobs ADD COLUMN source_url TEXT")
+    await conn.commit()
+
+
+_MIGRATIONS.append(_migrate_context_blobs_source_url)

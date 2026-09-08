@@ -114,7 +114,7 @@ export function NewsletterDigestDashboard() {
           {formError}
         </p>
       )}
-      {submitting && <p className="text-sm text-muted">Adding newsletter...</p>}
+      {submitting && <p className="text-sm text-muted ownix-shimmer">Adding newsletter...</p>}
 
       {error && (
         <p role="alert" className="rounded-md border border-line bg-status-error-tint px-4 py-3 text-sm text-status-error">
