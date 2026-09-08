@@ -172,3 +172,29 @@ async def test_document_candidate_promotion_delegates_to_doc_parser(tmp_path, mo
         (watch["space_id"], job_id),
     )
     assert row is not None
+
+
+async def test_article_candidate_promotion_creates_a_job(tmp_path, monkeypatch) -> None:
+    """Digest candidates are ordinary blog links pulled out of a newsletter
+    issue, not URLs the reader has curated into their article-domain
+    allowlist. promote_candidate must not require that allowlist membership
+    just because the pipeline route it delegates to (`create_job`) does."""
+    await _init_db(tmp_path, monkeypatch)
+    enqueue = AsyncMock()
+    monkeypatch.setattr("src.services.jobs.queue.enqueue", enqueue)
+    watch = await _watch()
+    candidate_id = await database.insert_digest_candidate(
+        space_id=watch["space_id"],
+        url="https://example.com/some-article",
+        canonical_url="https://example.com/some-article",
+        title="Some Article",
+    )
+    request = SimpleNamespace(state=SimpleNamespace(user={"id": 123}))
+
+    result = await newsletter_digest.promote_candidate(watch["id"], candidate_id, request)
+
+    assert result["job_id"]
+    enqueue.assert_awaited_once()
+    candidate = await database.get_digest_candidate(watch["space_id"], candidate_id)
+    assert candidate["status"] == "promoted"
+    assert candidate["job_id"] == result["job_id"]

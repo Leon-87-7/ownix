@@ -20,6 +20,7 @@ from src.api.jobs import JobCreateRequest, create_job
 from src.api.parsed import UrlIn as ParsedUrlIn
 from src.api.parsed import upload_url
 from src.services import newsletter_archive
+from src.services.jobs import create_and_enqueue_job
 from src.utils.validators import detect_pipeline
 
 newsletter_digest_router = APIRouter(prefix="/api/newsletter-digest", tags=["newsletter-digest"])
@@ -213,6 +214,21 @@ async def promote_candidate(watch_id: str, candidate_id: str, request: Request) 
         )
         if pipeline == "document":
             result = await upload_url(ParsedUrlIn(url=candidate["url"]), request)
+        elif pipeline == "rejected":
+            # Candidates are links the newsletter poll worker already extracted
+            # from a watched issue, not free-form user input — a domain outside
+            # the article allowlist should still promote as "article" rather
+            # than 422ing through create_job's generic pipeline gate (whose
+            # domain check exists to guard the dashboard's free-form Add Link
+            # flow, not a link the user is already watching).
+            job = await create_and_enqueue_job(chat_id, candidate["url"], "article")
+            result = {
+                "id": job["id"],
+                "job_id": job["id"],
+                "url": job.get("url", candidate["url"]),
+                "content_type": job.get("content_type", "article"),
+                "status": job.get("status", "pending"),
+            }
         else:
             result = await create_job(request, JobCreateRequest(url=candidate["url"]))
         job_id = result.get("job_id") or result.get("id")
