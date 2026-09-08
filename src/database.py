@@ -408,9 +408,13 @@ CREATE INDEX IF NOT EXISTS idx_digest_candidates_space_status
 -- FK below, plus the per-issue Gemini context (generated once by the poll
 -- worker, never per-job). Cleared (context_md -> NULL) on success, retained
 -- on error rows so a retry needs no regeneration.
+-- The two indexes below are deliberately NOT spliced in here (see the
+-- idx_jobs_source_url comment further down): on an existing database this
+-- table already exists in its pre-#609 shape (no watch_id column), so
+-- CREATE TABLE IF NOT EXISTS no-ops and an index on watch_id would crash
+-- startup with "no such column" before the migration that rebuilds this
+-- table with the new shape has run.
 {email_digest_payloads_table_sql};
-{email_digest_payloads_watch_index_sql};
-{email_digest_payloads_slug_index_sql};
 
 CREATE TABLE IF NOT EXISTS document_outputs (
     id          TEXT PRIMARY KEY,
@@ -472,8 +476,6 @@ END;
     newsletter_watches_table_sql=_NEWSLETTER_WATCHES_TABLE_SQL,
     newsletter_watches_index_sql=_NEWSLETTER_WATCHES_INDEX_SQL,
     email_digest_payloads_table_sql=_EMAIL_DIGEST_PAYLOADS_TABLE_SQL,
-    email_digest_payloads_watch_index_sql=_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL,
-    email_digest_payloads_slug_index_sql=_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL,
 )
 
 
@@ -1895,6 +1897,10 @@ async def init_db() -> None:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_source_url ON jobs(source_url)"
             )
+            # Same reasoning as above, for email_digest_payloads' watch_id/slug
+            # columns (see the comment next to its CREATE TABLE in SCHEMA_SQL).
+            await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
+            await conn.execute(_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL)
             await _approve_operator_user(conn)
             await conn.commit()
     except Exception:

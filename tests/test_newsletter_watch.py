@@ -275,6 +275,83 @@ async def test_migration_teardown_deletes_legacy_data_and_cascades(tmp_path, mon
         ] == 0
 
 
+async def test_init_db_migrates_a_real_pre_migration_database(tmp_path, monkeypatch) -> None:
+    """Regression (2026-09-08 prod incident): the two tests above call
+    `_run_migrations` directly on a hand-built connection, never exercising
+    `init_db()`'s own `executescript(SCHEMA_SQL)` step that runs first against
+    a real, non-fresh database. SCHEMA_SQL used to splice in
+    `CREATE INDEX ... ON email_digest_payloads(watch_id)` unconditionally —
+    on a real pre-#609 database, `email_digest_payloads` already exists in
+    its old (job_id/receipt_key/subscription_id/subject/html/text) shape, so
+    `CREATE TABLE IF NOT EXISTS` no-ops and that index statement crashed
+    startup with "no such column: watch_id" *before* the migration that
+    rebuilds the table ever got a chance to run. This drives the exact
+    pre-#609 production shape through `init_db()` itself, not a hand-rolled
+    migration call."""
+    from src import database
+
+    db_path = tmp_path / "prod_shaped.db"
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute("PRAGMA foreign_keys=OFF")
+        # source_url: added by an earlier migration in real history, so a real
+        # database already at user_version 46 has it — included here so this
+        # synthetic fixture matches init_db()'s own post-migration
+        # `CREATE INDEX idx_jobs_source_url ON jobs(source_url)` instead of
+        # tripping a second, unrelated "no such column" false negative.
+        await conn.execute(
+            "CREATE TABLE jobs (id TEXT PRIMARY KEY, chat_id INTEGER, url TEXT, "
+            "source_url TEXT, content_type TEXT, status TEXT, title TEXT, error_msg TEXT, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await conn.execute(
+            "CREATE TABLE spaces (id TEXT PRIMARY KEY, chat_id INTEGER NOT NULL, "
+            "name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6366f1', "
+            "icon TEXT NOT NULL DEFAULT 'folder', "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(chat_id, name))"
+        )
+        await conn.execute(
+            """CREATE TABLE newsletter_subscriptions (
+                id               TEXT PRIMARY KEY,
+                chat_id          INTEGER NOT NULL,
+                name             TEXT NOT NULL,
+                sender_email     TEXT NOT NULL,
+                alias_local_part TEXT NOT NULL UNIQUE,
+                space_id         TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+                created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        await conn.execute(
+            """CREATE TABLE email_digest_payloads (
+                job_id          TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+                receipt_key     TEXT NOT NULL,
+                subscription_id TEXT REFERENCES newsletter_subscriptions(id) ON DELETE SET NULL,
+                subject         TEXT,
+                html            TEXT,
+                text            TEXT,
+                UNIQUE(subscription_id, receipt_key)
+            )"""
+        )
+        await conn.execute(
+            "CREATE INDEX idx_email_digest_payloads_subscription_id "
+            "ON email_digest_payloads(subscription_id)"
+        )
+        target_version = database._MIGRATIONS.index(database._migrate_newsletter_archive_polling)
+        await conn.execute(f"PRAGMA user_version = {target_version}")
+        await conn.commit()
+
+    monkeypatch.setattr("src.config.settings.DB_PATH", str(db_path))
+    monkeypatch.setattr("src.database.settings.DB_PATH", str(db_path))
+
+    await database.init_db()  # must not raise
+
+    async with aiosqlite.connect(db_path) as conn:
+        cols = {row[1] for row in await (await conn.execute("PRAGMA table_info(email_digest_payloads)")).fetchall()}
+        assert {"watch_id", "publication_id", "slug", "context_md"} <= cols
+        assert "receipt_key" not in cols
+
+
 # ---------------------------------------------------------------------------
 # Composite FK
 # ---------------------------------------------------------------------------
