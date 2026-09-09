@@ -54,6 +54,15 @@ Rules:
 - links: extract any URLs, website names, app names, social handles visible in any frame; infer full URL from domain/brand
 - If no links found: return "links": []
 - code: only if real source code is rendered on screen (editor, terminal, slide). Transcribe it exactly — preserve indentation and line breaks, do NOT explain, reformat, complete, or fix it. If the same file scrolls across frames, stitch the parts in order and de-duplicate overlapping lines. Not code (UI chrome, prose, file trees, prices): return "".
+- Only state facts you can actually see in the frames or read in the transcript below. Do not infer or invent details that appear in neither.
+"""
+
+_TRANSCRIPT_GROUNDING = """
+
+The transcript below is the verbatim spoken audio of this video — it is ground truth for what the video is actually about. When writing "title" and "summary", base them on the transcript's content, not on guesses from the frames. Use the frames only for "main_frame_index", "code", and "links" (on-screen visuals the transcript won't mention).
+
+TRANSCRIPT:
+{transcript}
 """
 
 _PHOTO_PROMPT = """You are an OCR-grounded link extractor. Read the image(s) and return only URLs or domains that are LITERALLY visible as text. Do NOT invent or infer a URL from a brand name, product name, app icon, or logo.
@@ -206,15 +215,21 @@ async def generate(
     return (response.text or "").replace("—", "-")
 
 
-async def call_gemini_vision(frames: list[dict]) -> dict:
+async def call_gemini_vision(frames: list[dict], transcript_text: str | None = None) -> dict:
     """Analyze inline JPEG frames. Raises GeminiUnavailableError on total failure.
 
     frames: [{"base64": str, "mime_type": str}, ...]
+    transcript_text: spoken audio transcript, when already available — grounds
+        "title"/"summary" instead of leaving Gemini to guess them from frames alone.
     Returns {main_frame_index, summary, links: [{url, label, description}]}.
     """
     from google.genai import types
 
-    parts: list = [_VISION_PROMPT] + [
+    prompt = _VISION_PROMPT
+    if transcript_text:
+        prompt += _TRANSCRIPT_GROUNDING.format(transcript=transcript_text)
+
+    parts: list = [prompt] + [
         types.Part.from_bytes(data=base64.b64decode(f["base64"]), mime_type=f["mime_type"])
         for f in frames
     ]
