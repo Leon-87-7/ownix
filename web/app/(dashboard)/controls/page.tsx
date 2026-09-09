@@ -431,6 +431,14 @@ function AccessibilitySection() {
   // The ref is updated synchronously inside update() itself, so a second
   // overlapping call always sees the first call's optimistic value.
   const settingsRef = useRef(settings);
+  // The endpoint is a full-object PUT with last-write-wins semantics, so
+  // two in-flight PUTs can land at the server out of send order and the
+  // older one silently overwrites the newer one there even though
+  // generationRef already fixed which result the UI displays. Chaining
+  // each PUT onto the previous one's settlement guarantees they reach the
+  // server in the order they were made, so the persisted record always
+  // matches the last edit.
+  const pendingSaveRef = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -471,12 +479,17 @@ function AccessibilitySection() {
     publishAccessibilitySettingsFromExternalWrite(next);
     setSaving(true);
     setError(undefined);
-    try {
-      const saved = await apiPut<AccessibilitySettings>(
+    const run = pendingSaveRef.current.then(() =>
+      apiPut<AccessibilitySettings>(
         "/api/controls/accessibility-settings",
         next,
         "Failed to save accessibility settings",
-      );
+      ),
+    );
+    // Swallowed so a failed PUT doesn't poison the chain for the next update.
+    pendingSaveRef.current = run.catch(() => undefined);
+    try {
+      const saved = await run;
       if (generation !== generationRef.current) return;
       settingsRef.current = saved;
       setSettings(saved);
