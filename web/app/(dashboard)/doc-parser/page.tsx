@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { FileCode2, PencilSparkles } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/badges';
+import { describeError } from '@/lib/fetch-utils';
 import { GeneratedBadge } from '@/components/ui/generated-badge';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
@@ -94,10 +95,10 @@ function DocParserWorkspace() {
         throw new Error(`Documents request failed (${r.status})`);
       const d = await r.json();
       setJobs(d.items ?? []);
-    } catch {
+    } catch (error) {
       // Surface the failure instead of falling through to EmptyState, which
       // would misread a 5xx/network error as "no documents".
-      setLoadError('Failed to load documents. Please refresh.');
+      setLoadError(describeError(error, 'Failed to load documents. Please refresh.'));
     } finally {
       setLoading(false);
     }

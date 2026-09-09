@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { FileUp } from 'lucide-react';
 import { DOCUMENT_UPLOAD_ACCEPT } from '@/lib/document-formats';
+import { describeError } from '@/lib/fetch-utils';
 
 /** Document/image upload for `/intake` (issue #475, multi-format per ADR-0023).
  *  The server content-sniffs the bytes — this `accept` is only a picker hint. */
@@ -24,7 +25,7 @@ export function IntakeUploadDropzone({
     try {
       await onUploaded(file);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Upload failed.');
+      onError(describeError(err, 'Upload failed.'));
     } finally {
       setUploading(false);
     }

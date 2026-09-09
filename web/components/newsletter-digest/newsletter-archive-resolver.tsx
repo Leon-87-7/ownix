@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Search } from 'lucide-react';
 import type { NewsletterArchiveResolution } from '@/lib/newsletter-digest';
+import { describeError } from '@/lib/fetch-utils';
 
 const MAX_VISIBLE_ISSUES = 5;
 
@@ -34,6 +35,12 @@ export function NewsletterArchiveResolver({
   const mountedRef = useRef(true);
   const queryInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  // The `submitting` prop only reflects the parent's last committed render —
+  // a second Enter/click that lands before that render flushes would read
+  // the same stale `false` and fire onConfirm again. This ref is set
+  // synchronously so a second call in the same tick is rejected regardless
+  // of render timing.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -63,7 +70,7 @@ export function NewsletterArchiveResolver({
     } catch (err) {
       if (!mountedRef.current) return;
       setResolution(null);
-      setError(err instanceof Error ? err.message : 'Could not resolve that newsletter');
+      setError(describeError(err, 'Could not resolve that newsletter'));
     } finally {
       if (mountedRef.current) setResolving(false);
     }
@@ -78,12 +85,17 @@ export function NewsletterArchiveResolver({
     queryInputRef.current?.focus();
   }
 
-  function handleConfirm(event?: FormEvent<HTMLFormElement>) {
+  async function handleConfirm(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!resolution || submitting) return;
+    if (!resolution || submitting || submittingRef.current) return;
     const trimmedName = name.trim();
     if (!trimmedName) return;
-    void onConfirm?.(resolution, trimmedName);
+    submittingRef.current = true;
+    try {
+      await onConfirm?.(resolution, trimmedName);
+    } finally {
+      submittingRef.current = false;
+    }
   }
 
   return (

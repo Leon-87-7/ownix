@@ -15,6 +15,8 @@ import {
   type NewsletterArchiveResolution,
   type NewsletterWatch,
 } from '@/lib/newsletter-digest';
+import { describeError } from '@/lib/fetch-utils';
+import { toast } from '@/lib/toast';
 
 export function NewsletterDigestDashboard() {
   const [watches, setWatches] = useState<NewsletterWatch[]>([]);
@@ -31,7 +33,7 @@ export function NewsletterDigestDashboard() {
       setWatches(await fetchNewsletterWatches());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load newsletters');
+      setError(describeError(err, 'Could not load newsletters'));
     } finally {
       setLoading(false);
     }
@@ -46,11 +48,15 @@ export function NewsletterDigestDashboard() {
     setFormError(null);
     try {
       const created = await createNewsletterWatch({ archive_url: resolution.archive_url, name });
-      setWatches((current) => [created, ...current]);
+      // Defense in depth alongside the resolver's own submit guard: never
+      // show the same watch twice even if a duplicate request slipped through.
+      setWatches((current) =>
+        current.some((item) => item.id === created.id) ? current : [created, ...current],
+      );
       // Remount the resolver so it drops back to its empty input state.
       setFormKey((key) => key + 1);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not add newsletter');
+      setFormError(describeError(err, 'Could not add newsletter'));
     } finally {
       setSubmitting(false);
     }
@@ -63,8 +69,9 @@ export function NewsletterDigestDashboard() {
     try {
       await deleteNewsletterWatch(id);
       setWatches((current) => current.filter((item) => item.id !== id));
+      toast('Newsletter removed');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not stop watching that newsletter');
+      setFormError(describeError(err, 'Could not stop watching that newsletter'));
     } finally {
       setBusyId(null);
     }
@@ -77,7 +84,7 @@ export function NewsletterDigestDashboard() {
       await retryEmailDigest(id);
       await load();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not retry that digest');
+      setFormError(describeError(err, 'Could not retry that digest'));
     } finally {
       setBusyId(null);
     }

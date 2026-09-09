@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useTagList } from "@/lib/hooks/useTagList";
 import { useDomainList } from "@/lib/hooks/useDomainList";
-import { apiDelete, apiPut } from "@/lib/fetch-utils";
+import { apiDelete, apiPut, describeError } from "@/lib/fetch-utils";
 import type { Tag, TagFormState } from "@/lib/hooks/useTagList";
 import { Pin, PinOff, SlidersHorizontal, TagPlus } from "lucide-react";
 import { OwnixChevronDown } from "@/components/svg/ownix-chevron-down";
@@ -128,7 +128,7 @@ function TagsTab() {
       await deleteTag(editingTag.id);
       setEditingId(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Delete failed");
+      setDeleteError(describeError(err, "Delete failed"));
     }
   };
 
@@ -137,7 +137,7 @@ function TagsTab() {
     try {
       await toggleTagPinned(tag.id, !tag.pinned);
     } catch (err) {
-      setPinError(err instanceof Error ? err.message : "Pin failed");
+      setPinError(describeError(err, "Pin failed"));
     }
   };
 
@@ -228,7 +228,7 @@ function DomainTab({ apiPath, label }: { apiPath: string; label: string }) {
       await addDomain(trimmed);
       setInput("");
     } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : "Add failed");
+      setAddError(describeError(err, "Add failed"));
     } finally {
       setAdding(false);
     }
@@ -239,7 +239,7 @@ function DomainTab({ apiPath, label }: { apiPath: string; label: string }) {
     try {
       await removeDomain(domain);
     } catch (err: unknown) {
-      setRemoveError(err instanceof Error ? err.message : "Remove failed");
+      setRemoveError(describeError(err, "Remove failed"));
     }
   };
 
@@ -339,11 +339,7 @@ function RecoveryTab() {
           (err instanceof Error && err.name === "AbortError")
         )
           return;
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load recovery settings",
-        );
+        setError(describeError(err, "Failed to load recovery settings"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -367,9 +363,7 @@ function RecoveryTab() {
       setEnabled(result.telegram_notifications);
     } catch (err) {
       setEnabled(previous);
-      setError(
-        err instanceof Error ? err.message : "Failed to save recovery settings",
-      );
+      setError(describeError(err, "Failed to save recovery settings"));
     } finally {
       setSaving(false);
     }
@@ -430,6 +424,13 @@ function AccessibilitySection() {
   const isPersistedVoiceInstalled = voiceGroups.some((group) =>
     group.voices.some((voice) => voice.voiceURI === settings.voice_uri),
   );
+  // update() composes its PUT payload from this ref, not the `settings`
+  // state closure: two onChange events firing before React re-renders
+  // between them would otherwise both read the same stale `settings`,
+  // so the second call's payload silently drops the first call's change.
+  // The ref is updated synchronously inside update() itself, so a second
+  // overlapping call always sees the first call's optimistic value.
+  const settingsRef = useRef(settings);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -441,6 +442,7 @@ function AccessibilitySection() {
       })
       .then((value) => {
         if (!controller.signal.aborted) {
+          settingsRef.current = value;
           setSettings(value);
           publishAccessibilitySettingsFromExternalWrite(value);
           setLoaded(true);
@@ -452,11 +454,7 @@ function AccessibilitySection() {
           (caught instanceof Error && caught.name === "AbortError")
         )
           return;
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : "Failed to load accessibility settings",
-        );
+        setError(describeError(caught, "Failed to load accessibility settings"));
       });
     return () => controller.abort();
   }, []);
@@ -466,8 +464,9 @@ function AccessibilitySection() {
     value: AccessibilitySettings[K],
   ) => {
     const generation = ++generationRef.current;
-    const previous = settings;
-    const next = { ...settings, [key]: value };
+    const previous = settingsRef.current;
+    const next = { ...settingsRef.current, [key]: value };
+    settingsRef.current = next;
     setSettings(next);
     publishAccessibilitySettingsFromExternalWrite(next);
     setSaving(true);
@@ -479,17 +478,15 @@ function AccessibilitySection() {
         "Failed to save accessibility settings",
       );
       if (generation !== generationRef.current) return;
+      settingsRef.current = saved;
       setSettings(saved);
       publishAccessibilitySettingsFromExternalWrite(saved);
     } catch (caught) {
       if (generation !== generationRef.current) return;
+      settingsRef.current = previous;
       setSettings(previous);
       publishAccessibilitySettingsFromExternalWrite(previous);
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Failed to save accessibility settings",
-      );
+      setError(describeError(caught, "Failed to save accessibility settings"));
     } finally {
       if (generation === generationRef.current) setSaving(false);
     }
@@ -595,7 +592,7 @@ function DeleteAccountSection() {
       await apiDelete("/api/auth/me", "Could not delete account");
       router.replace("/login");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete account");
+      setError(describeError(err, "Could not delete account"));
       setDeleting(false);
       throw err;
     }

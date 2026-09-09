@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { CopyButton } from '@/components/ui/copy-button';
 import { DateTime } from '@/components/ui/date-time';
+import { describeError } from '@/lib/fetch-utils';
 import {
   createPairingCode,
   listExtensionTokens,
@@ -25,7 +26,7 @@ export function ExtensionTokensPanel() {
     try {
       setTokens(await listExtensionTokens());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tokens.');
+      setError(describeError(err, 'Failed to load tokens.'));
     } finally {
       setLoading(false);
     }
@@ -57,7 +58,7 @@ export function ExtensionTokensPanel() {
       setPairingCode(code);
       setPairingExpiresIn(expires_in);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create a pairing code.');
+      setError(describeError(err, 'Failed to create a pairing code.'));
     } finally {
       setPairing(false);
     }
@@ -70,7 +71,7 @@ export function ExtensionTokensPanel() {
       await revokeExtensionToken(tokenId);
       setTokens((prev) => prev.filter((t) => t.id !== tokenId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke token.');
+      setError(describeError(err, 'Failed to revoke token.'));
     } finally {
       setRevokingId(null);
     }

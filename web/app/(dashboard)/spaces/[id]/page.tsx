@@ -19,6 +19,7 @@ import { SkeletonBlock } from '@/components/feed/feed-states';
 import { IconPicker } from '@/components/spaces/icon-picker';
 import { DEFAULT_SPACE_ICON, SPACE_ICON_BY_NAME } from '@/lib/space-icons';
 import { apiDelete } from '@/lib/fetch-utils';
+import { toast } from '@/lib/toast';
 
 type ActiveTab = 'urls' | 'context';
 
@@ -73,6 +74,7 @@ export default function SpaceDetailPage() {
     setDeleteFailed(false);
     try {
       await apiDelete(`/api/spaces/${id}`);
+      toast('Collection deleted');
       // Navigating away - skip state updates so nothing fires mid-unmount.
       router.push('/spaces');
       return;

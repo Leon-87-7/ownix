@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+/** Turns a caught error into user-facing copy. `fetch()` rejects with a bare
+ * TypeError ("Failed to fetch") when the request never reaches the server —
+ * offline, DNS, CORS — which reads as a cryptic browser internal rather than
+ * guidance. Anything else is a real Error (usually the server's `detail`)
+ * and passes through unchanged. */
+export function describeError(err: unknown, fallback: string): string {
+  if (err instanceof TypeError) {
+    return 'Check your internet connection and try again.';
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 export type FetchState = "loading" | "ok" | "not_found" | "forbidden" | "error";
 
 const FETCH_STATE_MAP: Record<number, 'not_found' | 'forbidden' | 'error'> = {

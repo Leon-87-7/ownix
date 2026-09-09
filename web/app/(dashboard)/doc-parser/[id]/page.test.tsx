@@ -168,9 +168,7 @@ describe('DocDetail', () => {
 
     render(<DocDetail />);
 
-    expect(
-      await screen.findByText('Failed to load document: Not authenticated'),
-    ).toBeTruthy();
+    expect(await screen.findByText('Not authenticated')).toBeTruthy();
   });
 
   it('shows string backend detail for action failures', async () => {

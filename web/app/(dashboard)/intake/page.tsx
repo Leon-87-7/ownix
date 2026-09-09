@@ -10,6 +10,7 @@ import { useRestrictedMode } from '@/lib/restricted/context';
 import { IntakeComposer } from '@/components/intake/intake-composer';
 import { IntakeThread } from '@/components/intake/intake-thread';
 import { useIntakeThread } from '@/lib/hooks/useIntakeThread';
+import { describeError } from '@/lib/fetch-utils';
 import { IntakeStateBanner } from '@/components/intake/intake-state-banner';
 import { IntakeUploadDropzone } from '@/components/intake/intake-upload-dropzone';
 import { submitIntakeText } from '@/lib/hooks/useIntake';
@@ -122,11 +123,7 @@ function IntakeWorkspace() {
         await sendText(value);
         return true;
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Intake submit failed.',
-        );
+        setError(describeError(err, 'Intake submit failed.'));
         return false;
       }
     },
@@ -141,9 +138,7 @@ function IntakeWorkspace() {
         const response = await applyIntakeAction(action);
         add({ response });
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Action failed.',
-        );
+        setError(describeError(err, 'Action failed.'));
       } finally {
         setPendingActionId(null);
       }

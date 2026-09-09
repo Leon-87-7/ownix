@@ -21,6 +21,7 @@ import {
   type DigestCandidate,
   type NewsletterWatch,
 } from '@/lib/newsletter-digest';
+import { describeError } from '@/lib/fetch-utils';
 
 const MarkdownEditor = dynamic(() => import('@/components/ui/markdown-editor'), {
   ssr: false,
@@ -88,7 +89,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
       setError(null);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      setError(err instanceof Error ? err.message : 'Could not load newsletter digest');
+      setError(describeError(err, 'Could not load newsletter digest'));
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -131,7 +132,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create job');
+      setError(describeError(err, 'Could not create job'));
     } finally {
       setBusyCandidateId(null);
     }
@@ -147,7 +148,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not dismiss candidate');
+      setError(describeError(err, 'Could not dismiss candidate'));
     } finally {
       setBusyCandidateId(null);
     }
@@ -190,7 +191,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
       return;
     }
     if (failure) {
-      const reason = failure instanceof Error ? failure.message : 'Some candidates failed';
+      const reason = describeError(failure, 'Some candidates failed');
       setError(`Dismissed ${dismissed} of ${targets.length}. ${reason}`);
     }
     setDismissingRest(false);
@@ -202,7 +203,7 @@ export function NewsletterDigestDetail({ subscriptionId }: { subscriptionId: str
       await retryEmailDigest(subscriptionId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not retry digest');
+      setError(describeError(err, 'Could not retry digest'));
     } finally {
       setRetrying(false);
     }

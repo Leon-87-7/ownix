@@ -61,6 +61,7 @@ import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FolderTagForm } from '@/components/feed/folder-tag-form';
 import { apiPost, apiPut } from '@/lib/fetch-utils';
+import { toast } from '@/lib/toast';
 import { startPolling } from '@/lib/polling';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
 import { RepoFollowupPanel } from '@/components/ui/repo-followup-panel';
@@ -1456,6 +1457,7 @@ export default function JobDetailPage() {
       );
       if (!response.ok) throw new Error('Job delete failed');
       haptic('success');
+      toast('Job deleted');
       if (window.history.length > 1) router.back();
       else router.push('/feed');
     } catch {

@@ -8,6 +8,7 @@ import { MessageSquareText } from 'lucide-react';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { Tooltip } from '@/components/ui/tooltip';
+import { describeError } from '@/lib/fetch-utils';
 import type {
   Template,
   TemplateFormState,
@@ -38,7 +39,7 @@ function CreateForm({
         extra_instructions: '',
       });
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Create failed');
+      setError(describeError(err, 'Create failed'));
     } finally {
       setSubmitting(false);
     }
@@ -157,9 +158,7 @@ function UserTemplateRow({
     try {
       await onDelete(template.name);
     } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Delete failed',
-      );
+      setDeleteError(describeError(err, 'Delete failed'));
     }
   };
 
@@ -171,9 +170,7 @@ function UserTemplateRow({
       await onUpdate(template.name, editValues);
       setEditing(false);
     } catch (err) {
-      setSaveError(
-        err instanceof Error ? err.message : 'Save failed',
-      );
+      setSaveError(describeError(err, 'Save failed'));
     } finally {
       setSaving(false);
     }
