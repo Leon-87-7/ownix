@@ -562,6 +562,12 @@ async def test_transcript_persisted_on_all_short_jobs() -> None:
     persisted = any("transcript" in str(c) and "python fastapi" in str(c) for c in update_calls)
     assert persisted, "jobs.transcript was never persisted"
 
+    # The acquired transcript must reach the vision call, not just get persisted —
+    # this is the whole point of fetching it before vision now runs.
+    mocks["vision"].assert_awaited_once_with(
+        _FRAME_RESP["frames"], transcript_text=transcript_resp["text"]
+    )
+
     # Persisting the transcript must not prematurely flip status to "done" —
     # vision/Drive/media delivery haven't run yet at that point in the pipeline.
     # (transcript_drive_url is a separate, legitimate update_job_status call that
