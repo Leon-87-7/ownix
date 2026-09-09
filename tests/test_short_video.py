@@ -250,6 +250,9 @@ def _patch_pipeline(transcript_resp: dict, *, job: dict | None = None):
             "update_job_status": p(
                 "src.processors.short_video.database.update_job_status", new_callable=AsyncMock
             ),
+            "update_job_fields": p(
+                "src.processors.short_video.database.update_job_fields", new_callable=AsyncMock
+            ),
             "get_job": p("src.processors.short_video.database.get_job", new_callable=AsyncMock),
             "save_thumbnail": p(
                 "src.processors.short_video.database.save_thumbnail", new_callable=AsyncMock
@@ -555,9 +558,24 @@ async def test_transcript_persisted_on_all_short_jobs() -> None:
     with _patch_pipeline(transcript_resp, job=_PLAIN_JOB) as (short_video, mocks):
         await short_video.run(_PLAIN_JOB)
 
-    update_calls = mocks["update_job_status"].call_args_list
+    update_calls = mocks["update_job_fields"].call_args_list
     persisted = any("transcript" in str(c) and "python fastapi" in str(c) for c in update_calls)
     assert persisted, "jobs.transcript was never persisted"
+
+    # The acquired transcript must reach the vision call, not just get persisted —
+    # this is the whole point of fetching it before vision now runs.
+    mocks["vision"].assert_awaited_once_with(
+        _FRAME_RESP["frames"], transcript_text=transcript_resp["text"]
+    )
+
+    # Persisting the transcript must not prematurely flip status to "done" —
+    # vision/Drive/media delivery haven't run yet at that point in the pipeline.
+    # (transcript_drive_url is a separate, legitimate update_job_status call that
+    # only happens at the true end of the pipeline, in _deliver_transcript_doc.)
+    assert not any(
+        "transcript" in c.kwargs and "transcript_drive_url" not in c.kwargs
+        for c in mocks["update_job_status"].call_args_list
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -748,7 +766,7 @@ async def test_template_audio_transcript_persisted_and_tail_runs() -> None:
         }
         await short_video.run(job)
 
-    update_calls = mocks["update_job_status"].call_args_list
+    update_calls = mocks["update_job_fields"].call_args_list
     assert any("verbatim spoken content" in str(c) for c in update_calls), (
         "transcript not persisted"
     )
