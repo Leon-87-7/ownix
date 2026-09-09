@@ -425,12 +425,10 @@ async def _acquire_and_persist_transcript(
     if wordless:
         await send_message(chat_id, f"{tag}\n⚠️ I'm wordless")
 
-    # Persist transcript immediately on acquisition. The key_phrases DB column is dormant.
+    # Persist transcript immediately on acquisition, without flipping status to "done" —
+    # vision/Drive/media delivery haven't run yet at this point in the pipeline.
     if transcript_text:
-        await database.update_job_status(
-            job_id, "done",
-            transcript=transcript_text,
-        )
+        await database.update_job_fields(job_id, transcript=transcript_text)
 
     return transcript_text, template_analysis
 
