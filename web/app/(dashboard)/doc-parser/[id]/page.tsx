@@ -9,6 +9,7 @@ import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
 import { downloadBlob } from '@/components/ui/export-modal';
 import { PageShell } from '@/components/shell/page-shell';
 import { Tooltip } from '@/components/ui/tooltip';
+import { describeError } from '@/lib/fetch-utils';
 
 const RANDOM_PROMPTS = [
   'Summarize into the 5 most important takeaways',
@@ -234,11 +235,7 @@ export default function DocDetail() {
         setOuts(o);
       } catch (error) {
         if (!cancelled) {
-          const message =
-            error instanceof Error && error.message
-              ? error.message
-              : 'Failed to load document. Please refresh.';
-          setErr(`Failed to load document: ${message}`);
+          setErr(describeError(error, 'Failed to load document. Please refresh.'));
         }
       }
     }
@@ -267,8 +264,8 @@ export default function DocDetail() {
         return;
       }
       setReloadKey((key) => key + 1);
-    } catch {
-      setErr('Network error. Please try again.');
+    } catch (error) {
+      setErr(describeError(error, 'Network error. Please try again.'));
     } finally {
       setAction(null);
     }

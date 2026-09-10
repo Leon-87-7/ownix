@@ -8,7 +8,7 @@ import { SkeletonLine } from "@/components/feed/feed-states";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ReorderButtons } from "@/components/ui/reorder-buttons";
 import { useAddSearch, type AddSearchResult } from "@/lib/hooks/useAddSearch";
-import { apiPost } from "@/lib/fetch-utils";
+import { apiPost, describeError } from "@/lib/fetch-utils";
 
 export function UrlsTab({ spaceId }: { spaceId: string }) {
   const { spaceUrls, allJobs, loading, addJob, removeUrl, reorderUrl } =
@@ -40,8 +40,7 @@ export function UrlsTab({ spaceId }: { spaceId: string }) {
     } catch (error) {
       setRowErrors((current) => ({
         ...current,
-        [result.url]:
-          error instanceof Error ? error.message : "Could not add this URL.",
+        [result.url]: describeError(error, "Could not add this URL."),
       }));
     } finally {
       setBusyUrls((current) => {

@@ -190,20 +190,19 @@ describe('ControlsPage', () => {
     await waitFor(() => expect(select.value).toBe(''));
   });
 
-  it('keeps the newer voice pick when its PUT resolves before an older overlapping one', async () => {
-    // Regression test for the generationRef guard: pick 'us' (PUT deferred),
-    // then pick 'uk' before the first PUT resolves (PUT also deferred).
-    // Resolve the OLDER ('us') request last — without the guard, its
-    // response would land last and roll the UI back to 'us'.
+  it('queues overlapping voice-pick PUTs so the server always persists the latest edit', async () => {
+    // Regression test for the pendingSaveRef queue: the endpoint is a
+    // full-object PUT with last-write-wins semantics, so two in-flight PUTs
+    // can land at the server out of send order. Picking 'us' then 'uk'
+    // before the first PUT settles must NOT fire the second PUT until the
+    // first has resolved — otherwise the server could persist 'us' last
+    // even though the UI (correctly) shows 'uk'.
     //
     // Note: a mouse/keyboard user can't literally trigger this — the select
     // is disabled while saving={true}, so a real second pick can't happen
     // before the first PUT settles. fireEvent.change bypasses the disabled
     // attribute (it dispatches the DOM event directly), which is exactly
-    // what's needed here: this test exercises the generationRef guard logic
-    // itself, the same logic Task 3's "external write invalidates a slower
-    // in-flight load" test exercises from the other direction — not a
-    // literal two-click scenario.
+    // what's needed to exercise the queue itself.
     const voices = [
       { voiceURI: 'us', name: 'Google US English', lang: 'en-US' },
       { voiceURI: 'uk', name: 'Daniel', lang: 'en-GB' },
@@ -220,15 +219,18 @@ describe('ControlsPage', () => {
     }));
 
     let resolveFirstPut!: (response: Response) => void;
-    let resolveSecondPut!: (response: Response) => void;
     const firstPut = new Promise<Response>((done) => { resolveFirstPut = done; });
-    const secondPut = new Promise<Response>((done) => { resolveSecondPut = done; });
+    const putBodies: unknown[] = [];
     let putCount = 0;
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).includes('accessibility-settings')) {
         if (init?.method === 'PUT') {
           putCount += 1;
-          return putCount === 1 ? firstPut : secondPut;
+          putBodies.push(JSON.parse(init.body as string));
+          if (putCount === 1) return firstPut;
+          // The second PUT (once the queue releases it) can resolve
+          // immediately — only its send timing and body matter here.
+          return Promise.resolve(new Response(init.body as string, { status: 200 }));
         }
         return Promise.resolve(new Response(JSON.stringify({
           visual_motion: true,
@@ -247,18 +249,20 @@ describe('ControlsPage', () => {
     fireEvent.change(select, { target: { value: 'uk' } });
     await waitFor(() => expect(select.value).toBe('uk'));
 
+    // The second PUT must stay queued behind the first, still in flight.
+    expect(putCount).toBe(1);
+
     await act(async () => {
-      // Older request resolves LAST.
-      resolveSecondPut(new Response(JSON.stringify({
-        visual_motion: true, haptic_motion: true, voice_uri: 'uk',
-      }), { status: 200 }));
-      await secondPut;
       resolveFirstPut(new Response(JSON.stringify({
         visual_motion: true, haptic_motion: true, voice_uri: 'us',
       }), { status: 200 }));
       await firstPut;
     });
 
+    // Only once the first PUT settles does the queue release the second —
+    // and it carries the composed, correct value, not the stale 'us'.
+    await waitFor(() => expect(putCount).toBe(2));
+    expect(putBodies[1]).toMatchObject({ voice_uri: 'uk' });
     expect(select.value).toBe('uk');
   });
 

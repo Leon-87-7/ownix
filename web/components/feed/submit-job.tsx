@@ -27,7 +27,7 @@ import { DocUploadPanel } from "@/components/doc-parser/doc-upload-panel";
 import { GoToLinksPanel } from "@/components/feed/goto-links-panel";
 import { useRestrictedMode } from "@/lib/restricted/context";
 import { parseBatchLinkInput } from "@/lib/parse-batch-links";
-import { apiPost } from "@/lib/fetch-utils";
+import { apiPost, describeError } from "@/lib/fetch-utils";
 import { useHapticFeedback } from "@/lib/hooks/useHapticFeedback";
 import { usePressFeedback } from "@/lib/hooks/usePressFeedback";
 
@@ -514,7 +514,7 @@ export function SubmitJobProvider({ children }: { children: ReactNode }) {
         setOpen(false);
         haptic("success");
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not submit job");
+        setError(describeError(e, "Could not submit job"));
         haptic("error");
       } finally {
         setSubmitting(false);
@@ -562,7 +562,7 @@ export function SubmitJobProvider({ children }: { children: ReactNode }) {
         haptic("success");
         return true;
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Could not add link";
+        const message = describeError(e, "Could not add link");
         setBatchResults((current) =>
           current.map((row, i) =>
             i === index ? { ...row, status: "error", message } : row,

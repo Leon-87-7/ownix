@@ -5,6 +5,7 @@ import { InviteGate } from '@/components/shell/invite-gate';
 import { GoogleStatusProvider } from '@/components/shell/google-status';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ToastHost } from '@/components/ui/toast-host';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import DevPersonaSwitch from '@/components/ui/dev-persona-switch';
 import { isRestrictedRequest } from '@/lib/restricted/server';
@@ -62,6 +63,7 @@ export default async function DashboardLayout({
         </InviteGate>
         {/* Outside InviteGate so the dev switch survives the gate screen. */}
         <DevPersonaSwitch />
+        <ToastHost />
       </RestrictedModeProvider>
     </TooltipProvider>
   );

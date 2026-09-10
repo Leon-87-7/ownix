@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { PRESET_COLORS, IconPicker } from '@/components/ui/tag-picker';
 import { Pipette, TagX } from 'lucide-react';
 import type { TagFormState } from '@/lib/hooks/useTagList';
+import { describeError } from '@/lib/fetch-utils';
 
 export const DEFAULT_COLOR = '#8b5cf6';
 
@@ -39,7 +40,7 @@ export function TagForm({
     try {
       await onSubmit(values);
     } catch (err: unknown) {
-      setLocalError(err instanceof Error ? err.message : String(err));
+      setLocalError(describeError(err, 'Save failed'));
     } finally {
       setSubmitting(false);
     }
