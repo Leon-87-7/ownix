@@ -22,6 +22,10 @@ _HANDOFF_PREFIX = "connect_handoff:"
 _HANDOFF_TTL_SECONDS = 60
 
 _DASHBOARD_HANDOFF_PREFIX = "dashboard_handoff:"
+_GITHUB_OAUTH_STATE_PREFIX = "github_oauth_state:"
+_GOOGLE_LOGIN_STATE_PREFIX = "google_login_state:"
+_EMAIL_MAGIC_LINK_PREFIX = "email_magic_link:"
+_DISCORD_PAIRING_PREFIX = "discord_pairing:"
 
 # Per-account index of minted session ids, so account deletion can invalidate
 # every device's session (not just the one that triggered deletion) — closes
@@ -209,4 +213,40 @@ async def redeem_dashboard_handoff(token: str) -> int | None:
         return int(value)
     except ValueError:
         log.error("dashboard_handoff_decode_error")
+        return None
+
+
+async def mint_github_oauth_state(value: str, ttl: int = 600) -> str:
+    return await _mint_token(_GITHUB_OAUTH_STATE_PREFIX, value, ttl)
+
+
+async def redeem_github_oauth_state(token: str) -> str | None:
+    return await _redeem_token(_GITHUB_OAUTH_STATE_PREFIX, token)
+
+
+async def mint_google_login_state(value: str, ttl: int = 600) -> str:
+    return await _mint_token(_GOOGLE_LOGIN_STATE_PREFIX, value, ttl)
+
+
+async def redeem_google_login_state(token: str) -> str | None:
+    return await _redeem_token(_GOOGLE_LOGIN_STATE_PREFIX, token)
+
+
+async def mint_email_magic_link(email: str, ttl: int = 900) -> str:
+    return await _mint_token(_EMAIL_MAGIC_LINK_PREFIX, email, ttl)
+
+
+async def redeem_email_magic_link(token: str) -> str | None:
+    return await _redeem_token(_EMAIL_MAGIC_LINK_PREFIX, token)
+
+
+async def mint_discord_pairing(owner_id: int, ttl: int = 300) -> str:
+    return await _mint_token(_DISCORD_PAIRING_PREFIX, str(owner_id), ttl)
+
+
+async def redeem_discord_pairing(token: str) -> int | None:
+    value = await _redeem_token(_DISCORD_PAIRING_PREFIX, token)
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
         return None

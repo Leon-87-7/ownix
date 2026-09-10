@@ -104,3 +104,25 @@ async def send_welcome_email(user: dict) -> bool:
     await asyncio.to_thread(_send_email_sync, message)
     log.info("welcome_email_sent", tg_id=user.get("tg_id"), email=email)
     return True
+
+
+async def send_magic_link_email(email: str, link: str) -> bool:
+    """Send a one-time sign-in link without revealing account existence."""
+    if not _smtp_configured():
+        log.info("magic_link_email_smtp_unconfigured")
+        return False
+    domain = email.rsplit("@", 1)[-1]
+    if not await asyncio.to_thread(_domain_accepts_mail_sync, domain):
+        log.warning("magic_link_email_domain_unreachable", domain=domain)
+        return False
+    message = EmailMessage()
+    message["Subject"] = "Your Ownix sign-in link"
+    message["From"] = formataddr((settings.SMTP_FROM_NAME, settings.SMTP_FROM_EMAIL))
+    message["To"] = email
+    message.set_content(
+        f"Use this one-time link to sign in to Ownix:\n\n{link}\n\n"
+        "It expires in 15 minutes and can only be used once."
+    )
+    await asyncio.to_thread(_send_email_sync, message)
+    log.info("magic_link_email_sent", email=email)
+    return True

@@ -24,6 +24,12 @@ _OPEN_API_PATHS = frozenset(
         "/api/auth/reviewer-login",
         "/api/auth/miniapp/session",
         "/api/auth/handoff",
+        "/api/auth/github/connect",
+        "/api/auth/github/callback",
+        "/api/auth/google/connect",
+        "/api/auth/google/callback",
+        "/api/auth/email/request",
+        "/api/auth/email/callback",
         "/api/google/callback",
         # The pairing code itself is the credential here (issue #479) — there
         # is no session to check yet when the extension redeems it.

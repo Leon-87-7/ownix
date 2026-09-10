@@ -394,3 +394,73 @@ e.g. which Discord Gateway library you chose and why, how you stubbed it for
 the #622/#624 tests, and any place the real OAuth credentials (not yet
 provisioned — see issues #618/#619/#622's "Why this needs a human" notes)
 meant a code path could only be tested with mocked HTTP responses.
+
+## Result summary (post-review, 2026-09-10)
+
+Delivered via Codex Cloud (`task_e_6aa2a619e954832c86925584a4c571a2`) then
+hardened after a manual diff review + `/cloud-patch-review` pass. All seven
+issues landed in one diff rather than staged per the Work order — `resolve_owner`
+shipped with #621's merge branch already built in, which is functionally
+equivalent to the staged sequencing and didn't need correcting.
+
+- **#618 GitHub OAuth** — done. `src/api/auth.py` `github_connect`/`github_callback`,
+  `src/auth/identity.py`'s `resolve_owner`, `identity_links` table (both in
+  `SCHEMA_SQL` and the guarded end-of-file migration). Gap found in review:
+  no test exercised the actual HTTP callback or the Operator-notify path —
+  added `test_github_callback_new_signup_lands_pending_and_notifies` in
+  `tests/test_auth_identity.py`.
+- **#619 Google login-only** — done, correctly isolated from the export
+  OAuth client (`GOOGLE_LOGIN_*`, never `GOOGLE_OAUTH_*`). Gap: no dedicated
+  idempotency/isolation test — added
+  `test_google_login_is_idempotent_and_isolated_from_export`, which also
+  asserts `google_oauth_tokens`/`google_oauth_states` stay empty.
+- **#620 Email magic-link** — done, reusing `mint_email_magic_link`/
+  `redeem_email_magic_link` over the existing `_mint_token`/`_redeem_token`
+  primitive. Gap: no HTTP-level tests at all existed — added happy-path
+  (request → redeem → double-redeem rejected), unknown-token rejection, and
+  a no-existence-leak test. Also found and fixed a real gap the handoff doc
+  should have specified: `POST /api/auth/email/request` had no rate
+  limiting, letting anyone spam an arbitrary mailbox with sign-in links.
+  Added `rate_limit.enforce(f"magic_link_request:{email}", max_requests=5)`
+  mirroring the existing `reviewer_login` pattern, plus a test.
+- **#621 Cross-provider merge** — done; verified-email match and the
+  race-safe unique-index + `IntegrityError` recovery both present and
+  tested. Gap: nothing tested that a merge skips re-notifying the Operator —
+  added `test_merge_across_providers_never_renotifies_operator` (GitHub then
+  Google, same verified email, `notify_operator_invite` asserted awaited
+  exactly once across both).
+- **#622 Discord Gateway skeleton** — done. Chose `discord.py>=2.6,<3` (the
+  standard client for this shape of Gateway connection) held open inside
+  `worker.py`'s `main()` via `asyncio.gather`. DM-only intents confirmed by
+  test and by inspection (`discord.Intents.none()` + `dm_messages=True`
+  only). Stubbed via `SimpleNamespace` fakes for the message/author/channel
+  objects rather than the real `discord.Client` in tests — no real Gateway
+  connection is exercised, only the message-handling logic.
+- **#623 Discord pairing** — done; pairing-mint route correctly requires an
+  existing approved session (absent from `_OPEN_API_PATHS`), redemption is
+  single-use, and a bare DM can never create a Tenant.
+- **#624 Discord → shared intake router** — done; delegates straight to
+  `router.handle()`, no forked business logic.
+
+**Separate from the above, caught by an automated security review while
+this batch was being fixed up, not by the original handoff doc:** GitHub
+and Google login's OAuth `state` wasn't bound to the initiating browser
+(login-CSRF) — an attacker could start their own flow and trick a victim
+into completing the callback on the attacker's identity. Fixed with a
+short-lived `HttpOnly`/`Secure`/`SameSite=Lax` cookie carrying `state`,
+compared via `hmac.compare_digest` on callback, with tests for both
+providers (`test_github_callback_rejects_state_without_matching_cookie`,
+`test_google_callback_rejects_state_without_matching_cookie`).
+
+**Still open, deliberately not fixed here (needs a human, not a code
+change):** before this ever runs against the real production database, someone
+needs to check for existing rows sharing a normalized email — the new
+`CREATE UNIQUE INDEX ... ON users(email COLLATE NOCASE)` migration will
+fail outright at startup if any two already collide. ADR-0031 suggests this
+is unlikely (almost no rows carry email today) but it hasn't been verified
+against the real data.
+
+Full verification: `ruff check src/` clean; `pytest tests/test_auth.py
+tests/test_auth_identity.py tests/test_discord_channel.py
+tests/test_export_gate.py` — 99 passed (Discord tests require `discord.py`
+installed locally; they're skipped, not failed, without it).

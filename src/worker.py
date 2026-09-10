@@ -447,9 +447,15 @@ async def loop() -> None:
             await asyncio.sleep(2)
 
 
+async def _run_services() -> None:
+    from src.channels.discord import gateway as discord_gateway
+
+    await asyncio.gather(loop(), discord_gateway.run())
+
+
 def main() -> None:
     try:
-        asyncio.run(loop())
+        asyncio.run(_run_services())
     except KeyboardInterrupt:
         log.info("worker_shutdown")
 
