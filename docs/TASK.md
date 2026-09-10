@@ -1586,3 +1586,77 @@ built.
   endpoint's max-4-probes-per-request + per-`chat_id` rate limit,
   `PLAN.md:169-170`), or does it inherit them for free by sitting behind the
   same call sites?
+
+## 37. Dashboard photo/image upload → OCR ingestion for non-Telegram users
+
+> **Grill:** `/grilling` — pure product/UX scope call; reuses existing Gemini
+> Vision + FastAPI upload machinery, no new third-party integration.
+
+> **Entangled with the live non-Telegram-signup grill session** (not yet a
+> numbered task): that session is adding Google/GitHub OAuth identity
+> alongside `tg_id` and fixing article/repo raw-markdown persistence
+> (currently Telegram `send_document`-only). This brief is the deliberately
+> **deferred** third piece — full ingestion parity for photo/OCR — split out
+> because the session scoped v1 to login + URL-based job parity only.
+
+> **Grounded:** 2026-09-10
+
+Photo link extraction is Telegram-webhook-inline only today (ADR-0003): no
+`jobs` row, no Redis queue. `_webhook_route_photo` / `_handle_photo_update`
+/ `_handle_single_photo` / `_process_media_group` (all in
+`src/telegram/webhook.py`) download the photo via Telegram's file API, call
+`gemini_photo.py` (Vision extraction, deliberately job/chat_id-unaware per
+ADR-0003's own consequence), filter with `_filter_grounded_links`, reply via
+`send_message`, and fire-and-forget `brain.ingest_links`. Multi-image sends
+batch via Telegram's `media_group_id` (`_accumulate_media_group` /
+`_process_media_group`, ADR-0024 debounce). None of this has a dashboard
+equivalent — unlike `short`/`long`/`article`/`repo`, which already reach the
+dashboard through `POST /api/jobs` (task 4, ADR-0032/0033) with zero
+Telegram-bot involvement. The nearest precedent for a web file-upload entry
+point is `POST /api/parsed/upload` (`src/api/parsed.py:91`), the Doc Parser
+page's PDF ingest.
+
+**Wanted:** a signed-in dashboard user with no Telegram identity can upload a
+photo/screenshot and get the same result a Telegram photo message produces
+today (Gemini Vision → grounded-link filter → Brain ingest) without the
+Telegram bot.
+
+**Backend**
+
+- New upload endpoint (`POST /api/photos`, or folded into `parsed.py`'s
+  pattern) taking `UploadFile`; `chat_id` from `request.state.user["id"]`,
+  same convention as `POST /api/jobs`.
+- **Not a drop-in reuse:** `_handle_single_photo`'s extract→filter→ingest
+  logic is currently coupled to Telegram message/chat semantics (Telegram
+  file download, `send_message` reply). Pulling the Telegram-agnostic core
+  out — probably into `gemini_photo.py`, which ADR-0003 already keeps
+  job/chat_id-unaware — is real groundwork, not just a second caller.
+- ADR-0003's "ephemeral, no audit trail" stance assumed a Telegram chat as
+  the implicit retry surface ("user can re-send the photo"). A web upload
+  has no equivalent standing record — does this still skip a `jobs` row, or
+  does the dashboard's lack of a chat-bubble equivalent force one in after
+  all?
+
+**UI**
+
+- Where this lives: a file-upload affordance on Feed's existing submit
+  control (task 4), or its own entry point (Doc Parser precedent uses a
+  dedicated page for a different content type)?
+- Result rendering: Telegram gets a reply message with the extracted links;
+  the web path needs its own — toast, inline list, straight into the Brain
+  Links table?
+
+**Open questions** (resolve in grill)
+
+- **Is this actually wanted, or scope creep?** Once Google/GitHub login
+  ships, is there real demand for non-Telegram *photo* ingestion
+  specifically — or did "full parity" reasoning sweep this in without a
+  user ever asking for it? Confirm before building.
+- Single-photo v1, or also a `media_group_id`-equivalent batch upload?
+- Sync (wait for Vision, return the result in the response) vs. async (fire
+  a background task): the Telegram path is async only because the *HTTP
+  response to Telegram* had to return immediately (ADR-0003) — a browser
+  request has no such constraint. Which model actually fits here?
+- What test coverage exists on `_handle_single_photo` today, to catch a
+  regression when its core logic gets extracted out from under the Telegram
+  path?

@@ -184,7 +184,7 @@ finish() {
 # Replace the example below. Set TOTAL_STAGES to match the stages you write.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=3
+TOTAL_STAGES=4
 
 banner "Non-Telegram identity + Discord — credential setup (issues #618, #619, #622)"
 
@@ -261,6 +261,22 @@ write_env DISCORD_APPLICATION_ID "$DISCORD_APPLICATION_ID"
 write_env DISCORD_BOT_TOKEN "$DISCORD_BOT_TOKEN"
 set_secret DISCORD_BOT_TOKEN "$DISCORD_BOT_TOKEN"
 pause "Stage 3 done."
+
+# ── Stage 4: push the values to the VPS ────────────────────────────────────
+stage "Push credentials to the VPS"
+if (( ${#WRITTEN_ENV[@]} == 0 )); then
+  warn "nothing was written to $ENV_FILE this run — skipping push."
+else
+  say "Run this to push what was just written:"
+  say "  scripts/push-env-to-vps.sh ${WRITTEN_ENV[*]}"
+  if confirm "Run it now?"; then
+    "$(dirname "$0")/push-env-to-vps.sh" "${WRITTEN_ENV[@]}" \
+      || SKIPPED+=("VPS push failed — re-run scripts/push-env-to-vps.sh ${WRITTEN_ENV[*]} by hand")
+  else
+    SKIPPED+=("VPS push — run scripts/push-env-to-vps.sh ${WRITTEN_ENV[*]}")
+  fi
+fi
+pause "Stage 4 done."
 
 finish
 note "GitHub  → GITHUB_OAUTH_CLIENT_ID / GITHUB_OAUTH_CLIENT_SECRET / GITHUB_OAUTH_REDIRECT_URI"
