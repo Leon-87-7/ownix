@@ -83,6 +83,19 @@ The shared-SA model is rejected outright.
 These lifecycle mechanics are reversible implementation choices recorded for the
 implementer; the irreversible decisions are the gate and the scope model above.
 
+## Addendum (2026-09-10)
+
+ADR-0061 adds GitHub/Google/email sign-in as alternatives to the Telegram
+Login Widget for establishing a Tenant. To head off this ADR's "Identity
+first, Google second" ordering being misread as "Telegram is the only way
+in": that ordering was always specifically about *this ADR's* Drive/Sheets
+**export** grant (`drive.file` + `spreadsheets`, minted only after a tenant
+already exists). A Google **login** (identity, `openid email profile`) is a
+fully separate OAuth client, scope set, and callback under ADR-0061 — it
+never touches this export flow, and does not change when or whether the
+export grant may be issued. See CONTEXT.md's [[Google connection]] entry,
+sharpened to keep these two Google-branded flows distinct.
+
 ## References
 
 - [SA have no storage quota / can't own files](https://github.com/n8n-io/n8n/issues/26050),

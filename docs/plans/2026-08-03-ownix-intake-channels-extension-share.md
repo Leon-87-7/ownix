@@ -2,7 +2,9 @@
 
 Date: 2026-08-03
 
-Status: Draft implementation plan
+Status: Draft implementation plan. Phases 1-8 shipped. Phase 9's depth and
+Phase 10's shape were resolved 2026-09-10 (non-Telegram identity grill) — see
+ADR-0061 and the updates to those sections below.
 
 Owner surface: dashboard intake, browser extension, PWA share target, future channel adapters
 
@@ -106,6 +108,13 @@ Telegram should become one adapter, not the product's architectural center.
 
 Do not replace `chat_id` with email directly. Email is a login and contact
 address, not a durable internal owner key.
+
+**Resolved 2026-09-10 (non-Telegram identity grill; see ADR-0061):** the
+target model below still stands as the long-term shape, but Phase 9 ships in
+two parts. Phase 9a (this round) is a narrow slice: one additive table plus a
+synthetic owner id, no ownership migration. Phase 9b (the full `users.id`
+cutover with dual-write/backfill across `jobs`/`tags`/`spaces`/etc.) stays
+deferred until something actually needs it. See Phase 9 below.
 
 Target identity model:
 
@@ -706,15 +715,52 @@ Acceptance criteria:
 - user can revoke extension access and it takes effect immediately
 - API can distinguish dashboard session traffic from extension token traffic
 
-### Phase 9 - User Identity Migration
+### Phase 9a - Non-Telegram Identity (narrow slice) — resolved, see ADR-0061
+
+Goal: let a person sign in without Telegram, without migrating any existing
+ownership.
+
+Tasks:
+
+- [ ] Add one additive table: `(provider, subject, owner_id, verified)` — no
+      `users.id` rework, no touch to `jobs`/`tags`/`spaces`/etc.
+- [ ] GitHub OAuth login.
+- [ ] Google OAuth login — **separate OAuth client/scopes from the existing
+      Drive/Sheets export grant** (ADR-0030 addendum). `openid email profile`
+      only; never touches `drive.file`/`spreadsheets`.
+- [ ] Email magic-link login, reusing `src/auth/session.py`'s existing
+      `mint_handoff`/`redeem_handoff` single-use token pattern and the SMTP
+      infra `src/services/email.py` already has.
+- [ ] Non-Telegram signup mints a synthetic negative-range integer as the
+      Tenant's owner id (stored in `users.tg_id` — the column now means
+      "owner id," not literally a Telegram id).
+- [ ] Session dict keeps its existing field names (`first_name`/`username`/
+      `photo_url`); each provider maps its own fields into them.
+- [ ] Invite gate (ADR-0031) applies identically regardless of provider;
+      provider-verified email auto-fills `users.email`, skipping the
+      one-time in-app ask.
+- [ ] Cross-provider auto-merge on **verified** email match only
+      (GitHub `verified:true` / Google `email_verified:true` / magic-link
+      verified by construction). Merge inherits the existing account's
+      `status` — never re-fires approval. Race-safe via a case-insensitive
+      unique constraint on `users.email` + upsert-in-one-transaction.
+
+Acceptance criteria:
+
+- a person can sign up and reach `/intake` without ever touching Telegram
+- existing Telegram tenants, jobs, and every `chat_id`-scoped feature are
+  untouched
+- an unverified email never merges two accounts
+
+### Phase 9b - Full User Identity Migration (deferred)
 
 Goal: migrate from `chat_id` ownership to durable `user_id` ownership.
+Unchanged from the original plan below — deferred until Phase 9a's narrow
+slice actually becomes a bottleneck.
 
 Tasks:
 
 - [ ] Add `users.id` or a parallel durable user id column/table.
-- [ ] Add `user_identities`.
-- [ ] Add `intake_channels`.
 - [ ] Backfill existing Telegram users.
 - [ ] Add `user_id` to jobs and user-owned tables.
 - [ ] Dual-write `chat_id` and `user_id`.
@@ -727,26 +773,50 @@ Acceptance criteria:
 - email/dashboard user is the durable owner
 - Telegram identity maps to the same user
 - existing jobs remain visible to existing users
-- future Discord identity can attach to the same user
 
-### Phase 10 - Discord Adapter
+### Phase 10 - Discord Adapter (DM-only, pairing-only) — resolved, see ADR-0061
 
-Goal: prove the adapter model with a second chat channel.
+Goal: give iOS users an alternative to Telegram's share-sheet presence.
+Reintroduced specifically because Apple's Safari won't let an installed PWA
+register as a share-sheet target and a native iOS wrapper is a Non-Goal —
+Discord's native app already appears in the iOS system share sheet the way
+Telegram's does.
+
+Verified against Discord's own API docs (context7, `discord-api-docs`):
+Discord has no webhook for incoming messages — `MESSAGE_CREATE` (including
+DMs) only arrives over a persistent Gateway WebSocket connection. DM content
+is delivered without the privileged `MESSAGE_CONTENT` intent review (the docs
+carve out "DMs it receives" as always populated), so staying DM-only avoids
+that review entirely.
 
 Tasks:
 
-- [ ] Add Discord OAuth/bot identity mapping.
-- [ ] Add `src/channels/discord/*`.
-- [ ] Convert Discord messages to `IntakeMessage`.
-- [ ] Render `IntakeResponse` to Discord messages/buttons.
-- [ ] Store Discord channel identity in `intake_channels`.
-- [ ] Reuse shared command and job behavior.
+- [ ] Add `src/channels/discord/adapter.py`, mirroring
+      `src/channels/telegram/adapter.py`.
+- [ ] Hold one Gateway connection for the whole bot (not per-user) inside the
+      existing `worker.py` process — it already runs the one other permanent
+      loop in the system (BRPOP + reapers). No new `docker-compose` service.
+- [ ] DM-only in v1 — no guild/server channels (that's where the privileged
+      intent review actually bites, past 100 servers).
+- [ ] Discord can never create a Tenant on its own — Discord's API discloses
+      no email, so a bare DM can't clear the verified-email bar every other
+      provider clears. An already-signed-up Tenant requests a one-time
+      pairing code from the dashboard (reusing the Chrome extension's
+      existing pairing-code pattern) and DMs it to the bot to link their
+      Discord snowflake to their owner id via the Phase 9a identity table.
+- [ ] Convert paired Discord DMs to `IntakeMessage`; render `IntakeResponse`
+      back to Discord messages.
+- [ ] Reuse shared command and job behavior — full parity with Telegram, not
+      just URL forwarding.
 
 Acceptance criteria:
 
-- Discord can submit URLs into the same Ownix account
+- an unpaired DM never creates a job or an account — it only explains how to
+  pair
+- a paired Discord DM can do everything a Telegram DM can (URL submit, tags,
+  templates, force-reprocess, freestyle)
 - Discord does not fork business logic from dashboard/Telegram
-- channel-specific behavior stays inside the Discord adapter
+- no guild/server behavior ships in v1
 
 ## Testing Strategy
 
@@ -795,14 +865,16 @@ Manual verification:
 3. Should extension side panel ship in MVP, or only popup/context menu?
 4. Should image upload inside dashboard use the existing inline Telegram photo path or be converted to a queued job first?
 5. Should intake history be stored as a durable thread, or reconstructed from jobs/state/actions?
-6. What is the first production auth method for standalone non-Telegram users: email magic link, Google sign-in, or both?
+6. ~~What is the first production auth method for standalone non-Telegram users: email magic link, Google sign-in, or both?~~ **Resolved 2026-09-10 (ADR-0061): all three ship together — GitHub OAuth, Google OAuth (login-only), and email magic-link.** GitHub was prioritized on direct evidence (a prospective user named GitHub and Google, in that order, as what he actually uses); Google and magic-link were added rather than sequenced separately.
 7. Is iOS share sheet important enough to justify a native wrapper/share extension, or is Shortcut/bookmarklet acceptable for now?
 
 ## Non-Goals
 
 Do not build in the first pass:
 
-- full Discord support
+- Discord guild/server channels (DM-only pairing shipped — see Phase 10;
+  "full Discord support" now means only the guild/server surface, which
+  would also force Discord's privileged `MESSAGE_CONTENT` review)
 - native iOS app
 - native Android app
 - email inbox forwarding
