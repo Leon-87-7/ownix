@@ -54,9 +54,22 @@ describe('LoginPage', () => {
 
     expect(
       screen.getByText(
-        'Telegram may remember the account shown here. Ownix signs you in only after you choose it.',
+        'Telegram may remember the account shown here — Ownix signs you in only after you choose it. GitHub and Google use your account email.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('links GitHub and Google sign-in to their backend OAuth connect routes', () => {
+    render(<LoginPage />);
+
+    expect(screen.getByRole('link', { name: /Continue with GitHub/ })).toHaveAttribute(
+      'href',
+      '/api/auth/github/connect',
+    );
+    expect(screen.getByRole('link', { name: /Continue with Google/ })).toHaveAttribute(
+      'href',
+      '/api/auth/google/connect',
+    );
   });
 
   it('keeps reviewer access hidden unless the review flag is enabled', () => {

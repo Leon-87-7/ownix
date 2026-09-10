@@ -13,9 +13,13 @@ import { MobileOnboardingStepper } from '@/components/landing/mobile-onboarding-
 import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
 import { PoweredBy } from '@/components/landing/powered-by';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
+import { DestinationSlot } from '@/components/landing/destination-slot';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
+import { DiscordIcon } from '@/components/svg/discord-icon';
+import { GitHubIcon } from '@/components/svg/github-icon';
+import { GoogleIcon } from '@/components/svg/google-icon';
 import { ChromeIcon } from '@/components/svg/chrome-icon';
 import { InstagramIcon } from '@/components/svg/instagram-icon';
 import { PuzzlePieceIcon } from '@/components/svg/puzzle-piece';
@@ -79,6 +83,11 @@ export default async function LandingPage() {
   const signedIn = Boolean(
     (await cookies()).get('vig_session')?.value,
   );
+  const telegramBotUsername =
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
+  const telegramDeepLink = telegramBotUsername
+    ? `https://t.me/${telegramBotUsername}`
+    : '#invite';
 
   return (
     <>
@@ -730,10 +739,16 @@ export default async function LandingPage() {
                   aria-hidden="true"
                   className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 -rotate-[35deg] text-line"
                 />
-                <TelegramIcon
-                  aria-hidden="true"
-                  className="relative mb-3 h-6 w-6 text-muted"
-                />
+                <div className="relative mb-3 flex items-center gap-2.5">
+                  <TelegramIcon
+                    aria-hidden="true"
+                    className="h-6 w-6"
+                  />
+                  <DiscordIcon
+                    aria-hidden="true"
+                    className="h-6 w-6"
+                  />
+                </div>
                 <h3 className="font-subtitle relative mb-1 text-title font-semibold leading-snug text-ink">
                   Share sheet muscle memory
                 </h3>
@@ -783,6 +798,81 @@ export default async function LandingPage() {
               <span className="font-mono not-italic text-muted">
                 Telegram share sheet flow.
               </span>
+            </p>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="submission-channels"
+          className="border-t border-line py-16"
+        >
+          <div className="mx-auto max-w-[960px] px-6">
+            <h2
+              id="submission-channels"
+              className="mb-3 font-title text-[clamp(1.375rem,3.4vw,1.75rem)] font-semibold leading-tight tracking-[-0.25px] text-ink"
+            >
+              Two ways to send it in.
+            </h2>
+            <p className="text-pretty mb-8 max-w-[58ch] text-prose leading-relaxed">
+              DM the bot on Telegram, or drop it in our Discord -
+              either way it lands transcribed and searchable in your
+              Index within a minute.
+            </p>
+
+            <div className="overflow-hidden rounded-lg border border-line bg-surface">
+              <div className="flex flex-col items-start gap-4 border-b border-line p-5 sm:flex-row sm:items-center">
+                <TelegramIcon
+                  aria-hidden="true"
+                  className="h-7 w-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-subtitle mb-0.5 text-title font-semibold italic leading-snug text-ink">
+                    DM the bot directly
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Paste a link straight into the chat - same account
+                    you sign in with, no share sheet required.
+                  </p>
+                </div>
+                <GhostButton
+                  as="a"
+                  accent="contrasignal"
+                  href={telegramDeepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`h-9 shrink-0 px-3.5 text-button font-medium leading-none text-ink ${touchTarget}`}
+                >
+                  Message the bot
+                </GhostButton>
+              </div>
+
+              <div className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center">
+                <DiscordIcon
+                  aria-hidden="true"
+                  className="h-7 w-7 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-subtitle mb-0.5 text-title font-semibold italic leading-snug text-ink">
+                    Drop it in Discord
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Sign in, then pair your account from the dashboard
+                    and DM the bot - same pipeline, same Index.
+                  </p>
+                </div>
+                <GhostLinkButton
+                  accent="contrasignal"
+                  href="/login"
+                  className={`h-9 shrink-0 px-3.5 text-button font-medium leading-none text-ink ${touchTarget}`}
+                >
+                  Sign in to pair
+                </GhostLinkButton>
+              </div>
+            </div>
+
+            <p className="mt-4 font-mono text-xs text-muted">
+              no share sheet ◉ no context switch ◉ same Index either
+              way
             </p>
           </div>
         </section>
@@ -927,8 +1017,8 @@ export default async function LandingPage() {
                   </h2>
                   <ol className="max-w-[52ch] list-decimal space-y-2 pl-5 text-pretty text-prose leading-relaxed">
                     <li>
-                      Sign in with Telegram. The bot asks for your
-                      email.
+                      Sign in with Telegram, GitHub, or Google. One
+                      tap, no password.
                     </li>
                     <li>
                       I approve every member myself, usually within a
@@ -939,16 +1029,42 @@ export default async function LandingPage() {
                       Drive that day - not just ours.
                     </li>
                     <li>
-                      You get a hello from me, and one question: want
-                      to help build what Ownix becomes?
+                      Then you hear from me, with one question: what
+                      do you want Ownix to become?
                     </li>
                   </ol>
                 </div>
                 <div>
-                  <TelegramLoginWidget align="start" />
+                  <div className="mb-3 flex max-w-[280px] flex-col gap-3">
+                    <TelegramLoginWidget align="start" />
+                    <GhostButton
+                      as="a"
+                      href="/api/auth/github/connect"
+                      accent="contrasignal"
+                      className={`h-11 w-full gap-2.5 text-button font-medium text-ink ${touchTarget}`}
+                    >
+                      <GitHubIcon
+                        aria-hidden="true"
+                        className="h-[18px] w-[18px] shrink-0"
+                      />
+                      Continue with GitHub
+                    </GhostButton>
+                    <GhostButton
+                      as="a"
+                      href="/api/auth/google/connect"
+                      accent="contrasignal"
+                      className={`h-11 w-full gap-2.5 text-button font-medium text-ink ${touchTarget}`}
+                    >
+                      <GoogleIcon
+                        aria-hidden="true"
+                        className="h-[18px] w-[18px] shrink-0"
+                      />
+                      Continue with Google
+                    </GhostButton>
+                  </div>
                   <p className="text-pretty font-mono text-xs text-muted">
-                    no password ◉ the bot asks for your email ◉
-                    approval within hours
+                    no password ◉ approval within hours ◉ your files
+                    leave with you
                   </p>
                 </div>
               </div>
@@ -975,15 +1091,13 @@ export default async function LandingPage() {
                     aria-hidden="true"
                     className="h-6 w-6 shrink-0 text-muted/60"
                   />
-                  <TelegramIcon
-                    aria-hidden="true"
-                    className="h-6 w-6 shrink-0"
-                  />
+                  <DestinationSlot />
                 </div>
                 <span className="sr-only">
                   Share from Instagram, YouTube, TikTok, GitHub, or
-                  articles to Telegram, and it lands transcribed and
-                  searchable in your Index.
+                  articles to Telegram, Discord, or the Chrome
+                  extension, and it lands transcribed and searchable
+                  in your Index.
                 </span>
                 <p className="mt-6 text-balance text-center text-lead font-medium leading-normal text-ink">
                   Your internet.&emsp;Find it, use it, own it -
