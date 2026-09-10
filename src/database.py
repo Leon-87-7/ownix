@@ -238,8 +238,13 @@ CREATE TABLE IF NOT EXISTS users (
     CHECK(status IN ('pending','approved','blocked','deleting'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase
-    ON users(email COLLATE NOCASE) WHERE email IS NOT NULL;
+-- idx_users_email_nocase is NOT created here (unlike CREATE TABLE IF NOT
+-- EXISTS, a bare CREATE INDEX runs unconditionally every init_db() call,
+-- including against an old non-fresh DB whose users table doesn't have
+-- `email` yet — that migration hasn't run at this point in the fresh-vs-
+-- migrate branch below). It's created once, unconditionally, right after
+-- _run_migrations() — same reason idx_jobs_source_url sits there instead of
+-- in this script (see the comment at that call site).
 
 CREATE TABLE IF NOT EXISTS identity_links (
     provider   TEXT NOT NULL,
@@ -1866,6 +1871,13 @@ async def init_db() -> None:
             # columns (see the comment next to its CREATE TABLE in SCHEMA_SQL).
             await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
             await conn.execute(_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL)
+            # Same reasoning again: users.email exists unconditionally by
+            # this point (fresh SCHEMA_SQL always had it; a migrated old DB
+            # just ran the migration that adds it), but not any earlier.
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase "
+                "ON users(email COLLATE NOCASE) WHERE email IS NOT NULL"
+            )
             await _approve_operator_user(conn)
             await conn.commit()
     except Exception:
@@ -4367,6 +4379,20 @@ async def _migrate_identity_links(conn: aiosqlite.Connection) -> None:
             FOREIGN KEY(owner_id) REFERENCES users(tg_id) ON DELETE CASCADE
         )"""
     )
+    # A case-insensitive duplicate here makes SQLite raise a bare
+    # IntegrityError on the CREATE UNIQUE INDEX below, aborting startup with
+    # no indication of which rows to fix. Name them up front instead.
+    dupe_cur = await conn.execute(
+        "SELECT LOWER(email) AS e, COUNT(*) AS n FROM users "
+        "WHERE email IS NOT NULL GROUP BY LOWER(email) HAVING COUNT(*) > 1"
+    )
+    duplicates = [row[0] for row in await dupe_cur.fetchall()]
+    if duplicates:
+        raise RuntimeError(
+            "Cannot add the identity_links migration: users.email already has "
+            f"case-insensitive duplicates ({', '.join(duplicates)}) — resolve "
+            "them manually before this migration can run."
+        )
     await conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase "
         "ON users(email COLLATE NOCASE) WHERE email IS NOT NULL"

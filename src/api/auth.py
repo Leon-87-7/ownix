@@ -7,6 +7,7 @@ import hmac
 import random
 import re
 import secrets
+import sqlite3
 import time
 from urllib.parse import urlencode
 
@@ -203,7 +204,17 @@ async def _external_login(
     if normalized and email_verified:
         user = await database.get_user(owner_id)
         if not user or not user.get("email"):
-            await database.set_user_email(owner_id, normalized)
+            try:
+                await database.set_user_email(owner_id, normalized)
+            except sqlite3.IntegrityError:
+                # Another account already claimed this email between
+                # resolve_owner's own check and this backfill (e.g. it was
+                # only just verified on the provider's side) — keep the
+                # owner resolve_owner already picked rather than 500ing the
+                # login; the email simply doesn't get backfilled this time.
+                if await database.get_user_by_email(normalized) is None:
+                    raise
+                log.warning("auth.email_already_claimed", tg_id=owner_id)
         if is_new_tenant and await database.get_user_status(owner_id) == "pending":
             try:
                 await notify_operator_invite(owner_id, normalized)

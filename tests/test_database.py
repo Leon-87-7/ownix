@@ -1853,3 +1853,59 @@ async def test_wait_for_schema_ready_returns_once_peer_finishes_migrating(tmp_pa
         await conn.commit()
 
     await asyncio.wait_for(wait_task, timeout=5)
+
+
+# ---------------------------------------------------------------------------
+# Non-Telegram identity migration preflight (ADR-0061)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_identity_links_migration_rejects_duplicate_emails(tmp_path):
+    """A case-insensitive duplicate in users.email must fail loudly and name
+    the offending address, not surface as a bare sqlite3.IntegrityError from
+    the CREATE UNIQUE INDEX this migration also creates."""
+    from src import database
+
+    db_file = str(tmp_path / "dup_email.db")
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, email TEXT, "
+            "first_name TEXT, status TEXT NOT NULL DEFAULT 'pending')"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, email, first_name) VALUES (1, 'Same@Example.com', 'A')"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, email, first_name) VALUES (2, 'same@example.com', 'B')"
+        )
+        await conn.commit()
+
+        with pytest.raises(RuntimeError, match="same@example.com"):
+            await database._migrate_identity_links(conn)
+
+
+@pytest.mark.asyncio
+async def test_identity_links_migration_succeeds_without_duplicates(tmp_path):
+    from src import database
+
+    db_file = str(tmp_path / "clean_email.db")
+    async with aiosqlite.connect(db_file) as conn:
+        await conn.execute(
+            "CREATE TABLE users (tg_id INTEGER PRIMARY KEY, email TEXT, "
+            "first_name TEXT, status TEXT NOT NULL DEFAULT 'pending')"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, email, first_name) VALUES (1, 'a@example.com', 'A')"
+        )
+        await conn.execute(
+            "INSERT INTO users (tg_id, email, first_name) VALUES (2, 'b@example.com', 'B')"
+        )
+        await conn.commit()
+
+        await database._migrate_identity_links(conn)
+
+        cur = await conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_users_email_nocase'"
+        )
+        assert await cur.fetchone() is not None

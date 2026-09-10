@@ -12,6 +12,18 @@ from src.utils.validators import normalize_email
 _resolve_lock = asyncio.Lock()
 _PROVIDERS = frozenset({"github", "google", "email", "telegram", "discord"})
 
+# Telegram bounds every id (including negative group/supergroup chat ids) to
+# at most 52 significant bits, specifically so it stays safe in a
+# double-precision float — see the Bot API's `User`/`Chat` id docs. Starting
+# synthetic owner ids at -(2**53) keeps them permanently disjoint from any
+# real Telegram-issued id: a later group-chat tenant can never collide with
+# one, regardless of how Telegram's own id space shifts within that bound.
+_SYNTHETIC_OWNER_ID_FLOOR = -(2**53)
+
+
+def _mint_synthetic_owner_id() -> int:
+    return _SYNTHETIC_OWNER_ID_FLOOR - secrets.randbelow(2**31)
+
 
 async def resolve_owner(
     provider: str,
@@ -36,10 +48,14 @@ async def resolve_owner(
                     provider, subject, int(matched["tg_id"]), verified=True
                 )
 
-        owner_id = -(secrets.randbelow(2**31 - 1) + 1)
+        owner_id = _mint_synthetic_owner_id()
         while await database.get_user(owner_id) is not None:
-            owner_id = -(secrets.randbelow(2**31 - 1) + 1)
+            owner_id = _mint_synthetic_owner_id()
         await database.upsert_user(tg_id=owner_id, first_name=provider.title())
+        # Tracks the fresh row just created above — cleared once that row is
+        # itself already reconciled away (the email-collision branch below),
+        # so the final orphan check never deletes a real, pre-existing account.
+        minted_id: int | None = owner_id
         if normalized and email_verified:
             try:
                 await database.set_user_email(owner_id, normalized)
@@ -49,6 +65,14 @@ async def resolve_owner(
                     raise
                 await database.delete_user(owner_id)
                 owner_id = int(matched["tg_id"])
-        return await database.link_identity(
+                minted_id = None
+        winner = await database.link_identity(
             provider, subject, owner_id, verified=email_verified
         )
+        if minted_id is not None and winner != minted_id:
+            # A concurrent resolve_owner call for this exact (provider,
+            # subject) won identity_links' INSERT OR IGNORE race — the row
+            # minted above never got linked to anything and must not survive
+            # as an orphan.
+            await database.delete_user(minted_id)
+        return winner

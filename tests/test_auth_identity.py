@@ -103,6 +103,74 @@ async def test_concurrent_verified_signups_share_owner(identity_db):
     assert owners[0] == owners[1]
 
 
+@pytest.mark.asyncio
+async def test_synthetic_owner_id_is_disjoint_from_telegram_range(identity_db):
+    """Telegram bounds every id (including negative group/supergroup chat
+    ids) to 52 significant bits — a synthetic owner id must stay outside
+    that range so a future group-chat tenant can never collide with one."""
+    owner = await resolve_owner("github", "range-check", email=None, email_verified=False)
+    assert owner <= -(2**53)
+
+
+@pytest.mark.asyncio
+async def test_same_subject_race_does_not_leave_an_orphaned_user_row(identity_db, monkeypatch):
+    """The in-process lock only protects against a race between two
+    resolve_owner() calls in *this* process — it can't see a second API/
+    worker process linking the same (provider, subject) first. Simulate
+    that by injecting a competing identity_links row the moment our own
+    call mints its user row."""
+    real_upsert_user = database.upsert_user
+    minted_ids: list[int] = []
+
+    async def upsert_user_then_inject_race(**kwargs):
+        await real_upsert_user(**kwargs)
+        minted_ids.append(kwargs["tg_id"])
+        if len(minted_ids) == 1:
+            await real_upsert_user(tg_id=-999999, first_name="Other")
+            await database.link_identity("github", "race-subject", -999999, verified=False)
+
+    monkeypatch.setattr(database, "upsert_user", upsert_user_then_inject_race)
+
+    owner = await resolve_owner("github", "race-subject", email=None, email_verified=False)
+
+    assert owner == -999999
+    assert await database.get_user(minted_ids[0]) is None
+
+
+@pytest.mark.asyncio
+async def test_external_login_recovers_from_email_collision_on_backfill(
+    identity_db, monkeypatch
+):
+    """A second, already-known owner backfilling its email can collide with
+    a different, already-existing account that owns it — this must not 500
+    the login, per the same recovery shape resolve_owner already has for
+    its own analogous case."""
+    from src.api import auth as auth_api
+
+    await database.upsert_user(tg_id=-1, first_name="OwnerA")
+    await database.upsert_user(tg_id=-2, first_name="OwnerB")
+    await database.set_user_email(-2, "shared@example.com")
+
+    async def fake_resolve_owner(provider, subject, *, email, email_verified):
+        return -1
+
+    monkeypatch.setattr(auth_api, "resolve_owner", fake_resolve_owner)
+    monkeypatch.setattr(auth_api, "notify_operator_invite", AsyncMock())
+    monkeypatch.setattr(auth_api.settings, "SESSION_COOKIE_SECURE", False)
+    monkeypatch.setattr("src.auth.session.settings.SESSION_BACKEND", "memory")
+
+    response = await auth_api._external_login(
+        provider="github", subject="new-subject", email="shared@example.com",
+        email_verified=True, first_name="Someone", username="someone", photo_url=None,
+    )
+
+    assert response.status_code == 303
+    # The collision was caught and logged, not raised — owner A's email is
+    # simply left unset rather than the login failing outright.
+    owner_a = await database.get_user(-1)
+    assert owner_a["email"] is None
+
+
 # ---------------------------------------------------------------------------
 # HTTP-level login routes (#618, #619, #620, #621)
 # ---------------------------------------------------------------------------

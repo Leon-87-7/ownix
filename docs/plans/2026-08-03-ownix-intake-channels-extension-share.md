@@ -739,11 +739,19 @@ Tasks:
 - [ ] Invite gate (ADR-0031) applies identically regardless of provider;
       provider-verified email auto-fills `users.email`, skipping the
       one-time in-app ask.
-- [ ] Cross-provider auto-merge on **verified** email match only
+- [x] Cross-provider auto-merge on **verified** email match only
       (GitHub `verified:true` / Google `email_verified:true` / magic-link
       verified by construction). Merge inherits the existing account's
       `status` — never re-fires approval. Race-safe via a case-insensitive
       unique constraint on `users.email` + upsert-in-one-transaction.
+
+Implemented as `identity_links(provider, subject, owner_id, verified)` with
+`PRIMARY KEY(provider, subject)` — a same-`(provider, subject)` concurrent
+race is resolved atomically by `link_identity`'s `INSERT OR IGNORE` +
+re-`SELECT` winner pattern (`src/database.py`), and `resolve_owner`
+(`src/auth/identity.py`) deletes the losing call's orphaned `users` row
+rather than leaving it unlinked. See `tests/test_auth_identity.py`'s
+concurrent-signup tests.
 
 Acceptance criteria:
 

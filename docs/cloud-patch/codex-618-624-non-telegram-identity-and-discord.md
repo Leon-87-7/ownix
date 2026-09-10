@@ -452,15 +452,31 @@ compared via `hmac.compare_digest` on callback, with tests for both
 providers (`test_github_callback_rejects_state_without_matching_cookie`,
 `test_google_callback_rejects_state_without_matching_cookie`).
 
-**Still open, deliberately not fixed here (needs a human, not a code
-change):** before this ever runs against the real production database, someone
-needs to check for existing rows sharing a normalized email — the new
-`CREATE UNIQUE INDEX ... ON users(email COLLATE NOCASE)` migration will
-fail outright at startup if any two already collide. ADR-0031 suggests this
-is unlikely (almost no rows carry email today) but it hasn't been verified
-against the real data.
+**Resolved (2026-09-10):** checked production `users` for existing
+case-insensitive duplicate emails before this migration ever runs against
+real data — none found. `_migrate_identity_links` (`src/database.py`) now
+also preflights this itself: it raises a clear `RuntimeError` naming any
+duplicates before attempting `CREATE UNIQUE INDEX`, rather than letting a
+bare `sqlite3.IntegrityError` abort startup uninformatively on some future
+deploy.
 
-Full verification: `ruff check src/` clean; `pytest tests/test_auth.py
-tests/test_auth_identity.py tests/test_discord_channel.py
-tests/test_export_gate.py` — 99 passed (Discord tests require `discord.py`
-installed locally; they're skipped, not failed, without it).
+**Also fixed after a `/codex:review` pass on PR #625, before rabbitloop:**
+- `resolve_owner`'s synthetic owner-id range now starts at `-(2**53)`,
+  disjoint from any real Telegram-issued id (Telegram bounds those to 52
+  significant bits) — the prior arbitrary-negative-32-bit range could have
+  collided with a future negative group/supergroup Telegram chat id.
+- A same-`(provider, subject)` concurrent race (e.g. a webhook/retry firing
+  the same login twice) could mint a `users` row that never got linked and
+  was never cleaned up. `resolve_owner` now deletes that orphan when
+  `identity_links`' `INSERT OR IGNORE` race is lost.
+- `_external_login`'s email-backfill (`src/api/auth.py`) now catches the
+  `sqlite3.IntegrityError` a same-email collision there would raise, instead
+  of 500ing a legitimate login.
+- `_run_services` (`src/worker.py`) now isolates the Discord Gateway
+  connection behind a retry loop — previously any exception from
+  `discord_gateway.run()` would propagate through `asyncio.gather` and
+  cancel `loop()`, taking down real job processing over an optional channel.
+
+Full verification (real full suite, not a targeted subset):
+`ruff check src/` clean; `python -m pytest tests -q` — see the PR's own
+CI run for the authoritative pass count as of the latest push.
