@@ -5,6 +5,7 @@ import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { GitHubIcon } from '@/components/svg/github-icon';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
+import { MagicLinkForm } from '@/components/shell/magic-link-form';
 import { GhostButton } from '@/components/ui/ghost-button';
 
 // Thin auth page - index space is better spent on the landing page.
@@ -53,6 +54,20 @@ export default function LoginPage() {
             />
             Continue with Google
           </GhostButton>
+
+          <div className="flex items-center gap-3 py-1">
+            <span
+              aria-hidden="true"
+              className="h-px flex-1 bg-line"
+            />
+            <span className="text-xs text-muted">or</span>
+            <span
+              aria-hidden="true"
+              className="h-px flex-1 bg-line"
+            />
+          </div>
+
+          <MagicLinkForm />
         </div>
 
         <p className="mt-2 text-center text-xs leading-5 text-muted">

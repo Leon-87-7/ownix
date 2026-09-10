@@ -400,10 +400,21 @@ async def redeem_magic_link(token: str = Query(..., max_length=512)) -> Redirect
     )
 
 
+_DISCORD_PAIRING_TTL = 300
+
+
 @auth_router.post("/discord/pair")
 async def discord_pair(request: Request) -> dict:
-    code = await session_store.mint_discord_pairing(int(request.state.user["id"]))
-    return {"code": code, "instructions": "Send this one-time code in a DM to the Ownix bot."}
+    code = await session_store.mint_discord_pairing(
+        int(request.state.user["id"]), ttl=_DISCORD_PAIRING_TTL
+    )
+    return {
+        "code": code,
+        # The dashboard counts the code down; sending the TTL keeps that
+        # countdown from drifting off a hardcoded client-side copy.
+        "expires_in": _DISCORD_PAIRING_TTL,
+        "instructions": "Send this one-time code in a DM to the Ownix bot.",
+    }
 
 
 class ReviewerLoginPayload(BaseModel):

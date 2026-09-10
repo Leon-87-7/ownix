@@ -14,6 +14,7 @@ import { OnboardingStepper } from '@/components/landing/onboarding-stepper';
 import { PoweredBy } from '@/components/landing/powered-by';
 import { WordmarkMarquee } from '@/components/landing/wordmark-marquee';
 import { DestinationSlot } from '@/components/landing/destination-slot';
+import { MagicLinkForm } from '@/components/shell/magic-link-form';
 import { GoogleDriveIcon } from '@/components/svg/google-drive-icon';
 import { OpenAIIcon } from '@/components/svg/openai-icon';
 import { TelegramIcon } from '@/components/svg/telegram-icon';
@@ -1017,8 +1018,8 @@ export default async function LandingPage() {
                   </h2>
                   <ol className="max-w-[52ch] list-decimal space-y-2 pl-5 text-pretty text-prose leading-relaxed">
                     <li>
-                      Sign in with Telegram, GitHub, or Google. One
-                      tap, no password.
+                      Sign in with Telegram, GitHub, Google, or an
+                      emailed link. No password either way.
                     </li>
                     <li>
                       I approve every member myself, usually within a
@@ -1061,6 +1062,7 @@ export default async function LandingPage() {
                       />
                       Continue with Google
                     </GhostButton>
+                    <MagicLinkForm />
                   </div>
                   <p className="text-pretty font-mono text-xs text-muted">
                     no password ◉ approval within hours ◉ your files
