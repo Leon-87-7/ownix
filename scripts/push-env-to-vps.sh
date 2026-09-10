@@ -34,6 +34,8 @@ done
 
 [[ -n "$payload" ]] || { echo "nothing to push" >&2; exit 1; }
 
+# shellcheck disable=SC2029  # $VPS_DIR is meant to expand locally — the remote
+# side has no such variable, and stdin is already taken by the payload.
 printf '%s' "$payload" | ssh "$VPS_HOST" "
     set -e
     remote_env='${VPS_DIR}/.env'

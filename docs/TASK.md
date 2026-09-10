@@ -1605,7 +1605,8 @@ Photo link extraction is Telegram-webhook-inline only today (ADR-0003): no
 `jobs` row, no Redis queue. `_webhook_route_photo` / `_handle_photo_update`
 / `_handle_single_photo` / `_process_media_group` (all in
 `src/telegram/webhook.py`) download the photo via Telegram's file API, call
-`gemini_photo.py` (Vision extraction, deliberately job/chat_id-unaware per
+`call_gemini_photo_links` in `src/services/gemini.py` (Vision extraction,
+deliberately job/chat_id-unaware per
 ADR-0003's own consequence), filter with `_filter_grounded_links`, reply via
 `send_message`, and fire-and-forget `brain.ingest_links`. Multi-image sends
 batch via Telegram's `media_group_id` (`_accumulate_media_group` /
