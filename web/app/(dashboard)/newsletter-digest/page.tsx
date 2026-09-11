@@ -10,8 +10,9 @@ export default function NewsletterDigestPage() {
   if (restricted) {
     return (
       <RestrictedFacade icon={Newspaper} title="Newsletter Digest">
-        Newsletter aliases and candidate promotion are available in the full
-        product. This preview keeps inbound routing disabled.
+        Give Ownix a newsletter&apos;s archive link and it follows the
+        publication itself. New issues show up here, ready to promote into your
+        Index. Nothing touches your inbox. This preview is read-only.
       </RestrictedFacade>
     );
   }

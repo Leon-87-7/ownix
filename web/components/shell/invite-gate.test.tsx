@@ -177,7 +177,7 @@ describe("InviteGate", () => {
 
     expect(await screen.findByText("Dashboard feed")).toBeTruthy();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "You're in the queue — approval usually within a few hours; you'll get a Telegram hello and this page will unlock automatically. Meanwhile: install the app, send the bot your first link.",
+      "You're in the queue. Approval usually takes a few hours. You'll get a Telegram hello and this page unlocks on its own. In the meantime, install the app and send the bot your first link.",
     );
     expect(screen.queryByText("Pending approval")).toBeNull();
   });

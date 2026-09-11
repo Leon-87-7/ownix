@@ -131,7 +131,7 @@ export function ExtensionTokensPanel() {
                 className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2 text-sm"
               >
                 <span className="text-body">
-                  {token.label ?? 'Unnamed device'} — last used:{' '}
+                  {token.label ?? 'Unnamed device'}, last used:{' '}
                   {token.last_used_at == null ? (
                     'Never'
                   ) : (

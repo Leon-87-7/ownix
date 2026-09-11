@@ -66,7 +66,7 @@ describe('BrainPage', () => {
   it('shows empty banner when searchState is empty', () => {
     setupMocks({ searchState: 'empty' });
     render(<BrainPage />);
-    expect(screen.getByText(/no results found/i)).toBeTruthy();
+    expect(screen.getByText(/nothing matched/i)).toBeTruthy();
   });
 
   it('shows results when searchState is results', () => {
@@ -87,7 +87,7 @@ describe('BrainPage', () => {
     render(<BrainPage />);
     const button = screen.getByRole('button', { name: /run search/i });
     fireEvent.click(button);
-    expect(screen.getByText(/please enter a search query/i)).toBeTruthy();
+    expect(screen.getByText(/type something to search for/i)).toBeTruthy();
   });
 
   it('calls runSearch when query is non-empty and Search is clicked', () => {

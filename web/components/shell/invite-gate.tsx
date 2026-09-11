@@ -68,9 +68,9 @@ function QueueStatusBanner() {
       role="status"
       className="border-b border-line bg-raised px-4 py-3 text-center text-sm leading-6 text-body"
     >
-      You&apos;re in the queue — approval usually within a few hours; you&apos;ll get a Telegram
-      hello and this page will unlock automatically. Meanwhile: install the app,
-      send the bot your first link.
+      You&apos;re in the queue. Approval usually takes a few hours. You&apos;ll get a
+      Telegram hello and this page unlocks on its own. In the
+      meantime, install the app and send the bot your first link.
     </aside>
   );
 }

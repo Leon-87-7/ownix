@@ -113,7 +113,7 @@ function CreateForm({
               extra_instructions: e.target.value,
             }))
           }
-          placeholder="Write custom Gemini analysis instructions here..."
+          placeholder="Write the instructions you want applied to every save that uses this recipe."
           className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
         />
       </div>
@@ -298,9 +298,8 @@ export default function PromptsPage() {
         icon={MessageSquareText}
         title="Recipes"
       >
-        Recipes shape enrichment prompts for your own Index. Creating,
-        editing, and deleting recipes is locked in this read-only
-        preview.
+        In your own Index, Recipes decide how each save gets written
+        up. You can read them here, but this preview saves nothing.
       </RestrictedFacade>
     );
   return <PromptsWorkspace />;
@@ -324,7 +323,7 @@ function PromptsWorkspace() {
       <PageHeader
         icon={MessageSquareText}
         title="Recipes"
-        description="Named prompt presets that shape how Gemini analyzes what you save - invoke one by name to change what comes back."
+        description="Saved prompts that change how a link gets analyzed. Call one by name and you get a different write-up back."
       />
 
       {loading && (

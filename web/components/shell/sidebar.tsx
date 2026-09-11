@@ -358,7 +358,7 @@ export function Sidebar() {
               content={
                 connected === null
                   ? (user.first_name ?? 'Signed in')
-                  : `${user.first_name ?? 'Signed in'} — ${
+                  : `${user.first_name ?? 'Signed in'}, ${
                       connected
                         ? 'Connected to Google'
                         : 'Google not connected'
@@ -559,7 +559,7 @@ export function Sidebar() {
               </div>
               {disconnectFailed && (
                 <p className="mt-1 pl-[34px] text-label text-status-error">
-                  Couldn&apos;t disconnect — try again.
+                  Couldn&apos;t disconnect. Try again.
                 </p>
               )}
             </div>

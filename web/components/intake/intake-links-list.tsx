@@ -98,7 +98,7 @@ export function IntakeLinksList({ links }: { links: IntakeLink[] }) {
             </a>
             {(link.label || link.description) && (
               <p className="mt-0.5 select-text text-label text-muted">
-                {[link.label, link.description].filter(Boolean).join(' — ')}
+                {[link.label, link.description].filter(Boolean).join(': ')}
               </p>
             )}
           </li>

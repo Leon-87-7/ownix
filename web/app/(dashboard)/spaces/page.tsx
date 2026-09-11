@@ -15,9 +15,9 @@ export default function SpacesPage() {
   if (restricted)
     return (
       <RestrictedFacade icon={LayoutGrid} title="Collections">
-        Collections are visible in the full product for grouping saved jobs into
-        durable research sets. Creating and editing collections is locked in
-        this read-only preview.
+        Collections group your saves into sets you can revisit, annotate, and
+        export together. You can look around here, but this preview saves
+        nothing.
       </RestrictedFacade>
     );
   return <SpacesWorkspace />;
@@ -65,7 +65,7 @@ function SpacesWorkspace() {
       <PageHeader
         icon={LayoutGrid}
         title="Collections"
-        description="Group saved items into durable sets you can revisit, add context to, and export together."
+        description="For when searching later stops working. Group the saves into a set you can revisit, annotate, and export together."
         action={
           <button
             onClick={showForm ? resetForm : openForm}

@@ -52,8 +52,8 @@ export default function DevPersonaSwitch() {
 
   const Icon = restricted ? BotOff : Bot;
   const label = restricted
-    ? 'dev: visitor active — switch to mock user'
-    : 'dev: mock user active — switch to visitor';
+    ? 'dev: visitor active, switch to mock user'
+    : 'dev: mock user active, switch to visitor';
 
   return (
     // Plain <a>: the route handler sets/clears the httpOnly preview

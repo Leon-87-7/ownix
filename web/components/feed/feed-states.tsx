@@ -138,10 +138,10 @@ export function EmptyState({
         </>
       ) : (
         <>
-          <p className="text-sm font-medium text-ink">No jobs yet</p>
+          <p className="text-sm font-medium text-ink">Nothing saved yet</p>
           <p className="mt-1 text-sm text-body">
-            Send a video, article, or repo URL to the Telegram bot —
-            it will land here as it processes.
+            Send the bot a video, an article, or a repo URL. It shows
+            up here while it processes.
           </p>
         </>
       )}

@@ -158,6 +158,6 @@ describe('NewsletterArchiveResolver', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Find' }));
 
-    expect(await screen.findByText(/No recent issues found yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/no issues listed yet/i)).toBeInTheDocument();
   });
 });

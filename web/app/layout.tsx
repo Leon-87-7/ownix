@@ -13,7 +13,8 @@ const softwareAppSchema = {
   '@type': 'SoftwareApplication',
   name: 'Ownix',
   url: SITE_URL,
-  description: 'Collect what matters. Own your Index. Shape the Brain.',
+  description:
+    'Share a video, article, repo, or PDF and get back a transcript, a summary, and every link it mentioned, as markdown in your own Google Drive.',
   applicationCategory: 'ProductivityApplication',
   operatingSystem: 'Web',
 };

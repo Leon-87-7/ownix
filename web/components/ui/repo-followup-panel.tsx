@@ -48,7 +48,7 @@ export function RepoFollowupPanel({ jobId }: { jobId: string }) {
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-4">
-      <p className="text-sm font-medium text-ink">Found GitHub repos — analyze one next?</p>
+      <p className="text-sm font-medium text-ink">Found GitHub repos. Analyze one next?</p>
       {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
       <div className="flex flex-wrap gap-2">
         {candidates.map((candidate, idx) => (

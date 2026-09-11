@@ -72,7 +72,7 @@ export function IntakeStateBanner() {
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-3 rounded-lg border border-signal/40 bg-status-pending-tint px-4 py-3">
         <p className="text-sm text-ink">
-          {MODE_LABEL[pending.mode] ?? pending.mode} —{' '}
+          {MODE_LABEL[pending.mode] ?? pending.mode}:{' '}
           <span className="font-mono">job_{pending.job_id.slice(-4)}</span>
         </p>
         <button
@@ -89,7 +89,7 @@ export function IntakeStateBanner() {
           role="alert"
           className="text-sm text-status-error"
         >
-          Couldn&apos;t cancel — try again.
+          Couldn&apos;t cancel that. Try again.
         </p>
       )}
     </section>

@@ -14,7 +14,7 @@ export default function NewsletterDigestDetailPage() {
   if (restricted) {
     return (
       <RestrictedFacade icon={Newspaper} title="Newsletter Digest">
-        Newsletter candidates are visible in the full product after sign-in.
+        Sign in to read the issues Ownix collected from this newsletter.
       </RestrictedFacade>
     );
   }
