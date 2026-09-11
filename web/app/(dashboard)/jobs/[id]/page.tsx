@@ -986,7 +986,7 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
         <button
           type="button"
           onClick={handleRun}
-          disabled={generating}
+          disabled={generating || deleting}
           className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:bg-raised disabled:text-muted"
         >
           {generating ? (
@@ -1024,7 +1024,13 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
               <button
                 type="button"
                 aria-label="Delete checklist"
-                className={`absolute right-2 top-2 z-10 bg-canvas ${CARD_ACTION_BUTTON}`}
+                // A generate in flight would write its result back over the
+                // delete, silently undoing it - the POST resolves after the
+                // DELETE and has no idea it raced. ponytail: same-tab guard
+                // only; two tabs can still race, which needs an expected-version
+                // precondition on the DELETE to close properly.
+                disabled={generating}
+                className={`absolute right-2 top-2 z-10 bg-canvas disabled:text-line ${CARD_ACTION_BUTTON}`}
               >
                 <Trash2
                   className="h-4 w-4"

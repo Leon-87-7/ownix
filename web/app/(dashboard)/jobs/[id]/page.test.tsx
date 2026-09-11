@@ -272,6 +272,37 @@ describe('JobDetailPage', () => {
     expect(screen.queryByText(/Add tests/)).not.toBeInTheDocument();
   });
 
+  it('blocks delete while a regenerate is in flight', async () => {
+    // The in-flight POST would write its result back over the DELETE,
+    // silently resurrecting the checklist the user just removed.
+    let releaseGenerate: (() => void) | undefined;
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', async () => {
+        await new Promise<void>((resolve) => {
+          releaseGenerate = resolve;
+        });
+        return HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        });
+      }),
+    );
+    setupMocks({
+      job: { ...JOB, checklists_md: '# Old\n- [ ] Stale item' },
+    });
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete checklist' })).toBeDisabled(),
+    );
+
+    releaseGenerate?.();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete checklist' })).toBeEnabled(),
+    );
+  });
+
   it('keeps the checklist when the delete fails', async () => {
     server.use(
       http.post('/api/jobs/:jobId/checklists', () =>
