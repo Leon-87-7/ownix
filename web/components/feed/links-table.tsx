@@ -199,7 +199,7 @@ function LinkTagCluster({ link }: { link: LinkRow }) {
             key={tag.id}
             content={[tag.name, tag.meaning]
               .filter(Boolean)
-              .join(' — ')}
+              .join(': ')}
           >
             <span className="inline-flex h-4 w-4 items-center justify-center">
               <TagMark
@@ -484,7 +484,7 @@ function LinkPreviewPanel({
               key={tag.id}
               content={[tag.name, tag.meaning]
                 .filter(Boolean)
-                .join(' — ')}
+                .join(': ')}
             >
               <span className="inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-mono-label text-body">
                 <TagMark
@@ -522,7 +522,7 @@ function LinkPreviewPanel({
         />
         {deleteFailed && (
           <p className="text-xs text-status-error" role="alert">
-            Couldn&apos;t delete — try again.
+            Couldn&apos;t delete that. Try again.
           </p>
         )}
       </div>

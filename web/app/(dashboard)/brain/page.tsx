@@ -14,8 +14,8 @@ function IdleBanner() {
     <div className="rounded-lg border border-line bg-surface px-6 py-12 text-center">
       <p className="text-lg font-medium text-ink">Search the Brain</p>
       <p className="mt-1 text-pretty text-sm text-body">
-        Type a query above to find semantically similar videos and
-        articles you have saved.
+        Describe what you remember. The Brain matches on meaning, so
+        you don&apos;t need the title or the exact words.
       </p>
     </div>
   );
@@ -24,8 +24,8 @@ function IdleBanner() {
 function EmptyBanner() {
   return (
     <p className="text-pretty rounded-lg border border-line bg-surface px-6 py-8 text-center text-sm text-body">
-      No results found. Try a different query or add more videos to
-      your Brain.
+      Nothing matched. Try describing it differently, or save a few
+      more items and search again.
     </p>
   );
 }
@@ -104,7 +104,7 @@ export default function BrainPage() {
       <PageHeader
         icon={Brain}
         title="Brain"
-        description="Semantic search across your Index - plus shared signal from anyone who's opted their saves into the Brain."
+        description="Search your Index by meaning, not keywords. Members who opted their saves into the shared Brain show up here too."
       />
 
       <section className="flex gap-2">
@@ -141,7 +141,7 @@ export default function BrainPage() {
 
       {blankWarning && (
         <p className="text-xs text-status-pending">
-          Please enter a search query.
+          Type something to search for first.
         </p>
       )}
 

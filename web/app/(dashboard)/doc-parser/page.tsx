@@ -149,7 +149,8 @@ function DocParserWorkspace() {
         title="Docs"
         description={
           <>
-            Upload PDFs, Microsoft Office formats and Images.
+            That PDF you saved and never reopened? Drop it here and
+            read what was in it.
             <span className="mt-1 block font-mono text-xs text-muted">
               .pdf | .docx | .xlsx | .pptx | .png | …
             </span>

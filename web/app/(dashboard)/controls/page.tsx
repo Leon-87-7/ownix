@@ -27,7 +27,7 @@ import {
   type AccessibilitySettings,
 } from "@/lib/hooks/useAccessibilitySettings";
 
-const VOICE_PREVIEW_TEXT = "This is how enrichment will sound.";
+const VOICE_PREVIEW_TEXT = "This is how your summaries will sound when read aloud.";
 const VOICE_SELECT_CLASS =
   "h-10 flex-1 rounded-md border border-line bg-canvas px-3 text-sm text-ink outline-none transition-ui focus:border-signal disabled:cursor-not-allowed disabled:text-muted disabled:opacity-70";
 
@@ -698,8 +698,8 @@ export default function ControlsPage() {
   if (restricted)
     return (
       <RestrictedFacade icon={SlidersHorizontal} title="Settings">
-        Settings control domains, tags, and workspace behavior for your own
-        Index. Changes are locked in this read-only preview.
+        Settings is where you tune domains, tags, and how the dashboard behaves
+        in your own Index. Nothing you change here is saved.
       </RestrictedFacade>
     );
 
@@ -708,7 +708,7 @@ export default function ControlsPage() {
       <PageHeader
         icon={SlidersHorizontal}
         title="Settings"
-        description="Manage the tags, domain rules, and recovery behavior that shape your Index."
+        description="Tags, domain rules, accessibility, and the devices connected to your Index."
       />
       <div className="space-y-3">
         <Section title="Tags" defaultOpen>
@@ -716,10 +716,10 @@ export default function ControlsPage() {
         </Section>
         <Section title="Domains" defaultOpen>
           <p className="mb-4 text-sm text-body">
-            Control which link domains Ownix processes automatically. Adding a
-            domain to Allowed lets Ownix process links from it; adding it to
-            Ignored skips those links - steer around noisy sources without
-            touching individual saves.
+            Decide which sites Ownix processes on its own. Put a domain in
+            Allowed and links from it get picked up; put it in Ignored and they
+            get skipped. It is how you route around a noisy source without
+            having to reject its links one by one.
           </p>
           <div className="grid gap-6 md:grid-cols-2">
             <div>

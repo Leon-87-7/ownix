@@ -21,9 +21,10 @@ export default function AppError({
         <p className="font-mono text-mono-label font-medium uppercase tracking-[0.04em] text-status-error">
           Error
         </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Something went wrong</h1>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">This page didn&apos;t load</h1>
         <p className="mt-2 text-sm leading-6 text-body">
-          The page hit an unexpected error. You can try again, or head back to the feed.
+          Something broke on our side. Nothing you saved is affected. Try again, or
+          start over from the home page.
         </p>
         <div className="mt-5 flex justify-center gap-3">
           <button
@@ -37,7 +38,7 @@ export default function AppError({
             href="/"
             className="inline-flex h-8 items-center rounded-md border border-line px-3.5 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
-            Back to feed
+            Back to Ownix
           </Link>
         </div>
       </section>

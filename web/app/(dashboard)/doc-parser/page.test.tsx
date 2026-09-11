@@ -40,7 +40,7 @@ describe('DocParserPage', () => {
 
     render(<DocParserPage />);
 
-    await waitFor(() => expect(screen.getByText(/no jobs yet/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing saved yet/i)).toBeInTheDocument());
   });
 
   it('filters the job list by format tab (derived from the source extension)', async () => {

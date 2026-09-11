@@ -60,8 +60,8 @@ export default function OfflinePage() {
             color: '#c6c1b8',
           }}
         >
-          Your Index needs live data, so cached payloads stay off the
-          console.
+          Your Index lives on the server, so there is nothing cached
+          here to show you. It loads as soon as you are back online.
         </p>
         <a
           href="/feed"
@@ -80,7 +80,7 @@ export default function OfflinePage() {
             textDecoration: 'none',
           }}
         >
-          Retry Feed
+          Try the Feed again
         </a>
       </section>
     </main>

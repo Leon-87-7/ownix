@@ -161,7 +161,7 @@ export function NewsletterArchiveResolver({
             </ul>
           ) : (
             <p className="mt-3 text-copy text-muted">
-              No recent issues found yet — the archive resolved, but it listed nothing to show.
+              The archive resolved, but it has no issues listed yet.
             </p>
           )}
 

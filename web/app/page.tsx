@@ -62,10 +62,10 @@ const linkClasses =
   'inline-block transition-ui hover:text-signal-bright focus:outline-none focus:ring-2 focus:ring-signal focus:ring-offset-2 focus:ring-offset-surface [@media(pointer:coarse)]:py-3';
 
 const tiles: [string, number][] = [
-  ['Items indexed', 318],
-  ['Links extracted', 727],
-  ['Videos transcribed', 259],
-  ['Repos collected', 38],
+  ['Items indexed', 624],
+  ['Links extracted', 1210],
+  ['Videos saved', 462],
+  ['Repos collected', 59],
 ];
 
 // Same arrow stroke as OwnixChevron (components/svg/ownix-chevron-down.tsx),
@@ -606,7 +606,7 @@ export default async function LandingPage() {
                   markdown.
                 </p>
                 <p className="mt-3 mb-6 font-mono text-mono-label text-muted">
-                  short ◉ long ◉ article ◉ repo ◉ docs
+                  short ◉ long ◉ article ◉ repo ◉ docs ◉ newsletter
                 </p>
 
                 <div className="border-t border-line pt-4 md:pt-5">
@@ -618,6 +618,24 @@ export default async function LandingPage() {
                     type, search by title or tag, open anything to
                     grab its full transcript or copy a segment
                     straight into your AI.
+                  </p>
+                </div>
+
+                <div className="mt-4 border-t border-line pt-4 md:mt-5 md:pt-5">
+                  <h3 className="font-subtitle italic mb-1 text-title font-semibold leading-snug text-ink">
+                    &emsp;
+                    <span>
+                      The newsletter you keep meaning to read
+                    </span>
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Give Ownix a newsletter&apos;s archive link and it
+                    follows the publication itself. New issues land
+                    with their links already pulled out, ready to
+                    promote into your Index.
+                  </p>
+                  <p className="mt-3 font-mono text-mono-label text-muted">
+                    no alias / no forwarding / no inbox access
                   </p>
                 </div>
               </div>
@@ -640,7 +658,7 @@ export default async function LandingPage() {
                     for your AI.
                   </p>
                   <p className="mt-3 font-mono text-mono-label text-muted">
-                    pdf / word / spreadsheet / presentation
+                    pdf / word / spreadsheet / presentation / image
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
@@ -816,8 +834,8 @@ export default async function LandingPage() {
               It compounds - and it&apos;s yours.
             </h2>
             <p className="text-pretty mb-6 max-w-[58ch] text-prose leading-relaxed">
-              One month of casual saving, no effort beyond the share
-              button:
+              Three months of casual saving, no effort beyond the
+              share button:
             </p>
 
             {/* Below 360px the two-line mono captions misalign the values —

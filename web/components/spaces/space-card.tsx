@@ -60,7 +60,7 @@ export function SpaceCard({
         <p className="text-sm text-ink">Delete {space.name}?</p>
         {failed && (
           <p className="text-xs text-status-error">
-            Couldn&apos;t delete — try again.
+            Couldn&apos;t delete that. Try again.
           </p>
         )}
         <div className="flex gap-4">

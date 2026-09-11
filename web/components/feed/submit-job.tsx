@@ -728,9 +728,9 @@ export function SubmitJobProvider({ children }: { children: ReactNode }) {
               />
             </label>
             <p className="text-xs text-muted">
-              Ingest Link saves each link as-is; it does not process them
-              through the pipeline-detection flow. Paste as many as you like —
-              one job per link.
+              Ingest Link files each link as-is, without running it through a
+              pipeline. Paste as many as you like. Each one becomes its own
+              entry.
             </p>
             {addLinkError && (
               <p

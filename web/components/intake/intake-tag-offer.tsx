@@ -49,7 +49,7 @@ export function IntakeTagOffer({
     <div className="mt-3 w-full rounded-md border border-line bg-canvas p-3">
       <p className="mb-3 font-mono text-label text-muted">
         New tag <span className="text-ink">#{name}</span>
-        {remaining > 0 && ` — ${remaining} more after this`}
+        {remaining > 0 && `, ${remaining} more after this`}
       </p>
       <TagForm
         initial={{

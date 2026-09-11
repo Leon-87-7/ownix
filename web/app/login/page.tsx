@@ -20,7 +20,8 @@ export default function LoginPage() {
           Sign in to your Index
         </h2>
         <p className="mt-2 text-center text-sm leading-6 text-body">
-          Sign in to save your own links and unlock actions.
+          Sign in with Telegram and everything you share starts
+          landing in an Index that belongs to you.
         </p>
 
         <div className="mt-6 w-full">
