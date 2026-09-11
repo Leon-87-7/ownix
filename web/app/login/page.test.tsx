@@ -54,7 +54,7 @@ describe('LoginPage', () => {
 
     expect(
       screen.getByText(
-        'Telegram may remember the account shown here — Ownix signs you in only after you choose it. GitHub and Google use your account email.',
+        'Telegram may remember the account shown here. Ownix signs you in only after you choose it. GitHub and Google use your account email.',
       ),
     ).toBeInTheDocument();
   });

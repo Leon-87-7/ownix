@@ -23,8 +23,8 @@ export default function LoginPage() {
           Sign in to your Index
         </h2>
         <p className="mt-2 text-center text-sm leading-6 text-body">
-          Sign in with Telegram and everything you share starts
-          landing in an Index that belongs to you.
+          However you sign in, everything you share starts landing in
+          an Index that belongs to you.
         </p>
 
         <div className="mt-6 flex w-full flex-col gap-3">
@@ -72,7 +72,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-2 text-center text-xs leading-5 text-muted">
-          Telegram may remember the account shown here — Ownix signs
+          Telegram may remember the account shown here. Ownix signs
           you in only after you choose it. GitHub and Google use your
           account email.
         </p>

@@ -1055,8 +1055,34 @@ export default async function LandingPage() {
                   </ol>
                 </div>
                 <div>
-                  <div className="mb-3 flex max-w-[280px] flex-col gap-3">
+                  {/* Telegram sits alone above the divider on purpose: it is
+                    the only route that also connects the bot you send links
+                    to, so it is the recommended path rather than one of four
+                    equal options. The rest are account-only sign-ins. */}
+                  <div className="mb-3 flex max-w-[320px] flex-col gap-3">
+                    <span className="font-mono text-xs text-muted">
+                      Sign in with Telegram
+                    </span>
                     <TelegramLoginWidget align="start" />
+                    <span className="text-pretty text-xs leading-5 text-muted">
+                      Connects the bot you send links to, so you can
+                      start saving straight away.
+                    </span>
+
+                    <div className="flex items-center gap-3 py-1">
+                      <span
+                        aria-hidden="true"
+                        className="h-px flex-1 bg-line"
+                      />
+                      <span className="font-mono text-xs text-muted">
+                        or
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="h-px flex-1 bg-line"
+                      />
+                    </div>
+
                     <GhostButton
                       as="a"
                       href="/api/auth/github/connect"
@@ -1082,6 +1108,9 @@ export default async function LandingPage() {
                       Continue with Google
                     </GhostButton>
                     <MagicLinkForm />
+                    <span className="text-pretty text-xs leading-5 text-muted">
+                      Pair Telegram or Discord later from Settings.
+                    </span>
                   </div>
                   <p className="text-pretty font-mono text-xs text-muted">
                     no password ◉ approval within hours ◉ your files

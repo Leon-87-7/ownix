@@ -17,8 +17,12 @@ would still be there. That is the first law in
 architecture, the APIs, and the export formats, not only the marketing copy.
 
 This repository holds the whole system: a Python backend (FastAPI, SQLite, Redis), two
-Telegram bots, a Flask transcript sidecar, a Chrome extension, and a Next.js dashboard
-under `web/`. Backend codename: `vig`, for Video Intelligence Gateway.
+Telegram bots, a Discord gateway, a Flask transcript sidecar, a Chrome extension, and a
+Next.js dashboard under `web/`. Backend codename: `vig`, for Video Intelligence Gateway.
+
+Sign-in is invite-only and passwordless. Telegram, GitHub, Google, or an emailed
+magic link all work; accounts on a shared verified email merge automatically
+(ADR-0061).
 
 ---
 
@@ -26,10 +30,12 @@ under `web/`. Backend codename: `vig`, for Video Intelligence Gateway.
 
 ### Capture
 
-Three ways in, one destination.
+Four ways in, one destination.
 
 - **Telegram.** Share sheet on your phone, or paste a URL into the bot. Photos are
   handled inline, and multi-image sends group themselves.
+- **Discord.** DM the bot after pairing your account once from Settings. Same pipeline,
+  same Index (ADR-0061).
 - **Chrome extension** (`extension/chrome/`). A shortcut or a right-click on any page,
   link, or selection.
 - **Dashboard Intake.** Paste a URL, run a command, drop a file, or write a note.
@@ -329,7 +335,10 @@ when its key is missing.
 | `OPERATOR_CHAT_ID` | no | Per-user export isolation (ADR-0027). Unset means export for all |
 | `SESSION_BACKEND` | no | `redis` in production, `memory` for local auth loops |
 | `OPS_BOT_TOKEN` and the other `OPS_*` vars | no | The Ops bot (ADR-0036) |
-| `SMTP_*` | no | Transactional email. Approval still succeeds when unset |
+| `SMTP_*` | no | Transactional email and the sign-in magic link. Approval still succeeds when unset |
+| `DISCORD_BOT_TOKEN`, `DISCORD_APPLICATION_ID` | no | Discord DM channel (ADR-0061) |
+| `GITHUB_OAUTH_CLIENT_ID/SECRET/REDIRECT_URI` | no | GitHub sign-in |
+| `GOOGLE_LOGIN_CLIENT_ID/SECRET/REDIRECT_URI` | no | Google sign-in. Distinct from the `GOOGLE_OAUTH_*` Drive/Sheets credential above |
 
 ---
 
@@ -395,7 +404,7 @@ src/
 ├── api/                 # Dashboard JSON API: jobs, brain, spaces, intake, parsed,
 │                        #   controls, auth, google_oauth, extension_auth, preview,
 │                        #   templates, newsletter_digest
-├── auth/                # Session-cookie middleware
+├── auth/                # Session-cookie middleware, multi-provider identity
 ├── processors/          # short_video, long_video, article, repo, document,
 │                        #   enrichment, prd, checklists, screenshots, link,
 │                        #   bookmarks, newsletter_poll, email_digest, purge
@@ -403,6 +412,7 @@ src/
 │                        #   storage (GCS), jina, github, brave, transcript, parse,
 │                        #   frames, google_auth/tokens/workspace, pdf_intake,
 │                        #   space_export, job_recovery, ops_bot
+├── channels/discord/    # Discord gateway + adapter (DM-only, pairing-only)
 ├── telegram/            # webhook.py (routing, chat_state FSM), sender.py
 ├── utils/               # validators (detect_pipeline), markdown, logger, crypto
 └── templates.py         # PROMPT_TEMPLATES registry, the store behind Recipes

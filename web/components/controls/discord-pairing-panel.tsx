@@ -59,7 +59,7 @@ export function DiscordPairingPanel() {
     <div className="space-y-4">
       <p className="text-sm text-body">
         Send links from Discord: generate a one-time code here, then DM it to
-        the Ownix bot. The code expires in 5 minutes and works once — after
+        the Ownix bot. The code expires in 5 minutes and works once. After
         that, anything you DM the bot lands in your Index.
       </p>
       <button
