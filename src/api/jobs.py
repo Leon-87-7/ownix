@@ -763,19 +763,37 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
 
 
 @jobs_router.delete("/{job_id}/checklists", status_code=204)
-async def delete_job_checklists(job_id: str, request: Request) -> Response:
+async def delete_job_checklists(
+    job_id: str,
+    request: Request,
+    generated_at: str | None = Query(default=None),
+) -> Response:
     """Clear a job's generated checklist, returning it to the no-checklist state.
+
+    *generated_at* is the ``checklists_generated_at`` the caller was looking at.
+    The match is applied inside the UPDATE, so a checklist generated between the
+    caller's read and this delete is not erased by a stale tab — that gets a 409
+    instead. Omitting it deletes whatever is stored, for callers with nothing to
+    pin against.
 
     Idempotent: a job that never had a checklist (or whose checklist a stale tab
     deletes twice) gets the same 204 — the caller's intent is already satisfied,
     so a 404 would be noise.
     """
     await get_owned_job(job_id, request)
-    await database.update_job_fields(
-        job_id,
-        checklists_md=None,
-        checklists_generated_at=None,
-    )
+    if generated_at is None:
+        await database.update_job_fields(
+            job_id,
+            checklists_md=None,
+            checklists_generated_at=None,
+        )
+        return Response(status_code=204)
+
+    if not await database.clear_job_checklists(job_id, generated_at):
+        raise HTTPException(
+            status_code=409,
+            detail="This checklist was regenerated elsewhere - reload to see the current one",
+        )
     return Response(status_code=204)
 
 

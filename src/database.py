@@ -2276,6 +2276,35 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
     log.info("job_status_updated", job_id=job_id, status=status)
 
 
+async def clear_job_checklists(job_id: str, expected_generated_at: str | None) -> bool:
+    """Clear a job's checklist only if it is still the one the caller saw.
+
+    The match happens inside the UPDATE, so a generation landing between the
+    caller's read and this write loses the race instead of being erased. Returns
+    False when the stored checklist has moved on; True when the row was cleared
+    or was already empty (nothing to erase, so the caller's intent holds).
+    """
+    async with connection() as conn:
+        cursor = await conn.execute(
+            "UPDATE jobs SET checklists_md = NULL, checklists_generated_at = NULL, "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND checklists_generated_at IS ?",
+            (job_id, expected_generated_at),
+        )
+        cleared = cursor.rowcount > 0
+        await conn.commit()
+        if cleared:
+            log.info("job_checklists_cleared", job_id=job_id)
+            return True
+        # No row matched: either the checklist moved on (conflict) or there was
+        # never one to clear (idempotent no-op).
+        async with conn.execute(
+            "SELECT checklists_generated_at FROM jobs WHERE id = ?", (job_id,)
+        ) as check:
+            row = await check.fetchone()
+    return row is not None and row[0] is None
+
+
 async def update_job_fields(job_id: str, **fields: Any) -> None:
     """Update job fields without changing its workflow status."""
     if not fields:

@@ -249,7 +249,15 @@ describe('JobDetailPage', () => {
           checklists_generated_at: '2026-08-11T12:00:00Z',
         }),
       ),
-      http.delete('/api/jobs/:jobId/checklists', () => new HttpResponse(null, { status: 204 })),
+      http.delete('/api/jobs/:jobId/checklists', ({ request }) => {
+        // The delete is pinned to the checklist on screen, so a newer one
+        // generated in another tab can't be erased by this click.
+        const sent = new URL(request.url).searchParams.get('generated_at');
+        if (sent !== '2026-08-11T12:00:00Z') {
+          return HttpResponse.json({ detail: 'stale' }, { status: 409 });
+        }
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
     render(<JobDetailPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));

@@ -940,6 +940,10 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     job.id,
   );
   const [markdown, setMarkdown] = useState(job.checklists_md);
+  // Tracked only to pin the delete to the checklist on screen (409 if it moved).
+  const [generatedAt, setGeneratedAt] = useState(
+    job.checklists_generated_at,
+  );
 
   if (
     !['short', 'long'].includes(job.content_type) ||
@@ -951,12 +955,14 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     const result = await run();
     if (result) {
       setMarkdown(result.checklists_md);
+      setGeneratedAt(result.checklists_generated_at);
     }
   };
 
   const handleDelete = async () => {
-    if (await remove()) {
+    if (await remove(generatedAt)) {
       setMarkdown(null);
+      setGeneratedAt(null);
     }
   };
 

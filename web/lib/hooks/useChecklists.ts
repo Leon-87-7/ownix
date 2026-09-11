@@ -38,12 +38,19 @@ export function useChecklists(jobId: string) {
   /** Clear the stored checklist. Resolves false on failure (never throws) so
    * ConfirmDialog closes and the error surfaces in the section's alert slot —
    * same shape as the job delete on this page. */
-  const remove = useCallback(async (): Promise<boolean> => {
+  const remove = useCallback(
+    async (generatedAt: string | null): Promise<boolean> => {
     setDeleting(true);
     setError(null);
     try {
+      // Pin the delete to the checklist actually on screen: one generated in
+      // another tab since this page loaded must not be erased by this click.
+      // The server answers 409 and the message tells the user to reload.
+      const query = generatedAt
+        ? `?generated_at=${encodeURIComponent(generatedAt)}`
+        : '';
       await apiDelete(
-        `/api/jobs/${jobId}/checklists`,
+        `/api/jobs/${jobId}/checklists${query}`,
         'Checklist delete failed',
       );
       return true;
@@ -55,7 +62,9 @@ export function useChecklists(jobId: string) {
     } finally {
       setDeleting(false);
     }
-  }, [jobId]);
+    },
+    [jobId],
+  );
 
   return { generating, deleting, error, run, remove };
 }
