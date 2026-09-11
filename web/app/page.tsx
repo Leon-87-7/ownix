@@ -651,11 +651,24 @@ export default async function LandingPage() {
               </div>
 
               <div className="flex flex-col divide-y divide-line border-t border-line md:border-t-0">
-                <div className="py-4 first:pt-0 md:py-5">
+                <div className="py-4 md:py-5 md:first:pt-0">
+                  <h3 className="font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                    &emsp;
+                    <span>
+                      Drop a GitHub repo link, skip the clone
+                    </span>
+                  </h3>
+                  <p className="text-pretty text-copy leading-relaxed text-body">
+                    Paste a GitHub URL and Ownix reads the README and
+                    structure, writes a plain-language breakdown, and
+                    files it in your Index next to everything else.
+                  </p>
+                </div>
+                <div className="py-4 md:py-5">
                   {/* <span className="mb-1 block font-mono text-mono-label font-medium tracking-[0.4px] text-muted">
                     DOCS
                   </span> */}
-                  <h3 className="mt-4 font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
+                  <h3 className="font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
                     &emsp;
                     <span>
                       That PDF you saved and never reopened?
@@ -669,19 +682,6 @@ export default async function LandingPage() {
                   </p>
                   <p className="mt-3 font-mono text-mono-label text-muted">
                     pdf / word / spreadsheet / presentation / image
-                  </p>
-                </div>
-                <div className="py-4 md:py-5">
-                  <h3 className="font-subtitle italic mb-1 flex items-center gap-2 text-title font-semibold leading-snug text-ink">
-                    &emsp;
-                    <span>
-                      Drop a GitHub repo link, skip the clone
-                    </span>
-                  </h3>
-                  <p className="text-pretty text-copy leading-relaxed text-body">
-                    Paste a GitHub URL and Ownix reads the README and
-                    structure, writes a plain-language breakdown, and
-                    files it in your Index next to everything else.
                   </p>
                 </div>
                 <div className="py-4 md:py-5">
