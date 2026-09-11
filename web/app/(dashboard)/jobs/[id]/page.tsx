@@ -960,7 +960,7 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
   };
 
   const handleDelete = async () => {
-    if (await remove(generatedAt)) {
+    if (await remove(generatedAt ?? null)) {
       setMarkdown(null);
       setGeneratedAt(null);
     }
