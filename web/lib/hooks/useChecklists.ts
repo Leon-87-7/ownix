@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { apiPost } from '@/lib/fetch-utils';
+import { apiDelete, apiPost } from '@/lib/fetch-utils';
 
 interface ChecklistsResult {
   checklists_md: string;
@@ -10,6 +10,7 @@ interface ChecklistsResult {
 
 export function useChecklists(jobId: string) {
   const [generating, setGenerating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const run = useCallback(async (): Promise<ChecklistsResult | null> => {
@@ -34,5 +35,27 @@ export function useChecklists(jobId: string) {
     }
   }, [jobId]);
 
-  return { generating, error, run };
+  /** Clear the stored checklist. Resolves false on failure (never throws) so
+   * ConfirmDialog closes and the error surfaces in the section's alert slot —
+   * same shape as the job delete on this page. */
+  const remove = useCallback(async (): Promise<boolean> => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await apiDelete(
+        `/api/jobs/${jobId}/checklists`,
+        'Checklist delete failed',
+      );
+      return true;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Checklist delete failed',
+      );
+      return false;
+    } finally {
+      setDeleting(false);
+    }
+  }, [jobId]);
+
+  return { generating, deleting, error, run, remove };
 }

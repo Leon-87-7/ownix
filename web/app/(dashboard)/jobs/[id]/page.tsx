@@ -21,6 +21,7 @@ import {
   Download,
   Pencil,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { TagMenu, TagChips } from '@/components/ui/tag-picker';
@@ -877,8 +878,67 @@ function TranscriptCard({ job, restricted }: { job: JobDetail; restricted: boole
   );
 }
 
+// The escape hatch inside the delete dialog. `checklists_md` is the only stored
+// copy (src/processors/checklists.py writes no Drive/Sheets/Brain side effects),
+// so the way out is offered at the moment of the decision rather than requiring
+// the foresight to have used the header buttons. Amber icons carry the emphasis
+// - `.ownix-shimmer` is reserved for in-flight states (DESIGN.md), and this
+// section already spends it on the "Generating..." run label.
+const DIALOG_PILL_BUTTON =
+  'inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-signal transition-ui hover:bg-raised hover:text-signal-bright';
+
+function ChecklistEscapePills({
+  markdown,
+  jobId,
+}: {
+  markdown: string;
+  jobId: string;
+}) {
+  const { copied, copy } = useCopyFeedback(markdown);
+  const copyPress = usePressFeedback();
+  const downloadPress = usePressFeedback();
+
+  return (
+    <div className="inline-flex items-center gap-1 rounded-full border border-line p-1">
+      <Tooltip content={copied ? 'Copied' : 'Copy'}>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label="Copy checklist before deleting"
+          className={DIALOG_PILL_BUTTON}
+          {...copyPress}
+        >
+          {copied ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
+        </button>
+      </Tooltip>
+      <Tooltip content="Download .md">
+        <button
+          type="button"
+          onClick={() =>
+            downloadMarkdownFile(
+              `checklist_${jobId.slice(-4)}.md`,
+              markdown,
+            )
+          }
+          aria-label="Download checklist before deleting"
+          className={DIALOG_PILL_BUTTON}
+          {...downloadPress}
+        >
+          <Download className="h-4 w-4" />
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
 function ChecklistsSection({ job }: { job: JobDetail }) {
-  const { generating, error, run } = useChecklists(job.id);
+  const { generating, deleting, error, run, remove } = useChecklists(
+    job.id,
+  );
   const [markdown, setMarkdown] = useState(job.checklists_md);
 
   if (
@@ -891,6 +951,12 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
     const result = await run();
     if (result) {
       setMarkdown(result.checklists_md);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (await remove()) {
+      setMarkdown(null);
     }
   };
 
@@ -944,9 +1010,38 @@ function ChecklistsSection({ job }: { job: JobDetail }) {
         </p>
       )}
       {markdown && (
-        <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 font-mono text-xs text-body">
-          {markdown}
-        </pre>
+        // The trash sits on this wrapper, not inside the <pre> - anchored to
+        // the scroll box it would scroll out of reach on a long checklist,
+        // which is exactly when it's wanted.
+        <div className="relative">
+          <ConfirmDialog
+            title="Delete this checklist?"
+            description="This clears the generated checklist and returns the job to its no-checklist state. It's the only stored copy - take it with you first."
+            confirmLabel="Delete permanently"
+            pending={deleting}
+            onConfirm={handleDelete}
+            trigger={
+              <button
+                type="button"
+                aria-label="Delete checklist"
+                className={`absolute right-2 top-2 z-10 bg-canvas ${CARD_ACTION_BUTTON}`}
+              >
+                <Trash2
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                />
+              </button>
+            }
+          >
+            <ChecklistEscapePills
+              markdown={markdown}
+              jobId={job.id}
+            />
+          </ConfirmDialog>
+          <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-canvas p-4 pr-12 font-mono text-xs text-body">
+            {markdown}
+          </pre>
+        </div>
       )}
     </section>
   );

@@ -240,6 +240,62 @@ describe('JobDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download checklist' })).toBeInTheDocument();
   });
+
+  it('deletes a checklist back to the no-checklist state, offering a copy first', async () => {
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        }),
+      ),
+      http.delete('/api/jobs/:jobId/checklists', () => new HttpResponse(null, { status: 204 })),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));
+    await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete checklist' }));
+    // The escape hatch is offered at the moment of the decision - checklists_md
+    // is the only stored copy.
+    expect(
+      screen.getByRole('button', { name: 'Copy checklist before deleting' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download checklist before deleting' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Run Checklists' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Add tests/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the checklist when the delete fails', async () => {
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        }),
+      ),
+      http.delete('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({ detail: 'Checklist delete failed' }, { status: 500 }),
+      ),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));
+    await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete checklist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Checklist delete failed'),
+    );
+    expect(screen.getByText(/Add tests/)).toBeInTheDocument();
+  });
   it('captures screenshots and shows the Drive link on reload', async () => {
     const reload = vi.fn().mockResolvedValue(undefined);
     setupMocks({ reload });

@@ -100,3 +100,33 @@ def test_generation_failure_returns_502(client: TestClient, monkeypatch: pytest.
     monkeypatch.setattr("src.processors.checklists.run_checklists", fail)
     response = client.post("/api/jobs/job_abcd/checklists")
     assert response.status_code == 502
+
+
+def test_delete_clears_checklist(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed_job()
+    login(client)
+
+    async def generate(_job: dict) -> tuple[dict, str]:
+        return {"topics": []}, "# Checklist\n"
+
+    monkeypatch.setattr("src.processors.checklists.run_checklists", generate)
+    client.post("/api/jobs/job_abcd/checklists")
+
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+    detail = client.get("/api/jobs/job_abcd").json()
+    assert detail["checklists_md"] is None
+    assert detail["checklists_generated_at"] is None
+
+
+def test_delete_is_idempotent(client: TestClient) -> None:
+    """A job that never had a checklist - or a stale tab deleting twice - gets
+    the same 204; the caller's intent is already satisfied."""
+    seed_job()
+    login(client)
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+
+
+def test_delete_requires_ownership(client: TestClient) -> None:
+    seed_job()
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 401

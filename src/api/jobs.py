@@ -762,6 +762,23 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
     return {"checklists_md": markdown, "checklists_generated_at": generated_at}
 
 
+@jobs_router.delete("/{job_id}/checklists", status_code=204)
+async def delete_job_checklists(job_id: str, request: Request) -> Response:
+    """Clear a job's generated checklist, returning it to the no-checklist state.
+
+    Idempotent: a job that never had a checklist (or whose checklist a stale tab
+    deletes twice) gets the same 204 — the caller's intent is already satisfied,
+    so a 404 would be noise.
+    """
+    await get_owned_job(job_id, request)
+    await database.update_job_fields(
+        job_id,
+        checklists_md=None,
+        checklists_generated_at=None,
+    )
+    return Response(status_code=204)
+
+
 @jobs_router.post("/{job_id}/screenshots", status_code=202)
 async def generate_job_screenshots(job_id: str, request: Request) -> dict:
     """Claim screenshot capture and return immediately while it runs."""
