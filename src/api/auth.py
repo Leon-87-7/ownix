@@ -395,7 +395,7 @@ async def request_magic_link(payload: EmailPayload) -> dict:
     # http://localhost.attacker.example, which is a remote plaintext host.
     parsed = urlparse(base)
     if not (
-        parsed.scheme == "https"
+        (parsed.scheme == "https" and parsed.hostname)
         or (parsed.scheme == "http" and parsed.hostname in _LOOPBACK_HOSTS)
     ):
         raise HTTPException(status_code=503, detail="Email sign-in is not configured")

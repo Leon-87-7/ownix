@@ -411,15 +411,25 @@ def test_magic_link_request_does_not_leak_account_existence(identity_auth_client
     assert existing.json() == fresh.json()
 
 
-def test_magic_link_request_rejects_localhost_lookalike_host(identity_auth_client, monkeypatch):
+@pytest.mark.parametrize(
+    "dashboard_url",
+    [
+        # A prefix check accepts this remote plaintext host and mails it a
+        # bearer token; the hostname must match a loopback address exactly.
+        "http://localhost.attacker.example",
+        # Scheme alone is not enough — no hostname means a dead link.
+        "https://",
+    ],
+)
+def test_magic_link_request_rejects_unsafe_dashboard_url(
+    identity_auth_client, monkeypatch, dashboard_url
+):
     from src.intake import rate_limit
 
     rate_limit.reset()
     sent: list[str] = []
     monkeypatch.setattr("src.api.auth.send_magic_link_email", AsyncMock(side_effect=sent.append))
-    # A prefix check would accept this remote plaintext host and mail it a
-    # bearer token; the hostname must match a loopback address exactly.
-    monkeypatch.setattr("src.api.auth.settings.DASHBOARD_URL", "http://localhost.attacker.example")
+    monkeypatch.setattr("src.api.auth.settings.DASHBOARD_URL", dashboard_url)
 
     resp = identity_auth_client.post("/api/auth/email/request", json={"email": "a@example.com"})
     assert resp.status_code == 503

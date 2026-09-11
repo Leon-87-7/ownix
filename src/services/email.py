@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import smtplib
+import ssl
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -53,7 +54,9 @@ def _send_email_sync(message: EmailMessage) -> None:
         raise RuntimeError("SMTP_STARTTLS is required for a non-loopback SMTP relay")
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as smtp:
         if settings.SMTP_STARTTLS:
-            smtp.starttls()
+            # Default context verifies the cert and hostname; smtplib's own
+            # fallback does neither, so STARTTLS alone would not stop a MITM.
+            smtp.starttls(context=ssl.create_default_context())
         if settings.SMTP_USERNAME:
             smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
         smtp.send_message(message)
