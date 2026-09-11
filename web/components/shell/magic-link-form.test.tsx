@@ -11,7 +11,7 @@ function typeEmailAndSubmit(email: string) {
   fireEvent.change(screen.getByLabelText('Email address'), {
     target: { value: email },
   });
-  fireEvent.click(screen.getByRole('button', { name: /sign-in link/i }));
+  fireEvent.click(screen.getByRole('button', { name: /send link/i }));
 }
 
 describe('MagicLinkForm', () => {

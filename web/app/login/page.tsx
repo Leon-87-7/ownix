@@ -30,31 +30,38 @@ export default function LoginPage() {
         <div className="mt-6 flex w-full flex-col gap-3">
           <TelegramLoginWidget />
 
-          <GhostButton
-            as="a"
-            href="/api/auth/github/connect"
-            accent="contrasignal"
-            className="h-11 w-full gap-2.5 text-sm font-medium text-ink"
-          >
-            <GitHubIcon
-              aria-hidden="true"
-              className="h-[18px] w-[18px]"
-            />
-            Continue with GitHub
-          </GhostButton>
+          {/* Side by side, short labels: two account-only sign-ins are peers,
+            so they share one row instead of stacking two full-width blocks.
+            aria-label keeps the full phrase for screen readers. */}
+          <div className="grid grid-cols-2 gap-2">
+            <GhostButton
+              as="a"
+              href="/api/auth/github/connect"
+              aria-label="Continue with GitHub"
+              accent="contrasignal"
+              className="h-11 w-full gap-2 px-2 text-sm font-medium text-ink"
+            >
+              <GitHubIcon
+                aria-hidden="true"
+                className="h-[18px] w-[18px] shrink-0"
+              />
+              GitHub
+            </GhostButton>
 
-          <GhostButton
-            as="a"
-            href="/api/auth/google/connect"
-            accent="contrasignal"
-            className="h-11 w-full gap-2.5 text-sm font-medium text-ink"
-          >
-            <GoogleIcon
-              aria-hidden="true"
-              className="h-[18px] w-[18px]"
-            />
-            Continue with Google
-          </GhostButton>
+            <GhostButton
+              as="a"
+              href="/api/auth/google/connect"
+              aria-label="Continue with Google"
+              accent="contrasignal"
+              className="h-11 w-full gap-2 px-2 text-sm font-medium text-ink"
+            >
+              <GoogleIcon
+                aria-hidden="true"
+                className="h-[18px] w-[18px] shrink-0"
+              />
+              Google
+            </GhostButton>
+          </div>
 
           <div className="flex items-center gap-3 py-1">
             <span

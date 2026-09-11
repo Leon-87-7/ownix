@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { GhostButton } from '@/components/ui/ghost-button';
 import { apiPost, describeError } from '@/lib/fetch-utils';
 
 const FALLBACK = 'Could not send the link. Try again.';
@@ -47,25 +46,29 @@ export function MagicLinkForm({ className = '' }: { className?: string }) {
       >
         Email address
       </label>
-      <input
-        id={inputId}
-        type="email"
-        required
-        maxLength={254}
-        autoComplete="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@example.com"
-        className="h-11 w-full rounded-md border border-line bg-canvas px-3 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
-      />
-      <GhostButton
-        type="submit"
-        disabled={sending}
-        accent="contrasignal"
-        className="h-11 w-full text-sm font-medium text-ink"
-      >
-        {sending ? 'Sending…' : 'Email me a sign-in link'}
-      </GhostButton>
+      {/* Input and submit are one joined control, not two stacked rows: the
+        pair costs a single 44px row on a plate that already carries Telegram,
+        GitHub and Google above it. */}
+      <div className="flex h-11 items-center overflow-hidden rounded-md border border-line bg-canvas transition-ui hover:border-line-strong focus-within:border-signal">
+        <input
+          id={inputId}
+          type="email"
+          required
+          maxLength={254}
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm text-ink placeholder-muted focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={sending}
+          className="h-full shrink-0 whitespace-nowrap border-l border-line bg-raised px-3 text-sm font-medium text-ink transition-ui hover:bg-selected focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {sending ? 'Sending…' : 'Send link'}
+        </button>
+      </div>
       {message && (
         <p
           role="status"
