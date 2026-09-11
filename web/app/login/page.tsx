@@ -2,8 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AuthShell } from '@/components/shell/auth-shell';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
+import { GitHubIcon } from '@/components/svg/github-icon';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import { TelegramLoginWidget } from '@/components/shell/telegram-login-widget';
+import { MagicLinkForm } from '@/components/shell/magic-link-form';
+import { GhostButton } from '@/components/ui/ghost-button';
 
 // Thin auth page - index space is better spent on the landing page.
 // follow: true so link equity still flows through to pages this one links to.
@@ -24,24 +27,55 @@ export default function LoginPage() {
           landing in an Index that belongs to you.
         </p>
 
-        <div className="mt-6 w-full">
+        <div className="mt-6 flex w-full flex-col gap-3">
           <TelegramLoginWidget />
+
+          <GhostButton
+            as="a"
+            href="/api/auth/github/connect"
+            accent="contrasignal"
+            className="h-11 w-full gap-2.5 text-sm font-medium text-ink"
+          >
+            <GitHubIcon
+              aria-hidden="true"
+              className="h-[18px] w-[18px]"
+            />
+            Continue with GitHub
+          </GhostButton>
+
+          <GhostButton
+            as="a"
+            href="/api/auth/google/connect"
+            accent="contrasignal"
+            className="h-11 w-full gap-2.5 text-sm font-medium text-ink"
+          >
+            <GoogleIcon
+              aria-hidden="true"
+              className="h-[18px] w-[18px]"
+            />
+            Continue with Google
+          </GhostButton>
+
+          <div className="flex items-center gap-3 py-1">
+            <span
+              aria-hidden="true"
+              className="h-px flex-1 bg-line"
+            />
+            <span className="text-xs text-muted">or</span>
+            <span
+              aria-hidden="true"
+              className="h-px flex-1 bg-line"
+            />
+          </div>
+
+          <MagicLinkForm />
         </div>
 
         <p className="mt-2 text-center text-xs leading-5 text-muted">
-          Telegram may remember the account shown here. Ownix signs
-          you in only after you choose it.
+          Telegram may remember the account shown here — Ownix signs
+          you in only after you choose it. GitHub and Google use your
+          account email.
         </p>
-
-        <div
-          className="mt-5 w-full px-3 py-2 text-center text-sm text-muted"
-          aria-disabled="true"
-        >
-          <div className="inline-flex h-8 items-center justify-center rounded-md bg-signal-deep/80 px-3.5 text-button font-medium text-onsignal">
-            Connect to <GoogleIcon className="ml-2 h-4 w-4" />
-          </div>
-          <span className="ml-2">locked until approval</span>
-        </div>
 
         <Link
           href="/"

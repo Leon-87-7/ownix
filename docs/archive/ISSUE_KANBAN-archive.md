@@ -305,6 +305,26 @@
 | [#531](https://github.com/Leon-87-7/ownix/issues/531) | Desktop: recipe picker becomes an edge slide-in panel with recipe descriptions | — | Merged; PR #532; closed on GH |
 | [#265](https://github.com/Leon-87-7/ownix/issues/265) | docs: reconcile TASK.md with fable-TASK.md (merge briefs 14–15 back) | Docs | closed on GH |
 | [#332](https://github.com/Leon-87-7/ownix/issues/332) | Public landing — staged dashboard screenshots from a seeded demo account | — | closed on GH |
+| [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | closed on GH |
+| [#484](https://github.com/Leon-87-7/ownix/issues/484) | Slash-command palette with argument hints | Intake / Commands | closed on GH |
+| [#485](https://github.com/Leon-87-7/ownix/issues/485) | Migrate /find to shared intake commands | Intake / Commands | closed on GH |
+| [#486](https://github.com/Leon-87-7/ownix/issues/486) | Migrate /force to shared intake commands | Intake / Commands | closed on GH |
+| [#487](https://github.com/Leon-87-7/ownix/issues/487) | Migrate /freestyle to shared intake commands | Intake / Commands | closed on GH |
+| [#511](https://github.com/Leon-87-7/ownix/issues/511) | feat(tags): canonical token vocabulary and collision safety | Tags | Merged; PR #521; closed on GH |
+| [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | Merged; PR #521; closed on GH |
+| [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | Merged; PR #521; closed on GH |
+| [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | Merged; PR #521; closed on GH |
+| [#523](https://github.com/Leon-87-7/ownix/issues/523) | Route document URLs through shared intake | — | Merged; PR #527; closed on GH |
+| [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | Merged; PR #527; closed on GH |
+| [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | Merged; PR #527; closed on GH |
+| [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | Merged; PR #527; closed on GH |
+| [#554](https://github.com/Leon-87-7/ownix/issues/554) | Add CI test workflow + pytest-timeout default | CI / Tests | Merged; PR #555; closed on GH |
+| [#515](https://github.com/Leon-87-7/ownix/issues/515) | Auto-snapshot the DB before running migrations | DB / Migrations | Merged; PR #593; closed on GH |
+| [#516](https://github.com/Leon-87-7/ownix/issues/516) | CI dry-run of migrations against a sanitized prod snapshot | CI / Migrations | Merged; PR #593; closed on GH |
+| [#517](https://github.com/Leon-87-7/ownix/issues/517) | DB restore script + ops-runbook backup/rollback section | DB / Ops | Merged; PR #593; closed on GH |
+| [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | Merged; PR #593; closed on GH |
+| [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | Merged; PR #593; closed on GH |
+| [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | Merged; PR #593; closed on GH |
 
 ---
 
@@ -510,3 +530,19 @@
 | [#527](https://github.com/Leon-87-7/ownix/pull/527) | Add extension capture commands and refresh landing | agent/extension-capture-and-landing→main | #523, #524, #525, #526 | ✅ Merged |
 | [#532](https://github.com/Leon-87-7/ownix/pull/532) | Add dashboard Run Gemini recipe picker | agent/run-gemini-recipe-picker→main | #528–#531 | ✅ Merged |
 | [#349](https://github.com/Leon-87-7/ownix/pull/349) | Add and harden ntfy operator alerts | claude/ntfy-vig-integration-7y8dw6→main | #339–#348 | ❌ Closed |
+| [#564](https://github.com/Leon-87-7/ownix/pull/564) | Unify job/link tags for link, article, and repo jobs (#561-563) | feat/job-link-tags-561-563→main | #561, #562, #563 | ✅ Merged |
+| [#565](https://github.com/Leon-87-7/ownix/pull/565) | Add mobile entry point for GoTo Links | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
+| [#566](https://github.com/Leon-87-7/ownix/pull/566) | Show real favicons in GoTo links panel instead of generic icon | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
+| [#567](https://github.com/Leon-87-7/ownix/pull/567) | Add "Powered by" trust bar to landing page | claude/landing-powered-by-section-5ehlx3→main | — | ✅ Merged |
+| [#573](https://github.com/Leon-87-7/ownix/pull/573) | Mobile haptic button feel + council-review fixes (#569-572) | claude/haptic-button-feel-569-572→main | #569 | ✅ Merged |
+| [#584](https://github.com/Leon-87-7/ownix/pull/584) | fix(web): agent-readable 404s, Organization JSON-LD, canonical, llms.txt | fix/agent-readiness-scan→main | — | ✅ Merged |
+| [#585](https://github.com/Leon-87-7/ownix/pull/585) | feat: long-video screenshot capture (#580-583) | feat/long-video-screenshot-capture→main | #580 | ✅ Merged |
+| [#586](https://github.com/Leon-87-7/ownix/pull/586) | feat(web): hold-to-confirm retry for screenshot capture | feat/screenshots-retry-hold→main | — | ✅ Merged |
+| [#587](https://github.com/Leon-87-7/ownix/pull/587) | fix(web): job detail retry spin direction and screenshot copy | fix/job-detail-copy-and-spin→main | — | ✅ Merged |
+| [#588](https://github.com/Leon-87-7/ownix/pull/588) | fix(security): rate-limit unmetered Gemini-cost endpoints, add CORS policy | security/rate-limit-cors-gaps→main | — | ✅ Merged |
+| [#589](https://github.com/Leon-87-7/ownix/pull/589) | fix(web): mirror Checklists header to Transcript layout, drop landing box | web/checklists-header-polish→main | — | ✅ Merged |
+| [#590](https://github.com/Leon-87-7/ownix/pull/590) | feat: symmetric transcript/enrichment Drive tracking + editable transcript | feat/transcript-editor→main | — | ✅ Merged |
+| [#591](https://github.com/Leon-87-7/ownix/pull/591) | fix(web): restore glanceable transcript card, editing moved to its own page | fix/glanceable-transcript-card→main | — | ✅ Merged |
+| [#592](https://github.com/Leon-87-7/ownix/pull/592) | fix(web): back-nav loop + add X/Facebook platform icons | fix/transcript-back-loop-and-platform-icons→main | — | ✅ Merged |
+| [#593](https://github.com/Leon-87-7/ownix/pull/593) | feat: DB migration safety net (backup, restore, CI dry-run, staging scaffold) | db-migration-safety-515-520→main | #515, #516, #517, #518, #519, #520 | ✅ Merged |
+| [#599](https://github.com/Leon-87-7/ownix/pull/599) | feat(web): add per-field listen button using browser TTS | feat/listen-button→main | #594, #598 | ✅ Merged |

@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     TELEGRAM_STICKER_GEMINI_FAIL: str = ""
     TELEGRAM_STICKER_DRIVE_FAIL: str = ""
     GITHUB_TOKEN: str = ""
+    # Login OAuth clients (separate from repo enrichment and Google export).
+    GITHUB_OAUTH_CLIENT_ID: str = ""
+    GITHUB_OAUTH_CLIENT_SECRET: str = ""
+    GITHUB_OAUTH_REDIRECT_URI: str = ""
+    GOOGLE_LOGIN_CLIENT_ID: str = ""
+    GOOGLE_LOGIN_CLIENT_SECRET: str = ""
+    GOOGLE_LOGIN_REDIRECT_URI: str = ""
+    DISCORD_APPLICATION_ID: str = ""
+    DISCORD_BOT_TOKEN: str = ""
 
     # Slices #2/#3 — sidecar
     FRAME_SERVICE_URL: str = "http://10.0.0.4:5151"

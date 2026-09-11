@@ -240,6 +240,101 @@ describe('JobDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Copy checklist' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download checklist' })).toBeInTheDocument();
   });
+
+  it('deletes a checklist back to the no-checklist state, offering a copy first', async () => {
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        }),
+      ),
+      http.delete('/api/jobs/:jobId/checklists', ({ request }) => {
+        // The delete is pinned to the checklist on screen, so a newer one
+        // generated in another tab can't be erased by this click.
+        const sent = new URL(request.url).searchParams.get('generated_at');
+        if (sent !== '2026-08-11T12:00:00Z') {
+          return HttpResponse.json({ detail: 'stale' }, { status: 409 });
+        }
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));
+    await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete checklist' }));
+    // The escape hatch is offered at the moment of the decision - checklists_md
+    // is the only stored copy.
+    expect(
+      screen.getByRole('button', { name: 'Copy checklist before deleting' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Download checklist before deleting' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Run Checklists' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Add tests/)).not.toBeInTheDocument();
+  });
+
+  it('blocks delete while a regenerate is in flight', async () => {
+    // The in-flight POST would write its result back over the DELETE,
+    // silently resurrecting the checklist the user just removed.
+    let releaseGenerate: (() => void) | undefined;
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', async () => {
+        await new Promise<void>((resolve) => {
+          releaseGenerate = resolve;
+        });
+        return HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        });
+      }),
+    );
+    setupMocks({
+      job: { ...JOB, checklists_md: '# Old\n- [ ] Stale item' },
+    });
+    render(<JobDetailPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete checklist' })).toBeDisabled(),
+    );
+
+    releaseGenerate?.();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete checklist' })).toBeEnabled(),
+    );
+  });
+
+  it('keeps the checklist when the delete fails', async () => {
+    server.use(
+      http.post('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({
+          checklists_md: '# Review\n- [ ] Add tests',
+          checklists_generated_at: '2026-08-11T12:00:00Z',
+        }),
+      ),
+      http.delete('/api/jobs/:jobId/checklists', () =>
+        HttpResponse.json({ detail: 'Checklist delete failed' }, { status: 500 }),
+      ),
+    );
+    render(<JobDetailPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Run Checklists' }));
+    await waitFor(() => expect(screen.getByText(/Add tests/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete checklist' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Checklist delete failed'),
+    );
+    expect(screen.getByText(/Add tests/)).toBeInTheDocument();
+  });
   it('captures screenshots and shows the Drive link on reload', async () => {
     const reload = vi.fn().mockResolvedValue(undefined);
     setupMocks({ reload });

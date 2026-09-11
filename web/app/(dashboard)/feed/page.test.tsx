@@ -112,6 +112,8 @@ function setupMocks(
     setCtFilter: vi.fn(),
     stFilter: '',
     setStFilter: vi.fn(),
+    checklistOnly: false,
+    setChecklistOnly: vi.fn(),
     stats: STATS,
     jobs: JOBS,
     total: JOBS.length,
@@ -723,6 +725,8 @@ describe('FeedPage', () => {
       setCtFilter: vi.fn(),
       stFilter: '',
       setStFilter: vi.fn(),
+      checklistOnly: false,
+      setChecklistOnly: vi.fn(),
       stats: STATS,
       jobs: JOBS,
       total: JOBS.length,
@@ -787,6 +791,8 @@ describe('FeedPage', () => {
       setCtFilter: vi.fn(),
       stFilter: '',
       setStFilter: vi.fn(),
+      checklistOnly: false,
+      setChecklistOnly: vi.fn(),
       stats: STATS,
       jobs: JOBS,
       total: JOBS.length,
@@ -855,12 +861,15 @@ describe('FeedPage', () => {
   it('clears every filter from the empty-state Clear button', () => {
     const setStFilter = vi.fn();
     const setQuery = vi.fn();
+    const setChecklistOnly = vi.fn();
     setupMocks({
       stFilter: 'error',
+      checklistOnly: true,
       jobs: [],
       total: 0,
       stats: undefined,
       setStFilter,
+      setChecklistOnly,
     });
     mockUseFuseSearch.mockReturnValue({
       query: '',
@@ -878,5 +887,9 @@ describe('FeedPage', () => {
     });
     expect(setStFilter).toHaveBeenCalledWith('');
     expect(setQuery).toHaveBeenCalledWith('');
+    // "Every filter" has to include the toggle chips — an active one that
+    // survives Clear strands the feed in a filtered view with nothing left
+    // to click.
+    expect(setChecklistOnly).toHaveBeenCalledWith(false);
   });
 });

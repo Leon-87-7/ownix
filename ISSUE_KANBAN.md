@@ -9,20 +9,19 @@
 
 |                                                    # | Title                                                              | Area              | Notes                          |
 | ----------------------------------------------------: | ------------------------------------------------------------------- | ------------------ | ------------------------------- |
-| [#483](https://github.com/Leon-87-7/ownix/issues/483) | Render the retry action on retryable intake errors | Intake / Console | closed on GH |
-| [#484](https://github.com/Leon-87-7/ownix/issues/484) | Slash-command palette with argument hints | Intake / Commands | closed on GH |
-| [#485](https://github.com/Leon-87-7/ownix/issues/485) | Migrate /find to shared intake commands | Intake / Commands | closed on GH |
-| [#486](https://github.com/Leon-87-7/ownix/issues/486) | Migrate /force to shared intake commands | Intake / Commands | closed on GH |
-| [#487](https://github.com/Leon-87-7/ownix/issues/487) | Migrate /freestyle to shared intake commands | Intake / Commands | closed on GH |
-| [#511](https://github.com/Leon-87-7/ownix/issues/511) | feat(tags): canonical token vocabulary and collision safety | Tags | Merged; PR #521; closed on GH |
-| [#512](https://github.com/Leon-87-7/ownix/issues/512) | feat(intake): tagged /force with document-safe reprocessing | Intake / Jobs | Merged; PR #521; closed on GH |
-| [#513](https://github.com/Leon-87-7/ownix/issues/513) | feat(telegram): tagged URL submissions via /tag and plain intake | Telegram / Intake | Merged; PR #521; closed on GH |
-| [#514](https://github.com/Leon-87-7/ownix/issues/514) | feat(telegram): /taglist vocabulary command | Telegram / Tags | Merged; PR #521; closed on GH |
-| [#523](https://github.com/Leon-87-7/ownix/issues/523) | Route document URLs through shared intake | — | Merged; PR #527; closed on GH |
-| [#524](https://github.com/Leon-87-7/ownix/issues/524) | Add explicit fallback intents to shared intake | — | Merged; PR #527; closed on GH |
-| [#525](https://github.com/Leon-87-7/ownix/issues/525) | Add background extension capture shortcuts | — | Merged; PR #527; closed on GH |
-| [#526](https://github.com/Leon-87-7/ownix/issues/526) | Make extension capture shortcuts discoverable | — | Merged; PR #527; closed on GH |
-| [#554](https://github.com/Leon-87-7/ownix/issues/554) | Add CI test workflow + pytest-timeout default | CI / Tests | Merged; PR #555; closed on GH |
+| [#568](https://github.com/Leon-87-7/ownix/issues/568) | Mobile haptic button feel across the Ownix dashboard | — | Parent PRD spec issue; no linked PR; closed on GH |
+| [#569](https://github.com/Leon-87-7/ownix/issues/569) | Accessibility settings — storage, API, and Settings UI toggle | — | Merged; PR #573; closed on GH |
+| [#570](https://github.com/Leon-87-7/ownix/issues/570) | Visual press-feedback hook + v1 rollout | — | Merged; PR #573; closed on GH |
+| [#571](https://github.com/Leon-87-7/ownix/issues/571) | Real vibration on outcome-bearing actions | — | Merged; PR #573; closed on GH |
+| [#580](https://github.com/Leon-87-7/ownix/issues/580) | Screenshot capture: core pipeline + job-detail button | Screenshots | Merged; PR #585; closed on GH |
+| [#581](https://github.com/Leon-87-7/ownix/issues/581) | Screenshot capture: /screenshots command (Telegram + dashboard composer) | Screenshots | Merged; PR #585; closed on GH |
+| [#582](https://github.com/Leon-87-7/ownix/issues/582) | Screenshot capture: job purge deletes the screenshots subfolder | Screenshots | Merged; PR #585; closed on GH |
+| [#583](https://github.com/Leon-87-7/ownix/issues/583) | Screenshot capture: persist video duration, gate trigger UI proactively | Long video | Merged; PR #585; closed on GH |
+| [#594](https://github.com/Leon-87-7/ownix/issues/594) | feat(web): add stripMarkdown and isSpeakable utilities for TTS | Web / Listen Button | Merged; PR #599; closed on GH |
+| [#595](https://github.com/Leon-87-7/ownix/issues/595) | feat(web): add useSpeech hook wrapping the browser TTS API | Web / Listen Button | Merged; PR #599; closed on GH |
+| [#596](https://github.com/Leon-87-7/ownix/issues/596) | feat(web): add ListenButton component | Web / Listen Button | Merged; PR #599; closed on GH |
+| [#597](https://github.com/Leon-87-7/ownix/issues/597) | feat(web): add listen button to job detail enrichment fields | Web / Listen Button | Merged; PR #599; closed on GH |
+| [#598](https://github.com/Leon-87-7/ownix/issues/598) | feat(web): add listen button to Space context blobs | Web / Listen Button | Merged; PR #599; closed on GH |
 
 ---
 
@@ -104,26 +103,11 @@ Ordered by unblocked-first, then dependency chain.
 | [#477](https://github.com/Leon-87-7/ownix/issues/477) | Refactor Telegram webhook into an intake-router adapter | Telegram / Intake | #473 |
 | [#478](https://github.com/Leon-87-7/ownix/issues/478) | Chrome extension MVP — capture current tab / context-menu links into Ownix Intake | Extension | #472 |
 | [#479](https://github.com/Leon-87-7/ownix/issues/479) | Production-safe Chrome extension auth via one-time pairing tokens | Extension / Auth | #478 |
-| [#515](https://github.com/Leon-87-7/ownix/issues/515) | Auto-snapshot the DB before running migrations | DB / Migrations | — |
-| [#516](https://github.com/Leon-87-7/ownix/issues/516) | CI dry-run of migrations against a sanitized prod snapshot | CI / Migrations | — |
-| [#517](https://github.com/Leon-87-7/ownix/issues/517) | DB restore script + ops-runbook backup/rollback section | DB / Ops | #515 |
-| [#518](https://github.com/Leon-87-7/ownix/issues/518) | Startup guard: auto-restore and abort cleanly on failed migration | DB / Migrations | #515 |
-| [#519](https://github.com/Leon-87-7/ownix/issues/519) | Migration-authoring conventions: rollback note + deprecate-then-drop | DB / Docs | #515 |
-| [#520](https://github.com/Leon-87-7/ownix/issues/520) | Dedicated staging tier + gated two-stage deploy | Ops / Deploy | #516 |
 | [#540](https://github.com/Leon-87-7/ownix/issues/540) | Spaces redesign: preview cards, icon-aware detail page, merged add-search | — | — |
-| [#568](https://github.com/Leon-87-7/ownix/issues/568) | Mobile haptic button feel across the Ownix dashboard | — | — |
-| [#569](https://github.com/Leon-87-7/ownix/issues/569) | Accessibility settings — storage, API, and Settings UI toggle | — | — |
-| [#570](https://github.com/Leon-87-7/ownix/issues/570) | Visual press-feedback hook + v1 rollout | — | #569 |
-| [#571](https://github.com/Leon-87-7/ownix/issues/571) | Real vibration on outcome-bearing actions | — | #569, #570 |
-| [#580](https://github.com/Leon-87-7/ownix/issues/580) | Screenshot capture: core pipeline + job-detail button | Screenshots | — |
-| [#581](https://github.com/Leon-87-7/ownix/issues/581) | Screenshot capture: /screenshots command (Telegram + dashboard composer) | Screenshots | #580 |
-| [#582](https://github.com/Leon-87-7/ownix/issues/582) | Screenshot capture: job purge deletes the screenshots subfolder | Screenshots | #580 |
-| [#583](https://github.com/Leon-87-7/ownix/issues/583) | Screenshot capture: persist video duration, gate trigger UI proactively | Long video | #580 |
-| [#594](https://github.com/Leon-87-7/ownix/issues/594) | feat(web): add stripMarkdown and isSpeakable utilities for TTS | Web / Listen Button | — |
-| [#595](https://github.com/Leon-87-7/ownix/issues/595) | feat(web): add useSpeech hook wrapping the browser TTS API | Web / Listen Button | — |
-| [#596](https://github.com/Leon-87-7/ownix/issues/596) | feat(web): add ListenButton component | Web / Listen Button | #595 |
-| [#597](https://github.com/Leon-87-7/ownix/issues/597) | feat(web): add listen button to job detail enrichment fields | Web / Listen Button | #594, #596 |
-| [#598](https://github.com/Leon-87-7/ownix/issues/598) | feat(web): add listen button to Space context blobs | Web / Listen Button | #594, #596 |
+| [#620](https://github.com/Leon-87-7/ownix/issues/620) | Email magic-link sign-in | Identity | #618 |
+| [#621](https://github.com/Leon-87-7/ownix/issues/621) | Cross-provider account auto-merge on verified email | Identity | #618, #619, #620 |
+| [#623](https://github.com/Leon-87-7/ownix/issues/623) | Discord pairing | Discord | #618, #622 |
+| [#624](https://github.com/Leon-87-7/ownix/issues/624) | Paired Discord DM routes through the shared intake router | Discord | #623 |
 
 ---
 
@@ -132,6 +116,9 @@ Ordered by unblocked-first, then dependency chain.
 |                                                   # | Title                                                                                     | Area               | Notes                                                  |
 | --------------------------------------------------: | ------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------ |
 | [#413](https://github.com/Leon-87-7/ownix/issues/413) | SSRF: pin resolved IP / validate redirects for transcript_server.py fetch path | Security / Transcript | Agent brief posted; needs a human tradeoff call (disable redirects vs re-validate each hop) across yt-dlp + youtube-transcript-api before an agent implements |
+| [#618](https://github.com/Leon-87-7/ownix/issues/618) | GitHub OAuth sign-in (non-Telegram identity foundation) | Identity | Agent brief posted; needs a human to create the OAuth App in GitHub's developer settings — wizard at `scripts/setup-nontelegram-oauth.sh` |
+| [#619](https://github.com/Leon-87-7/ownix/issues/619) | Google OAuth sign-in (login-only, separate from export grant) | Identity | Agent brief posted; needs a human to create a *separate* Google Cloud OAuth client (must not reuse the export-grant client) — same wizard |
+| [#622](https://github.com/Leon-87-7/ownix/issues/622) | Discord Gateway connection skeleton (DM-only) | Discord | Agent brief posted; needs a human to create the Discord bot application/token in the Discord Developer Portal — same wizard |
 
 ---
 
@@ -577,7 +564,7 @@ Unsized video hosts (docs/TASK.md task 34 — grill-with-search-docs 2026-08-01;
 Critical path: #466 → #467 → #469; #468 parallel off #466
 Note: the #466 dependency is on DEPLOYMENT, not merge — transcript_server.py ships in its own image (Dockerfile.transcript) as the transcript-service container. Against a stale sidecar #467 fails silently into the default-to-short path. Vimeo is deliberately excluded (every anonymous yt-dlp route is auth-walled — Vimeo revoked the app credential yt-dlp impersonates, error_code 8001) and Twitch was dropped as not relevant; both live in docs/TASK.md Inbox.
 
-Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-03-ownix-intake-channels-extension-share.md — spec-to-kanban 2026-08-03)
+Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-03-ownix-intake-channels-extension-share.md — spec-to-kanban 2026-08-03; Phase 9a/10 resolved via ADR-0061, spec-to-kanban 2026-09-10)
 #472 Dashboard Intake MVP — /intake URL submit (root, unblocked)
 ├── #473 Shared intake router + versioned contract ◄── #472
 │   ├── #474 Dashboard conversational state (intent/freestyle) + expiry sweeper
@@ -587,7 +574,20 @@ Ownix Intake channels — dashboard, extension, share sheet (docs/plans/2026-08-
 └── #478 Chrome extension MVP (current tab + context menu)
     └── #479 Extension pairing auth (one-time token, hash-only)
 Critical path: #472 → #473 → {#474, #475, #477}; #476 parallel off #472; #478 → #479 parallel off #472
-Note: Phase 9 user_id identity migration and Phase 10 Discord adapter deferred per the plan's Non-Goals — not yet broken into issues.
+
+Phase 9a — non-Telegram identity (narrow slice, ADR-0061) [HITL roots]
+#618 GitHub OAuth sign-in — identity-linking table + owner-id scheme + invite-gate parity (root, unblocked) [HITL]
+├── #619 Google OAuth sign-in (login-only, separate client from the export grant) ◄── #618 [HITL]
+├── #620 Email magic-link sign-in ◄── #618
+└── #621 Cross-provider account auto-merge on verified email ◄── #618, #619, #620
+Critical path: #618 → {#619, #620} → #621
+
+Phase 10 — Discord DM-only, pairing-only channel (ADR-0061) [HITL root]
+#622 Discord Gateway connection skeleton, DM-only (root, unblocked) [HITL]
+└── #623 Discord pairing ◄── #618, #622
+    └── #624 Paired Discord DM → shared intake router ◄── #623
+Critical path: #622 → #623 → #624; #618 also gates #623
+Note: guild/server Discord support and the full user_id ownership migration (plan's Phase 9b) remain deliberately deferred — see ADR-0061.
 
 Batch link intake — paste a list, import a bookmark file (grill-with-docs 2026-08-06/07; ADR-0046, ADR-0048; CONTEXT.md `Batch link paste` / `Paste parsing` / `URL coercion` / `Bookmark import` / `Snapshot ingest` / `Deferred link enrichment` / `Job card` / `Job delete`)
 #490 Tighten is_fetchable_url + add coerce_url (root, unblocked — the whitespace-blob bug; one validator for every intake surface)
@@ -630,13 +630,13 @@ Telegram tagged URL submission (grill-with-docs 2026-08-12; ADR-0049; CONTEXT.md
 Critical path: #511 → #512 → #513; #514 parallel after #511 (all ✅-Done)
 
 DB migration safety (docs/plans/2026-08-12-database-migration-strategy-audit.md — spec-to-kanban 2026-08-12; ADR-0001)
-#515 Auto-snapshot the DB before running migrations (root, unblocked — the pre-migration rollback artifact)
-├── #517 Restore script + ops-runbook backup/rollback section ◄── #515
-├── #518 Startup guard — auto-restore + clean abort on failed migration ◄── #515
-└── #519 Migration-authoring conventions — rollback note + deprecate-then-drop ◄── #515
-#516 CI dry-run of migrations against a sanitized prod snapshot (root, unblocked)
-└── #520 Dedicated staging tier + gated two-stage deploy ◄── #516
-Critical path: #515 → {#517, #518, #519}; #516 → #520
+#515 Auto-snapshot the DB before running migrations (root, unblocked — the pre-migration rollback artifact) ✅-Done (PR #593)
+├── #517 Restore script + ops-runbook backup/rollback section ◄── #515 ✅-Done (PR #593)
+├── #518 Startup guard — auto-restore + clean abort on failed migration ◄── #515 ✅-Done (PR #593)
+└── #519 Migration-authoring conventions — rollback note + deprecate-then-drop ◄── #515 ✅-Done (PR #593)
+#516 CI dry-run of migrations against a sanitized prod snapshot (root, unblocked) ✅-Done (PR #593)
+└── #520 Dedicated staging tier + gated two-stage deploy ◄── #516 ✅-Done (PR #593)
+Critical path: #515 → {#517, #518, #519}; #516 → #520 (all ✅-Done via PR #593)
 Note: single-node SQLite/WAL is deliberate (ADR-0001) — this batch is backup/rollback + test-rehearsal safety, not a Postgres migration. #520 (staging tier) carries an owner deploy-cadence decision as its first acceptance gate.
 
 Extension capture commands (source: extension routing grill, 2026-08-13)
@@ -653,27 +653,27 @@ Job/Link tag unification (docs/plans/2026-08-27-job-link-tag-unification.md — 
 Critical path: #561 → #562 → #563
 
 Mobile haptic button feel (PRD #568 — ADR-0053; grill-with-search-docs 2026-08-28)
-#569 Accessibility settings — storage, API, and Settings UI toggle (root, unblocked)
-└── #570 Visual press-feedback hook + v1 rollout ◄── #569
-    └── #571 Real vibration on outcome-bearing actions ◄── also #569
-Critical path: #569 → #570 → #571
-Note: #568 is the parent PRD spec issue (not a build slice) — see docs/adr/0053-mobile-haptic-button-feel.md.
+#569 Accessibility settings — storage, API, and Settings UI toggle (root, unblocked) ✅-Done (PR #573)
+└── #570 Visual press-feedback hook + v1 rollout ◄── #569 ✅-Done (PR #573)
+    └── #571 Real vibration on outcome-bearing actions ◄── also #569 ✅-Done (PR #573)
+Critical path: #569 → #570 → #571 (all ✅-Done via PR #573)
+Note: #568 is the parent PRD spec issue (not a build slice) — see docs/adr/0053-mobile-haptic-button-feel.md. ✅-Done (closed on GH, no linked PR)
 
 Long-video screenshot capture (spec #579 — ADR-0054, ADR-0055, ADR-0056; grill-with-docs 2026-08-29)
-#580 Screenshot capture: core pipeline + job-detail button (root, unblocked)
-├── #581 /screenshots command (Telegram + dashboard composer) ◄── #580
-├── #582 Job purge deletes the screenshots subfolder ◄── #580
-└── #583 Persist video duration, gate trigger UI proactively ◄── #580
-Critical path: #580 → {#581, #582, #583} (all three parallel once #580 lands)
+#580 Screenshot capture: core pipeline + job-detail button (root, unblocked) ✅-Done (PR #585)
+├── #581 /screenshots command (Telegram + dashboard composer) ◄── #580 ✅-Done (PR #585)
+├── #582 Job purge deletes the screenshots subfolder ◄── #580 ✅-Done (PR #585)
+└── #583 Persist video duration, gate trigger UI proactively ◄── #580 ✅-Done (PR #585)
+Critical path: #580 → {#581, #582, #583} (all ✅-Done via PR #585)
 Note: #579 is the parent spec issue (not a build slice) — see docs/adr/0054-screenshot-capture-per-job-drive-subfolder.md, 0055-screenshot-capture-two-layer-detection.md, 0056-screenshot-capture-trigger-mirrors-prd-not-checklists.md, and CONTEXT.md `Screenshot capture`.
 
 Listen button — per-field TTS on job detail + Space context blobs (docs/superpowers/plans/2026-09-04-listen-button.md — ADR-0059; CONTEXT.md `Listen button`)
-#594 stripMarkdown + isSpeakable utilities (root, unblocked)
-#595 useSpeech hook wrapping browser speechSynthesis (root, unblocked)
-└── #596 ListenButton component ◄── #595
-    ├── #597 Wire into job detail enrichment fields ◄── also #594
-    └── #598 Wire into Space context blobs ◄── also #594
-Critical path: {#594, #595} → #596 → {#597, #598}
+#594 stripMarkdown + isSpeakable utilities (root, unblocked) ✅-Done (PR #599)
+#595 useSpeech hook wrapping browser speechSynthesis (root, unblocked) ✅-Done (PR #599)
+└── #596 ListenButton component ◄── #595 ✅-Done (PR #599)
+    ├── #597 Wire into job detail enrichment fields ◄── also #594 ✅-Done (PR #599)
+    └── #598 Wire into Space context blobs ◄── also #594 ✅-Done (PR #599)
+Critical path: {#594, #595} → #596 → {#597, #598} (all ✅-Done via PR #599)
 Note: v1 is browser-native Web Speech API only — no Fish.Audio, no backend, per ADR-0059.
 
 Email digest pipeline [SUPERSEDED by ADR-0060, see the Newsletter archive polling block below — #612 retires this block's inbound-alias transport; all seven issues below are closed] (PLAN.md — approved after 7 rounds of Codex review, PLAN-REVIEW-LOG.md; research: docs/research/2026-09-05-email-digest-claudex-research.md)
@@ -709,7 +709,7 @@ Note: supersedes the #600–#606 block above per ADR-0060 — that block's inbou
 
 | # | Title | Branch→Base | Linked Issue | Status |
 | --: | ----- | ----------- | ------------ | ------ |
-| [#567](https://github.com/Leon-87-7/ownix/pull/567) | Add "Powered by" trust bar to landing page | claude/landing-powered-by-section-5ehlx3→main | — | ✅ Merged |
-| [#566](https://github.com/Leon-87-7/ownix/pull/566) | Show real favicons in GoTo links panel instead of generic icon | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
-| [#565](https://github.com/Leon-87-7/ownix/pull/565) | Add mobile entry point for GoTo Links | claude/goto-links-mobile-keyboard-721h1l→main | — | ✅ Merged |
-| [#564](https://github.com/Leon-87-7/ownix/pull/564) | Unify job/link tags for link, article, and repo jobs (#561-563) | feat/job-link-tags-561-563→main | #561, #562, #563 | ✅ Merged |
+| [#617](https://github.com/Leon-87-7/ownix/pull/617) | feat(web): add toast notifications and unify fetch error messages | web/toast-and-error-messages→main | — | ✅ Merged |
+| [#616](https://github.com/Leon-87-7/ownix/pull/616) | fix(short-video): ground Gemini vision summary in the transcript | fix/short-video-transcript-grounding→main | — | ✅ Merged |
+| [#614](https://github.com/Leon-87-7/ownix/pull/614) | feat: replace email routing with newsletter archive polling | feat/newsletter-archive-polling→main | — | ✅ Merged |
+| [#607](https://github.com/Leon-87-7/ownix/pull/607) | feat: newsletter email digest pipeline | feat/newsletter-email-digest→main | — | ✅ Merged |

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import smtplib
+import ssl
 from email.message import EmailMessage
 from email.utils import formataddr
 
@@ -15,6 +16,8 @@ from src.config import settings
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 def _feed_url() -> str | None:
@@ -45,9 +48,15 @@ def _domain_accepts_mail_sync(domain: str) -> bool:
 
 
 def _send_email_sync(message: EmailMessage) -> None:
+    # Magic-link mail carries a bearer token, so a plaintext hop off this host
+    # would leak it (CWE-319). Only a loopback relay may skip STARTTLS.
+    if not settings.SMTP_STARTTLS and settings.SMTP_HOST not in _LOOPBACK_HOSTS:
+        raise RuntimeError("SMTP_STARTTLS is required for a non-loopback SMTP relay")
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as smtp:
         if settings.SMTP_STARTTLS:
-            smtp.starttls()
+            # Default context verifies the cert and hostname; smtplib's own
+            # fallback does neither, so STARTTLS alone would not stop a MITM.
+            smtp.starttls(context=ssl.create_default_context())
         if settings.SMTP_USERNAME:
             smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
         smtp.send_message(message)
@@ -103,4 +112,28 @@ async def send_welcome_email(user: dict) -> bool:
     )
     await asyncio.to_thread(_send_email_sync, message)
     log.info("welcome_email_sent", tg_id=user.get("tg_id"), email=email)
+    return True
+
+
+async def send_magic_link_email(email: str, link: str) -> bool:
+    """Send a one-time sign-in link without revealing account existence."""
+    if not _smtp_configured():
+        log.info("magic_link_email_smtp_unconfigured")
+        return False
+    domain = email.rsplit("@", 1)[-1]
+    if not await asyncio.to_thread(_domain_accepts_mail_sync, domain):
+        log.warning("magic_link_email_domain_unreachable", domain=domain)
+        return False
+    message = EmailMessage()
+    message["Subject"] = "Your Ownix sign-in link"
+    message["From"] = formataddr((settings.SMTP_FROM_NAME, settings.SMTP_FROM_EMAIL))
+    message["To"] = email
+    message.set_content(
+        f"Use this one-time link to sign in to Ownix:\n\n{link}\n\n"
+        "It expires in 15 minutes and can only be used once."
+    )
+    await asyncio.to_thread(_send_email_sync, message)
+    # Domain only — the full address in a retained log is a sign-in trail
+    # linking a person to this account (CWE-532).
+    log.info("magic_link_email_sent", domain=domain)
     return True

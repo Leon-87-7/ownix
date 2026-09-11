@@ -447,9 +447,30 @@ async def loop() -> None:
             await asyncio.sleep(2)
 
 
+async def _run_discord_gateway_forever() -> None:
+    """Retry the optional Discord Gateway connection on failure, without
+    letting an unhandled exception there take down `loop()`'s sibling task —
+    `asyncio.gather` cancels every task the moment any one of them raises."""
+    from src.channels.discord import gateway as discord_gateway
+
+    while True:
+        try:
+            await discord_gateway.run()
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("discord_gateway_error")
+            await asyncio.sleep(30)
+
+
+async def _run_services() -> None:
+    await asyncio.gather(loop(), _run_discord_gateway_forever())
+
+
 def main() -> None:
     try:
-        asyncio.run(loop())
+        asyncio.run(_run_services())
     except KeyboardInterrupt:
         log.info("worker_shutdown")
 

@@ -6,7 +6,12 @@ import html
 import hmac
 import random
 import re
+import secrets
+import sqlite3
 import time
+from urllib.parse import urlencode, urlparse
+
+import httpx
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -15,12 +20,14 @@ from pydantic import BaseModel, Field
 from src import database
 from src.auth import session as session_store
 from src.auth.hmac_verify import verify_telegram_auth
+from src.auth.identity import resolve_owner
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
 from src.auth.middleware import COOKIE_NAME
 from src.config import settings
 from src.intake import rate_limit
 from src.services.account import delete_account
 from src.services.invite_notifications import notify_operator_invite
+from src.services.email import send_magic_link_email
 from src.utils.logger import get_logger
 from src.utils.validators import normalize_email
 
@@ -28,6 +35,7 @@ log = get_logger(__name__)
 
 _COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 days
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -171,6 +179,261 @@ async def miniapp_session(payload: MiniAppSessionPayload, response: Response) ->
 
 class EmailPayload(BaseModel):
     email: str
+
+
+async def _external_login(
+    *,
+    provider: str,
+    subject: str,
+    email: str | None,
+    email_verified: bool,
+    first_name: str,
+    username: str | None,
+    photo_url: str | None,
+) -> RedirectResponse:
+    normalized = normalize_email(email) if email else None
+    known_identity = await database.get_identity_owner(provider, subject)
+    known_email = await database.get_user_by_email(normalized) if normalized else None
+    owner_id = await resolve_owner(
+        provider, subject, email=normalized, email_verified=email_verified
+    )
+    resumed = await _resume_deletion_if_stuck(owner_id)
+    if resumed is not None:
+        raise HTTPException(status_code=401, detail="Account deletion completed; sign in again")
+
+    is_new_tenant = known_identity is None and known_email is None
+    if normalized and email_verified:
+        user = await database.get_user(owner_id)
+        if not user or not user.get("email"):
+            try:
+                await database.set_user_email(owner_id, normalized)
+            except sqlite3.IntegrityError:
+                # Another account already claimed this email between
+                # resolve_owner's own check and this backfill (e.g. it was
+                # only just verified on the provider's side) — keep the
+                # owner resolve_owner already picked rather than 500ing the
+                # login; the email simply doesn't get backfilled this time.
+                if await database.get_user_by_email(normalized) is None:
+                    raise
+                log.warning("auth.email_already_claimed", tg_id=owner_id)
+        if is_new_tenant and await database.get_user_status(owner_id) == "pending":
+            try:
+                await notify_operator_invite(owner_id, normalized)
+            except Exception:
+                log.exception("invite.operator_notification_failed", tg_id=owner_id)
+
+    session_id = await session_store.mint(
+        {
+            "id": owner_id,
+            "first_name": first_name,
+            "username": username,
+            "photo_url": photo_url,
+            "source": provider,
+        }
+    )
+    response = RedirectResponse("/feed", status_code=303)
+    response.set_cookie(
+        COOKIE_NAME,
+        session_id,
+        httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite="lax",
+        max_age=_COOKIE_MAX_AGE,
+        path="/",
+    )
+    if await database.get_user_status(owner_id) == "pending":
+        response.set_cookie(
+            "ownix_preview", "1", httponly=True, secure=settings.SESSION_COOKIE_SECURE,
+            samesite="lax", path="/"
+        )
+    else:
+        response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    return response
+
+
+_GITHUB_STATE_COOKIE = "gh_oauth_state"
+_GOOGLE_LOGIN_STATE_COOKIE = "google_login_oauth_state"
+_OAUTH_STATE_COOKIE_MAX_AGE = 600  # matches mint_*_oauth_state's default TTL
+
+
+@auth_router.get("/github/connect")
+async def github_connect() -> RedirectResponse:
+    if (
+        not settings.GITHUB_OAUTH_CLIENT_ID
+        or not settings.GITHUB_OAUTH_CLIENT_SECRET
+        or not settings.GITHUB_OAUTH_REDIRECT_URI
+    ):
+        raise HTTPException(status_code=503, detail="GitHub sign-in is not configured")
+    state = await session_store.mint_github_oauth_state(secrets.token_urlsafe(16))
+    query = urlencode(
+        {"client_id": settings.GITHUB_OAUTH_CLIENT_ID,
+         "redirect_uri": settings.GITHUB_OAUTH_REDIRECT_URI,
+         "scope": "read:user user:email", "state": state}
+    )
+    redirect = RedirectResponse(f"https://github.com/login/oauth/authorize?{query}")
+    # Binds `state` to this browser (login CSRF guard) — without it, an
+    # attacker can start their own flow, get a valid `state`+`code`, and
+    # trick a victim into completing the callback, landing the victim's
+    # browser in a session tied to the attacker's GitHub identity.
+    redirect.set_cookie(
+        _GITHUB_STATE_COOKIE, state, httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE, samesite="lax",
+        max_age=_OAUTH_STATE_COOKIE_MAX_AGE, path="/api/auth/github/",
+    )
+    return redirect
+
+
+@auth_router.get("/github/callback")
+async def github_callback(request: Request, code: str, state: str) -> RedirectResponse:
+    cookie_state = request.cookies.get(_GITHUB_STATE_COOKIE)
+    if not cookie_state or not hmac.compare_digest(cookie_state, state):
+        raise HTTPException(status_code=400, detail="OAuth state mismatch")
+    if await session_store.redeem_github_oauth_state(state) is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://github.com/login/oauth/access_token",
+            data={"client_id": settings.GITHUB_OAUTH_CLIENT_ID,
+                  "client_secret": settings.GITHUB_OAUTH_CLIENT_SECRET, "code": code,
+                  "redirect_uri": settings.GITHUB_OAUTH_REDIRECT_URI},
+            headers={"Accept": "application/json"},
+        )
+        token_response.raise_for_status()
+        token = token_response.json().get("access_token")
+        if not token:
+            raise HTTPException(status_code=400, detail="GitHub authorization failed")
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+        user_response = await client.get("https://api.github.com/user", headers=headers)
+        email_response = await client.get("https://api.github.com/user/emails", headers=headers)
+        user_response.raise_for_status()
+        email_response.raise_for_status()
+    user = user_response.json()
+    primary = next((item for item in email_response.json()
+                    if item.get("primary") and item.get("verified")), None)
+    response = await _external_login(
+        provider="github", subject=str(user["id"]),
+        email=primary.get("email") if primary else None, email_verified=bool(primary),
+        first_name=user.get("name") or user.get("login") or "GitHub user",
+        username=user.get("login"), photo_url=user.get("avatar_url"),
+    )
+    response.delete_cookie(_GITHUB_STATE_COOKIE, path="/api/auth/github/")
+    return response
+
+
+@auth_router.get("/google/connect")
+async def google_login_connect() -> RedirectResponse:
+    if (
+        not settings.GOOGLE_LOGIN_CLIENT_ID
+        or not settings.GOOGLE_LOGIN_CLIENT_SECRET
+        or not settings.GOOGLE_LOGIN_REDIRECT_URI
+    ):
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured")
+    state = await session_store.mint_google_login_state(secrets.token_urlsafe(16))
+    query = urlencode(
+        {"client_id": settings.GOOGLE_LOGIN_CLIENT_ID,
+         "redirect_uri": settings.GOOGLE_LOGIN_REDIRECT_URI,
+         "response_type": "code", "scope": "openid email profile", "state": state}
+    )
+    redirect = RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{query}")
+    # Same login-CSRF guard as /github/connect — binds `state` to this browser.
+    redirect.set_cookie(
+        _GOOGLE_LOGIN_STATE_COOKIE, state, httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE, samesite="lax",
+        max_age=_OAUTH_STATE_COOKIE_MAX_AGE, path="/api/auth/google/",
+    )
+    return redirect
+
+
+@auth_router.get("/google/callback")
+async def google_login_callback(request: Request, code: str, state: str) -> RedirectResponse:
+    cookie_state = request.cookies.get(_GOOGLE_LOGIN_STATE_COOKIE)
+    if not cookie_state or not hmac.compare_digest(cookie_state, state):
+        raise HTTPException(status_code=400, detail="OAuth state mismatch")
+    if await session_store.redeem_google_login_state(state) is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={"client_id": settings.GOOGLE_LOGIN_CLIENT_ID,
+                  "client_secret": settings.GOOGLE_LOGIN_CLIENT_SECRET, "code": code,
+                  "redirect_uri": settings.GOOGLE_LOGIN_REDIRECT_URI,
+                  "grant_type": "authorization_code"},
+        )
+        token_response.raise_for_status()
+        token = token_response.json().get("access_token")
+        if not token:
+            raise HTTPException(status_code=400, detail="Google authorization failed")
+        user_response = await client.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        user_response.raise_for_status()
+    user = user_response.json()
+    response = await _external_login(
+        provider="google", subject=str(user["sub"]), email=user.get("email"),
+        email_verified=user.get("email_verified") is True,
+        first_name=user.get("given_name") or user.get("name") or "Google user",
+        username=None, photo_url=user.get("picture"),
+    )
+    response.delete_cookie(_GOOGLE_LOGIN_STATE_COOKIE, path="/api/auth/google/")
+    return response
+
+
+@auth_router.post("/email/request")
+async def request_magic_link(payload: EmailPayload) -> dict:
+    email = normalize_email(payload.email)
+    if email is None:
+        raise HTTPException(status_code=422, detail="Invalid email")
+    # Unauthenticated and triggers a real outbound send — without this,
+    # anyone can spam an arbitrary mailbox with sign-in links. Same shape as
+    # reviewer_login's per-email cap just below.
+    rate_limit.enforce(f"magic_link_request:{email}", max_requests=5)
+    base = settings.DASHBOARD_URL.strip().rstrip("/")
+    # The sign-in token rides in this URL, so an unset DASHBOARD_URL would mail a
+    # dead link and a plaintext one would mail a bearer token in the clear.
+    # Match the hostname exactly — a prefix check also passes
+    # http://localhost.attacker.example, which is a remote plaintext host.
+    parsed = urlparse(base)
+    if not (
+        (parsed.scheme == "https" and parsed.hostname)
+        or (parsed.scheme == "http" and parsed.hostname in _LOOPBACK_HOSTS)
+    ):
+        raise HTTPException(status_code=503, detail="Email sign-in is not configured")
+    token = await session_store.mint_email_magic_link(email)
+    link = f"{base}/api/auth/email/callback?token={token}"
+    try:
+        await send_magic_link_email(email, link)
+    except Exception:
+        log.exception("magic_link.send_failed")
+    return {"ok": True, "message": "If that address can receive email, a sign-in link was sent."}
+
+
+@auth_router.get("/email/callback")
+async def redeem_magic_link(token: str = Query(..., max_length=512)) -> RedirectResponse:
+    email = await session_store.redeem_email_magic_link(token)
+    if email is None:
+        raise HTTPException(status_code=400, detail="This link has expired or was already used")
+    return await _external_login(
+        provider="email", subject=email, email=email, email_verified=True,
+        first_name=email.split("@", 1)[0], username=None, photo_url=None,
+    )
+
+
+_DISCORD_PAIRING_TTL = 300
+
+
+@auth_router.post("/discord/pair")
+async def discord_pair(request: Request) -> dict:
+    code = await session_store.mint_discord_pairing(
+        int(request.state.user["id"]), ttl=_DISCORD_PAIRING_TTL
+    )
+    return {
+        "code": code,
+        # The dashboard counts the code down; sending the TTL keeps that
+        # countdown from drifting off a hardcoded client-side copy.
+        "expires_in": _DISCORD_PAIRING_TTL,
+        "instructions": "Send this one-time code in a DM to the Ownix bot.",
+    }
 
 
 class ReviewerLoginPayload(BaseModel):

@@ -15,6 +15,7 @@ import { TagMark } from "@/components/ui/tag-picker";
 import { Tooltip } from "@/components/ui/tooltip";
 import { PageShell, PageHeader } from "@/components/shell/page-shell";
 import { ExtensionTokensPanel } from "@/components/controls/extension-tokens-panel";
+import { DiscordPairingPanel } from "@/components/controls/discord-pairing-panel";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 import { TagForm, DEFAULT_COLOR } from "@/components/ui/tag-form";
@@ -750,6 +751,9 @@ export default function ControlsPage() {
         </div>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
+        </Section>
+        <Section title="Discord">
+          <DiscordPairingPanel />
         </Section>
         <Section title="Danger zone" titleClassName="text-status-error">
           <DeleteAccountSection />

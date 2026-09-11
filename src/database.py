@@ -238,6 +238,23 @@ CREATE TABLE IF NOT EXISTS users (
     CHECK(status IN ('pending','approved','blocked','deleting'))
 );
 
+-- idx_users_email_nocase is NOT created here (unlike CREATE TABLE IF NOT
+-- EXISTS, a bare CREATE INDEX runs unconditionally every init_db() call,
+-- including against an old non-fresh DB whose users table doesn't have
+-- `email` yet — that migration hasn't run at this point in the fresh-vs-
+-- migrate branch below). It's created once, unconditionally, right after
+-- _run_migrations() — same reason idx_jobs_source_url sits there instead of
+-- in this script (see the comment at that call site).
+
+CREATE TABLE IF NOT EXISTS identity_links (
+    provider   TEXT NOT NULL,
+    subject    TEXT NOT NULL,
+    owner_id   INTEGER NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE,
+    verified   INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(provider, subject)
+);
+
 CREATE TABLE IF NOT EXISTS user_settings (
     chat_id    INTEGER NOT NULL,
     key        TEXT NOT NULL,
@@ -1854,6 +1871,13 @@ async def init_db() -> None:
             # columns (see the comment next to its CREATE TABLE in SCHEMA_SQL).
             await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
             await conn.execute(_EMAIL_DIGEST_PAYLOADS_SLUG_INDEX_SQL)
+            # Same reasoning again: users.email exists unconditionally by
+            # this point (fresh SCHEMA_SQL always had it; a migrated old DB
+            # just ran the migration that adds it), but not any earlier.
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase "
+                "ON users(email COLLATE NOCASE) WHERE email IS NOT NULL"
+            )
             await _approve_operator_user(conn)
             await conn.commit()
     except Exception:
@@ -2250,6 +2274,35 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
         )
         await conn.commit()
     log.info("job_status_updated", job_id=job_id, status=status)
+
+
+async def clear_job_checklists(job_id: str, expected_generated_at: str | None) -> bool:
+    """Clear a job's checklist only if it is still the one the caller saw.
+
+    The match happens inside the UPDATE, so a generation landing between the
+    caller's read and this write loses the race instead of being erased. Returns
+    False when the stored checklist has moved on; True when the row was cleared
+    or was already empty (nothing to erase, so the caller's intent holds).
+    """
+    async with connection() as conn:
+        cursor = await conn.execute(
+            "UPDATE jobs SET checklists_md = NULL, checklists_generated_at = NULL, "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND checklists_generated_at IS ?",
+            (job_id, expected_generated_at),
+        )
+        cleared = cursor.rowcount > 0
+        await conn.commit()
+        if cleared:
+            log.info("job_checklists_cleared", job_id=job_id)
+            return True
+        # No row matched: either the checklist moved on (conflict) or there was
+        # never one to clear (idempotent no-op).
+        async with conn.execute(
+            "SELECT checklists_generated_at FROM jobs WHERE id = ?", (job_id,)
+        ) as check:
+            row = await check.fetchone()
+    return row is not None and row[0] is None
 
 
 async def update_job_fields(job_id: str, **fields: Any) -> None:
@@ -2675,6 +2728,48 @@ async def set_user_email(tg_id: int, email: str | None) -> None:
         await _upsert_minimal_user(conn, tg_id=tg_id, email=email, update_email=True)
         await conn.commit()
     log.info("user_email_set", tg_id=tg_id, has_email=email is not None)
+
+
+async def get_user_by_email(email: str) -> dict | None:
+    row = await _fetch_one("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (email,))
+    return dict(row) if row else None
+
+
+async def get_identity_owner(provider: str, subject: str) -> int | None:
+    row = await _fetch_one(
+        "SELECT owner_id FROM identity_links WHERE provider = ? AND subject = ?",
+        (provider, subject),
+    )
+    return int(row["owner_id"]) if row else None
+
+
+async def link_identity(
+    provider: str, subject: str, owner_id: int, *, verified: bool
+) -> int:
+    """Attach an external identity, returning the winner of a concurrent insert."""
+    async with connection() as conn:
+        await conn.execute(
+            "INSERT OR IGNORE INTO identity_links "
+            "(provider, subject, owner_id, verified) VALUES (?, ?, ?, ?)",
+            (provider, subject, owner_id, int(verified)),
+        )
+        cursor = await conn.execute(
+            "SELECT owner_id FROM identity_links WHERE provider = ? AND subject = ?",
+            (provider, subject),
+        )
+        row = await cursor.fetchone()
+        await conn.commit()
+    return int(row[0])
+
+
+async def relink_identity(provider: str, subject: str, owner_id: int) -> None:
+    """Re-point an existing identity link at another owner (verified-email merge)."""
+    await _execute_rowcount(
+        "UPDATE identity_links SET owner_id = ?, verified = 1 "
+        "WHERE provider = ? AND subject = ?",
+        (owner_id, provider, subject),
+    )
+    log.info("identity_relinked", provider=provider, owner_id=owner_id)
 
 
 async def delete_user(tg_id: int) -> bool:
@@ -4302,3 +4397,46 @@ async def _migrate_context_blobs_source_url(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_context_blobs_source_url)
+
+
+# Non-Telegram identity is additive: existing ownership remains keyed by the
+# historical users.tg_id/chat_id columns (ADR-0061).
+async def _migrate_identity_links(conn: aiosqlite.Connection) -> None:
+    table_cur = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+    )
+    if await table_cur.fetchone() is None:
+        return
+    await conn.execute(
+        """CREATE TABLE IF NOT EXISTS identity_links (
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            owner_id INTEGER NOT NULL,
+            verified INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(provider, subject),
+            FOREIGN KEY(owner_id) REFERENCES users(tg_id) ON DELETE CASCADE
+        )"""
+    )
+    # A case-insensitive duplicate here makes SQLite raise a bare
+    # IntegrityError on the CREATE UNIQUE INDEX below, aborting startup with
+    # no indication of which rows to fix. Name them up front instead.
+    dupe_cur = await conn.execute(
+        "SELECT LOWER(email) AS e, COUNT(*) AS n FROM users "
+        "WHERE email IS NOT NULL GROUP BY LOWER(email) HAVING COUNT(*) > 1"
+    )
+    duplicates = [row[0] for row in await dupe_cur.fetchall()]
+    if duplicates:
+        raise RuntimeError(
+            "Cannot add the identity_links migration: users.email already has "
+            f"case-insensitive duplicates ({', '.join(duplicates)}) — resolve "
+            "them manually before this migration can run."
+        )
+    await conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase "
+        "ON users(email COLLATE NOCASE) WHERE email IS NOT NULL"
+    )
+    await conn.commit()
+
+
+_MIGRATIONS.append(_migrate_identity_links)
