@@ -39,14 +39,20 @@ async function fetchFeedServerMode(
   ct: string,
   st: string,
   restricted = false,
+  checklistOnly = false,
 ): Promise<{ stats: FeedStats; jobs: JobSummary[]; total: number }> {
   const params = new URLSearchParams();
   if (ct) params.set('content_type', ct);
   if (st) params.set('status', st);
+  // Server-side so the count stays truthful past CLIENT_MODE_LIMIT, where the
+  // client only holds one 50-row page and can't filter the rest.
+  if (checklistOnly) params.set('has_checklist', 'true');
   params.set('limit', '50');
 
-  // Stats scoped by content_type (never status) so Overview cards show full
-  // status split for the active tab. Omit for global totals.
+  // Stats scoped by content_type only — never status, never the checklist
+  // toggle — so Overview cards show the full split for the active tab rather
+  // than collapsing to whatever narrowing is on. Omit for global totals.
+  // `deriveStats` deliberately mirrors this in client mode.
   const statsParams = new URLSearchParams();
   if (ct) statsParams.set('content_type', ct);
   const statsQuery = statsParams.toString();
@@ -72,10 +78,16 @@ async function fetchFeedServerMode(
  * Filter the full job list by content_type and status (exact match —
  * matching the server-side WHERE status = ? semantics).
  */
-function deriveJobs(allJobs: JobSummary[], ct: string, st: string): JobSummary[] {
+function deriveJobs(
+  allJobs: JobSummary[],
+  ct: string,
+  st: string,
+  checklistOnly: boolean,
+): JobSummary[] {
   let list = allJobs;
   if (ct) list = list.filter((j) => j.content_type === ct);
   if (st) list = list.filter((j) => j.status === st);
+  if (checklistOnly) list = list.filter((j) => Boolean(j.checklists_generated_at));
   return list;
 }
 
@@ -86,6 +98,10 @@ function deriveJobs(allJobs: JobSummary[], ct: string, st: string): JobSummary[]
  * - `by_status`: scoped to the active content_type (matching what the server
  *   returns when you pass content_type to /api/jobs/stats) — powers Overview cards.
  * - `total`: sum of by_status values for the scoped slice (matching server behaviour).
+ *
+ * Takes `ct` and nothing else on purpose: status and the checklist toggle both
+ * narrow the *list*, never the Overview cards, so the cards keep showing what
+ * the tab holds. `fetchFeedServerMode` scopes its stats request the same way.
  */
 function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
   const by_content_type: Record<string, number> = {};
@@ -110,6 +126,7 @@ function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
 export function useFeedData(initialContentType = '', restricted = false) {
   const [ctFilter, setCtFilter] = useState(initialContentType);
   const [stFilter, setStFilter] = useState('');
+  const [checklistOnly, setChecklistOnly] = useState(false);
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
@@ -144,6 +161,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
   ctRef.current = ctFilter;
   const stRef = useRef(stFilter);
   stRef.current = stFilter;
+  const checklistOnlyRef = useRef(checklistOnly);
+  checklistOnlyRef.current = checklistOnly;
   const serverModeRef = useRef(serverMode);
   serverModeRef.current = serverMode;
 
@@ -190,7 +209,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
   // Server-mode filter fetch (called on filter change when in server mode)
   // -------------------------------------------------------------------------
 
-  const serverLoad = useCallback(async (ct: string, st: string) => {
+  const serverLoad = useCallback(async (ct: string, st: string, checklist: boolean) => {
     const reqId = ++reqIdRef.current;
     const loadId = ++loadIdRef.current;
 
@@ -198,7 +217,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setError(null);
 
     try {
-      const { stats, jobs, total } = await fetchFeedServerMode(ct, st, restricted);
+      const { stats, jobs, total } = await fetchFeedServerMode(ct, st, restricted, checklist);
       if (reqId !== reqIdRef.current) return;
 
       const filtered = ct ? jobs.filter((j) => j.content_type === ct) : jobs;
@@ -229,6 +248,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
           ctRef.current,
           stRef.current,
           restricted,
+          checklistOnlyRef.current,
         );
         if (reqId !== reqIdRef.current) return;
         const ct = ctRef.current;
@@ -276,19 +296,19 @@ export function useFeedData(initialContentType = '', restricted = false) {
       // active — otherwise (e.g. a deep link carrying ?type=short) the mount
       // data is unscoped, so we must fetch the filtered view rather than show
       // the wrong list.
-      if (!ctFilter && !stFilter) return;
+      if (!ctFilter && !stFilter && !checklistOnly) return;
     }
-    serverLoad(ctFilter, stFilter);
+    serverLoad(ctFilter, stFilter, checklistOnly);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ctFilter, stFilter, serverLoad]);
+  }, [serverMode, ctFilter, stFilter, checklistOnly, serverLoad]);
 
   // -------------------------------------------------------------------------
   // Derived state (client mode only — computed synchronously, no fetch)
   // -------------------------------------------------------------------------
 
   const derivedJobs = useMemo(
-    () => (serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter)),
-    [serverMode, allJobs, ctFilter, stFilter],
+    () => (serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter, checklistOnly)),
+    [serverMode, allJobs, ctFilter, stFilter, checklistOnly],
   );
 
   const derivedStats = useMemo(
@@ -315,6 +335,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setCtFilter,
     stFilter,
     setStFilter,
+    checklistOnly,
+    setChecklistOnly,
     stats,
     jobs,
     total,

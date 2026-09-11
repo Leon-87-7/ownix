@@ -9,6 +9,13 @@ import { Tooltip } from "@/components/ui/tooltip";
 //
 // One badge family for any "a generated artifact exists for this job" marker
 // — icon/label swap per artifact (checklist, document enrichment, ...).
+// The bare mark's paint: contrasignal-bright plus a stacked drop-shadow halo
+// that keeps it legible on light, dark, and busy pixels. Exported so a control
+// that *filters* by this mark (the feed's chip) wears the identical face —
+// same mark, same colors, same halo, so the filter reads as the badge itself.
+export const GENERATED_MARK_PAINT =
+  "text-contrasignal-bright [filter:drop-shadow(0_1px_1px_rgba(0,0,0,0.98))_drop-shadow(0_0_4px_rgba(0,0,0,0.92))_drop-shadow(0_0_1px_rgba(255,255,255,0.72))]";
+
 export function GeneratedBadge({
   bare = false,
   icon: Icon = BookmarkCheck,
@@ -29,7 +36,7 @@ export function GeneratedBadge({
       <span
         className={
           bare
-            ? "inline-flex h-8 w-8 items-center justify-center text-contrasignal-bright [filter:drop-shadow(0_1px_1px_rgba(0,0,0,0.98))_drop-shadow(0_0_4px_rgba(0,0,0,0.92))_drop-shadow(0_0_1px_rgba(255,255,255,0.72))]"
+            ? `inline-flex h-8 w-8 items-center justify-center ${GENERATED_MARK_PAINT}`
             : "inline-flex h-6 w-6 items-center justify-center rounded border border-line bg-canvas text-contrasignal-bright"
         }
         aria-label={label}

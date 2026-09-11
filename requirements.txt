@@ -16,5 +16,6 @@ apscheduler>=3.10
 numpy>=1.26
 json-repair>=0.30
 dnspython>=2.6.1  # MX lookup before welcome emails (src/services/email.py)
+discord.py>=2.6,<3  # DM-only Gateway client; reconnect/resume handled by the library
 
 cryptography>=42.0

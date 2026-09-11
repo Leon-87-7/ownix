@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,6 +11,46 @@ def test_unsized_enqueues_the_video_task():
     """Without this, an unsized job is enqueued as {"task": "unsized"} and _dispatch drops it."""
     assert task_for_content_type("unsized", default="unsized") == "video"
     assert worker._TASK_HANDLERS["video"] is worker._handle_video
+
+
+@pytest.mark.asyncio
+async def test_discord_gateway_failure_retries_instead_of_propagating(monkeypatch):
+    """A raw asyncio.gather(loop(), discord_gateway.run()) lets any exception
+    from the Discord side cancel loop() too — real job processing must never
+    go down over the optional Discord channel."""
+    calls: list[int] = []
+
+    async def flaky_run() -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("gateway connection dropped")
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("src.channels.discord.gateway.run", flaky_run)
+    monkeypatch.setattr("src.worker.asyncio.sleep", fake_sleep)
+
+    await worker._run_discord_gateway_forever()
+
+    assert len(calls) == 2, "must retry after the first failure, not propagate it"
+    assert sleeps == [30]
+
+
+@pytest.mark.asyncio
+async def test_discord_gateway_cancellation_still_propagates(monkeypatch):
+    """CancelledError must pass through untouched so process shutdown works —
+    only ordinary exceptions get caught and retried."""
+
+    async def cancelled_run() -> None:
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr("src.channels.discord.gateway.run", cancelled_run)
+
+    with pytest.raises(asyncio.CancelledError):
+        await worker._run_discord_gateway_forever()
 
 
 @pytest.mark.asyncio

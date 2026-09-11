@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+from urllib.parse import quote
+
 import aiosqlite
 import pytest
 from fastapi import FastAPI
@@ -100,3 +102,77 @@ def test_generation_failure_returns_502(client: TestClient, monkeypatch: pytest.
     monkeypatch.setattr("src.processors.checklists.run_checklists", fail)
     response = client.post("/api/jobs/job_abcd/checklists")
     assert response.status_code == 502
+
+
+def test_delete_clears_checklist(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed_job()
+    login(client)
+
+    async def generate(_job: dict) -> tuple[dict, str]:
+        return {"topics": []}, "# Checklist\n"
+
+    monkeypatch.setattr("src.processors.checklists.run_checklists", generate)
+    client.post("/api/jobs/job_abcd/checklists")
+
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+    detail = client.get("/api/jobs/job_abcd").json()
+    assert detail["checklists_md"] is None
+    assert detail["checklists_generated_at"] is None
+
+
+def test_delete_is_idempotent(client: TestClient) -> None:
+    """A job that never had a checklist - or a stale tab deleting twice - gets
+    the same 204; the caller's intent is already satisfied."""
+    seed_job()
+    login(client)
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 204
+
+
+def test_delete_requires_ownership(client: TestClient) -> None:
+    seed_job()
+    assert client.delete("/api/jobs/job_abcd/checklists").status_code == 401
+
+
+def test_delete_rejects_a_stale_version(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tab holding checklist A must not erase checklist B generated since."""
+    seed_job()
+    login(client)
+
+    async def generate(_job: dict) -> tuple[dict, str]:
+        return {"topics": []}, "# Checklist\n"
+
+    monkeypatch.setattr("src.processors.checklists.run_checklists", generate)
+    stale = client.post("/api/jobs/job_abcd/checklists").json()["checklists_generated_at"]
+    # A second generation lands while the first tab still shows the old one.
+    client.post("/api/jobs/job_abcd/checklists")
+
+    response = client.delete(f"/api/jobs/job_abcd/checklists?generated_at={quote(stale, safe='')}")
+    assert response.status_code == 409
+    assert client.get("/api/jobs/job_abcd").json()["checklists_md"] == "# Checklist\n"
+
+
+def test_delete_with_matching_version_clears(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed_job()
+    login(client)
+
+    async def generate(_job: dict) -> tuple[dict, str]:
+        return {"topics": []}, "# Checklist\n"
+
+    monkeypatch.setattr("src.processors.checklists.run_checklists", generate)
+    current = client.post("/api/jobs/job_abcd/checklists").json()["checklists_generated_at"]
+
+    assert (
+        client.delete(
+            f"/api/jobs/job_abcd/checklists?generated_at={quote(current, safe='')}"
+        ).status_code
+        == 204
+    )
+    assert client.get("/api/jobs/job_abcd").json()["checklists_md"] is None
+
+
+def test_delete_with_version_on_empty_job_is_idempotent(client: TestClient) -> None:
+    """Already cleared: the caller's intent holds, so no 409."""
+    seed_job()
+    login(client)
+    assert client.delete("/api/jobs/job_abcd/checklists?generated_at=2026-01-01T00:00:00").status_code == 204

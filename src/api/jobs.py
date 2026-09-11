@@ -331,12 +331,26 @@ async def resolve_thumbnail(
 
 
 def _job_scope_where(
-    chat_id: int, content_type: str | None, status: str | None
+    chat_id: int,
+    content_type: str | None,
+    status: str | None,
+    has_checklist: bool | None = None,
 ) -> tuple[str, list]:
     """Feed-scope filter shared by list_jobs and get_adjacent_jobs — the two must
-    agree on what's visible or prev/next navigation drifts from the feed."""
+    agree on what's visible or prev/next navigation drifts from the feed.
+
+    *has_checklist* is feed-only (prev/next leaves it None): it narrows to jobs
+    that already carry a generated checklist, which is how the feed answers
+    "what have I actually turned into something?" without scrolling for badges.
+    """
     conditions = ["chat_id = ?", "url NOT LIKE 'email_digest:%'"]
     params: list = [chat_id]
+    if has_checklist is not None:
+        conditions.append(
+            "checklists_generated_at IS NOT NULL"
+            if has_checklist
+            else "checklists_generated_at IS NULL"
+        )
     if content_type is not None:
         conditions.append("content_type = ?")
         params.append(content_type)
@@ -353,6 +367,7 @@ async def list_jobs(
     request: Request,
     content_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    has_checklist: bool | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=1000),
 ) -> dict:
@@ -360,7 +375,7 @@ async def list_jobs(
     chat_id: int = request.state.user["id"]
     offset = (page - 1) * limit
 
-    where, params = _job_scope_where(chat_id, content_type, status)
+    where, params = _job_scope_where(chat_id, content_type, status, has_checklist)
 
     async with database.connection() as conn:
         cur_total = await conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", params)
@@ -745,6 +760,41 @@ async def generate_job_checklists(job_id: str, request: Request) -> dict:
         checklists_generated_at=generated_at,
     )
     return {"checklists_md": markdown, "checklists_generated_at": generated_at}
+
+
+@jobs_router.delete("/{job_id}/checklists", status_code=204)
+async def delete_job_checklists(
+    job_id: str,
+    request: Request,
+    generated_at: str | None = Query(default=None),
+) -> Response:
+    """Clear a job's generated checklist, returning it to the no-checklist state.
+
+    *generated_at* is the ``checklists_generated_at`` the caller was looking at.
+    The match is applied inside the UPDATE, so a checklist generated between the
+    caller's read and this delete is not erased by a stale tab — that gets a 409
+    instead. Omitting it deletes whatever is stored, for callers with nothing to
+    pin against.
+
+    Idempotent: a job that never had a checklist (or whose checklist a stale tab
+    deletes twice) gets the same 204 — the caller's intent is already satisfied,
+    so a 404 would be noise.
+    """
+    await get_owned_job(job_id, request)
+    if generated_at is None:
+        await database.update_job_fields(
+            job_id,
+            checklists_md=None,
+            checklists_generated_at=None,
+        )
+        return Response(status_code=204)
+
+    if not await database.clear_job_checklists(job_id, generated_at):
+        raise HTTPException(
+            status_code=409,
+            detail="This checklist was regenerated elsewhere - reload to see the current one",
+        )
+    return Response(status_code=204)
 
 
 @jobs_router.post("/{job_id}/screenshots", status_code=202)

@@ -81,6 +81,16 @@ async def test_welcome_email_sends_feed_url(monkeypatch: pytest.MonkeyPatch) -> 
     )
 
 
+def test_send_email_sync_refuses_plaintext_to_remote_relay(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Magic-link mail carries a bearer token — a plaintext hop to a remote
+    # relay would leak it, so the send must fail instead of going out clear.
+    monkeypatch.setattr("src.services.email.settings.SMTP_STARTTLS", False)
+    monkeypatch.setattr("src.services.email.settings.SMTP_HOST", "smtp.example")
+
+    with pytest.raises(RuntimeError, match="STARTTLS"):
+        email_service._send_email_sync(EmailMessage())
+
+
 async def test_welcome_email_blocks_user_when_domain_has_no_mx(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

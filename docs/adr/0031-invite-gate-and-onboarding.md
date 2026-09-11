@@ -83,3 +83,19 @@ columns: `email TEXT` and `status TEXT` (`pending` | `approved` | `blocked`).
 - Orthogonal to per-user export isolation (epic #201): a friend can be
   `approved` and use VIG (Telegram + dashboard) without any Google connection.
   Personal Drive/Sheets exports remain the separate #204+ OAuth feature.
+
+## Addendum (2026-09-10)
+
+Two notes from ADR-0061, which extends this gate to non-Telegram sign-ups:
+
+- The "**Email verification (confirm link):** rejected — no SMTP infra" line
+  above is now stale as an infra claim — `src/services/email.py` ships
+  transactional mail (used today for the approval welcome email). The policy
+  decision this ADR actually made (default-deny, Operator approval) is
+  unchanged; only the premise behind that one rejected alternative is not
+  true anymore.
+- The gate itself — `pending` until Operator approval — now applies
+  identically to GitHub, Google, and email-magic-link sign-ups, not just
+  Telegram. A provider-verified email auto-fills `users.email` at signup,
+  skipping the one-time in-app ask this ADR introduced, but the
+  Operator-notify-and-approve mechanic is otherwise untouched.
