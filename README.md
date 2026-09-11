@@ -1,34 +1,107 @@
-# Ownix — Your internet. Own it
+# Ownix - Your internet. Own it
 
-![Ownix — You watched it. You liked it. You lost it.](docs/assets/og-image.png)
+![Ownix: you watched it, you liked it, you lost it.](docs/assets/og-image.png)
 
-Telegram bot that processes short videos, long videos, Github URLs, dev articles, and PDF documents into structured AI analysis, stores everything in Google Drive + Sheets + GCS, and builds a searchable semantic Second Brain — with a Next.js web dashboard for browsing the results. (Backend codename: `vig` — Video Intelligence Gateway.)
+You watched it. You liked it. You lost it.
+
+Ownix is where the things you find online stop disappearing. Share a reel, a YouTube
+video, an article, a GitHub repo, a PDF, or a screenshot, from the share sheet you
+already use, a Chrome right-click, or the dashboard itself. A minute later it is an
+entry in your Index: full transcript, structured summary, every link it mentioned, all
+in markdown. You can search it by meaning instead of keywords, and paste it straight
+into Claude, Cursor, or Codex.
+
+Everything also lands in your own Google Drive. If Ownix shut down tomorrow, your Index
+would still be there. That is the first law in
+[`docs/brand/CONSTITUTION.md`](docs/brand/CONSTITUTION.md), and it constrains the
+architecture, the APIs, and the export formats, not only the marketing copy.
+
+This repository holds the whole system: a Python backend (FastAPI, SQLite, Redis), two
+Telegram bots, a Flask transcript sidecar, a Chrome extension, and a Next.js dashboard
+under `web/`. Backend codename: `vig`, for Video Intelligence Gateway.
 
 ---
 
-## Features
+## What it does
 
-- **Short video pipeline** — YouTube Shorts, Instagram Reels, TikTok: frame extraction → Gemini Vision analysis → Brave Search link verification → Drive upload
-- **Long video pipeline** — YouTube: transcript extraction → Drive upload → Gemini enrichment (topic, objective, action points, tools, promise-gap) → optional Mini-PRD spec generation
-- **Article pipeline** — Substack, Medium, dev.to, Ghost, Hashnode + per-chat allowlist: Jina Reader fetch → markdown cache → paywall heuristic → Gemini analysis → Sheets → Brain
-- **Repo pipeline** — `github.com/<owner>/<repo>` URLs: GitHub API bundle (README + prioritized file tree + package manifests + stars/forks/language) → Gemini 2.5 Flash structured analysis (tagline, tech stack, developer use-cases, educational concepts + file-pointed curriculum hooks) → `.md` document → Sheets → Brain. Handles archived repos and missing-README repos; gists and enterprise hosts are rejected
-- **Document pipeline** — PDF documents (file upload or `.pdf` URL): liteparse text extraction → content-addressed GCS cache (`parsed/<sha>.txt`) → Gemini enrichment (title, author, document type, key points, references, tools) → Telegram delivery (parsed `.txt` + enrichment summary)
-- **Photo OCR** — Screenshot link extraction with verbatim-grounded anti-hallucination filter; multi-image sends are auto-batched via Telegram's `media_group_id` (no command needed) into one unified result
-- **Second Brain** — Semantic link graph (Gemini embeddings + NumPy cosine similarity) searchable via `/find`
-- **Mini-PRD** — AI-generated product specs from long-video transcripts; two slots: auto (Flash) and intent (Pro, user-directed)
-- **Web dashboard** — "The Operator's Console": a Next.js 14 (App Router) operator UI under `web/` for browsing processed jobs (feed with per-type tabs + server-resolved thumbnails), the brain link graph, spaces, prompts, and per-job detail views
+### Capture
+
+Three ways in, one destination.
+
+- **Telegram.** Share sheet on your phone, or paste a URL into the bot. Photos are
+  handled inline, and multi-image sends group themselves.
+- **Chrome extension** (`extension/chrome/`). A shortcut or a right-click on any page,
+  link, or selection.
+- **Dashboard Intake.** Paste a URL, run a command, drop a file, or write a note.
+
+### Pipelines
+
+The URL decides which one runs.
+
+| Content | What comes back |
+| --- | --- |
+| **Short video**: Shorts, Reels, TikTok | Frame extraction, Gemini Vision analysis grounded in the transcript, Brave-verified links, Drive upload |
+| **Long video**: YouTube | Transcript, Drive upload, Gemini enrichment (topic, objective, action points, tools, promise-gap), optional Mini-PRD |
+| **Article**: Substack, Medium, dev.to, Ghost, Hashnode, plus your own allowlist | Jina Reader fetch, markdown cache, paywall heuristic, Gemini analysis, Sheets, Brain |
+| **Repo**: `github.com/<owner>/<repo>` | README, prioritized file tree, manifests, stars and forks, then Gemini structured analysis (tagline, stack, use-cases, curriculum hooks) written to `.md` |
+| **Document**: PDF, Office formats, images | liteparse extraction, content-addressed GCS cache, Gemini briefing, delivery to Telegram and the Docs page |
+| **Photo**: screenshots | OCR link extraction with a verbatim-grounded filter that drops anything the image does not actually say |
+| **Newsletter**: subscribed aliases | Public-archive polling, candidate promotion, issue-feed digest (ADR-0060) |
+
+### Then use it
+
+- **Brain.** A semantic link graph built from Gemini embeddings and cosine similarity,
+  stored as an Obsidian-style `.md` vault in your Drive. Search it from the dashboard or
+  with `/find`.
+- **Checklists.** Turn a transcript into instructions you can hand to an agent, so it
+  audits your actual codebase instead of your memory of the video. Ownix automates the
+  ask. You still do the judging, which is what the Second Law protects.
+- **Mini-PRD.** Product specs generated from long-video transcripts. Two slots: auto
+  (Flash) and intent (Pro, steered by you).
+- **Collections and Recipes.** Group saves into sets you can revisit and export. Save
+  the freestyle prompt you keep retyping.
+
+---
+
+## The dashboard (`web/`)
+
+Next.js 14 App Router, deployed on Vercel. Routes under `web/app/(dashboard)/`:
+
+| Route | What it is for |
+| --- | --- |
+| `/intake` | One surface for everything you send Ownix |
+| `/feed` | Everything you have saved, with per-type tabs, a links table, and a layout toggle |
+| `/jobs/[id]` | The entry itself: transcript, summary, links, notes, checklists, export |
+| `/newsletter-digest` | Subscribed newsletters and promoted candidates |
+| `/doc-parser` | Docs. Upload PDFs, Office files, and images, then read the parsed result |
+| `/brain` | Semantic search across the Index |
+| `/spaces` | Collections |
+| `/prompts` | Recipes |
+| `/controls` | Settings: tags, domain rules, accessibility, extension tokens |
+
+Public routes: `/` (landing), `/login`, `/privacy`, `/terms`, `/accessibility`,
+`/restricted` (a read-only preview), `/mini` (Telegram Mini App), and `/offline`. The
+session gate is `web/middleware.ts`.
+
+Design and voice are governed by `PRODUCT.md` (users, brand personality), `DESIGN.md`
+(tokens and the Personal Index north star), and
+[`docs/brand/CONSTITUTION.md`](docs/brand/CONSTITUTION.md) (why any of it is allowed to
+exist).
 
 ---
 
 ## Requirements
 
-- Docker + Docker Compose
-- Python 3.11+ (for the transcript sidecar, run on host)
-- Telegram bot token
-- Google Cloud project with Drive + Sheets + Cloud Storage APIs enabled (OAuth credentials + optional service account)
-- Gemini API key (free tier sufficient for personal use)
+- Docker and Docker Compose
+- Python 3.11+ for the transcript sidecar, which runs on the host
+- A Telegram bot token
+- A Google Cloud project with the Drive, Sheets, and Cloud Storage APIs enabled
+- A Gemini API key. The free tier covers personal use.
 
-Optional: `BRAVE_API_KEY` (link verification), `GITHUB_TOKEN` (repo pipeline + higher GitHub rate limit), `JINA_API_KEY` (Jina quota), `GEMINI_PAID_API_KEY` (fallback), `GOOGLE_STORAGE_BUCKET` (document pipeline).
+Optional keys, each switching on one feature: `BRAVE_API_KEY` for link verification,
+`GITHUB_TOKEN` for the repo pipeline and a higher rate limit, `JINA_API_KEY` for Jina
+quota, `GEMINI_PAID_API_KEY` as a rate-limit fallback, and `GOOGLE_STORAGE_BUCKET` for
+the document pipeline.
 
 ---
 
@@ -42,12 +115,14 @@ cd ownix
 cp .env.example .env
 ```
 
-Fill in `.env`. Required fields:
+Only `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` are enforced at startup.
+Everything else is validated at use-time by the feature that needs it. In practice you
+want at least:
 
 ```env
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_WEBHOOK_SECRET=
-WEBHOOK_URL=                        # public HTTPS base (e.g. ngrok URL)
+WEBHOOK_URL=                        # public HTTPS base, e.g. an ngrok URL
 REDIS_URL=redis://redis:6379/0
 
 GEMINI_FREE_API_KEY=
@@ -59,12 +134,12 @@ GOOGLE_OAUTH_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_SHORT=
 GOOGLE_DRIVE_FOLDER_LONG=
 GOOGLE_DRIVE_FOLDER_BRAIN=
-GOOGLE_SHEETS_ID=                   # single workbook with 5 tabs
+GOOGLE_SHEETS_ID=                   # one workbook, one tab per domain
 ```
 
-See `.env.example` for the full list.
+`.env.example` lists everything. `src/config.py` holds the authoritative defaults.
 
-### 2. Start the transcript sidecar (host machine)
+### 2. Start the transcript sidecar on the host
 
 ```Shell
 pip install flask waitress yt-dlp youtube-transcript-api Pillow
@@ -93,72 +168,88 @@ curl https://your-domain.com/health    # → {"status":"ok"}
 
 ---
 
-## Bot Commands
+## Bot commands
 
-| Command                   | Description                                                   |
-| ------------------------- | ------------------------------------------------------------- |
-| `<url>`                   | Auto-detected pipeline: short video / long video / article    |
-| `/find <query>`           | Semantic search across Second Brain                           |
-| `/freestyle <url>`        | Process URL with a custom Gemini prompt                       |
-| `/force <url>`            | Bypass dedup + invalidate markdown cache, reprocess           |
-| `/spec <suffix> [intent]` | Generate Mini-PRD for a job (last 4 chars of job ID)          |
-| `/cancel`                 | Clear armed chat state (awaiting_freestyle / awaiting_intent) |
-| `/allowlist <domain>`     | Add domain to article pipeline for this chat                  |
-| `/unallowlist <domain>`   | Remove domain from allowlist                                  |
-| `/allowlist_list`         | Show this chat's custom domains                               |
-| `/download_md <url>`      | Fetch any URL as clean Markdown via Jina (no job created)     |
-| `/ignore <domain>`        | Block domain from short-video link extraction                 |
-| `/rebuild-graph`          | Recompute all Second Brain Obsidian `.md` nodes               |
+Send a bare URL and the right pipeline picks it up. Everything else:
 
-Plain-text shortcuts work for most commands — `find <query>` is equivalent to `/find <query>`. Screenshots no longer need batch commands — send several at once and they're grouped automatically.
+| Command | What it does |
+| --- | --- |
+| `/start`, `/help` | Onboarding and the command list |
+| `/find <query>` | Semantic search across your Brain |
+| `/spec <suffix> [intent]` | Mini-PRD for a job, addressed by the last 4 characters of its ID |
+| `/checklists <suffix>` | Turn a transcript into checks you can run |
+| `/screenshots <suffix>` | Capture informative frames from a saved video |
+| `/freestyle <url>` | Process a URL with your own prompt |
+| `/force <url>` | Skip dedup, invalidate the markdown cache, reprocess |
+| `/tag`, `/taglist` | Tag a job, list your tags |
+| `/addlink <url>` | File a bare link without running a pipeline |
+| `/allowlist`, `/unallowlist`, `/allowlist_list` | Per-chat article domains |
+| `/ignore`, `/unignore`, `/ignore_list` | Block a domain from link extraction |
+| `/download_md <url>` | Fetch any URL as clean markdown, no job created |
+| `/rebuild-graph` | Recompute every Brain node |
+| `/cancel` | Clear armed chat state |
+| `/<template>` | Run a named Recipe. One command per entry in `PROMPT_TEMPLATES` |
+
+Most commands also work without the slash, so `find <query>` does the same thing as
+`/find <query>`. Screenshots need no batch command: send several at once and they group
+by Telegram's `media_group_id`.
+
+A second Ops bot (`/webhook/ops`, `src/services/ops_bot.py`, ADR-0036) handles user and
+invite administration.
 
 ---
 
 ## Architecture
 
 ```
-Telegram User
-      │ HTTPS POST /webhook
-      ▼
-FastAPI :8000  ─── detect_pipeline ──► create_job ──► Redis LPUSH
-      │                                                    │
-      │ (photo messages are inline — no queue)             ▼
-      │                                            Worker (asyncio)
-      │                                              │ BRPOP
-      │                                              ├─ "video" short → frames → Gemini Vision
-      │                                              ├─ "video" long  → transcript → Drive
-      │                                              ├─ "article"     → Jina → Gemini
-      │                                              ├─ "repo"        → GitHub bundle → Gemini
-      │                                              ├─ "document"    → liteparse → GCS cache → Gemini
-      │                                              ├─ "enrichment"  → Gemini text
-      │                                              └─ "prd_*"       → Gemini PRD
+Capture: Telegram share sheet │ Chrome extension │ Dashboard Intake
+                              ▼ HTTPS POST /webhook  |  POST /api/intake
+FastAPI :8000  ─── detect_pipeline ──► create_and_enqueue_job ──► Redis LPUSH
+      │                                                              │
+      │ (photo messages run inline, never queued, ADR-0003)          ▼
+      │                                                      Worker (asyncio)
+      │                                                        │ BRPOP
+      │                                                        ├─ video → short | long
+      │                                                        ├─ article  → Jina → Gemini
+      │                                                        ├─ repo     → GitHub → Gemini
+      │                                                        ├─ document → liteparse → GCS
+      │                                                        ├─ enrichment / prd_* / checklists
+      │                                                        └─ screenshots / newsletter / purge
 
-State:   SQLite WAL  ─── jobs, links, chat_state, markdown_cache, allowed_domains
-Queue:   Redis FIFO  ─── survives restarts, supports multiple workers
-Brain:   text-embedding-004 → NumPy similarity → Drive Obsidian vault
-Sheets:  5 tabs: YouTube Transcript Index | Short Video Analysis | Article Analysis | Repo Analysis | mini PRD
+State:   SQLite WAL, holding jobs, links, chat_state, markdown_cache, allowed_domains, users
+Queue:   Redis FIFO, survives restarts, supports multiple workers
+Brain:   gemini-embedding-001 → NumPy cosine similarity → Drive Obsidian vault
+Storage: your Google Drive and Sheets, plus GCS for content-addressed blobs
 ```
+
+Two long-running processes are built from the same image.
+
+- **API**: `src/main.py`, served by uvicorn as `src.main:app`. It hosts the Telegram
+  webhook, the ops-bot webhook, `/health`, and the dashboard JSON API in `src/api/`.
+  Auth is session-cookie middleware in `src/auth/`.
+- **Worker**: `src/worker.py`. It BRPOPs `{"task": <discriminator>, "job_id": ...}` off
+  the Redis list `video_jobs` and dispatches into `src/processors/`.
 
 ### URL routing
 
 `detect_pipeline(url, extra_domains)` in `src/utils/validators.py`:
 
-| Pattern                                                              | Pipeline |
-| -------------------------------------------------------------------- | -------- |
-| `youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@*/video/` | short    |
-| `youtube.com/watch`, `youtu.be/`                                     | long     |
-| `github.com/<owner>/<repo>` (gists / enterprise hosts rejected)      | repo     |
-| any URL with path ending `.pdf`                                      | document |
-| host in `ARTICLE_DEFAULT_DOMAINS` or per-chat `allowed_domains`      | article  |
-| anything else                                                        | rejected |
+| Pattern | Pipeline |
+| --- | --- |
+| `youtube.com/shorts/`, `instagram.com/reel/`, `tiktok.com/@*/video/` | short |
+| `youtube.com/watch`, `youtu.be/` | long |
+| `github.com/<owner>/<repo>`, with gists and enterprise hosts rejected | repo |
+| any URL whose path ends in `.pdf` | document |
+| a host in `ARTICLE_DEFAULT_DOMAINS` or in the chat's `allowed_domains` | article |
+| anything else | rejected |
 
 ### Job status FSM
 
 ```
 pending → processing → transcript_done → enriching → done
                     ↘                              ↗
-                     (short / article / document: no intermediate states)
-                error (retryable via user button or /force)
+                     (short, article, document: no intermediate states)
+                error (retry from the dashboard or with /force) │ cancelled
 ```
 
 ---
@@ -166,94 +257,98 @@ pending → processing → transcript_done → enriching → done
 ## Development
 
 ```Shell
-# Install dependencies
-pip install -r requirements.txt
-
-# Run tests
-pytest -q                    # 159 tests
-
-# Run a single test file
-pytest tests/test_article_pipeline.py -v
-
-# Integration tests (hit real Gemini API)
-RUN_INTEGRATION=1 pytest tests/ -v
-
-# Lint
-ruff check src/
+pip install -r requirements-dev.txt   # includes runtime deps
+python -m pytest tests -q             # around 1,300 tests
+python -m pytest tests/test_article_pipeline.py -q
+RUN_INTEGRATION=1 python -m pytest tests -q   # also hits real external APIs
+ruff check src/                       # line-length 100, py311
 ```
 
-### Web dashboard (`web/`)
+### Web dashboard
 
 ```Shell
 cd web
 npm install
 npm run dev                  # Next.js dev server
-npm test                     # Vitest (watch) — or test:run / test:coverage
+npm test                     # Vitest watch, or test:run / test:coverage
+npm run lint
+npm run build
 ```
+
+`NEXT_PUBLIC_API_MOCK=1` runs the dashboard against the MSW handlers in
+`web/lib/mocks/`, with the auth gate skipped outside production.
 
 ### Database migrations
 
-Migrations run automatically at startup via `PRAGMA user_version`. The migration table is in `src/database.py` (`_MIGRATIONS`). Each step is either a list of SQL statements (idempotent `ALTER TABLE` / `CREATE TABLE IF NOT EXISTS`) or an async callable for operations that need dynamic introspection (e.g. the v5→v6 content_type CHECK expansion).
-
-To inspect the current schema version:
+Migrations run at startup via `PRAGMA user_version`. The table lives in
+`src/database.py` as `_MIGRATIONS`. Each step is either a list of idempotent SQL
+statements or an async callable for steps that need introspection. Rollback discipline
+is ADR-0058.
 
 ```Shell
 sqlite3 data/jobs.db "PRAGMA user_version;"
 ```
 
-### Adding a new pipeline
+### Adding a pipeline
 
-1. Add the new `content_type` value to the CHECK constraint in `SCHEMA_SQL` and write a migration step
-2. Add detection logic to `detect_pipeline` in `src/utils/validators.py`
+1. Add the `content_type` value to the CHECK constraint in `SCHEMA_SQL`, plus a migration
+2. Teach `detect_pipeline` in `src/utils/validators.py` to recognize it
 3. Create `src/processors/<type>.py` with `async def run(job: dict) -> None`
 4. Add a task discriminator in `src/worker.py`
-5. Route the task type in `src/telegram/webhook.py` (main URL handler + `/force` + `/freestyle`)
+5. Route it in `src/telegram/webhook.py`, in the URL handler and in `/force` and `/freestyle`
 
 ---
 
-## Configuration Reference
+## Configuration reference
 
-All env vars are validated at startup by `src/config.py` (pydantic-settings). Missing required vars crash the process before the first request.
+`src/config.py` loads every env var through pydantic-settings. Only the two Telegram
+secrets are required at startup. The rest degrade gracefully: a feature is simply off
+when its key is missing.
 
-| Variable                                      | Required | Description                                                               |
-| --------------------------------------------- | -------- | ------------------------------------------------------------------------- |
-| `TELEGRAM_BOT_TOKEN`                          | ✅       | Bot token from @BotFather                                                 |
-| `TELEGRAM_WEBHOOK_SECRET`                     | ✅       | Random secret for webhook validation                                      |
-| `WEBHOOK_URL`                                 | ✅       | Public HTTPS base URL                                                     |
-| `REDIS_URL`                                   | ✅       | Redis connection string                                                   |
-| `DB_PATH`                                     | ✅       | SQLite file path (default: `/app/data/jobs.db`)                           |
-| `GEMINI_FREE_API_KEY`                         | ✅       | Primary Gemini key                                                        |
-| `GEMINI_PAID_API_KEY`                         | —        | Fallback Gemini key on rate limit                                         |
-| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | ✅       | Drive + Sheets OAuth                                                      |
-| `GOOGLE_SHEETS_ID`                            | ✅       | Single consolidated workbook (5 tabs)                                     |
-| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN`        | ✅       | Drive folder IDs                                                          |
-| `GOOGLE_DRIVE_FOLDER_PRD`                     | —        | PRD output folder (Mini-PRD disabled if absent)                           |
-| `BRAVE_API_KEY`                               | —        | Brave Search (link verification disabled if absent)                       |
-| `GITHUB_TOKEN`                                | —        | GitHub API for the repo pipeline + `/find` enrichment (higher rate limit) |
-| `JINA_API_KEY`                                | —        | Jina Reader (works without key, higher quota with)                        |
-| `BRAIN_MIN_SCORE`                             | —        | Cosine similarity floor for `/find` (default: 0.5)                        |
-| `PRD_MAX_TRANSCRIPT_CHARS`                    | —        | PRD transcript cap (default: 60000)                                       |
-| `PRD_INTENT_COOLDOWN_SECONDS`                 | —        | Cooldown between intent PRD re-runs (default: 15)                         |
-| `GOOGLE_STORAGE_BUCKET`                       | —        | GCS bucket for document pipeline (document pipeline disabled if absent)   |
-| `GOOGLE_SERVICE_ACCOUNT_JSON`                 | —        | Service-account key file (GCS auth; falls back to OAuth)                  |
+| Variable | Required | Description |
+| --- | --- | --- |
+| `TELEGRAM_BOT_TOKEN` | yes | Bot token from @BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | yes | Random secret for webhook validation |
+| `REDIS_URL` | no | Redis connection string. Default `redis://redis:6379/0` |
+| `DB_PATH` | no | SQLite file. Default `/app/data/jobs.db` |
+| `WEBHOOK_URL` | no | Public HTTPS base URL |
+| `GEMINI_FREE_API_KEY` | no | Primary Gemini key. Enrichment is off without it |
+| `GEMINI_PAID_API_KEY` | no | Fallback when the free key hits its rate limit |
+| `GOOGLE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN` | no | Drive and Sheets OAuth |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | no | Fernet key for stored per-user Google tokens |
+| `GOOGLE_SHEETS_ID` | no | The single consolidated workbook |
+| `GOOGLE_DRIVE_FOLDER_SHORT/LONG/BRAIN/PRD/EXPORTS/SCREENSHOTS` | no | Drive folder IDs. The matching feature is off when unset |
+| `GOOGLE_STORAGE_BUCKET` | no | GCS bucket for the document pipeline |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | no | Service-account key path for GCS auth. Falls back to OAuth |
+| `BRAVE_API_KEY` | no | Brave Search. Link verification is off without it |
+| `GITHUB_TOKEN` | no | Repo pipeline and `/find` enrichment, with a higher rate limit |
+| `JINA_API_KEY` | no | Jina Reader. Works without a key, with a higher quota when set |
+| `BRAIN_MIN_SCORE` | no | Cosine-similarity floor for `/find`. Default `0.5` |
+| `PRD_MAX_TRANSCRIPT_CHARS` | no | PRD transcript cap. Default `60000` |
+| `CHECKLISTS_MAX_TRANSCRIPT_CHARS` | no | Checklist transcript cap. Default `60000` |
+| `OPERATOR_CHAT_ID` | no | Per-user export isolation (ADR-0027). Unset means export for all |
+| `SESSION_BACKEND` | no | `redis` in production, `memory` for local auth loops |
+| `OPS_BOT_TOKEN` and the other `OPS_*` vars | no | The Ops bot (ADR-0036) |
+| `SMTP_*` | no | Transactional email. Approval still succeeds when unset |
 
 ---
 
-## Google APIs Setup
+## Google APIs setup
 
-### OAuth (Drive + Sheets)
+### OAuth for Drive and Sheets
 
-The bot uses OAuth with a refresh token — no service account needed for personal Google accounts.
+Ownix uses OAuth with a refresh token, so a personal account needs no service account.
+Files are created in the user's own Drive, which is the whole point.
 
 1. Create a project in [Google Cloud Console](https://console.cloud.google.com)
 2. Enable Drive API v3 and Sheets API v4
-3. Create OAuth 2.0 credentials (Desktop app type)
+3. Create OAuth 2.0 credentials of the Desktop app type
 4. Run the auth flow once to get a refresh token
 5. Set `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`
 
 ### Sheets workbook
 
-Create one Google Sheet with five tabs named exactly:
+One spreadsheet, one tab per domain, named exactly:
 
 - `YouTube Transcript Index`
 - `Short Video Analysis`
@@ -261,99 +356,83 @@ Create one Google Sheet with five tabs named exactly:
 - `Repo Analysis`
 - `mini PRD`
 
-Set `GOOGLE_SHEETS_ID` to the spreadsheet ID from the URL.
+Set `GOOGLE_SHEETS_ID` to the spreadsheet ID from the URL. Tab routing lives in
+`src/services/sheets.py`.
 
 ---
 
 ## Deployment
 
-### Docker Compose (production)
-
 ```Shell
 docker-compose up -d --scale worker=2   # 2 workers, 1 API container
 ```
 
-The transcript sidecar (`transcript_server.py`) runs on the host. Set `TRANSCRIPT_SERVICE_URL` and `FRAME_SERVICE_URL` to point to it.
+Compose runs `api`, `worker`, `transcript-service`, `redis`, and `cloudflared`. Vercel
+serves the frontend in production, so the local `web` service in `docker-compose.yml`
+stays commented out. If you run the transcript sidecar on the host instead of in
+Compose, point `TRANSCRIPT_SERVICE_URL` and `FRAME_SERVICE_URL` at it.
 
 ### Logs
 
 ```Shell
-docker-compose logs -f worker   # structured JSON via structlog
-
-# Query errors
+docker-compose logs -f worker                              # structured JSON via structlog
 docker-compose logs worker | jq 'select(.level=="error")'
-
-# Track a specific job
 docker-compose logs worker | jq 'select(.job_id=="20260528_143022_A3F9")'
 ```
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 src/
 ├── main.py              # FastAPI app, APScheduler (brain refresh Sun/Wed 09:00 UTC)
 ├── worker.py            # Task dispatch loop, boot-time reapers
-├── database.py          # SQLite schema + PRAGMA migrations + all CRUD
+├── database.py          # SQLite schema, PRAGMA migrations, all CRUD
 ├── brain.py             # Second Brain: ingest / search / rebuild / refresh
 ├── queue.py             # Redis brpop/lpush wrapper
 ├── config.py            # pydantic-settings, all env vars
-├── processors/
-│   ├── short_video.py   # Frames → Vision → Brave → Drive + transcript tail
-│   ├── long_video.py    # Transcript + metadata → Drive → Phase 1
-│   ├── enrichment.py    # Gemini text enrichment, Phase 2
-│   ├── prd.py           # Mini-PRD: run_auto / run_intent / run_auto_resend
-│   ├── article.py       # Jina → cache → paywall → Gemini → Sheets → Brain
-│   ├── repo.py          # GitHub bundle → Gemini structured analysis → Sheets → Brain
-│   └── document.py      # PDF parse (liteparse) → GCS cache → Gemini enrichment
-├── services/
-│   ├── gemini_client.py # free→paid fallback, GeminiUnavailableError
-│   ├── gemini.py        # Vision + resolve_tool_urls
-│   ├── gemini_photo.py  # Photo link extraction (verbatim-grounded)
-│   ├── jina.py          # Jina Reader client, JinaFetchError
-│   ├── drive.py         # Drive upload + update
-│   ├── sheets.py        # Sheets append (5 tabs) + article in-place update
-│   ├── github.py        # GitHub metadata + Redis cache
-│   ├── google_auth.py   # Shared Google OAuth / service-account credentials
-│   ├── job_recovery.py  # Dashboard-triggered job recovery orchestration
-│   ├── storage.py       # GCS content-addressed blob store (document pipeline)
-│   ├── parse.py         # liteparse PDF text extraction
-│   ├── frames.py        # /short_frames sidecar client
-│   ├── transcript.py    # /transcript + /metadata sidecar clients
-│   └── brave.py         # Brave Search client
-├── telegram/
-│   ├── webhook.py       # POST /webhook — URL routing, chat_state FSM, dispatch tables
-│   └── sender.py        # sendMessage, sendDocument, sendPhoto, ForceReply, inline keyboard
-├── utils/
-│   ├── validators.py    # detect_pipeline, ARTICLE_DEFAULT_DOMAINS, extract_description_links
-│   ├── markdown.py      # build_links_message, build_enriched_links_message
-│   └── logger.py        # structlog JSON config
-├── templates.py         # PROMPT_TEMPLATES registry (summary/method/technical/review/narrative)
-├── analysis.py          # extract_key_phrases (enrichment KEY CONTEXT block)
-└── validation.py        # validate_template_choice (mismatch warning)
+├── api/                 # Dashboard JSON API: jobs, brain, spaces, intake, parsed,
+│                        #   controls, auth, google_oauth, extension_auth, preview,
+│                        #   templates, newsletter_digest
+├── auth/                # Session-cookie middleware
+├── processors/          # short_video, long_video, article, repo, document,
+│                        #   enrichment, prd, checklists, screenshots, link,
+│                        #   bookmarks, newsletter_poll, email_digest, purge
+├── services/            # One module per external service: gemini*, drive, sheets,
+│                        #   storage (GCS), jina, github, brave, transcript, parse,
+│                        #   frames, google_auth/tokens/workspace, pdf_intake,
+│                        #   space_export, job_recovery, ops_bot
+├── telegram/            # webhook.py (routing, chat_state FSM), sender.py
+├── utils/               # validators (detect_pipeline), markdown, logger, crypto
+└── templates.py         # PROMPT_TEMPLATES registry, the store behind Recipes
 
-tests/                   # pytest + pytest-asyncio (159 tests)
-transcript_server.py     # Flask+Waitress sidecar :5151 (yt-dlp + ffmpeg + youtube-transcript-api)
-docker-compose.yml
-.env.example
+extension/chrome/        # Chrome extension: right-click and shortcut capture
+transcript_server.py     # Flask and Waitress sidecar on :5151 (yt-dlp, ffmpeg, transcripts)
+tests/                   # pytest, pytest-asyncio
 
-web/                     # Next.js 14 dashboard — "The Operator's Console"
-├── app/                 # feed (home), brain, spaces, prompts, controls, jobs/[id], login
-├── components/          # PlatformIcon, job cards, sidebar rail/drawer, VIG branding
-├── lib/                 # useFeedData + job-detail utilities
-└── *.test.tsx           # Vitest + React Testing Library + MSW
+web/                     # Next.js 14 dashboard
+├── app/(dashboard)/     # intake, feed, newsletter-digest, doc-parser, brain,
+│                        #   spaces, prompts, controls, jobs/[id]
+├── app/                 # landing, login, privacy, terms, accessibility, mini, offline
+├── components/          # shell/ ui/ feed/ brain/ spaces/ doc-parser/ landing/ svg/
+├── lib/                 # hooks, fetch utilities, MSW mocks
+└── *.test.tsx           # Vitest, React Testing Library, MSW, colocated
 ```
 
 ---
 
-## Further Reading
+## Further reading
 
-- [`docs/seed/README.md`](docs/seed/README.md) — portfolio narrative: why it was built this way, key decisions, complexity notes
-- [`docs/seed/ARCHITECTURE.md`](docs/seed/ARCHITECTURE.md) — system diagrams, pipeline sequence diagrams, component map
-- [`docs/seed/TECHSTACK.md`](docs/seed/TECHSTACK.md) — tech choices with rationale and switch conditions
-- [`docs/seed/MODULE_MAP.md`](docs/seed/MODULE_MAP.md) — module-level call graph
-- [`CLAUDE.md`](CLAUDE.md) — agent and contributor instructions
+- [`docs/brand/CONSTITUTION.md`](docs/brand/CONSTITUTION.md), why Ownix exists and what it refuses to do
+- [`PRODUCT.md`](PRODUCT.md), users, purpose, brand personality, accessibility bar
+- [`DESIGN.md`](DESIGN.md), the visual system and its normative tokens
+- [`CONTEXT.md`](CONTEXT.md), domain glossary and architecture decisions
+- [`docs/adr/`](docs/adr/), numbered architecture decision records
+- [`docs/seed/PRD.md`](docs/seed/PRD.md), the full spec. Use its table of contents rather than reading top to bottom
+- [`docs/seed/ARCHITECTURE.md`](docs/seed/ARCHITECTURE.md), diagrams and component map
+- [`docs/seed/TECHSTACK.md`](docs/seed/TECHSTACK.md), tech choices, rationale, switch conditions
+- [`CLAUDE.md`](CLAUDE.md), agent and contributor instructions
 
 ---
 
