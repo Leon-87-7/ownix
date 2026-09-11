@@ -12,6 +12,7 @@ const FALLBACK = 'Failed to create a pairing code.';
  * (authenticated) session and carry it into the DM you want paired. */
 export function DiscordPairingPanel() {
   const [code, setCode] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<number | null>(null);
   const [expiresIn, setExpiresIn] = useState<number | null>(null);
   const [pairing, setPairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,11 +21,17 @@ export function DiscordPairingPanel() {
   // rendering it at zero so nobody DMs a code that's already dead.
   const live = code !== null && expiresIn !== null && expiresIn > 0;
 
+  // Counted off an absolute deadline, not by subtracting a second per tick —
+  // a backgrounded tab stops firing timers, and a decrementing counter would
+  // resume showing time left on a code the server already expired.
   useEffect(() => {
-    if (!live) return;
-    const timeout = setTimeout(() => setExpiresIn((s) => (s ?? 1) - 1), 1000);
-    return () => clearTimeout(timeout);
-  }, [live, expiresIn]);
+    if (deadline === null) return;
+    const tick = () =>
+      setExpiresIn(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
 
   const handlePair = async () => {
     setPairing(true);
@@ -40,7 +47,7 @@ export function DiscordPairingPanel() {
         return;
       }
       setCode(res.data.code);
-      setExpiresIn(res.data.expires_in);
+      setDeadline(Date.now() + res.data.expires_in * 1000);
     } catch (err) {
       setError(describeError(err, FALLBACK));
     } finally {

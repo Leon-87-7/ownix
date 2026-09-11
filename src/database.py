@@ -2733,6 +2733,16 @@ async def link_identity(
     return int(row[0])
 
 
+async def relink_identity(provider: str, subject: str, owner_id: int) -> None:
+    """Re-point an existing identity link at another owner (verified-email merge)."""
+    await _execute_rowcount(
+        "UPDATE identity_links SET owner_id = ?, verified = 1 "
+        "WHERE provider = ? AND subject = ?",
+        (owner_id, provider, subject),
+    )
+    log.info("identity_relinked", provider=provider, owner_id=owner_id)
+
+
 async def delete_user(tg_id: int) -> bool:
     """Hard-delete the invite-gate row for tg_id (account deletion's last step)."""
     deleted = await _execute_rowcount("DELETE FROM users WHERE tg_id = ?", (tg_id,)) > 0

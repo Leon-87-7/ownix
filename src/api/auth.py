@@ -257,7 +257,11 @@ _OAUTH_STATE_COOKIE_MAX_AGE = 600  # matches mint_*_oauth_state's default TTL
 
 @auth_router.get("/github/connect")
 async def github_connect() -> RedirectResponse:
-    if not settings.GITHUB_OAUTH_CLIENT_ID or not settings.GITHUB_OAUTH_REDIRECT_URI:
+    if (
+        not settings.GITHUB_OAUTH_CLIENT_ID
+        or not settings.GITHUB_OAUTH_CLIENT_SECRET
+        or not settings.GITHUB_OAUTH_REDIRECT_URI
+    ):
         raise HTTPException(status_code=503, detail="GitHub sign-in is not configured")
     state = await session_store.mint_github_oauth_state(secrets.token_urlsafe(16))
     query = urlencode(
@@ -317,7 +321,11 @@ async def github_callback(request: Request, code: str, state: str) -> RedirectRe
 
 @auth_router.get("/google/connect")
 async def google_login_connect() -> RedirectResponse:
-    if not settings.GOOGLE_LOGIN_CLIENT_ID or not settings.GOOGLE_LOGIN_REDIRECT_URI:
+    if (
+        not settings.GOOGLE_LOGIN_CLIENT_ID
+        or not settings.GOOGLE_LOGIN_CLIENT_SECRET
+        or not settings.GOOGLE_LOGIN_REDIRECT_URI
+    ):
         raise HTTPException(status_code=503, detail="Google sign-in is not configured")
     state = await session_store.mint_google_login_state(secrets.token_urlsafe(16))
     query = urlencode(
@@ -379,8 +387,14 @@ async def request_magic_link(payload: EmailPayload) -> dict:
     # anyone can spam an arbitrary mailbox with sign-in links. Same shape as
     # reviewer_login's per-email cap just below.
     rate_limit.enforce(f"magic_link_request:{email}", max_requests=5)
-    token = await session_store.mint_email_magic_link(email)
     base = settings.DASHBOARD_URL.strip().rstrip("/")
+    # The sign-in token rides in this URL, so an unset DASHBOARD_URL would mail a
+    # dead link and a plaintext one would mail a bearer token in the clear.
+    if not base.startswith("https://") and not base.startswith(
+        ("http://localhost", "http://127.0.0.1")
+    ):
+        raise HTTPException(status_code=503, detail="Email sign-in is not configured")
+    token = await session_store.mint_email_magic_link(email)
     link = f"{base}/api/auth/email/callback?token={token}"
     try:
         await send_magic_link_email(email, link)

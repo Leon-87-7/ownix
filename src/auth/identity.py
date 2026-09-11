@@ -25,6 +25,41 @@ def _mint_synthetic_owner_id() -> int:
     return _SYNTHETIC_OWNER_ID_FLOOR - secrets.randbelow(2**31)
 
 
+async def _reconcile_late_email(
+    provider: str, subject: str, existing: int, normalized: str
+) -> int:
+    """Apply the verified-email merge to an identity linked before it had an email.
+
+    A provider can withhold a verified email on first login (a private GitHub
+    address) and hand it over later. Returning `existing` unconditionally would
+    strand that identity on its own account even though ADR-0061 says a
+    provider-verified email merges cross-provider accounts.
+    """
+    owner = await database.get_user(existing)
+    if owner is not None and owner["email"]:
+        return existing  # already has an email — nothing arrived that's new
+    matched = await database.get_user_by_email(normalized)
+    if matched is None:
+        try:
+            await database.set_user_email(existing, normalized)
+        except sqlite3.IntegrityError:
+            # Lost a race to another signup claiming this address; fall through
+            # to the owner it landed on.
+            matched = await database.get_user_by_email(normalized)
+            if matched is None:
+                raise
+        else:
+            return existing
+    winner = int(matched["tg_id"])
+    if winner == existing:
+        return existing
+    # ponytail: re-points the link only — jobs already filed under the
+    # abandoned owner stay there rather than being migrated. Move them here if
+    # this stops being a rare, early-account case.
+    await database.relink_identity(provider, subject, winner)
+    return winner
+
+
 async def resolve_owner(
     provider: str,
     subject: str,
@@ -39,6 +74,8 @@ async def resolve_owner(
     async with _resolve_lock:
         existing = await database.get_identity_owner(provider, subject)
         if existing is not None:
+            if normalized and email_verified:
+                return await _reconcile_late_email(provider, subject, existing, normalized)
             return existing
 
         if normalized and email_verified:

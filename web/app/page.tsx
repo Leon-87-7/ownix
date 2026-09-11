@@ -88,7 +88,7 @@ export default async function LandingPage() {
     process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
   const telegramDeepLink = telegramBotUsername
     ? `https://t.me/${telegramBotUsername}`
-    : '#invite';
+    : null;
 
   return (
     <>
@@ -838,9 +838,10 @@ export default async function LandingPage() {
                 <GhostButton
                   as="a"
                   accent="contrasignal"
-                  href={telegramDeepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={telegramDeepLink ?? '#invite'}
+                  {...(telegramDeepLink
+                    ? { target: '_blank', rel: 'noopener noreferrer' }
+                    : {})}
                   className={`h-9 shrink-0 px-3.5 text-button font-medium leading-none text-ink ${touchTarget}`}
                 >
                   Message the bot

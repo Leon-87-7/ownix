@@ -31,6 +31,31 @@ describe('DiscordPairingPanel', () => {
     ).toBe(true);
   });
 
+  it('hides a code the server has already expired, even if the tab was suspended', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      jsonResponse({ code: 'abc123', expires_in: 300 }),
+    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    try {
+      render(<DiscordPairingPanel />);
+      await user.click(screen.getByRole('button', { name: /generate pairing code/i }));
+      expect(await screen.findByText('abc123')).toBeInTheDocument();
+
+      // Jump the wall clock past the deadline WITHOUT firing the ~300 ticks a
+      // foreground tab would have run — that's what a suspended tab does. One
+      // tick after resuming has to show the code as expired; decrementing a
+      // second per tick would still claim ~299s left.
+      vi.setSystemTime(Date.now() + 301_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await waitFor(() => expect(screen.queryByText('abc123')).not.toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("surfaces the server's detail on failure", async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
       jsonResponse({ detail: 'Not signed in' }, { status: 401 }),

@@ -84,6 +84,48 @@ async def test_verified_email_merges_providers(identity_db):
 
 
 @pytest.mark.asyncio
+async def test_late_verified_email_merges_into_the_account_that_owns_it(identity_db):
+    """A provider can withhold a verified email on first login and hand it over
+    later (a private GitHub address). That late email still has to merge under
+    ADR-0061's policy instead of stranding the identity on its own account."""
+    github = await resolve_owner("github", "1", email=None, email_verified=False)
+    google = await resolve_owner(
+        "google", "2", email="shared@example.com", email_verified=True
+    )
+    assert github != google
+
+    merged = await resolve_owner(
+        "github", "1", email="SHARED@example.com", email_verified=True
+    )
+    assert merged == google
+    assert await database.get_identity_owner("github", "1") == google
+
+
+@pytest.mark.asyncio
+async def test_late_verified_email_backfills_when_unclaimed(identity_db):
+    owner = await resolve_owner("github", "1", email=None, email_verified=False)
+    assert (await database.get_user(owner))["email"] is None
+
+    again = await resolve_owner(
+        "github", "1", email="solo@example.com", email_verified=True
+    )
+    assert again == owner
+    assert (await database.get_user(owner))["email"] == "solo@example.com"
+
+
+@pytest.mark.asyncio
+async def test_late_unverified_email_never_merges(identity_db):
+    github = await resolve_owner("github", "1", email=None, email_verified=False)
+    google = await resolve_owner(
+        "google", "2", email="shared@example.com", email_verified=True
+    )
+    still_separate = await resolve_owner(
+        "github", "1", email="shared@example.com", email_verified=False
+    )
+    assert still_separate == github != google
+
+
+@pytest.mark.asyncio
 async def test_unverified_email_does_not_merge(identity_db):
     verified = await resolve_owner(
         "github", "1", email="same@example.com", email_verified=True
@@ -235,6 +277,7 @@ def test_github_callback_rejects_state_without_matching_cookie(
     """Login-CSRF guard: a `state` that never went through this browser's
     /connect (no matching cookie) must be rejected before anything else."""
     monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client")
+    monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret")
     monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_REDIRECT_URI", "https://app.example.test/x")
 
     resp = identity_auth_client.get(
@@ -249,6 +292,7 @@ def test_google_callback_rejects_state_without_matching_cookie(
     identity_auth_client, monkeypatch
 ):
     monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_CLIENT_ID", "g-client")
+    monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_CLIENT_SECRET", "g-secret")
     monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_REDIRECT_URI", "https://app.example.test/y")
 
     resp = identity_auth_client.get(
@@ -393,8 +437,10 @@ def test_merge_across_providers_never_renotifies_operator(
     existing verified-email account must not re-fire the Operator-approval
     notification — that only ever happens for a genuinely new tenant."""
     monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_CLIENT_ID", "gh-client")
+    monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_CLIENT_SECRET", "gh-secret")
     monkeypatch.setattr("src.api.auth.settings.GITHUB_OAUTH_REDIRECT_URI", "https://app.example.test/x")
     monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_CLIENT_ID", "g-client")
+    monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_CLIENT_SECRET", "g-secret")
     monkeypatch.setattr("src.api.auth.settings.GOOGLE_LOGIN_REDIRECT_URI", "https://app.example.test/y")
     notify = AsyncMock()
     monkeypatch.setattr("src.api.auth.notify_operator_invite", notify)

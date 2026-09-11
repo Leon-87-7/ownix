@@ -4,7 +4,8 @@ Date: 2026-08-03
 
 Status: Draft implementation plan. Phases 1-8 shipped. Phase 9's depth and
 Phase 10's shape were resolved 2026-09-10 (non-Telegram identity grill) — see
-ADR-0061 and the updates to those sections below.
+ADR-0061 and the updates to those sections below. Phase 9a and Phase 10 are
+implemented (issues #618-#624); Phase 9b stays deferred.
 
 Owner surface: dashboard intake, browser extension, PWA share target, future channel adapters
 
@@ -722,21 +723,21 @@ ownership.
 
 Tasks:
 
-- [ ] Add one additive table: `(provider, subject, owner_id, verified)` — no
+- [x] Add one additive table: `(provider, subject, owner_id, verified)` — no
       `users.id` rework, no touch to `jobs`/`tags`/`spaces`/etc.
-- [ ] GitHub OAuth login.
-- [ ] Google OAuth login — **separate OAuth client/scopes from the existing
+- [x] GitHub OAuth login.
+- [x] Google OAuth login — **separate OAuth client/scopes from the existing
       Drive/Sheets export grant** (ADR-0030 addendum). `openid email profile`
       only; never touches `drive.file`/`spreadsheets`.
-- [ ] Email magic-link login, reusing `src/auth/session.py`'s existing
+- [x] Email magic-link login, reusing `src/auth/session.py`'s existing
       `mint_handoff`/`redeem_handoff` single-use token pattern and the SMTP
       infra `src/services/email.py` already has.
-- [ ] Non-Telegram signup mints a synthetic negative-range integer as the
+- [x] Non-Telegram signup mints a synthetic negative-range integer as the
       Tenant's owner id (stored in `users.tg_id` — the column now means
       "owner id," not literally a Telegram id).
-- [ ] Session dict keeps its existing field names (`first_name`/`username`/
+- [x] Session dict keeps its existing field names (`first_name`/`username`/
       `photo_url`); each provider maps its own fields into them.
-- [ ] Invite gate (ADR-0031) applies identically regardless of provider;
+- [x] Invite gate (ADR-0031) applies identically regardless of provider;
       provider-verified email auto-fills `users.email`, skipping the
       one-time in-app ask.
 - [x] Cross-provider auto-merge on **verified** email match only
@@ -799,22 +800,22 @@ that review entirely.
 
 Tasks:
 
-- [ ] Add `src/channels/discord/adapter.py`, mirroring
+- [x] Add `src/channels/discord/adapter.py`, mirroring
       `src/channels/telegram/adapter.py`.
-- [ ] Hold one Gateway connection for the whole bot (not per-user) inside the
+- [x] Hold one Gateway connection for the whole bot (not per-user) inside the
       existing `worker.py` process — it already runs the one other permanent
       loop in the system (BRPOP + reapers). No new `docker-compose` service.
-- [ ] DM-only in v1 — no guild/server channels (that's where the privileged
+- [x] DM-only in v1 — no guild/server channels (that's where the privileged
       intent review actually bites, past 100 servers).
-- [ ] Discord can never create a Tenant on its own — Discord's API discloses
+- [x] Discord can never create a Tenant on its own — Discord's API discloses
       no email, so a bare DM can't clear the verified-email bar every other
       provider clears. An already-signed-up Tenant requests a one-time
       pairing code from the dashboard (reusing the Chrome extension's
       existing pairing-code pattern) and DMs it to the bot to link their
       Discord snowflake to their owner id via the Phase 9a identity table.
-- [ ] Convert paired Discord DMs to `IntakeMessage`; render `IntakeResponse`
+- [x] Convert paired Discord DMs to `IntakeMessage`; render `IntakeResponse`
       back to Discord messages.
-- [ ] Reuse shared command and job behavior — full parity with Telegram, not
+- [x] Reuse shared command and job behavior — full parity with Telegram, not
       just URL forwarding.
 
 Acceptance criteria:

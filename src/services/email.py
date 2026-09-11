@@ -124,5 +124,7 @@ async def send_magic_link_email(email: str, link: str) -> bool:
         "It expires in 15 minutes and can only be used once."
     )
     await asyncio.to_thread(_send_email_sync, message)
-    log.info("magic_link_email_sent", email=email)
+    # Domain only — the full address in a retained log is a sign-in trail
+    # linking a person to this account (CWE-532).
+    log.info("magic_link_email_sent", domain=domain)
     return True
