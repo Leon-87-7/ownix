@@ -311,6 +311,21 @@ def test_job_scope_where_defaults_exclude_cancelled() -> None:
     assert params == [1, "short", "error"]
 
 
+def test_job_scope_where_has_checklist() -> None:
+    """The feed's Checklist chip narrows server-side so counts stay truthful
+    past CLIENT_MODE_LIMIT, where the client holds only one page."""
+    where, params = jobs._job_scope_where(1, None, None, True)
+    assert "checklists_generated_at IS NOT NULL" in where
+    assert params == [1]
+
+    where, _ = jobs._job_scope_where(1, None, None, False)
+    assert "checklists_generated_at IS NULL" in where
+
+    # Omitted (the prev/next caller) leaves the scope untouched.
+    where, _ = jobs._job_scope_where(1, None, None)
+    assert "checklists_generated_at" not in where
+
+
 class _FetchOneCursor:
     def __init__(self, payload):
         self.payload = payload

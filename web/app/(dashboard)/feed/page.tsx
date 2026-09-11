@@ -36,7 +36,8 @@ import { RecoveryPanel } from '@/components/feed/recovery-panel';
 import { PageShell } from '@/components/shell/page-shell';
 import { useGoogleStatus } from '@/components/shell/google-status';
 import { useSubmitJob } from '@/components/feed/submit-job';
-import { LayoutDashboard, Link2, List } from 'lucide-react';
+import { BookmarkCheck, LayoutDashboard, Link2, List } from 'lucide-react';
+import { GENERATED_MARK_PAINT } from '@/components/ui/generated-badge';
 import { OwnixAddIcon } from '@/components/svg/ownix-add-icon';
 import { GoogleIcon } from '@/components/svg/google-icon';
 import type { JobSummary } from '@/components/feed/job-card';
@@ -154,6 +155,8 @@ function FeedPageContent() {
     setCtFilter,
     stFilter,
     setStFilter,
+    checklistOnly,
+    setChecklistOnly,
     stats,
     jobs,
     total,
@@ -410,7 +413,7 @@ function FeedPageContent() {
     }
   };
   const showPreviewGrid = Boolean(ctFilter) || allLayout === 'grid';
-  const hasFilters = Boolean(ctFilter || stFilter || query.trim());
+  const hasFilters = Boolean(ctFilter || stFilter || checklistOnly || query.trim());
   const empty = !loading && !error && displayedJobs.length === 0;
 
   const countLabel = jobCountLabel(
@@ -453,6 +456,7 @@ function FeedPageContent() {
     setFeedView('jobs');
     setContentType('');
     setStFilter('');
+    setChecklistOnly(false);
     setQuery('');
   };
 
@@ -527,6 +531,17 @@ function FeedPageContent() {
         searchLabel="Search by title or URL"
         statusValue={stFilter}
         onStatusChange={setStFilter}
+        toggleFilters={[
+          {
+            // Same mark the cards wear (GeneratedBadge), same paint — the chip
+            // is that badge turned into a control, so no text label is needed.
+            label: 'Checklist generated',
+            icon: BookmarkCheck,
+            iconClassName: GENERATED_MARK_PAINT,
+            active: checklistOnly,
+            onChange: setChecklistOnly,
+          },
+        ]}
         hideSearchAndFilters={showingLinks}
         searchSlot={
           showingLinks ? (

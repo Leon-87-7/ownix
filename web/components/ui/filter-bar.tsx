@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type React from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
 import { usePressFeedback } from '@/lib/hooks/usePressFeedback';
 
 function isEditableShortcutTarget(target: EventTarget | null) {
@@ -32,6 +33,21 @@ export interface FilterTab {
 export interface StatusOption {
   label: string;
   value: string;
+}
+
+/** An independent on/off narrowing that stacks on top of the status chips
+ * (e.g. "Checklist") rather than replacing the single-select status value. */
+export interface ToggleFilter {
+  label: string;
+  active: boolean;
+  onChange: (next: boolean) => void;
+  /** Renders the chip as icon-only. Pass the same icon the matching card badge
+   * uses, so the filter reads as "show me the ones wearing this mark" — the
+   * label stays as the aria-label and tooltip, never dropped. */
+  icon?: LucideIcon;
+  /** Paint for that icon — pass the badge's own (e.g. GENERATED_MARK_PAINT) so
+   * the chip and the mark it filters for are visually the same object. */
+  iconClassName?: string;
 }
 
 // Shared default: feed and doc-parser both filter on the same job statuses.
@@ -169,27 +185,44 @@ function FilterButton({
   label,
   active,
   onClick,
+  icon: Icon,
+  iconClassName,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  icon?: LucideIcon;
+  iconClassName?: string;
 }) {
   const pressFeedback = usePressFeedback();
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      aria-label={Icon ? label : undefined}
       {...pressFeedback}
-      className={`h-7 rounded-md px-3 text-button font-medium transition-ui ${
+      className={`h-7 rounded-md text-button font-medium transition-ui ${
+        Icon ? 'inline-flex w-8 items-center justify-center' : 'px-3'
+      } ${
         active
           ? 'bg-contrasignal-deep text-onsignal hover:bg-contrasignal'
           : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
       }`}
     >
-      {label}
+      {Icon ? (
+        <Icon
+          className={`h-[18px] w-[18px] ${iconClassName ?? ''}`}
+          aria-hidden="true"
+        />
+      ) : (
+        label
+      )}
     </button>
   );
+  // Icon-only chips carry their name in aria-label; the tooltip is the sighted
+  // equivalent, so the control is never mark-only for either audience.
+  return Icon ? <Tooltip content={label}>{button}</Tooltip> : button;
 }
 
 export function FilterBar({
@@ -205,6 +238,7 @@ export function FilterBar({
   statusFilters = DEFAULT_STATUS_FILTERS,
   statusValue,
   onStatusChange,
+  toggleFilters,
   recoveryPanel,
   actionSlot,
   hideSearchAndFilters = false,
@@ -224,6 +258,9 @@ export function FilterBar({
   statusFilters?: StatusOption[];
   statusValue: string;
   onStatusChange: (v: string) => void;
+  /** Independent on/off chips rendered after the status chips, fenced off by a
+   * divider — they narrow the status selection instead of replacing it. */
+  toggleFilters?: readonly ToggleFilter[];
   recoveryPanel?: React.ReactNode;
   /** Page-level action rendered as the first slot in the tabs wrap grid (see
    * SegmentedTabs.leadingItem). */
@@ -352,6 +389,24 @@ export function FilterBar({
                       onClick={() => onStatusChange(value)}
                     />
                   ))}
+                  {toggleFilters?.length ? (
+                    <span
+                      aria-hidden="true"
+                      className="mx-1 h-5 w-px self-center bg-line"
+                    />
+                  ) : null}
+                  {toggleFilters?.map(
+                    ({ label, active, onChange, icon, iconClassName }) => (
+                      <FilterButton
+                        key={label}
+                        label={label}
+                        active={active}
+                        onClick={() => onChange(!active)}
+                        icon={icon}
+                        iconClassName={iconClassName}
+                      />
+                    ),
+                  )}
                 </div>
                 {recoveryPanel}
               </div>
