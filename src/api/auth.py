@@ -9,7 +9,7 @@ import re
 import secrets
 import sqlite3
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 
@@ -35,6 +35,7 @@ log = get_logger(__name__)
 
 _COOKIE_MAX_AGE = 30 * 24 * 3600  # 30 days
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -390,8 +391,12 @@ async def request_magic_link(payload: EmailPayload) -> dict:
     base = settings.DASHBOARD_URL.strip().rstrip("/")
     # The sign-in token rides in this URL, so an unset DASHBOARD_URL would mail a
     # dead link and a plaintext one would mail a bearer token in the clear.
-    if not base.startswith("https://") and not base.startswith(
-        ("http://localhost", "http://127.0.0.1")
+    # Match the hostname exactly — a prefix check also passes
+    # http://localhost.attacker.example, which is a remote plaintext host.
+    parsed = urlparse(base)
+    if not (
+        parsed.scheme == "https"
+        or (parsed.scheme == "http" and parsed.hostname in _LOOPBACK_HOSTS)
     ):
         raise HTTPException(status_code=503, detail="Email sign-in is not configured")
     token = await session_store.mint_email_magic_link(email)

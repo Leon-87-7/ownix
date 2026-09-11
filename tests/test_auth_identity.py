@@ -411,6 +411,22 @@ def test_magic_link_request_does_not_leak_account_existence(identity_auth_client
     assert existing.json() == fresh.json()
 
 
+def test_magic_link_request_rejects_localhost_lookalike_host(identity_auth_client, monkeypatch):
+    from src.intake import rate_limit
+
+    rate_limit.reset()
+    sent: list[str] = []
+    monkeypatch.setattr("src.api.auth.send_magic_link_email", AsyncMock(side_effect=sent.append))
+    # A prefix check would accept this remote plaintext host and mail it a
+    # bearer token; the hostname must match a loopback address exactly.
+    monkeypatch.setattr("src.api.auth.settings.DASHBOARD_URL", "http://localhost.attacker.example")
+
+    resp = identity_auth_client.post("/api/auth/email/request", json={"email": "a@example.com"})
+    assert resp.status_code == 503
+    assert sent == []
+    rate_limit.reset()
+
+
 def test_magic_link_request_is_rate_limited(identity_auth_client, monkeypatch):
     from src.intake import rate_limit
 

@@ -16,6 +16,8 @@ from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
 
 def _feed_url() -> str | None:
     base = settings.DASHBOARD_URL.strip().rstrip("/")
@@ -45,6 +47,10 @@ def _domain_accepts_mail_sync(domain: str) -> bool:
 
 
 def _send_email_sync(message: EmailMessage) -> None:
+    # Magic-link mail carries a bearer token, so a plaintext hop off this host
+    # would leak it (CWE-319). Only a loopback relay may skip STARTTLS.
+    if not settings.SMTP_STARTTLS and settings.SMTP_HOST not in _LOOPBACK_HOSTS:
+        raise RuntimeError("SMTP_STARTTLS is required for a non-loopback SMTP relay")
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as smtp:
         if settings.SMTP_STARTTLS:
             smtp.starttls()
