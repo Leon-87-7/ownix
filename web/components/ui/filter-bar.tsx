@@ -245,6 +245,9 @@ function FilterButton({
 function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterConfig) {
   const selected = new Set(selectedIds);
   const active = selectedIds.length > 0;
+  // A single selection reads better as the tag's own name than a bare "1".
+  const singleSelectedTag =
+    selectedIds.length === 1 ? allTags.find((tag) => tag.id === selectedIds[0]) : undefined;
   const trigger = (
     <button
       type="button"
@@ -259,8 +262,8 @@ function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterCo
         className="h-[18px] w-[18px]"
         aria-hidden="true"
       />
-      Tags
-      {active && <span className="font-mono">{selectedIds.length}</span>}
+      {singleSelectedTag ? singleSelectedTag.name : 'Tags'}
+      {active && !singleSelectedTag && <span className="font-mono">{selectedIds.length}</span>}
     </button>
   );
 
@@ -286,7 +289,7 @@ function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterCo
               <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-signal">
                 {!active && <Check className="h-3.5 w-3.5" />}
               </span>
-              All tags
+              Clear All
             </DropdownMenu.CheckboxItem>
             {allTags.length > 0 && (
               <span

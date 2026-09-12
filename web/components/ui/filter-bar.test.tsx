@@ -178,7 +178,7 @@ describe('FilterBar', () => {
     expect(onChange).toHaveBeenCalledWith(['t2']);
   });
 
-  it('"All tags" clears the current selection', async () => {
+  it('"Clear All" clears the current selection', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
@@ -199,9 +199,51 @@ describe('FilterBar', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Filter by tags' }));
-    await user.click(await screen.findByRole('menuitemcheckbox', { name: 'All tags' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: 'Clear All' }));
 
     expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it('shows the tag name on the trigger when exactly one tag is selected', async () => {
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          selectedIds: ['t1'],
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Filter by tags' })).toHaveTextContent('Spec');
+  });
+
+  it('falls back to the numeric count when more than one tag is selected', async () => {
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          selectedIds: ['t1', 't2'],
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Filter by tags' })).toHaveTextContent('Tags2');
   });
 
   it('shows an empty-vocabulary message instead of hiding the trigger', async () => {
