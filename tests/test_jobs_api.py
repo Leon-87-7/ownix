@@ -368,6 +368,8 @@ async def test_get_adjacent_jobs_queries_and_payload(monkeypatch) -> None:
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
         content_type="short",
         status=None,
+        has_checklist=None,
+        tags=None,
     )
 
     prev_sql, prev_params = conn.calls[0]
@@ -380,6 +382,34 @@ async def test_get_adjacent_jobs_queries_and_payload(monkeypatch) -> None:
     assert prev_params == [1, "short", "2026-07-04 09:00:00", "2026-07-04 09:00:00", "j2"]
     assert next_params == prev_params
     assert response == {"previous_id": "older", "next_id": None}
+
+
+@pytest.mark.asyncio
+async def test_get_adjacent_jobs_honors_checklist_and_tag_scope(monkeypatch) -> None:
+    """Prev/next must narrow the same way list_jobs does, or walking off a
+    checklist- or tag-filtered feed lands on a job outside it (Codex review,
+    PR #626)."""
+    conn = _AdjacentConn([None, None])
+    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+
+    async def _fake_get_owned_job(job_id, _request):
+        return {"id": job_id, "created_at": "2026-07-04 09:00:00"}
+
+    monkeypatch.setattr(jobs, "get_owned_job", _fake_get_owned_job)
+
+    await jobs.get_adjacent_jobs(
+        "j2",
+        SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        content_type=None,
+        status=None,
+        has_checklist=True,
+        tags="t1,t2",
+    )
+
+    prev_sql, prev_params = conn.calls[0]
+    assert "checklists_generated_at IS NOT NULL" in prev_sql
+    assert "job_tags jt" in prev_sql and "link_tags lt" in prev_sql
+    assert prev_params[:3] == [1, "t1", "t2"]
 
 
 def test_list_jobs_order_matches_adjacent_tiebreak() -> None:

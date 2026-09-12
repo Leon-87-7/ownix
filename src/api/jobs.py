@@ -343,6 +343,12 @@ async def resolve_thumbnail(
     return None, None
 
 
+def _parse_tag_ids(tags: str | None) -> list[str]:
+    """Comma-separated tag-id list -> list, shared by list_jobs and
+    get_adjacent_jobs so the two can't parse the same query param differently."""
+    return [t for t in (tags or "").split(",") if t]
+
+
 def _job_scope_where(
     chat_id: int,
     content_type: str | None,
@@ -353,9 +359,10 @@ def _job_scope_where(
     """Feed-scope filter shared by list_jobs and get_adjacent_jobs — the two must
     agree on what's visible or prev/next navigation drifts from the feed.
 
-    *has_checklist* is feed-only (prev/next leaves it None): it narrows to jobs
-    that already carry a generated checklist, which is how the feed answers
-    "what have I actually turned into something?" without scrolling for badges.
+    *has_checklist* narrows to jobs that already carry a generated checklist,
+    which is how the feed answers "what have I actually turned into something?"
+    without scrolling for badges. Both callers pass through whatever scope the
+    Feed had active, so prev/next never walks outside a narrowed feed.
     """
     conditions = ["chat_id = ?", "url NOT LIKE 'email_digest:%'"]
     params: list = [chat_id]
@@ -409,7 +416,7 @@ async def list_jobs(
     """
     chat_id: int = request.state.user["id"]
     offset = (page - 1) * limit
-    tag_ids = [t for t in (tags or "").split(",") if t]
+    tag_ids = _parse_tag_ids(tags)
 
     where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
@@ -609,17 +616,25 @@ async def get_adjacent_jobs(
     request: Request,
     content_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    has_checklist: bool | None = Query(default=None),
+    tags: str | None = Query(default=None),
 ) -> dict[str, str | None]:
     """Return neighboring job IDs for the caller within an optional Feed scope.
 
     Semantics are chronological by design: previous_id = closest OLDER job,
     next_id = closest NEWER job ("Next →" moves forward in time, not down the
     newest-first feed list). Won't-fix suggestions to invert this.
+
+    Takes the same scope params as list_jobs (content_type/status/has_checklist/
+    tags) so walking Previous/Next never lands outside the feed the user had
+    narrowed — see _job_scope_where.
     """
     job = await get_owned_job(job_id, request)
     chat_id: int = request.state.user["id"]
 
-    where, params = _job_scope_where(chat_id, content_type, status)
+    where, params = _job_scope_where(
+        chat_id, content_type, status, has_checklist, _parse_tag_ids(tags)
+    )
 
     created_at = job["created_at"]
     async with database.connection() as conn:

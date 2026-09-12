@@ -43,6 +43,7 @@ import {
   buildMarkdown,
   parseLinks,
   jobScopeQuery,
+  adjacentScopeQuery,
   feedScopeQuery,
   buildJobHref,
   type FeedScope,
@@ -377,17 +378,6 @@ function JobHeader({
   const searchParams = useSearchParams();
   const contentType = searchParams.get('content_type') ?? undefined;
   const status = searchParams.get('status') ?? undefined;
-  // Two vocabularies, deliberately: /api/jobs/:id/adjacent takes content_type
-  // and knows nothing about the Feed-only narrowings, while /feed reads `type`
-  // and needs all of them. scopeQuery drives the API call; feedScope drives the
-  // links back out.
-  const scopeQuery = useMemo(
-    () =>
-      new URLSearchParams(
-        jobScopeQuery({ contentType, status }),
-      ).toString(),
-    [contentType, status],
-  );
   const feedScope: FeedScope = useMemo(
     () => ({
       contentType,
@@ -397,6 +387,14 @@ function JobHeader({
       tags: searchParams.get('tags')?.split(',').filter(Boolean) ?? [],
     }),
     [contentType, status, searchParams],
+  );
+  // Two vocabularies, deliberately: /api/jobs/:id/adjacent takes the API's
+  // param names (has_checklist, tags) while /feed reads its own (checklist,
+  // tags). Both read off the same feedScope, so prev/next can't drift from
+  // the scope Back would restore.
+  const scopeQuery = useMemo(
+    () => new URLSearchParams(adjacentScopeQuery(feedScope)).toString(),
+    [feedScope],
   );
   const [adjacent, setAdjacent] = useState<AdjacentJobs>({
     previous_id: null,

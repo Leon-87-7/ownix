@@ -32,6 +32,17 @@ export const SHORT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: 
 ]
 
 
+/** Every narrowing the Feed can hold. Kept here beside `jobScopeQuery` because
+ * the two describe the same state in two vocabularies: the job APIs take
+ * `content_type`, the Feed reads its own back as `type`. Not interchangeable. */
+export interface FeedScope {
+  contentType?: string
+  status?: string
+  query?: string
+  checklistOnly?: boolean
+  tags?: string[]
+}
+
 /** Single source of truth for the Feed-scope query params (#309): card links
  * write them, the detail page reads them back for its adjacent lookup. */
 export function jobScopeQuery(scope: {
@@ -44,15 +55,19 @@ export function jobScopeQuery(scope: {
   }
 }
 
-/** Every narrowing the Feed can hold. Kept here beside `jobScopeQuery` because
- * the two describe the same state in two vocabularies: the job APIs take
- * `content_type`, the Feed reads its own back as `type`. Not interchangeable. */
-export interface FeedScope {
-  contentType?: string
-  status?: string
-  query?: string
-  checklistOnly?: boolean
-  tags?: string[]
+/** The /adjacent lookup's full scope: everything jobScopeQuery sends plus
+ * has_checklist/tags, in the job APIs' own param names. Kept separate from
+ * jobScopeQuery (rather than widening it) because jobScopeQuery also feeds
+ * buildJobHref, which already writes checklist/tags in the Feed's vocabulary
+ * via feedOnlyParams — adding them here too would just duplicate/dead-param
+ * that URL. Prev/next needs the full scope or it can walk outside a feed
+ * narrowed by tag or checklist filters. */
+export function adjacentScopeQuery(scope: FeedScope): Record<string, string> {
+  return {
+    ...jobScopeQuery(scope),
+    ...(scope.checklistOnly ? { has_checklist: 'true' } : {}),
+    ...(scope.tags?.length ? { tags: scope.tags.join(',') } : {}),
+  }
 }
 
 /** Serializes a FeedScope into the params `/feed` reads on arrival, so a
