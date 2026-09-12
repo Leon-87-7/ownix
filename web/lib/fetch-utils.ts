@@ -96,6 +96,7 @@ export async function apiPost<T>(
 ): Promise<ApiResult<T>> {
   let res: Response;
   try {
+    // nosemgrep -- same-origin relative API path built by the caller, not user input
     res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

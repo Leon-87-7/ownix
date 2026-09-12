@@ -7,5 +7,7 @@ export function downloadMarkdownFile(filename: string, content: string): void {
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in Firefox — click() queues
+  // the fetch of the blob rather than reading it inline. Defer to the next task.
+  setTimeout(() => URL.revokeObjectURL(url));
 }

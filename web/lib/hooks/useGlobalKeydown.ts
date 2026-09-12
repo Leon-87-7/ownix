@@ -1,6 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+
+// `useLayoutEffect` warns when React renders on the server, and there are no
+// keystrokes there anyway — fall back to the passive effect during SSR.
+const useLatestRefEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** Binds one window `keydown` listener for the life of the component and always
  * calls the latest `handler`.
@@ -15,10 +19,10 @@ export function useGlobalKeydown(
 ): void {
   const handlerRef = useRef(handler);
   // Assigned in an effect rather than during render (refs are not render
-  // state). Effects run in declaration order on every commit, so the ref is
-  // refreshed before the listener below can be reached by a keystroke — those
-  // arrive asynchronously, never between a render and its own effects.
-  useEffect(() => {
+  // state), and in a *layout* effect specifically: React does not guarantee a
+  // passive effect has flushed before the next browser input, so a keydown
+  // landing in that gap would call the previous render's handler.
+  useLatestRefEffect(() => {
     handlerRef.current = handler;
   });
 

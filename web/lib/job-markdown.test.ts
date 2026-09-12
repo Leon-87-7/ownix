@@ -33,7 +33,8 @@ describe('downloadMarkdownFile', () => {
     vi.restoreAllMocks()
   })
 
-  it('creates an object URL, clicks a download anchor with the given filename, then revokes it', () => {
+  it('creates an object URL, clicks a download anchor with the given filename, then revokes it', async () => {
+    vi.useFakeTimers()
     downloadMarkdownFile('job-notes.md', '# Notes')
 
     expect(URL.createObjectURL).toHaveBeenCalledOnce()
@@ -46,7 +47,12 @@ describe('downloadMarkdownFile', () => {
     expect(anchor.download).toBe('job-notes.md')
     expect(anchor.href).toContain('blob:download')
 
+    // Deferred to the next task — revoking inline cancels the download in
+    // Firefox, so it must NOT have fired by the time click() returns.
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:download')
+    vi.useRealTimers()
   })
 })
 

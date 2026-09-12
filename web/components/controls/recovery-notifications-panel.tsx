@@ -33,7 +33,11 @@ export function RecoveryNotificationsPanel() {
       <p className="ml-7 mt-1.5 text-xs text-muted">
         Send a Telegram message when a stuck job is recovered from the Feed.
       </p>
-      {error && <p className="ml-7 mt-2 text-sm text-status-error">{error}</p>}
+      {error && (
+        <p role="alert" className="ml-7 mt-2 text-sm text-status-error">
+          {error}
+        </p>
+      )}
     </>
   );
 }

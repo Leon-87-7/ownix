@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, Download, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -74,6 +74,14 @@ export function ChecklistsSection({ job }: { job: JobDetail }) {
   const [markdown, setMarkdown] = useState(job.checklists_md);
   // Tracked only to pin the delete to the checklist on screen (409 if it moved).
   const [generatedAt, setGeneratedAt] = useState(job.checklists_generated_at);
+
+  // `useFetchDetail.reload()` swaps `job` in place without remounting this
+  // section, so the state above would keep showing the pre-refresh checklist and
+  // send its stale `generatedAt` to `remove` — which the server rejects with 409.
+  useEffect(() => {
+    setMarkdown(job.checklists_md);
+    setGeneratedAt(job.checklists_generated_at);
+  }, [job.id, job.checklists_md, job.checklists_generated_at]);
 
   if (
     !['short', 'long'].includes(job.content_type) ||

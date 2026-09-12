@@ -41,6 +41,12 @@ export type { IntakeActionKey } from '@/components/feed/command-launcher';
 // unrelated keystroke, not the second half of the chord.
 const GOTO_CHORD_TIMEOUT_MS = 600;
 
+// Keys whose own character requires Shift on a standard layout (`*` is Shift+8
+// on US/UK/most EU). Shift there is how you type the key, not an extra chord,
+// so the no-modifiers gate has to let it through — otherwise only a numpad `*`
+// ever reaches the handler, and the palette advertises a dead shortcut.
+const SHIFTED_KEYS = new Set(['*']);
+
 interface SubmitJobContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -213,7 +219,10 @@ export function SubmitJobProvider({ children }: { children: ReactNode }) {
   useGlobalKeydown((event) => {
     const key = event.key.toLowerCase();
     const noMods =
-      !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      (!event.shiftKey || SHIFTED_KEYS.has(key));
 
     // Chord bookkeeping runs on every keydown (not just the shortcut-eligible
     // branch below) so any interrupting key — modified, or typed into a field —

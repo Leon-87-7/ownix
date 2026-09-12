@@ -380,6 +380,54 @@ describe('FeedPage', () => {
     );
   });
 
+  // The adoption/projection race: both effects run in the same commit, adoption
+  // first. It only *queues* the incoming scope, so the projection effect still
+  // sees the previous one — and would replace() the URL the user just navigated
+  // to back to the one they left.
+  it('adopts an external /feed navigation instead of restoring the previous scope', () => {
+    navigationMock.searchParams = new URLSearchParams('status=done&q=skill');
+    const { rerender } = render(<FeedTree />);
+    navigationMock.replace.mockClear();
+
+    // Sidebar "Feed" click from an already-filtered feed: new URL, no remount.
+    navigationMock.searchParams = new URLSearchParams();
+    rerender(<FeedTree />);
+
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+    expect(mockUseFeedData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: '', query: '' }),
+      false,
+    );
+  });
+
+  // Every replace() is fed back as the next searchParams, the way App Router
+  // publishes it — so a scope that never settles shows up as a replace() loop
+  // rather than passing on the first render.
+  it('settles the URL after an external navigation instead of ping-ponging', () => {
+    navigationMock.searchParams = new URLSearchParams('status=done&q=skill');
+    const { rerender } = render(<FeedTree />);
+
+    // Navigate to a URL that still needs canonicalizing (?google= is transient),
+    // so there is a real projection to converge on.
+    navigationMock.searchParams = new URLSearchParams(
+      'type=short&checklist=1&google=denied',
+    );
+    navigationMock.replace.mockClear();
+    rerender(<FeedTree />);
+
+    for (let i = 0; i < 5; i += 1) {
+      const call = navigationMock.replace.mock.calls.at(-1);
+      if (!call) break; // nothing new to publish — the URL has settled
+      navigationMock.replace.mockClear();
+      navigationMock.searchParams = new URLSearchParams(
+        (call[0] as string).split('?')[1] ?? '',
+      );
+      rerender(<FeedTree />);
+    }
+
+    expect(navigationMock.searchParams.toString()).toBe('type=short&checklist=1');
+  });
+
   it('writes the search query to the URL so Back can restore it', () => {
     render(<FeedTree />);
     fireEvent.change(screen.getByLabelText('Search by title or URL'), {

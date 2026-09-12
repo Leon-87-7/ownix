@@ -7,7 +7,7 @@ import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { CardAction, CardCopyAction } from '@/components/ui/card-action';
 import { isSafeHttpUrl } from '@/lib/url-utils';
 import { downloadMarkdownFile } from '@/lib/download';
-import { jobScopeQuery } from '@/lib/feed-scope';
+import { jobUrlQuery, parseJobScope } from '@/lib/feed-scope';
 import type { JobDetail } from '@/lib/hooks/useJobDetail';
 
 /** Transcript preview card - mirrors the doc-parser detail page's output cards
@@ -26,10 +26,7 @@ export function TranscriptCard({
   const scopeQuery = useMemo(
     () =>
       new URLSearchParams(
-        jobScopeQuery({
-          contentType: searchParams.get('content_type') ?? undefined,
-          status: searchParams.get('status') ?? undefined,
-        }),
+        jobUrlQuery(parseJobScope(new URLSearchParams(searchParams))),
       ).toString(),
     [searchParams],
   );

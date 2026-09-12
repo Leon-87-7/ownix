@@ -178,13 +178,19 @@ export function TagsPanel() {
             onDelete={handleDelete}
           />
           {deleteError && (
-            <p className="mt-2 text-xs text-status-error">{deleteError}</p>
+            <p role="alert" className="mt-2 text-xs text-status-error">
+              {deleteError}
+            </p>
           )}
         </div>
       )}
       <div className="space-y-2">
         {loading && <p className="text-sm text-body">Loading tags…</p>}
-        {fetchError && <p className="text-sm text-status-error">{fetchError}</p>}
+        {fetchError && (
+          <p role="alert" className="text-sm text-status-error">
+            {fetchError}
+          </p>
+        )}
         {!loading && !fetchError && tags.length === 0 && (
           <p className="text-sm text-muted">No tags yet. Create one above.</p>
         )}
@@ -202,7 +208,11 @@ export function TagsPanel() {
             />
           ))}
         </ul>
-        {pinError && <p className="text-xs text-status-error">{pinError}</p>}
+        {pinError && (
+          <p role="alert" className="text-xs text-status-error">
+            {pinError}
+          </p>
+        )}
       </div>
     </div>
   );

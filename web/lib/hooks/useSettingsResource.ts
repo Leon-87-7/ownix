@@ -54,6 +54,7 @@ export function useSettingsResource<T extends object>(
 
   useEffect(() => {
     const controller = new AbortController();
+    // nosemgrep -- same-origin relative API path; every call site passes a static literal
     fetch(url, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Failed to load ${errorLabel}`);

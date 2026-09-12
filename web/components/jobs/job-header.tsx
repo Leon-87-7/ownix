@@ -237,7 +237,13 @@ export function JobHeader({
         ) : (
           <button
             type="button"
-            onClick={() => setEditingTitle(true)}
+            onClick={() => {
+              // Escape unmounts the focused input, and Firefox/Safari fire no
+              // `blur` for a removed element — so the flag can still be set from
+              // the previous edit and would swallow this session's first save.
+              skipBlurSaveRef.current = false;
+              setEditingTitle(true);
+            }}
             disabled={restricted}
             aria-label="Edit title"
             className="group flex flex-1 items-start gap-1.5 break-all text-left text-xl font-semibold leading-snug text-ink disabled:cursor-default"

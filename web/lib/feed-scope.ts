@@ -117,6 +117,15 @@ export function parseJobScope(params: URLSearchParams): FeedScope {
 export function buildJobHref(id: string, scope: FeedScope) {
   return {
     pathname: `/jobs/${id}`,
-    query: { ...jobScopeQuery(scope), ...feedOnlyParams(scope) },
+    query: jobUrlQuery(scope),
   };
+}
+
+/** The full param set a job-detail URL carries — `buildJobHref`'s query, on its
+ * own, for the links that hop *between* job pages (detail ↔ transcript). They
+ * have to write the same set or a round trip silently drops `q`/checklist/tags
+ * and lands the user back in a wider feed than they left. Inverse:
+ * `parseJobScope`. */
+export function jobUrlQuery(scope: FeedScope): Record<string, string> {
+  return { ...jobScopeQuery(scope), ...feedOnlyParams(scope) };
 }

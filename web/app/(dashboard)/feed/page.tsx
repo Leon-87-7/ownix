@@ -281,6 +281,9 @@ function FeedPageContent() {
   // republishes our own `replace` back to us as a `searchParams` change, which
   // is indistinguishable from a navigation unless we remember what we sent.
   const ourWritesRef = useRef<Set<string>>(new Set());
+  // Set for exactly the commit in which an incoming URL was adopted, so the
+  // projection effect below can sit that one out. See its comment for why.
+  const adoptingRef = useRef(false);
 
   // Deliberately keyed on `searchParams` alone. Keying it on the scope too
   // would make our own in-flight narrowing look like an outside navigation and
@@ -291,17 +294,31 @@ function FeedPageContent() {
     // Someone navigated to a different /feed URL without remounting us — the
     // sidebar's own "Feed" link, clicked from an already-filtered feed. Adopt
     // it whole, rather than the two-of-six fields the old sync effects covered.
+    adoptingRef.current = true;
     setScope(clampScope(parseFeedScope(searchParams), restricted));
   }, [searchParams, restricted]);
 
   useEffect(() => {
+    // The adoption effect above only *queued* the incoming scope — `scope`, and
+    // so `canonicalQuery`, still hold the previous one for the rest of this
+    // commit. Projecting that now would `router.replace` the URL the user just
+    // navigated to back to the one they left. Sit out the one commit; the
+    // adopted scope re-runs this effect and projects its own canonical form.
+    if (adoptingRef.current) {
+      adoptingRef.current = false;
+      return;
+    }
     if (canonicalQuery === searchParams.toString()) return;
     ourWritesRef.current.add(canonicalQuery);
     router.replace(
       canonicalQuery ? `${pathname}?${canonicalQuery}` : pathname,
       { scroll: false },
     );
-  }, [canonicalQuery, searchParams, pathname, router]);
+    // `scope` is a dep even though `canonicalQuery` is derived from it: adopting
+    // a URL that canonicalizes to the same string leaves canonicalQuery
+    // value-equal, so without the object identity this effect would never re-run
+    // after the commit it just sat out, and the projection would be lost.
+  }, [scope, canonicalQuery, searchParams, pathname, router]);
 
   const setFeedScope = useCallback(
     (patch: Partial<FeedScope>) => {

@@ -26,7 +26,10 @@ export function Section({
       ref={ref}
       open={defaultOpen}
       onToggle={() => {
-        ref.current?.scrollIntoView?.({
+        // `toggle` fires on close too — scrolling then yanks the page while the
+        // user is collapsing a section.
+        if (!ref.current?.open) return;
+        ref.current.scrollIntoView?.({
           behavior: reducedMotion ? 'auto' : 'smooth',
           block: 'nearest',
         });
