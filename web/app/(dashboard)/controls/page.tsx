@@ -34,11 +34,13 @@ const VOICE_SELECT_CLASS =
 
 function TagPill({
   tag,
+  count,
   editing,
   onClick,
   onTogglePin,
 }: {
   tag: Tag;
+  count?: number;
   editing: boolean;
   onClick: () => void;
   onTogglePin: () => void;
@@ -59,6 +61,16 @@ function TagPill({
           {tag.name}
         </button>
       </Tooltip>
+      {count !== undefined && (
+        <Tooltip content={`${count} ${count === 1 ? "job" : "jobs"} tagged`}>
+          <span
+            aria-label={`${count} ${count === 1 ? "job" : "jobs"} tagged`}
+            className="font-mono text-mono-label tabular-nums text-muted"
+          >
+            {count}
+          </span>
+        </Tooltip>
+      )}
       <Tooltip content={tag.pinned ? "Unpin from GoTo" : "Pin for GoTo"}>
         <button
           type="button"
@@ -95,8 +107,18 @@ function TagsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | undefined>();
   const [pinError, setPinError] = useState<string | undefined>();
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   const editingTag = tags.find((t) => t.id === editingId) ?? null;
   const editPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/jobs/stats")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { by_tag?: Record<string, number> } | null) => {
+        if (data?.by_tag) setTagCounts(data.by_tag);
+      })
+      .catch(() => {});
+  }, []);
 
   // Detached edit panel can render off-screen (fixed slot, not inline at the
   // clicked pill), so pull it into view whenever the edit target changes.
@@ -196,6 +218,7 @@ function TagsTab() {
             <TagPill
               key={tag.id}
               tag={tag}
+              count={tagCounts[tag.id]}
               editing={tag.id === editingId}
               onClick={() => selectForEdit(tag.id)}
               onTogglePin={() => {
