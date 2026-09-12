@@ -114,12 +114,17 @@ function setupMocks(
     setStFilter: vi.fn(),
     checklistOnly: false,
     setChecklistOnly: vi.fn(),
+    tagFilter: [],
+    setTagFilter: vi.fn(),
+    tagCounts: {},
+    tagFilterDisabled: false,
     stats: STATS,
     jobs: JOBS,
     total: JOBS.length,
     loading: false,
     error: null,
     reload: vi.fn(),
+    preloadIndexes: new Map(),
     ...overrides,
   } as ReturnType<typeof useFeedData>);
 
@@ -727,12 +732,17 @@ describe('FeedPage', () => {
       setStFilter: vi.fn(),
       checklistOnly: false,
       setChecklistOnly: vi.fn(),
+      tagFilter: [],
+      setTagFilter: vi.fn(),
+      tagCounts: {},
+      tagFilterDisabled: false,
       stats: STATS,
       jobs: JOBS,
       total: JOBS.length,
       loading: false,
       error: null,
       reload,
+      preloadIndexes: new Map(),
     } as ReturnType<typeof useFeedData>);
     server.use(
       http.post('/api/jobs', () =>
@@ -793,12 +803,17 @@ describe('FeedPage', () => {
       setStFilter: vi.fn(),
       checklistOnly: false,
       setChecklistOnly: vi.fn(),
+      tagFilter: [],
+      setTagFilter: vi.fn(),
+      tagCounts: {},
+      tagFilterDisabled: false,
       stats: STATS,
       jobs: JOBS,
       total: JOBS.length,
       loading: false,
       error: null,
       reload,
+      preloadIndexes: new Map(),
     } as ReturnType<typeof useFeedData>;
     mockUseFeedData.mockReturnValue(feedState);
     server.use(

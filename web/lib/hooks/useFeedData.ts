@@ -77,18 +77,38 @@ async function fetchFeedServerMode(
 /**
  * Filter the full job list by content_type and status (exact match —
  * matching the server-side WHERE status = ? semantics).
+ *
+ * `tagIds` narrows with OR semantics (a job matches if it carries ANY selected
+ * tag) — client-mode only; server-mode has no backend support for this yet
+ * (job→link resolution isn't SQL-joinable, see useFeedData's serverMode gap).
  */
 function deriveJobs(
   allJobs: JobSummary[],
   ct: string,
   st: string,
   checklistOnly: boolean,
+  tagIds: string[],
 ): JobSummary[] {
   let list = allJobs;
   if (ct) list = list.filter((j) => j.content_type === ct);
   if (st) list = list.filter((j) => j.status === st);
   if (checklistOnly) list = list.filter((j) => Boolean(j.checklists_generated_at));
+  if (tagIds.length) list = list.filter((j) => j.tags?.some((t) => tagIds.includes(t.id)));
   return list;
+}
+
+/** {tag id: how many loaded jobs carry it} — powers the usage count shown per
+ * row in the tag filter dropdown. Always computed off the full unfiltered
+ * `allJobs`, not the narrowed list, so picking one tag doesn't change another
+ * tag's displayed count. */
+function deriveTagCounts(allJobs: JobSummary[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const job of allJobs) {
+    for (const tag of job.tags ?? []) {
+      counts[tag.id] = (counts[tag.id] ?? 0) + 1;
+    }
+  }
+  return counts;
 }
 
 /**
@@ -127,6 +147,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
   const [ctFilter, setCtFilter] = useState(initialContentType);
   const [stFilter, setStFilter] = useState('');
   const [checklistOnly, setChecklistOnly] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
@@ -307,14 +328,20 @@ export function useFeedData(initialContentType = '', restricted = false) {
   // -------------------------------------------------------------------------
 
   const derivedJobs = useMemo(
-    () => (serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter, checklistOnly)),
-    [serverMode, allJobs, ctFilter, stFilter, checklistOnly],
+    () =>
+      serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter, checklistOnly, tagFilter),
+    [serverMode, allJobs, ctFilter, stFilter, checklistOnly, tagFilter],
   );
 
   const derivedStats = useMemo(
     () => (serverMode ? null : deriveStats(allJobs, ctFilter)),
     [serverMode, allJobs, ctFilter],
   );
+
+  // Server mode has no way to filter by tag (see module comment on deriveJobs),
+  // so counts/selection are meaningless there too — the feed disables the
+  // trigger in that case rather than show numbers that don't affect anything.
+  const tagCounts = useMemo(() => deriveTagCounts(allJobs), [allJobs]);
 
   const preloadIndexes = useMemo(
     () => new Map(preloadJobs.map((job, index) => [job.id, index])),
@@ -337,6 +364,14 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setStFilter,
     checklistOnly,
     setChecklistOnly,
+    tagFilter,
+    setTagFilter,
+    tagCounts,
+    // ponytail: server-mode tag filtering needs a job→link SQL join that isn't
+    // practical today (jobs has no persisted link_id column — see ADR/PR notes).
+    // Exposed so the feed can disable the tag filter trigger above the
+    // client-mode job cap instead of silently no-op'ing it.
+    tagFilterDisabled: serverMode,
     stats,
     jobs,
     total,

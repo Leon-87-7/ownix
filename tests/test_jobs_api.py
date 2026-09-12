@@ -254,8 +254,12 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
         def __init__(self):
             self.calls = 0
 
-        async def execute(self, *_args, **_kwargs):
+        async def execute(self, sql="", *_args, **_kwargs):
             self.calls += 1
+            # Tag-vocabulary batch queries embedded onto the list response
+            # (issue: feed tag filter) — no tags seeded for this job.
+            if "job_tags" in sql or "link_tags" in sql:
+                return FakeCursor([])
             if self.calls == 1:
                 return FakeCursor((1,))
             return FakeCursor(

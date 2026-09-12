@@ -14,6 +14,7 @@ import {
   useSearchParams,
 } from 'next/navigation';
 import { useFeedData } from '@/lib/hooks/useFeedData';
+import { fetchVocabulary, type TagSummary } from '@/lib/hooks/useLinkTags';
 import { useFuseSearch } from '@/lib/hooks/useFuseSearch';
 import { useInFlightPolling } from '@/lib/hooks/useInFlightPolling';
 import { useBackgroundFreshness } from '@/lib/hooks/useBackgroundFreshness';
@@ -157,6 +158,10 @@ function FeedPageContent() {
     setStFilter,
     checklistOnly,
     setChecklistOnly,
+    tagFilter,
+    setTagFilter,
+    tagCounts,
+    tagFilterDisabled,
     stats,
     jobs,
     total,
@@ -165,6 +170,18 @@ function FeedPageContent() {
     reload,
     preloadIndexes,
   } = useFeedData(urlContentType, restricted);
+  // Shared module-level vocabulary cache (also used by JobCardTags), so the
+  // filter dropdown doesn't fire its own /api/controls/tags request in the
+  // common case. Re-reads on every job-list refresh (background poll, manual
+  // reload) rather than mount-only: a tag created via a card's "New tag…" menu
+  // busts the shared cache from that card's own hook instance, and this is the
+  // only way this component notices — the cache has no subscribe/broadcast,
+  // just a swapped module-level promise. Re-fetching is a cache hit (no network
+  // call) except right after such a bust, so the extra calls are free.
+  const [allTags, setAllTags] = useState<TagSummary[]>([]);
+  useEffect(() => {
+    void fetchVocabulary().then(setAllTags);
+  }, [jobs]);
   const {
     openIntake,
     openSubmitWith,
@@ -413,7 +430,9 @@ function FeedPageContent() {
     }
   };
   const showPreviewGrid = Boolean(ctFilter) || allLayout === 'grid';
-  const hasFilters = Boolean(ctFilter || stFilter || checklistOnly || query.trim());
+  const hasFilters = Boolean(
+    ctFilter || stFilter || checklistOnly || tagFilter.length || query.trim(),
+  );
   const empty = !loading && !error && displayedJobs.length === 0;
 
   const countLabel = jobCountLabel(
@@ -542,6 +561,13 @@ function FeedPageContent() {
             onChange: setChecklistOnly,
           },
         ]}
+        tagFilter={{
+          allTags,
+          counts: tagCounts,
+          selectedIds: tagFilter,
+          onChange: setTagFilter,
+          disabled: tagFilterDisabled,
+        }}
         hideSearchAndFilters={showingLinks}
         searchSlot={
           showingLinks ? (

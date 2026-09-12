@@ -3170,6 +3170,45 @@ async def batch_list_job_tags(job_ids: list[str]) -> dict[str, list[dict]]:
     return result
 
 
+async def batch_list_link_tags(link_ids: list[str]) -> dict[str, list[dict]]:
+    """Return {link_id: [tag_dicts]} for all given link IDs (absent link = empty list)."""
+    if not link_ids:
+        return {}
+    rows = await _fetch_in(
+        """SELECT lt.link_id, t.id, t.name, t.color, t.meaning, t.icon
+           FROM link_tags lt
+           JOIN tags t ON t.id = lt.tag_id
+           WHERE lt.link_id IN ({placeholders})
+           ORDER BY t.name""",
+        link_ids,
+    )
+    result: dict[str, list[dict]] = {lid: [] for lid in link_ids}
+    for row in rows:
+        lid = row.pop("link_id")
+        result[lid].append(row)
+    return result
+
+
+async def batch_list_effective_job_tags(items: list[dict]) -> dict[str, list[dict]]:
+    """Return {job_id: [tag_dicts]}, unioning job_tags with link_tags via item["link_id"].
+
+    Mirrors the frontend's useMergedTags: sweep_job_tags_to_link empties a linked
+    job's job_tags, so the union never double-counts once a job has resolved to
+    a link. Callers must resolve link_id (e.g. via _add_link_ids) first.
+    """
+    job_ids = [item["id"] for item in items]
+    link_ids = [item["link_id"] for item in items if item.get("link_id")]
+    job_tag_map = await batch_list_job_tags(job_ids)
+    link_tag_map = await batch_list_link_tags(link_ids)
+    result: dict[str, list[dict]] = {}
+    for item in items:
+        tags = job_tag_map.get(item["id"], [])
+        if item.get("link_id"):
+            tags = tags + link_tag_map.get(item["link_id"], [])
+        result[item["id"]] = tags
+    return result
+
+
 async def attach_job_tag(job_id: str, tag_id: str) -> bool:
     """Attach *tag_id* to *job_id*. Idempotent. Returns True."""
     await _execute(

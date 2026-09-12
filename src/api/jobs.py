@@ -411,6 +411,12 @@ async def list_jobs(
         items.append(item)
     await _add_link_ids(items, chat_id)
 
+    # Embedded so the feed's client-mode tag filter can match in-memory without
+    # a per-card fetch (mirrors the frontend's useMergedTags job_tags/link_tags union).
+    tags_by_job = await database.batch_list_effective_job_tags(items)
+    for item in items:
+        item["tags"] = tags_by_job.get(item["id"], [])
+
     return {
         "items": items,
         "total": total,

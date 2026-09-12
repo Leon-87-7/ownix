@@ -6,6 +6,7 @@ import { GeneratedBadge } from "@/components/ui/generated-badge";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
 import { buildJobHref } from "@/lib/job-detail-utils";
+import type { TagSummary } from "@/lib/hooks/useLinkTags";
 
 export interface JobSummary {
   id: string;
@@ -18,6 +19,10 @@ export interface JobSummary {
   thumbnail_kind?: "landscape" | "portrait" | null;
   checklists_generated_at?: string | null;
   link_id?: string;
+  /** Effective tags (job_tags ∪ link_tags), embedded by GET /api/jobs for the
+   * feed's client-mode tag filter — read-only snapshot, not kept in sync with
+   * live attach/detach (JobCardTags fetches its own copy for that). */
+  tags?: TagSummary[];
 }
 
 interface JobCardProps {

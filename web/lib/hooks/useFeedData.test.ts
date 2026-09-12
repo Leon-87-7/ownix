@@ -208,6 +208,69 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
     expect(result.current.stats?.total).toBe(2);
   });
 
+  it('filters jobs by tag client-side with OR semantics across selected tags', async () => {
+    const taggedJobs = {
+      items: [
+        { id: 's1', content_type: 'short', status: 'done', tags: [{ id: 't1', name: 'A' }] },
+        { id: 's2', content_type: 'short', status: 'done', tags: [{ id: 't2', name: 'B' }] },
+        { id: 's3', content_type: 'short', status: 'done', tags: [] },
+      ],
+      total: 3,
+    };
+    stubFetch((url) => url.includes('/stats')
+      ? { ok: true, body: STATS }
+      : { ok: true, body: taggedJobs });
+
+    const result = await renderLoadedFeed();
+    expect(result.current.jobs).toHaveLength(3);
+
+    act(() => result.current.setTagFilter(['t1', 't2']));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(result.current.jobs.map((j) => j.id).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('an empty tag filter selection (All tags) does not narrow the list', async () => {
+    const taggedJobs = {
+      items: [
+        { id: 's1', content_type: 'short', status: 'done', tags: [{ id: 't1', name: 'A' }] },
+        { id: 's2', content_type: 'short', status: 'done', tags: [] },
+      ],
+      total: 2,
+    };
+    stubFetch((url) => url.includes('/stats')
+      ? { ok: true, body: STATS }
+      : { ok: true, body: taggedJobs });
+
+    const result = await renderLoadedFeed();
+
+    expect(result.current.tagFilter).toEqual([]);
+    expect(result.current.jobs).toHaveLength(2);
+  });
+
+  it('tagCounts reflects usage across the full unfiltered job list, unaffected by the active tag selection', async () => {
+    const taggedJobs = {
+      items: [
+        { id: 's1', content_type: 'short', status: 'done', tags: [{ id: 't1', name: 'A' }] },
+        { id: 's2', content_type: 'long', status: 'done', tags: [{ id: 't1', name: 'A' }, { id: 't2', name: 'B' }] },
+        { id: 's3', content_type: 'short', status: 'pending', tags: [{ id: 't2', name: 'B' }] },
+      ],
+      total: 3,
+    };
+    stubFetch((url) => url.includes('/stats')
+      ? { ok: true, body: STATS }
+      : { ok: true, body: taggedJobs });
+
+    const result = await renderLoadedFeed();
+    expect(result.current.tagCounts).toEqual({ t1: 2, t2: 2 });
+
+    // Narrowing by content_type/status must not change the usage counts —
+    // they describe the tag vocabulary, not the current view.
+    act(() => result.current.setCtFilter('short'));
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.tagCounts).toEqual({ t1: 2, t2: 2 });
+  });
+
   it('reload() does not set loading=true (silent background refresh)', async () => {
     stubFeedOk();
     const result = await renderLoadedFeed();
@@ -485,5 +548,24 @@ describe('useFeedData — server mode (total > 1000)', () => {
     const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
     const jobsCall = calls.find((u) => u.includes('/api/jobs') && !u.includes('/stats'))!;
     expect(jobsCall).toContain('limit=1000');
+  });
+
+  it('exposes tagFilterDisabled=true (no SQL join to support job→link tag filtering past the client-mode cap)', async () => {
+    const bigJobs = {
+      items: Array.from({ length: 50 }, (_, i) => ({
+        id: `j${i}`,
+        content_type: 'short',
+        status: 'done',
+      })),
+      total: 1001,
+    };
+    const bigStats = { total: 1001, by_status: { done: 1001 }, by_content_type: { short: 1001 } };
+    stubFetch((url) => url.includes('/stats')
+      ? { ok: true, body: bigStats }
+      : { ok: true, body: bigJobs });
+
+    const result = await renderLoadedFeed();
+
+    expect(result.current.tagFilterDisabled).toBe(true);
   });
 });

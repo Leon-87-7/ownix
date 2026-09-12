@@ -103,3 +103,26 @@ def test_carrier_jobs_never_receive_link_ids_or_sweep_tags(tag_db, content_type)
     assert [tag["id"] for tag in _run(database.list_link_tags("link-existing"))] == [
         "tag-link"
     ]
+
+
+@pytest.mark.parametrize("content_type", ["article", "repo"])
+def test_batch_effective_job_tags_unions_swept_link_tags(tag_db, content_type):
+    """Once a link-backed job sweeps to link_tags, the feed's tag filter must
+    still see both tags (its own + the link's) or it silently loses coverage
+    on the exact content types builders tag most."""
+    item, _ = _run(_seed(content_type))
+    _run(_add_link_ids([item], 7))
+
+    result = _run(database.batch_list_effective_job_tags([item]))
+
+    assert {tag["id"] for tag in result[item["id"]]} == {"tag-job", "tag-link"}
+
+
+@pytest.mark.parametrize("content_type", ["short", "long", "photo", "document"])
+def test_batch_effective_job_tags_reads_job_tags_for_carrier_types(tag_db, content_type):
+    item, _ = _run(_seed(content_type))
+    _run(_add_link_ids([item], 7))
+
+    result = _run(database.batch_list_effective_job_tags([item]))
+
+    assert [tag["id"] for tag in result[item["id"]]] == ["tag-job"]
