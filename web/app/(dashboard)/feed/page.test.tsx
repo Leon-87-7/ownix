@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@/test/render';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MockInstance } from 'vitest';
 import type { JobSummary } from '@/components/feed/job-card';
 import { AppHeader } from '@/components/shell/app-header';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
@@ -142,7 +143,7 @@ async function openRecoveryActions() {
   );
 }
 
-let fetchSpy: ReturnType<typeof vi.spyOn>;
+let fetchSpy: MockInstance<typeof fetch>;
 
 beforeEach(() => {
   window.localStorage.clear();

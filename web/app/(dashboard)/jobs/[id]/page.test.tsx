@@ -735,7 +735,7 @@ describe('JobDetailPage', () => {
   it('submits a named recipe and optimistically marks the job enriching', async () => {
     const reload = vi.fn().mockResolvedValue(undefined);
     mockUseJobDetail.mockImplementation(() => {
-      const [job, setData] = useState<JobDetail>({
+      const [job, setData] = useState<JobDetail | null>({
         ...JOB,
         status: 'transcript_done',
       } as JobDetail);

@@ -64,7 +64,7 @@ describe("usePressFeedback", () => {
 
   it("suppresses feedback when visual motion is disabled", () => {
     installMedia(true);
-    publishAccessibilitySettings({ visual_motion: false, haptic_motion: true });
+    publishAccessibilitySettings({ visual_motion: false, haptic_motion: true, voice_uri: null });
     const animate = vi.fn();
     const { result } = renderHook(() => usePressFeedback());
     act(() =>
@@ -75,7 +75,7 @@ describe("usePressFeedback", () => {
 
   it("lets an explicit stored preference override the live OS reduced-motion default", () => {
     installMedia(true, true);
-    publishAccessibilitySettings({ visual_motion: true, haptic_motion: true });
+    publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: null });
     const animate = vi.fn();
     const { result } = renderHook(() => usePressFeedback());
     act(() =>
@@ -96,7 +96,7 @@ describe("usePressFeedback", () => {
 
   it("fires exactly one animation trigger path for a single touch gesture", () => {
     installMedia(true);
-    publishAccessibilitySettings({ visual_motion: true, haptic_motion: true });
+    publishAccessibilitySettings({ visual_motion: true, haptic_motion: true, voice_uri: null });
     const animate = vi.fn();
     const target = { animate } as unknown as HTMLElement;
     const { result } = renderHook(() => usePressFeedback());

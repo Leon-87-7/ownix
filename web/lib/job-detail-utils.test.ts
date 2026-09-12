@@ -494,7 +494,7 @@ describe('buildMarkdown', () => {
   })
 
   it('omits a field whose value is undefined', () => {
-    const md = buildMarkdown({ ...baseJob, ai_topic: undefined } as JobDetail)
+    const md = buildMarkdown({ ...baseJob, ai_topic: undefined } as unknown as JobDetail)
     expect(md).not.toContain('## Topic')
   })
 

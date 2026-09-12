@@ -13,9 +13,10 @@ describe('TagForm color picker', () => {
       />,
     );
     const grid = container.querySelector('.grid-cols-6');
+    expect(grid).toBeTruthy();
     // +1 for the custom-color swatch, which now fills the grid's last slot.
-    expect(grid?.children.length).toBe(PRESET_COLORS.length + 1);
-    expect(grid?.children.length % 6).toBe(0);
+    expect(grid!.children.length).toBe(PRESET_COLORS.length + 1);
+    expect(grid!.children.length % 6).toBe(0);
   });
 
   it('lets a custom color (outside the presets) be picked via the native color input', () => {

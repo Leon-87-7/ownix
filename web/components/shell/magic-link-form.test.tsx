@@ -17,7 +17,7 @@ function typeEmailAndSubmit(email: string) {
 describe('MagicLinkForm', () => {
   it('posts the address and shows the server message', async () => {
     const fetchMock = vi.fn(
-      async () =>
+      async (..._args: unknown[]) =>
         new Response(
           JSON.stringify({ ok: true, message: 'If that address can receive email, a sign-in link was sent.' }),
         ),
