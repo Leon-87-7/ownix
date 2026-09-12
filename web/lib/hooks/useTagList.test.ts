@@ -2,6 +2,10 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useTagList } from './useTagList';
+import { fetchVocabulary } from './useLinkTags';
+
+vi.mock('./useLinkTags', () => ({ fetchVocabulary: vi.fn() }));
+const mockFetchVocabulary = vi.mocked(fetchVocabulary);
 
 const TAGS = [{ id: 't1', name: 'alpha', meaning: '', color: '#fff' }];
 
@@ -13,7 +17,10 @@ function stubMethodFetch(method: string, resp: { ok: boolean; status: number; bo
       : ({ ok: true, status: 200, json: async () => TAGS }) as Response));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  mockFetchVocabulary.mockClear();
+});
 
 /** Render the hook and wait for the initial tag list to load. */
 async function renderLoadedTags() {
@@ -38,23 +45,34 @@ describe('useTagList', () => {
     await expect(
       act(() => result.current.createTag({ name: 'alpha', meaning: '', color: '#fff' })),
     ).rejects.toThrow('Tag name already exists');
+    expect(mockFetchVocabulary).not.toHaveBeenCalled();
   });
 
-  it('updateTag merges the server row into state', async () => {
+  it('createTag invalidates the shared tag vocabulary cache on success', async () => {
+    stubMethodFetch('POST', { ok: true, status: 201, body: { id: 't2', name: 'beta', meaning: '', color: '#000' } });
+    const result = await renderLoadedTags();
+
+    await act(() => result.current.createTag({ name: 'beta', meaning: '', color: '#000' }));
+    expect(mockFetchVocabulary).toHaveBeenCalledWith(true);
+  });
+
+  it('updateTag merges the server row into state and invalidates the vocabulary cache', async () => {
     const updated = { id: 't1', name: 'beta', meaning: 'm', color: '#000' };
     stubMethodFetch('PUT', { ok: true, status: 200, body: updated });
     const result = await renderLoadedTags();
 
     await act(() => result.current.updateTag('t1', { name: 'beta', meaning: 'm', color: '#000' }));
     expect(result.current.tags[0].name).toBe('beta');
+    expect(mockFetchVocabulary).toHaveBeenCalledWith(true);
   });
 
-  it('deleteTag removes the tag on 204', async () => {
+  it('deleteTag removes the tag on 204 and invalidates the vocabulary cache', async () => {
     stubMethodFetch('DELETE', { ok: true, status: 204 });
     const result = await renderLoadedTags();
 
     await act(() => result.current.deleteTag('t1'));
     expect(result.current.tags).toHaveLength(0);
+    expect(mockFetchVocabulary).toHaveBeenCalledWith(true);
   });
 
   it('toggleTagPinned POSTs to pin and flips local state', async () => {
@@ -71,5 +89,8 @@ describe('useTagList', () => {
 
     await act(() => result.current.toggleTagPinned('t1', false));
     expect(result.current.tags[0].pinned).toBe(false);
+    // Pinned state isn't part of the shared TagSummary vocabulary, so pinning
+    // shouldn't trigger a wasted refetch of it.
+    expect(mockFetchVocabulary).not.toHaveBeenCalled();
   });
 });
