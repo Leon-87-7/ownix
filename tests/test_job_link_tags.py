@@ -182,6 +182,56 @@ def test_count_jobs_by_tag_counts_each_job_once(tag_db):
     assert counts == {"tag-job": 1, "tag-link": 1}
 
 
+def test_persist_job_link_ids_opens_no_write_when_already_current(tag_db, monkeypatch):
+    """CodeRabbit (PR #626): the read path calls this on every list/adjacent
+    request. Once a job's link_id is already correct, re-persisting it must
+    not open a write transaction — a naive unconditional UPDATE+commit would
+    contend with other writers on every single read, for nothing."""
+    item, _ = _run(_seed("article"))
+    _run(_add_link_ids([item], 7))  # first call: real write, sets link_id
+
+    real_connection = database.connection
+    call_count = 0
+
+    def _counting_connection():
+        nonlocal call_count
+        call_count += 1
+        return real_connection()
+
+    monkeypatch.setattr(database, "connection", _counting_connection)
+    _run(database.persist_job_link_ids({item["id"]: "link-existing"}))
+
+    # Only the read (_fetch_in's SELECT) should open a connection -- an
+    # unchanged mapping must not also open one for a write.
+    assert call_count == 1
+
+
+def test_backfill_pending_link_ids_lets_a_brand_new_job_join_tag_scoped_results(tag_db):
+    """CodeRabbit (PR #626): tag-scoped SQL joins on jobs.link_id, which only
+    the read path sets -- and only for jobs an *unfiltered* read has already
+    seen. Without a backfill pass, a job created since the last unfiltered
+    read is invisible to every tag-scoped query forever, since the very query
+    that would surface it (and let it get backfilled) is the one excluding it."""
+    from src.api.jobs import _backfill_pending_link_ids, _job_scope_where
+
+    item, _ = _run(_seed("article"))  # never passed through _add_link_ids: link_id is NULL
+
+    async def ids_for(tag_ids: list[str]) -> list[str]:
+        where, params = _job_scope_where(7, None, None, None, tag_ids)
+        async with database.connection() as conn:
+            cur = await conn.execute(f"SELECT id FROM jobs WHERE {where}", params)
+            return [row["id"] for row in await cur.fetchall()]
+
+    # Before backfill: the job's own tag lives in job_tags, so it's still
+    # found via that half of the OR -- seed a link-only tag scenario instead
+    # by checking the job is invisible on the link's tag until link_id is set.
+    assert _run(ids_for(["tag-link"])) == []
+
+    _run(_backfill_pending_link_ids(7))
+
+    assert _run(ids_for(["tag-link"])) == [item["id"]]
+
+
 def test_migration_backfills_jobs_whose_url_only_matches_after_normalizing(tmp_path, monkeypatch):
     """The backfill must not stop at exact URL equality.
 

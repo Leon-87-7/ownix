@@ -189,6 +189,8 @@ async def test_get_job_stats_unscoped_omits_content_type_predicate(monkeypatch) 
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
     response = await jobs.get_job_stats(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
@@ -220,6 +222,8 @@ async def test_get_job_stats_scopes_status_breakdown_to_content_type(monkeypatch
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
     response = await jobs.get_job_stats(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
@@ -391,6 +395,8 @@ async def test_get_adjacent_jobs_honors_checklist_and_tag_scope(monkeypatch) -> 
     PR #626)."""
     conn = _AdjacentConn([None, None])
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
     async def _fake_get_owned_job(job_id, _request):
         return {"id": job_id, "created_at": "2026-07-04 09:00:00"}

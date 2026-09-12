@@ -4549,17 +4549,45 @@ async def persist_job_link_ids(by_job: dict[str, str]) -> None:
 
     Called from the jobs read path, which makes this self-backfilling: the
     migration catches what SQL could match, and everything else is written the
-    first time its job is listed. Guarded so an already-persisted page (the
-    common case) updates nothing.
+    first time its job is listed. Reads what's already stored first and writes
+    only what changed — the common case (an already-persisted page, on every
+    read after the first) then opens no write transaction at all, instead of
+    committing a no-op UPDATE per job on every single list/adjacent call.
     """
     if not by_job:
         return
+    existing = await _fetch_in(
+        "SELECT id, link_id FROM jobs WHERE id IN ({placeholders})", list(by_job)
+    )
+    current = {row["id"]: row["link_id"] for row in existing}
+    changed = {
+        job_id: link_id for job_id, link_id in by_job.items() if current.get(job_id) != link_id
+    }
+    if not changed:
+        return
     async with connection() as conn:
         await conn.executemany(
-            "UPDATE jobs SET link_id = ? WHERE id = ? AND (link_id IS NULL OR link_id != ?)",
-            [(link_id, job_id, link_id) for job_id, link_id in by_job.items()],
+            "UPDATE jobs SET link_id = ? WHERE id = ?",
+            [(link_id, job_id) for job_id, link_id in changed.items()],
         )
         await conn.commit()
+
+
+async def jobs_missing_link_id(chat_id: int) -> list[tuple[str, str]]:
+    """(id, url) for this chat's link-backed jobs jobs.link_id hasn't caught up to.
+
+    Feeds the tag-filter backfill in src/api/jobs.py: tag-scoped SQL JOINs
+    through jobs.link_id, but SQL can't call normalize_url() to resolve it
+    (same reason _migrate_jobs_link_id resolves in Python) — this just returns
+    the raw candidates for that Python-side resolution.
+    """
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, url FROM jobs WHERE chat_id = ? AND link_id IS NULL "
+            "AND content_type IN ('link', 'article', 'repo')",
+            (chat_id,),
+        )
+        return [(row["id"], row["url"]) for row in await cur.fetchall()]
 
 
 async def count_jobs_by_tag(chat_id: int) -> dict[str, int]:

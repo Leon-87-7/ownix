@@ -56,6 +56,31 @@ async def _add_link_ids(items: list[dict], chat_id: int) -> None:
     )
 
 
+async def _backfill_pending_link_ids(chat_id: int) -> None:
+    """Resolve jobs.link_id for this chat's not-yet-listed link-backed jobs
+    before running any tag-scoped SQL.
+
+    Tag filtering JOINs on jobs.link_id, which the read path (_add_link_ids)
+    only ever sets for jobs that have already appeared in an *unfiltered*
+    list/adjacent page. Without this, a job created since the last unfiltered
+    read is invisible to every tag-scoped query and to count_jobs_by_tag
+    forever — the very query that would surface it (and let _add_link_ids
+    persist its link_id) is the one excluding it. The common case is zero
+    pending rows, so this is cheap.
+    """
+    pending = await database.jobs_missing_link_id(chat_id)
+    if not pending:
+        return
+    normalized_by_job = {job_id: normalize_url(url) for job_id, url in pending}
+    links_by_url = await database.resolve_link_ids(chat_id, list(normalized_by_job.values()))
+    resolved = {
+        job_id: links_by_url[url]
+        for job_id, url in normalized_by_job.items()
+        if url in links_by_url
+    }
+    await database.persist_job_link_ids(resolved)
+
+
 class RecoveryRequest(BaseModel):
     content_type: RecoveryContentType | None = None
 
@@ -114,6 +139,7 @@ async def get_job_stats(
     # Always global, like by_content_type: picking one tag must not change
     # another tag's count in the filter dropdown. Past the client-mode cap this
     # is the only source of those counts — the browser isn't holding the jobs.
+    await _backfill_pending_link_ids(chat_id)
     by_tag = await database.count_jobs_by_tag(chat_id)
 
     return {
@@ -386,10 +412,10 @@ def _job_scope_where(
         # Python, so a tag narrows identically whether the feed is filtering
         # client-side or here. Relies on jobs.link_id (see persist_job_link_ids).
         placeholders = ",".join("?" * len(tag_ids))
+        # nosec must sit on Bandit's flagged line itself (the f-string's first
+        # line), not above it -- a comment above the statement doesn't suppress.
         conditions.append(
-            # nosec B608 -- `placeholders` is only `?` marks, one per tag_id;
-            # every actual value is bound through `params` below.
-            f"(EXISTS (SELECT 1 FROM job_tags jt WHERE jt.job_id = jobs.id "
+            f"(EXISTS (SELECT 1 FROM job_tags jt WHERE jt.job_id = jobs.id "  # nosec B608 -- placeholders is only `?` marks; every value is bound through `params` below.
             f"AND jt.tag_id IN ({placeholders})) "
             f"OR EXISTS (SELECT 1 FROM link_tags lt WHERE lt.link_id = jobs.link_id "
             f"AND lt.tag_id IN ({placeholders})))"
@@ -417,6 +443,8 @@ async def list_jobs(
     chat_id: int = request.state.user["id"]
     offset = (page - 1) * limit
     tag_ids = _parse_tag_ids(tags)
+    if tag_ids:
+        await _backfill_pending_link_ids(chat_id)
 
     where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
@@ -631,10 +659,11 @@ async def get_adjacent_jobs(
     """
     job = await get_owned_job(job_id, request)
     chat_id: int = request.state.user["id"]
+    tag_ids = _parse_tag_ids(tags)
+    if tag_ids:
+        await _backfill_pending_link_ids(chat_id)
 
-    where, params = _job_scope_where(
-        chat_id, content_type, status, has_checklist, _parse_tag_ids(tags)
-    )
+    where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
     created_at = job["created_at"]
     async with database.connection() as conn:

@@ -540,6 +540,31 @@ describe('FeedPage', () => {
     );
   });
 
+  // switchToLinks used to clone `searchParams` directly instead of the ref
+  // setFeedScope advances immediately -- so a filter picked right before
+  // opening Links (still unpublished by App Router) was silently dropped from
+  // the URL, even though switchToLinks never meant to touch it (CodeRabbit,
+  // PR #626).
+  it('keeps a pending scope change when Links is opened before the URL updates', () => {
+    server.use(
+      http.get('/api/brain/links/view', () =>
+        HttpResponse.json({ order: 'desc', size: 25 }),
+      ),
+      http.get('/api/brain/links', () =>
+        HttpResponse.json({ items: [], limit: 25, offset: 0, total: 0 }),
+      ),
+    );
+    render(<FeedTree />);
+    // searchParams deliberately left empty — the mock never publishes the write.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: /links/i }));
+
+    expect(navigationMock.replace).toHaveBeenLastCalledWith(
+      '/feed?status=done&view=links',
+      { scroll: false },
+    );
+  });
+
   it('omits the Links view and skips authenticated links fetches in restricted mode', async () => {
     navigationMock.searchParams = new URLSearchParams('view=links');
 

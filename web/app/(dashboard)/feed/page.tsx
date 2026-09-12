@@ -175,8 +175,22 @@ function FeedPageContent() {
     initialScopeRef.current = parseFeedScope(searchParams);
   const initialScope = initialScopeRef.current;
   // Latest params without making every consumer of setFeedScope re-key on them.
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
+  // setFeedScope/switchToLinks/the cleanup effect below each advance this ref
+  // themselves right after building their own replace() params, so it reflects
+  // a pending write immediately rather than waiting for App Router to publish
+  // it back as a new `searchParams`. Resyncing it here on every render (rather
+  // than only when `searchParams` itself changes) would stomp that advance
+  // back to the last-published value the moment any of those calls' own state
+  // updates (setCtFilter, setQuery, ...) trigger a re-render before publication
+  // — losing whichever scope change was still in flight (CodeRabbit, PR #626).
+  // Typed as the plain (mutable) URLSearchParams, not the inferred
+  // ReadonlyURLSearchParams — every advance below assigns a freshly built
+  // URLSearchParams into this ref, and ReadonlyURLSearchParams is a narrower
+  // subtype (all our reads here — toString/get — work identically either way).
+  const searchParamsRef = useRef<URLSearchParams>(searchParams);
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+  }, [searchParams]);
   const { restricted, showRestrictedToast } = useRestrictedMode();
   const {
     ctFilter,
@@ -281,7 +295,11 @@ function FeedPageContent() {
       return;
     if (oauthReturn) setOauthResult(google as 'connected' | 'denied');
     if (sharedUrl) openSubmitWith(sharedUrl);
-    const params = new URLSearchParams(searchParams.toString());
+    // Clone the ref, not `searchParams` directly: a scope change queued by
+    // setFeedScope/switchToLinks just before this effect ran hasn't been
+    // published back as a new `searchParams` yet, and cloning the live value
+    // here would drop it from this replace() (CodeRabbit, PR #626).
+    const params = new URLSearchParams(searchParamsRef.current.toString());
     params.delete('google');
     params.delete('share_title');
     params.delete('share_text');
@@ -291,6 +309,7 @@ function FeedPageContent() {
       params.delete('type');
       setCtFilter('');
     }
+    searchParamsRef.current = params;
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, {
       scroll: false,
@@ -356,6 +375,11 @@ function FeedPageContent() {
         if (next[param]) params.set(param, next[param]);
         else params.delete(param);
       }
+      // Advance immediately rather than waiting for App Router to publish this
+      // replace() back as a new `searchParams` — switchToLinks or another
+      // setFeedScope call landing before publication reads this ref, and must
+      // see the change that's already in flight (CodeRabbit, PR #626).
+      searchParamsRef.current = params;
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, {
         scroll: false,
@@ -391,18 +415,19 @@ function FeedPageContent() {
       setFeedView('jobs');
       return;
     }
-    const params = new URLSearchParams(searchParams.toString());
+    // Clone the ref, not `searchParams` directly, and advance it after: a
+    // setFeedScope call queued just before this one hasn't been published back
+    // as a new `searchParams` yet, and building off the live value here would
+    // both drop that pending scope from this replace() and, once this ref
+    // advance itself lands, get overwritten right back by it a moment later
+    // (CodeRabbit, PR #626).
+    const params = new URLSearchParams(searchParamsRef.current.toString());
     params.delete('type');
     params.set('view', 'links');
+    searchParamsRef.current = params;
     router.replace(`${pathname}?${params}`, { scroll: false });
     setFeedView('links');
-  }, [
-    pathname,
-    router,
-    searchParams,
-    restricted,
-    showRestrictedToast,
-  ]);
+  }, [pathname, router, restricted, showRestrictedToast]);
 
   // Expose the Feed search focus to the command launcher. focusLinkSearch
   // switches to Links first, then focuses LinksTable's own search input - not
