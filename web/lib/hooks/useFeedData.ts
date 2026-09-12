@@ -7,6 +7,9 @@ export interface FeedStats {
   total: number;
   by_status: Record<string, number>;
   by_content_type: Record<string, number>;
+  /** Global per-tag job counts. The only source of the filter dropdown's counts
+   * past CLIENT_MODE_LIMIT, where the browser isn't holding the jobs to count. */
+  by_tag?: Record<string, number>;
 }
 
 interface JobsResponse {
@@ -40,10 +43,14 @@ async function fetchFeedServerMode(
   st: string,
   restricted = false,
   checklistOnly = false,
+  tagIds: string[] = [],
 ): Promise<{ stats: FeedStats; jobs: JobSummary[]; total: number }> {
   const params = new URLSearchParams();
   if (ct) params.set('content_type', ct);
   if (st) params.set('status', st);
+  // Backed by jobs.link_id since the job->link key is persisted, so tag
+  // narrowing means the same thing here as it does client-side.
+  if (tagIds.length) params.set('tags', tagIds.join(','));
   // Server-side so the count stays truthful past CLIENT_MODE_LIMIT, where the
   // client only holds one 50-row page and can't filter the rest.
   if (checklistOnly) params.set('has_checklist', 'true');
@@ -77,18 +84,38 @@ async function fetchFeedServerMode(
 /**
  * Filter the full job list by content_type and status (exact match —
  * matching the server-side WHERE status = ? semantics).
+ *
+ * `tagIds` narrows with OR semantics (a job matches if it carries ANY selected
+ * tag) — client-mode only; server-mode has no backend support for this yet
+ * (job→link resolution isn't SQL-joinable, see useFeedData's serverMode gap).
  */
 function deriveJobs(
   allJobs: JobSummary[],
   ct: string,
   st: string,
   checklistOnly: boolean,
+  tagIds: string[],
 ): JobSummary[] {
   let list = allJobs;
   if (ct) list = list.filter((j) => j.content_type === ct);
   if (st) list = list.filter((j) => j.status === st);
   if (checklistOnly) list = list.filter((j) => Boolean(j.checklists_generated_at));
+  if (tagIds.length) list = list.filter((j) => j.tags?.some((t) => tagIds.includes(t.id)));
   return list;
+}
+
+/** {tag id: how many loaded jobs carry it} — powers the usage count shown per
+ * row in the tag filter dropdown. Always computed off the full unfiltered
+ * `allJobs`, not the narrowed list, so picking one tag doesn't change another
+ * tag's displayed count. */
+function deriveTagCounts(allJobs: JobSummary[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const job of allJobs) {
+    for (const tag of job.tags ?? []) {
+      counts[tag.id] = (counts[tag.id] ?? 0) + 1;
+    }
+  }
+  return counts;
 }
 
 /**
@@ -123,10 +150,18 @@ function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useFeedData(initialContentType = '', restricted = false) {
+export function useFeedData(
+  initialContentType = '',
+  restricted = false,
+  // Seeded from the Feed's URL so a back-navigation remount restores the
+  // narrowing the user left behind, rather than dropping them into an
+  // unfiltered list. The Feed owns writing these back to the URL.
+  initialScope: { status?: string; checklistOnly?: boolean; tags?: string[] } = {},
+) {
   const [ctFilter, setCtFilter] = useState(initialContentType);
-  const [stFilter, setStFilter] = useState('');
-  const [checklistOnly, setChecklistOnly] = useState(false);
+  const [stFilter, setStFilter] = useState(initialScope.status ?? '');
+  const [checklistOnly, setChecklistOnly] = useState(initialScope.checklistOnly ?? false);
+  const [tagFilter, setTagFilter] = useState<string[]>(initialScope.tags ?? []);
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
@@ -163,6 +198,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
   stRef.current = stFilter;
   const checklistOnlyRef = useRef(checklistOnly);
   checklistOnlyRef.current = checklistOnly;
+  const tagFilterRef = useRef(tagFilter);
+  tagFilterRef.current = tagFilter;
   const serverModeRef = useRef(serverMode);
   serverModeRef.current = serverMode;
 
@@ -209,7 +246,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
   // Server-mode filter fetch (called on filter change when in server mode)
   // -------------------------------------------------------------------------
 
-  const serverLoad = useCallback(async (ct: string, st: string, checklist: boolean) => {
+  const serverLoad = useCallback(
+    async (ct: string, st: string, checklist: boolean, tags: string[]) => {
     const reqId = ++reqIdRef.current;
     const loadId = ++loadIdRef.current;
 
@@ -217,7 +255,13 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setError(null);
 
     try {
-      const { stats, jobs, total } = await fetchFeedServerMode(ct, st, restricted, checklist);
+      const { stats, jobs, total } = await fetchFeedServerMode(
+        ct,
+        st,
+        restricted,
+        checklist,
+        tags,
+      );
       if (reqId !== reqIdRef.current) return;
 
       const filtered = ct ? jobs.filter((j) => j.content_type === ct) : jobs;
@@ -249,6 +293,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
           stRef.current,
           restricted,
           checklistOnlyRef.current,
+          tagFilterRef.current,
         );
         if (reqId !== reqIdRef.current) return;
         const ct = ctRef.current;
@@ -296,25 +341,33 @@ export function useFeedData(initialContentType = '', restricted = false) {
       // active — otherwise (e.g. a deep link carrying ?type=short) the mount
       // data is unscoped, so we must fetch the filtered view rather than show
       // the wrong list.
-      if (!ctFilter && !stFilter && !checklistOnly) return;
+      if (!ctFilter && !stFilter && !checklistOnly && !tagFilter.length) return;
     }
-    serverLoad(ctFilter, stFilter, checklistOnly);
+    serverLoad(ctFilter, stFilter, checklistOnly, tagFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ctFilter, stFilter, checklistOnly, serverLoad]);
+  }, [serverMode, ctFilter, stFilter, checklistOnly, tagFilter, serverLoad]);
 
   // -------------------------------------------------------------------------
   // Derived state (client mode only — computed synchronously, no fetch)
   // -------------------------------------------------------------------------
 
   const derivedJobs = useMemo(
-    () => (serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter, checklistOnly)),
-    [serverMode, allJobs, ctFilter, stFilter, checklistOnly],
+    () =>
+      serverMode ? null : deriveJobs(allJobs, ctFilter, stFilter, checklistOnly, tagFilter),
+    [serverMode, allJobs, ctFilter, stFilter, checklistOnly, tagFilter],
   );
 
   const derivedStats = useMemo(
     () => (serverMode ? null : deriveStats(allJobs, ctFilter)),
     [serverMode, allJobs, ctFilter],
   );
+
+  // Client mode counts the jobs it holds; server mode can't (it holds one 50-row
+  // page), so it reads the global GROUP BY the stats endpoint returns.
+  const derivedTagCounts = useMemo(() => deriveTagCounts(allJobs), [allJobs]);
+  const tagCounts = serverMode
+    ? (serverStats?.by_tag ?? {})
+    : derivedTagCounts;
 
   const preloadIndexes = useMemo(
     () => new Map(preloadJobs.map((job, index) => [job.id, index])),
@@ -337,6 +390,9 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setStFilter,
     checklistOnly,
     setChecklistOnly,
+    tagFilter,
+    setTagFilter,
+    tagCounts,
     stats,
     jobs,
     total,

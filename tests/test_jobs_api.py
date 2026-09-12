@@ -185,9 +185,12 @@ async def test_get_job_stats_unscoped_omits_content_type_predicate(monkeypatch) 
         [
             [{"status": "done", "cnt": 3}, {"status": "error", "cnt": 5}],
             [{"content_type": "article", "cnt": 9}, {"content_type": "short", "cnt": 2}],
+            [],  # count_jobs_by_tag's GROUP BY
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
     response = await jobs.get_job_stats(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
@@ -215,9 +218,12 @@ async def test_get_job_stats_scopes_status_breakdown_to_content_type(monkeypatch
                 {"status": "error", "cnt": 5},
             ],
             [{"content_type": "article", "cnt": 9}, {"content_type": "short", "cnt": 2}],
+            [],  # count_jobs_by_tag's GROUP BY
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
     response = await jobs.get_job_stats(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
@@ -254,8 +260,12 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
         def __init__(self):
             self.calls = 0
 
-        async def execute(self, *_args, **_kwargs):
+        async def execute(self, sql="", *_args, **_kwargs):
             self.calls += 1
+            # Tag-vocabulary batch queries embedded onto the list response
+            # (issue: feed tag filter) — no tags seeded for this job.
+            if "job_tags" in sql or "link_tags" in sql:
+                return FakeCursor([])
             if self.calls == 1:
                 return FakeCursor((1,))
             return FakeCursor(
@@ -283,6 +293,7 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
 
     response = await jobs.list_jobs(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        tags=None,
         page=1,
         limit=20,
     )
@@ -361,6 +372,8 @@ async def test_get_adjacent_jobs_queries_and_payload(monkeypatch) -> None:
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
         content_type="short",
         status=None,
+        has_checklist=None,
+        tags=None,
     )
 
     prev_sql, prev_params = conn.calls[0]
@@ -373,6 +386,36 @@ async def test_get_adjacent_jobs_queries_and_payload(monkeypatch) -> None:
     assert prev_params == [1, "short", "2026-07-04 09:00:00", "2026-07-04 09:00:00", "j2"]
     assert next_params == prev_params
     assert response == {"previous_id": "older", "next_id": None}
+
+
+@pytest.mark.asyncio
+async def test_get_adjacent_jobs_honors_checklist_and_tag_scope(monkeypatch) -> None:
+    """Prev/next must narrow the same way list_jobs does, or walking off a
+    checklist- or tag-filtered feed lands on a job outside it (Codex review,
+    PR #626)."""
+    conn = _AdjacentConn([None, None])
+    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    # Not under test here — skip the link_id backfill pass entirely.
+    monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
+
+    async def _fake_get_owned_job(job_id, _request):
+        return {"id": job_id, "created_at": "2026-07-04 09:00:00"}
+
+    monkeypatch.setattr(jobs, "get_owned_job", _fake_get_owned_job)
+
+    await jobs.get_adjacent_jobs(
+        "j2",
+        SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        content_type=None,
+        status=None,
+        has_checklist=True,
+        tags="t1,t2",
+    )
+
+    prev_sql, prev_params = conn.calls[0]
+    assert "checklists_generated_at IS NOT NULL" in prev_sql
+    assert "job_tags jt" in prev_sql and "link_tags lt" in prev_sql
+    assert prev_params[:3] == [1, "t1", "t2"]
 
 
 def test_list_jobs_order_matches_adjacent_tiebreak() -> None:
@@ -448,6 +491,7 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
     # Must not raise; with no rows the response is an empty list.
     response = await jobs.list_jobs(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        tags=None,
         page=1,
         limit=1000,
     )

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@/test/render';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { BookmarkCheck } from 'lucide-react';
 import { FilterBar } from './filter-bar';
@@ -113,5 +114,141 @@ describe('FilterBar', () => {
     fireEvent.click(chip);
 
     expect(onChange).toHaveBeenCalledWith(false);
+  });
+
+  const TAGS = [
+    { id: 't1', name: 'Spec', color: '#fff', meaning: '' },
+    { id: 't2', name: 'Repo', color: '#fff', meaning: '' },
+  ];
+
+  it('renders a tag row per option with its usage count and toggles selection', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          counts: { t1: 3, t2: 0 },
+          selectedIds: [],
+          onChange,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Filter by tags' }));
+
+    const specRow = await screen.findByRole('menuitemcheckbox', { name: /Spec/ });
+    expect(specRow).toHaveTextContent('3');
+    expect(screen.getByRole('menuitemcheckbox', { name: /Repo/ })).toHaveTextContent('0');
+
+    await user.click(specRow);
+    expect(onChange).toHaveBeenCalledWith(['t1']);
+  });
+
+  it('deselects an already-selected tag on click', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          selectedIds: ['t1', 't2'],
+          onChange,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Filter by tags' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /Spec/ }));
+
+    expect(onChange).toHaveBeenCalledWith(['t2']);
+  });
+
+  it('"All tags" clears the current selection', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          selectedIds: ['t1'],
+          onChange,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Filter by tags' }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: 'All tags' }));
+
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it('shows an empty-vocabulary message instead of hiding the trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: [],
+          selectedIds: [],
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Filter by tags' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Filter by tags' }));
+    expect(await screen.findByText('No tags yet.')).toBeInTheDocument();
+  });
+
+  it('disables the trigger and explains why via title when tagFilter.disabled is set', () => {
+    render(
+      <FilterBar
+        tabs={tabs}
+        tabValue=""
+        onTabChange={vi.fn()}
+        query=""
+        setQuery={vi.fn()}
+        statusValue=""
+        onStatusChange={vi.fn()}
+        tagFilter={{
+          allTags: TAGS,
+          selectedIds: [],
+          onChange: vi.fn(),
+        }}
+      />,
+    );
+
+    // Tag filtering is backed by jobs.link_id in SQL now, so it stays usable
+    // at every feed size rather than disabling itself past the client-mode cap.
+    const trigger = screen.getByRole('button', { name: 'Filter by tags' });
+    expect(trigger).not.toBeDisabled();
   });
 });

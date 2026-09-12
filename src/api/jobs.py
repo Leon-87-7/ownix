@@ -47,6 +47,38 @@ async def _add_link_ids(items: list[dict], chat_id: int) -> None:
         item["link_id"] = links_by_url[normalized_by_job[item["id"]]]
         if item["id"] in sweepable:
             await database.sweep_job_tags_to_link(item["id"], item["link_id"])
+    # Persist what we just resolved. The key is computed here from
+    # normalize_url(), which SQL can't call, so storing it is the only way tag
+    # filtering gets a column to JOIN on past the client-mode cap. Writing it on
+    # read makes the backfill self-healing: a job is joinable once it's listed.
+    await database.persist_job_link_ids(
+        {item["id"]: item["link_id"] for item in resolved}
+    )
+
+
+async def _backfill_pending_link_ids(chat_id: int) -> None:
+    """Resolve jobs.link_id for this chat's not-yet-listed link-backed jobs
+    before running any tag-scoped SQL.
+
+    Tag filtering JOINs on jobs.link_id, which the read path (_add_link_ids)
+    only ever sets for jobs that have already appeared in an *unfiltered*
+    list/adjacent page. Without this, a job created since the last unfiltered
+    read is invisible to every tag-scoped query and to count_jobs_by_tag
+    forever — the very query that would surface it (and let _add_link_ids
+    persist its link_id) is the one excluding it. The common case is zero
+    pending rows, so this is cheap.
+    """
+    pending = await database.jobs_missing_link_id(chat_id)
+    if not pending:
+        return
+    normalized_by_job = {job_id: normalize_url(url) for job_id, url in pending}
+    links_by_url = await database.resolve_link_ids(chat_id, list(normalized_by_job.values()))
+    resolved = {
+        job_id: links_by_url[url]
+        for job_id, url in normalized_by_job.items()
+        if url in links_by_url
+    }
+    await database.persist_job_link_ids(resolved)
 
 
 class RecoveryRequest(BaseModel):
@@ -104,10 +136,17 @@ async def get_job_stats(
         rows2 = await cur2.fetchall()
         by_content_type: dict[str, int] = {row["content_type"]: row["cnt"] for row in rows2}
 
+    # Always global, like by_content_type: picking one tag must not change
+    # another tag's count in the filter dropdown. Past the client-mode cap this
+    # is the only source of those counts — the browser isn't holding the jobs.
+    await _backfill_pending_link_ids(chat_id)
+    by_tag = await database.count_jobs_by_tag(chat_id)
+
     return {
         "total": total,
         "by_status": by_status,
         "by_content_type": by_content_type,
+        "by_tag": by_tag,
     }
 
 
@@ -330,18 +369,26 @@ async def resolve_thumbnail(
     return None, None
 
 
+def _parse_tag_ids(tags: str | None) -> list[str]:
+    """Comma-separated tag-id list -> list, shared by list_jobs and
+    get_adjacent_jobs so the two can't parse the same query param differently."""
+    return [t for t in (tags or "").split(",") if t]
+
+
 def _job_scope_where(
     chat_id: int,
     content_type: str | None,
     status: str | None,
     has_checklist: bool | None = None,
+    tag_ids: list[str] | None = None,
 ) -> tuple[str, list]:
     """Feed-scope filter shared by list_jobs and get_adjacent_jobs — the two must
     agree on what's visible or prev/next navigation drifts from the feed.
 
-    *has_checklist* is feed-only (prev/next leaves it None): it narrows to jobs
-    that already carry a generated checklist, which is how the feed answers
-    "what have I actually turned into something?" without scrolling for badges.
+    *has_checklist* narrows to jobs that already carry a generated checklist,
+    which is how the feed answers "what have I actually turned into something?"
+    without scrolling for badges. Both callers pass through whatever scope the
+    Feed had active, so prev/next never walks outside a narrowed feed.
     """
     conditions = ["chat_id = ?", "url NOT LIKE 'email_digest:%'"]
     params: list = [chat_id]
@@ -359,6 +406,22 @@ def _job_scope_where(
         params.append(status)
     else:
         conditions.append("status != 'cancelled'")
+    if tag_ids:
+        # OR across the selected tags, and job_tags ∪ link_tags per job — the
+        # same effective-tag union batch_list_effective_job_tags builds in
+        # Python, so a tag narrows identically whether the feed is filtering
+        # client-side or here. Relies on jobs.link_id (see persist_job_link_ids).
+        placeholders = ",".join("?" * len(tag_ids))
+        # nosec must sit on Bandit's flagged line itself (the f-string's first
+        # line), not above it -- a comment above the statement doesn't suppress.
+        conditions.append(
+            f"(EXISTS (SELECT 1 FROM job_tags jt WHERE jt.job_id = jobs.id "  # nosec B608 -- placeholders is only `?` marks; every value is bound through `params` below.
+            f"AND jt.tag_id IN ({placeholders})) "
+            f"OR EXISTS (SELECT 1 FROM link_tags lt WHERE lt.link_id = jobs.link_id "
+            f"AND lt.tag_id IN ({placeholders})))"
+        )
+        params.extend(tag_ids)
+        params.extend(tag_ids)
     return " AND ".join(conditions), params
 
 
@@ -368,14 +431,22 @@ async def list_jobs(
     content_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
     has_checklist: bool | None = Query(default=None),
+    tags: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=1000),
 ) -> dict:
-    """List jobs for the authenticated user with optional filters and pagination."""
+    """List jobs for the authenticated user with optional filters and pagination.
+
+    *tags* is a comma-separated tag-id list with OR semantics, matching the
+    Feed's multi-select tag filter.
+    """
     chat_id: int = request.state.user["id"]
     offset = (page - 1) * limit
+    tag_ids = _parse_tag_ids(tags)
+    if tag_ids:
+        await _backfill_pending_link_ids(chat_id)
 
-    where, params = _job_scope_where(chat_id, content_type, status, has_checklist)
+    where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
     async with database.connection() as conn:
         cur_total = await conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", params)
@@ -410,6 +481,12 @@ async def list_jobs(
         item["thumbnail_url"], item["thumbnail_kind"] = await resolve_thumbnail(item, stored_ids)
         items.append(item)
     await _add_link_ids(items, chat_id)
+
+    # Embedded so the feed's client-mode tag filter can match in-memory without
+    # a per-card fetch (mirrors the frontend's useMergedTags job_tags/link_tags union).
+    tags_by_job = await database.batch_list_effective_job_tags(items)
+    for item in items:
+        item["tags"] = tags_by_job.get(item["id"], [])
 
     return {
         "items": items,
@@ -567,17 +644,26 @@ async def get_adjacent_jobs(
     request: Request,
     content_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    has_checklist: bool | None = Query(default=None),
+    tags: str | None = Query(default=None),
 ) -> dict[str, str | None]:
     """Return neighboring job IDs for the caller within an optional Feed scope.
 
     Semantics are chronological by design: previous_id = closest OLDER job,
     next_id = closest NEWER job ("Next →" moves forward in time, not down the
     newest-first feed list). Won't-fix suggestions to invert this.
+
+    Takes the same scope params as list_jobs (content_type/status/has_checklist/
+    tags) so walking Previous/Next never lands outside the feed the user had
+    narrowed — see _job_scope_where.
     """
     job = await get_owned_job(job_id, request)
     chat_id: int = request.state.user["id"]
+    tag_ids = _parse_tag_ids(tags)
+    if tag_ids:
+        await _backfill_pending_link_ids(chat_id)
 
-    where, params = _job_scope_where(chat_id, content_type, status)
+    where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
     created_at = job["created_at"]
     async with database.connection() as conn:

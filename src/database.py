@@ -177,6 +177,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     -- Symmetric transcript/enrichment Drive tracking (ADR-0057): drive_url is
     -- always the enrichment doc, transcript_drive_url is always the transcript doc.
     transcript_drive_url        TEXT,
+    -- Resolved job->link key, persisted so tag filtering has a column to JOIN
+    -- on (tags live on links). Written by the jobs read path, not at creation:
+    -- the match runs through normalize_url(), which SQL can't call.
+    link_id                     TEXT,
     CHECK(content_type IN ('short', 'long', 'unsized', 'article', 'repo', 'document', 'link')),
     CHECK(status IN ('held','pending','processing','transcript_done','enriching','done','error','cancelled')),
     CHECK(prd_auto_status IS NULL OR prd_auto_status IN ('generating','done','error')),
@@ -1867,6 +1871,10 @@ async def init_db() -> None:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_source_url ON jobs(source_url)"
             )
+            # Same reasoning, for jobs.link_id (added by _migrate_jobs_link_id).
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_link_id ON jobs(link_id)"
+            )
             # Same reasoning as above, for email_digest_payloads' watch_id/slug
             # columns (see the comment next to its CREATE TABLE in SCHEMA_SQL).
             await conn.execute(_EMAIL_DIGEST_PAYLOADS_WATCH_INDEX_SQL)
@@ -3170,6 +3178,45 @@ async def batch_list_job_tags(job_ids: list[str]) -> dict[str, list[dict]]:
     return result
 
 
+async def batch_list_link_tags(link_ids: list[str]) -> dict[str, list[dict]]:
+    """Return {link_id: [tag_dicts]} for all given link IDs (absent link = empty list)."""
+    if not link_ids:
+        return {}
+    rows = await _fetch_in(
+        """SELECT lt.link_id, t.id, t.name, t.color, t.meaning, t.icon
+           FROM link_tags lt
+           JOIN tags t ON t.id = lt.tag_id
+           WHERE lt.link_id IN ({placeholders})
+           ORDER BY t.name""",
+        link_ids,
+    )
+    result: dict[str, list[dict]] = {lid: [] for lid in link_ids}
+    for row in rows:
+        lid = row.pop("link_id")
+        result[lid].append(row)
+    return result
+
+
+async def batch_list_effective_job_tags(items: list[dict]) -> dict[str, list[dict]]:
+    """Return {job_id: [tag_dicts]}, unioning job_tags with link_tags via item["link_id"].
+
+    Mirrors the frontend's useMergedTags: sweep_job_tags_to_link empties a linked
+    job's job_tags, so the union never double-counts once a job has resolved to
+    a link. Callers must resolve link_id (e.g. via _add_link_ids) first.
+    """
+    job_ids = [item["id"] for item in items]
+    link_ids = [item["link_id"] for item in items if item.get("link_id")]
+    job_tag_map = await batch_list_job_tags(job_ids)
+    link_tag_map = await batch_list_link_tags(link_ids)
+    result: dict[str, list[dict]] = {}
+    for item in items:
+        tags = job_tag_map.get(item["id"], [])
+        if item.get("link_id"):
+            tags = tags + link_tag_map.get(item["link_id"], [])
+        result[item["id"]] = tags
+    return result
+
+
 async def attach_job_tag(job_id: str, tag_id: str) -> bool:
     """Attach *tag_id* to *job_id*. Idempotent. Returns True."""
     await _execute(
@@ -4440,3 +4487,130 @@ async def _migrate_identity_links(conn: aiosqlite.Connection) -> None:
 
 
 _MIGRATIONS.append(_migrate_identity_links)
+
+
+# Persists the job→link key that `_add_link_ids` already resolves on every jobs
+# request and then discards. Tags live on links (link_tags), so without a stored
+# key there is nothing for SQL to JOIN on — which is why tag filtering could only
+# ever run in-memory, i.e. below the client-mode job cap.
+async def _migrate_jobs_link_id(conn: aiosqlite.Connection) -> None:
+    table_cur = await conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('jobs', 'links')"
+    )
+    tables = {row[0] for row in await table_cur.fetchall()}
+    if "jobs" not in tables:
+        return
+    cur = await conn.execute("PRAGMA table_info(jobs)")
+    columns = {row[1] for row in await cur.fetchall()}
+    if "link_id" not in columns:
+        await conn.execute("ALTER TABLE jobs ADD COLUMN link_id TEXT")
+    if "links" not in tables:
+        # Databases old enough to predate the links table have nothing to
+        # backfill from. Harmless: the column exists, and the read path fills
+        # it in as jobs are listed.
+        await conn.commit()
+        return
+    # The backfill has to be exhaustive, not best-effort. Tag-filtered SQL
+    # matches ON link_id, so a job left NULL can never appear in the very query
+    # that would heal it — it would just be silently missing from tag results
+    # forever. Read-path healing only ever covers the newest page.
+    from src.brain import normalize_url
+
+    link_backed = ("link", "article", "repo")
+    cur_jobs = await conn.execute(
+        "SELECT id, chat_id, url FROM jobs "
+        f"WHERE link_id IS NULL AND content_type IN ({','.join('?' * len(link_backed))})",
+        link_backed,
+    )
+    pending = await cur_jobs.fetchall()
+    if not pending:
+        await conn.commit()
+        return
+    cur_links = await conn.execute("SELECT id, chat_id, url FROM links")
+    link_by_key = {(row[1], row[2]): row[0] for row in await cur_links.fetchall()}
+    updates = []
+    for job_id, chat_id, url in pending:
+        link_id = link_by_key.get((chat_id, normalize_url(url)))
+        if link_id:
+            updates.append((link_id, job_id))
+    # Chunked so a large backlog doesn't build one enormous statement batch.
+    for start in range(0, len(updates), 500):
+        await conn.executemany(
+            "UPDATE jobs SET link_id = ? WHERE id = ?", updates[start : start + 500]
+        )
+    await conn.commit()
+
+
+_MIGRATIONS.append(_migrate_jobs_link_id)
+
+
+async def persist_job_link_ids(by_job: dict[str, str]) -> None:
+    """Store resolved job→link keys so tag filtering can JOIN instead of scan.
+
+    Called from the jobs read path, which makes this self-backfilling: the
+    migration catches what SQL could match, and everything else is written the
+    first time its job is listed. Reads what's already stored first and writes
+    only what changed — the common case (an already-persisted page, on every
+    read after the first) then opens no write transaction at all, instead of
+    committing a no-op UPDATE per job on every single list/adjacent call.
+    """
+    if not by_job:
+        return
+    existing = await _fetch_in(
+        "SELECT id, link_id FROM jobs WHERE id IN ({placeholders})", list(by_job)
+    )
+    current = {row["id"]: row["link_id"] for row in existing}
+    changed = {
+        job_id: link_id for job_id, link_id in by_job.items() if current.get(job_id) != link_id
+    }
+    if not changed:
+        return
+    async with connection() as conn:
+        await conn.executemany(
+            "UPDATE jobs SET link_id = ? WHERE id = ?",
+            [(link_id, job_id) for job_id, link_id in changed.items()],
+        )
+        await conn.commit()
+
+
+async def jobs_missing_link_id(chat_id: int) -> list[tuple[str, str]]:
+    """(id, url) for this chat's link-backed jobs jobs.link_id hasn't caught up to.
+
+    Feeds the tag-filter backfill in src/api/jobs.py: tag-scoped SQL JOINs
+    through jobs.link_id, but SQL can't call normalize_url() to resolve it
+    (same reason _migrate_jobs_link_id resolves in Python) — this just returns
+    the raw candidates for that Python-side resolution.
+    """
+    async with connection() as conn:
+        cur = await conn.execute(
+            "SELECT id, url FROM jobs WHERE chat_id = ? AND link_id IS NULL "
+            "AND content_type IN ('link', 'article', 'repo')",
+            (chat_id,),
+        )
+        return [(row["id"], row["url"]) for row in await cur.fetchall()]
+
+
+async def count_jobs_by_tag(chat_id: int) -> dict[str, int]:
+    """Return {tag id: how many of this user's jobs carry it}.
+
+    The server-mode counterpart to the frontend's deriveTagCounts, which can
+    only count the jobs the browser is holding. Unions job_tags with link_tags
+    the same way `batch_list_effective_job_tags` does, and counts each job once
+    per tag even when both sides carry it.
+    """
+    async with connection() as conn:
+        cur = await conn.execute(
+            """SELECT tag_id, COUNT(DISTINCT job_id) AS cnt FROM (
+                   SELECT jt.tag_id AS tag_id, j.id AS job_id
+                   FROM job_tags jt JOIN jobs j ON j.id = jt.job_id
+                   WHERE j.chat_id = ? AND j.status != 'cancelled'
+                     AND j.url NOT LIKE 'email_digest:%'
+                   UNION
+                   SELECT lt.tag_id AS tag_id, j.id AS job_id
+                   FROM link_tags lt JOIN jobs j ON j.link_id = lt.link_id
+                   WHERE j.chat_id = ? AND j.status != 'cancelled'
+                     AND j.url NOT LIKE 'email_digest:%'
+               ) GROUP BY tag_id""",
+            (chat_id, chat_id),
+        )
+        return {row["tag_id"]: row["cnt"] for row in await cur.fetchall()}

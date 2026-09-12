@@ -511,15 +511,23 @@ describe('JobDetailPage', () => {
     expect(routerPush).not.toHaveBeenCalled();
   });
 
+  // The fallback has to speak the Feed's vocabulary, not the job API's: /feed
+  // reads `type`, so the old `content_type=` URL this used to emit restored
+  // nothing. Carries the Feed-only narrowings too — a card cmd-clicked into a
+  // new tab has no history, so this URL is the only record of where the user was.
   it('falls back to the scoped feed URL when opened directly', () => {
     const historyLengthSpy = vi.spyOn(window.history, 'length', 'get').mockReturnValue(1);
-    searchParams = new URLSearchParams('content_type=article&status=done');
+    searchParams = new URLSearchParams(
+      'content_type=article&status=done&q=skill&checklist=1&tags=t1,t2',
+    );
     render(<JobDetailPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
 
     expect(routerBack).not.toHaveBeenCalled();
-    expect(routerPush).toHaveBeenCalledWith('/feed?content_type=article&status=done');
+    expect(routerPush).toHaveBeenCalledWith(
+      '/feed?type=article&status=done&q=skill&checklist=1&tags=t1%2Ct2',
+    );
 
     historyLengthSpy.mockRestore();
   });

@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Check, Tag as TagIcon, type LucideIcon } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';
 import { usePressFeedback } from '@/lib/hooks/usePressFeedback';
+import { TagMark } from '@/components/ui/tag-picker';
+import type { TagSummary } from '@/lib/hooks/useLinkTags';
 
 function isEditableShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -48,6 +51,17 @@ export interface ToggleFilter {
   /** Paint for that icon — pass the badge's own (e.g. GENERATED_MARK_PAINT) so
    * the chip and the mark it filters for are visually the same object. */
   iconClassName?: string;
+}
+
+/** Multi-select, OR-semantics narrowing by the user's own tag vocabulary —
+ * a job matches if it carries any selected tag. Stacks with status/toggle
+ * filters the same way `toggleFilters` does. */
+export interface TagFilterConfig {
+  allTags: TagSummary[];
+  /** {tag id: how many loaded jobs carry it} — shown per row, not required. */
+  counts?: Record<string, number>;
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
 }
 
 // Shared default: feed and doc-parser both filter on the same job statuses.
@@ -225,6 +239,101 @@ function FilterButton({
   return Icon ? <Tooltip content={label}>{button}</Tooltip> : button;
 }
 
+/** Dropdown-checkbox trigger for TagFilterConfig — same Radix pattern as
+ * tag-picker.tsx's TagMenu, but rows toggle filter selection instead of
+ * job attachment, plus a leading "All tags" row that clears the selection. */
+function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterConfig) {
+  const selected = new Set(selectedIds);
+  const active = selectedIds.length > 0;
+  const trigger = (
+    <button
+      type="button"
+      aria-label="Filter by tags"
+      className={`inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-button font-medium transition-ui disabled:cursor-not-allowed disabled:opacity-50 ${
+        active
+          ? 'bg-contrasignal-deep text-onsignal hover:bg-contrasignal'
+          : 'border border-line bg-surface text-body hover:bg-raised hover:text-ink'
+      }`}
+    >
+      <TagIcon
+        className="h-[18px] w-[18px]"
+        aria-hidden="true"
+      />
+      Tags
+      {active && <span className="font-mono">{selectedIds.length}</span>}
+    </button>
+  );
+
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild>
+        {trigger}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          style={{ transformOrigin: 'var(--radix-dropdown-menu-content-transform-origin)' }}
+          className="material-overlay z-50 w-56 overflow-hidden rounded-md border border-line bg-[rgb(22_24_28/var(--material-opacity))] shadow-overlay contrast-more:border-line-strong data-[state=closed]:animate-material-out data-[state=open]:animate-material-in motion-reduce:animate-none"
+        >
+          <div className="max-h-72 overflow-auto p-1">
+            <DropdownMenu.CheckboxItem
+              checked={!active}
+              onCheckedChange={() => onChange([])}
+              onSelect={(e) => e.preventDefault()}
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs font-medium text-body outline-none transition-ui data-[highlighted]:bg-raised data-[highlighted]:text-ink"
+            >
+              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-signal">
+                {!active && <Check className="h-3.5 w-3.5" />}
+              </span>
+              All tags
+            </DropdownMenu.CheckboxItem>
+            {allTags.length > 0 && (
+              <span
+                aria-hidden="true"
+                className="my-1 block h-px bg-line"
+              />
+            )}
+            {allTags.length === 0 && (
+              <p className="px-2 py-1.5 text-xs text-muted">No tags yet.</p>
+            )}
+            {allTags.map((tag) => {
+              const isOn = selected.has(tag.id);
+              const count = counts?.[tag.id] ?? 0;
+              return (
+                <DropdownMenu.CheckboxItem
+                  key={tag.id}
+                  checked={isOn}
+                  onCheckedChange={() =>
+                    onChange(
+                      isOn ? selectedIds.filter((id) => id !== tag.id) : [...selectedIds, tag.id],
+                    )
+                  }
+                  onSelect={(e) => e.preventDefault()}
+                  title={tag.meaning || undefined}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-body outline-none transition-ui data-[highlighted]:bg-raised data-[highlighted]:text-ink"
+                >
+                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-signal">
+                    {isOn && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <TagMark
+                    tag={tag}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="flex-1 truncate">{tag.name}</span>
+                  <span className="font-mono text-mono-label tabular-nums text-muted">
+                    {count}
+                  </span>
+                </DropdownMenu.CheckboxItem>
+              );
+            })}
+          </div>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 export function FilterBar({
   tabs,
   tabValue,
@@ -239,6 +348,7 @@ export function FilterBar({
   statusValue,
   onStatusChange,
   toggleFilters,
+  tagFilter,
   recoveryPanel,
   actionSlot,
   hideSearchAndFilters = false,
@@ -261,6 +371,9 @@ export function FilterBar({
   /** Independent on/off chips rendered after the status chips, fenced off by a
    * divider — they narrow the status selection instead of replacing it. */
   toggleFilters?: readonly ToggleFilter[];
+  /** Multi-select tag narrowing, fenced off with `toggleFilters` behind the
+   * same divider — see TagFilterConfig. */
+  tagFilter?: TagFilterConfig;
   recoveryPanel?: React.ReactNode;
   /** Page-level action rendered as the first slot in the tabs wrap grid (see
    * SegmentedTabs.leadingItem). */
@@ -278,8 +391,17 @@ export function FilterBar({
   scrollTabsOnMobile?: boolean;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
-  // Default collapsed; component remounts on navigation so it resets naturally.
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Default collapsed — except when something in there is already narrowing the
+  // list. Feed filters now survive back-navigation, so the old assumption that a
+  // remount resets them no longer holds: a restored status/checklist/tag filter
+  // would otherwise be applied but hidden, which is the same silent narrowing
+  // the persistence fix exists to end. Open by default means the user can always
+  // see (and undo) what's filtering their list.
+  const [filtersOpen, setFiltersOpen] = useState(
+    Boolean(statusValue) ||
+      Boolean(toggleFilters?.some((f) => f.active)) ||
+      Boolean(tagFilter?.selectedIds.length),
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Track the < sm (640px) breakpoint in JS so the collapsed panel is also
@@ -389,7 +511,7 @@ export function FilterBar({
                       onClick={() => onStatusChange(value)}
                     />
                   ))}
-                  {toggleFilters?.length ? (
+                  {toggleFilters?.length || tagFilter ? (
                     <span
                       aria-hidden="true"
                       className="mx-1 h-5 w-px self-center bg-line"
@@ -407,6 +529,7 @@ export function FilterBar({
                       />
                     ),
                   )}
+                  {tagFilter && <TagFilterButton {...tagFilter} />}
                 </div>
                 {recoveryPanel}
               </div>

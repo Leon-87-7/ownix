@@ -14,7 +14,7 @@ describe('LogoutPage', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Sign in with Telegram' }),
+      screen.getByRole('link', { name: 'Back to login' }),
     ).toHaveAttribute('href', '/login');
   });
 });
