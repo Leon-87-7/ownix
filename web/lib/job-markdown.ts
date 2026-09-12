@@ -1,13 +1,9 @@
-import type { JobDetail } from '@/lib/hooks/useJobDetail'
+/** The job-detail field set, and turning its values into markdown or speech.
+ * Split out of the old `job-detail-utils` grab bag, which also carried the
+ * Feed's URL vocabulary (now `lib/feed-scope.ts`) and a DOM download helper
+ * (now `lib/download.ts`). */
 
-export function downloadMarkdownFile(filename: string, content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
+import type { JobDetail } from '@/lib/hooks/useJobDetail'
 
 export type RenderType = 'text' | 'list' | 'json' | 'links' | 'code'
 
@@ -30,97 +26,6 @@ export const SHORT_FIELDS: Array<{ key: keyof JobDetail; label: string; render: 
   { key: 'code', label: 'Code', render: 'code' },
   { key: 'links', label: 'Links Found', render: 'links' },
 ]
-
-
-/** Every narrowing the Feed can hold. Kept here beside `jobScopeQuery` because
- * the two describe the same state in two vocabularies: the job APIs take
- * `content_type`, the Feed reads its own back as `type`. Not interchangeable. */
-export interface FeedScope {
-  contentType?: string
-  status?: string
-  query?: string
-  checklistOnly?: boolean
-  tags?: string[]
-}
-
-/** Single source of truth for the Feed-scope query params (#309): card links
- * write them, the detail page reads them back for its adjacent lookup. */
-export function jobScopeQuery(scope: {
-  contentType?: string
-  status?: string
-}): Record<string, string> {
-  return {
-    ...(scope.contentType ? { content_type: scope.contentType } : {}),
-    ...(scope.status ? { status: scope.status } : {}),
-  }
-}
-
-/** The /adjacent lookup's full scope: everything jobScopeQuery sends plus
- * has_checklist/tags, in the job APIs' own param names. Kept separate from
- * jobScopeQuery (rather than widening it) because jobScopeQuery also feeds
- * buildJobHref, which already writes checklist/tags in the Feed's vocabulary
- * via feedOnlyParams — adding them here too would just duplicate/dead-param
- * that URL. Prev/next needs the full scope or it can walk outside a feed
- * narrowed by tag or checklist filters. */
-export function adjacentScopeQuery(scope: FeedScope): Record<string, string> {
-  return {
-    ...jobScopeQuery(scope),
-    ...(scope.checklistOnly ? { has_checklist: 'true' } : {}),
-    ...(scope.tags?.length ? { tags: scope.tags.join(',') } : {}),
-  }
-}
-
-/** Serializes a FeedScope into the params `/feed` reads on arrival, so a
- * back-navigation restores the narrowing instead of dropping the user into an
- * unfiltered list. Empty values are omitted rather than written blank — a bare
- * `/feed` has to keep meaning "everything". Inverse: `parseFeedScope`. */
-export function feedScopeQuery(scope: FeedScope): Record<string, string> {
-  return {
-    ...(scope.contentType ? { type: scope.contentType } : {}),
-    ...(scope.status ? { status: scope.status } : {}),
-    ...feedOnlyParams(scope),
-  }
-}
-
-/** Reads a FeedScope back off the Feed's own URL. `contentType` is deliberately
- * left out: the Feed already normalizes `type` against its known content types
- * and owns that param's validation. */
-export function parseFeedScope(params: URLSearchParams): Omit<FeedScope, 'contentType'> {
-  const tags = params.get('tags')?.split(',').filter(Boolean) ?? []
-  return {
-    status: params.get('status') ?? '',
-    query: params.get('q') ?? '',
-    checklistOnly: params.get('checklist') === '1',
-    tags,
-  }
-}
-
-/** Narrowings only the Feed understands. They ride job URLs as passengers so
- * Back can rebuild the Feed from a detail page opened in a new tab (no history
- * to go back to); they are never sent to the job APIs. */
-function feedOnlyParams(scope: FeedScope): Record<string, string> {
-  return {
-    ...(scope.query?.trim() ? { q: scope.query.trim() } : {}),
-    ...(scope.checklistOnly ? { checklist: '1' } : {}),
-    ...(scope.tags?.length ? { tags: scope.tags.join(',') } : {}),
-  }
-}
-
-/** Job-detail href carrying the Feed's active filter scope (#309). Carries the
- * whole scope, not just content_type/status: a cmd-click into a new tab has no
- * history for Back to use, so the detail URL is the only record of where the
- * user was. */
-export function buildJobHref(id: string, scope: FeedScope) {
-  return {
-    pathname: `/jobs/${id}`,
-    query: { ...jobScopeQuery(scope), ...feedOnlyParams(scope) },
-  }
-}
-
-/** Guards against `javascript:`/`data:` etc. before a raw URL is used as an href. */
-export function isSafeHttpUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url)
-}
 
 export interface JobLink {
   url: string

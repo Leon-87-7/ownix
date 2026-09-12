@@ -9,7 +9,8 @@ export default {
   },
   mutate: [
     'lib/feed-thumbnail-preload.ts',
-    'lib/job-detail-utils.ts',
+    'lib/job-markdown.ts',
+    'lib/feed-scope.ts',
     'lib/parse-batch-links.ts',
     'lib/polling.ts',
     'lib/share-target.ts',

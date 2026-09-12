@@ -11,7 +11,7 @@ import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
-import { jobScopeQuery } from '@/lib/job-detail-utils';
+import { jobScopeQuery } from '@/lib/feed-scope';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),

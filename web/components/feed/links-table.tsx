@@ -91,18 +91,61 @@ function linkPreviewImageUrl(linkId: string): string {
   return `/api/brain/links/${encodeURIComponent(linkId)}/preview/image`;
 }
 
+/** The only part of the links-table state the preview UI needs. Named as its
+ * own slice so the components below take what they use instead of the whole
+ * ~25-field hook result, which told the reader nothing and re-rendered them on
+ * every unrelated field change. */
+type PreviewSlice = Pick<
+  UseLinksTableResult,
+  'preview' | 'previewState' | 'selectedLinkId'
+>;
+
+/** Resolves the shared selection/cache into what one row should draw:
+ * `resolved` once the lookup has settled either way, `ogImageUrl` only when
+ * this row's own preview came back with one. */
+function resolvePreview(
+  link: LinkRow,
+  { preview, previewState, selectedLinkId }: PreviewSlice,
+): { resolved: boolean; ogImageUrl: string | null } {
+  return {
+    resolved:
+      selectedLinkId === link.id &&
+      (previewState === 'ready' || previewState === 'error'),
+    ogImageUrl:
+      preview?.id === link.id && previewState === 'ready'
+        ? (preview.og_image_url ?? null)
+        : null,
+  };
+}
+
+/** The two empty/loading lines, shared by the mobile cards and the desktop
+ * table so the copy can't drift between them. */
+function linksPlaceholder(
+  state: LinksTableState,
+  query: string,
+  count: number,
+): string | null {
+  if (state === 'loading' || state === 'idle')
+    return 'Loading extracted links…';
+  if (state === 'ready' && count === 0)
+    return query.trim()
+      ? 'No links match your search.'
+      : 'No extracted links have been saved yet.';
+  return null;
+}
+
 /** Mobile-only: the card's More panel. Expanded order: og:image preview
  * (fetched lazily via the shared links-table selection/cache, task 397) →
  * full URL (the only place it renders on touch) → title · description →
  * provenance ("seen in a video about X" — never row identity, task 32). */
 function LinkDetails({
   link,
-  linksData,
+  previews,
   expanded,
   onToggle,
 }: {
   link: LinkRow;
-  linksData: UseLinksTableResult;
+  previews: PreviewSlice;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -110,14 +153,10 @@ function LinkDetails({
     .filter(Boolean)
     .join(' · ');
   const href = safeUrl(link.url);
-  const { preview, previewState, selectedLinkId } = linksData;
-  const previewResolved =
-    selectedLinkId === link.id &&
-    (previewState === 'ready' || previewState === 'error');
-  const ogImageUrl =
-    preview?.id === link.id && previewState === 'ready'
-      ? preview.og_image_url
-      : null;
+  const { resolved: previewResolved, ogImageUrl } = resolvePreview(
+    link,
+    previews,
+  );
 
   return (
     <span className="inline-flex max-w-full items-start gap-2">
@@ -286,12 +325,12 @@ function LinkUrl({ link }: { link: LinkRow }) {
 
 function TableCard({
   link,
-  linksData,
+  previews,
   expanded,
   onToggle,
 }: {
   link: LinkRow;
-  linksData: UseLinksTableResult;
+  previews: PreviewSlice;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -308,7 +347,7 @@ function TableCard({
       <div className="mt-2">
         <LinkDetails
           link={link}
-          linksData={linksData}
+          previews={previews}
           expanded={expanded}
           onToggle={onToggle}
         />
@@ -409,14 +448,14 @@ export function LinksSearchBar({
  * ↑/↓) og:image + row metadata — this is what replaced the per-row More
  * button on desktop (task 397). */
 function LinkPreviewPanel({
-  linksData,
+  link,
+  previews,
+  removeLink,
 }: {
-  linksData: UseLinksTableResult;
+  link: LinkRow | null;
+  previews: PreviewSlice;
+  removeLink: UseLinksTableResult['removeLink'];
 }) {
-  const { data, selectedLinkId, preview, previewState, removeLink } =
-    linksData;
-  const link =
-    data.items.find((item) => item.id === selectedLinkId) ?? null;
   const [deleting, setDeleting] = useState(false);
   const [deleteFailed, setDeleteFailed] = useState(false);
 
@@ -424,16 +463,17 @@ function LinkPreviewPanel({
     return <LinkPreviewEmptyState />;
   }
 
+  const { preview, previewState } = previews;
   const href = safeUrl(link.url);
   const description = [link.title, link.description]
     .filter(Boolean)
     .join(' · ');
-  const ogImageUrl =
-    previewState === 'ready' && preview?.id === link.id
-      ? preview.og_image_url
-      : null;
-  const previewResolved =
-    previewState === 'ready' || previewState === 'error';
+  // This panel only ever draws the selected row, so `resolvePreview`'s
+  // selection check is satisfied by construction.
+  const { resolved: previewResolved, ogImageUrl } = resolvePreview(
+    link,
+    previews,
+  );
 
   return (
     <aside className="max-h-[70vh] min-w-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-line bg-surface p-4">
@@ -561,6 +601,14 @@ export function LinksTable({
     selectAdjacent,
   } = linksData;
   const pending = state === 'loading' || state === 'idle';
+  const previews: PreviewSlice = {
+    preview: linksData.preview,
+    previewState: linksData.previewState,
+    selectedLinkId,
+  };
+  const placeholder = linksPlaceholder(state, query, data.items.length);
+  const selectedLink =
+    data.items.find((item) => item.id === selectedLinkId) ?? null;
   const [expandedLinkId, setExpandedLinkId] = useState<string | null>(
     null,
   );
@@ -609,16 +657,9 @@ export function LinksTable({
 
       {/* Same 639px breakpoint as the table's `hidden sm:flex` below — CSS gates both. */}
       <div className="space-y-2 sm:hidden">
-        {pending && (
+        {placeholder && (
           <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-body">
-            Loading extracted links…
-          </p>
-        )}
-        {state === 'ready' && data.items.length === 0 && (
-          <p className="rounded-lg border border-line bg-surface px-4 py-8 text-center text-body">
-            {query.trim()
-              ? 'No links match your search.'
-              : 'No extracted links have been saved yet.'}
+            {placeholder}
           </p>
         )}
         {state === 'ready' &&
@@ -626,7 +667,7 @@ export function LinksTable({
             <TableCard
               key={link.url}
               link={link}
-              linksData={linksData}
+              previews={previews}
               expanded={expandedLinkId === link.id}
               onToggle={() => toggleMobileDetails(link.id)}
             />
@@ -665,19 +706,10 @@ export function LinksTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {pending && (
+                {placeholder && (
                   <tr>
                     <td className="px-4 py-8 text-center text-body">
-                      Loading extracted links…
-                    </td>
-                  </tr>
-                )}
-                {state === 'ready' && data.items.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-8 text-center text-body">
-                      {query.trim()
-                        ? 'No links match your search.'
-                        : 'No extracted links have been saved yet.'}
+                      {placeholder}
                     </td>
                   </tr>
                 )}
@@ -735,7 +767,11 @@ export function LinksTable({
             </table>
           </div>
         </div>
-        <LinkPreviewPanel linksData={linksData} />
+        <LinkPreviewPanel
+          link={selectedLink}
+          previews={previews}
+          removeLink={linksData.removeLink}
+        />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

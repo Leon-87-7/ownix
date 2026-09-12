@@ -6,21 +6,11 @@ import type React from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Check, Tag as TagIcon, type LucideIcon } from 'lucide-react';
 import { Tooltip } from '@/components/ui/tooltip';
+import { isEditableTarget } from '@/lib/keyboard';
+import { useGlobalKeydown } from '@/lib/hooks/useGlobalKeydown';
 import { usePressFeedback } from '@/lib/hooks/usePressFeedback';
 import { TagMark } from '@/components/ui/tag-picker';
 import type { TagSummary } from '@/lib/hooks/useLinkTags';
-
-function isEditableShortcutTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName.toLowerCase();
-  return (
-    tag === 'input' ||
-    tag === 'textarea' ||
-    tag === 'select' ||
-    target.isContentEditable ||
-    Boolean(target.closest('[role="dialog"]'))
-  );
-}
 
 export interface FilterTab {
   label: string;
@@ -337,37 +327,71 @@ function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterCo
   );
 }
 
-export function FilterBar({
-  tabs,
-  tabValue,
-  onTabChange,
-  tabsLabel = 'Content type',
+/** The standard list search box, with the `/`-to-focus shortcut wired in.
+ * A view whose search needs more than a text box (the Links table carries a
+ * page-size picker) passes its own node as FilterBar's `search` instead. */
+export function FilterSearchInput({
+  id,
   query,
   setQuery,
-  searchInputId,
-  searchPlaceholder = 'Search…',
-  searchLabel = 'Search',
+  label = 'Search',
+  placeholder = 'Search…',
+}: {
+  /** DOM id so the command launcher can focus it. */
+  id?: string;
+  query: string;
+  setQuery: (q: string) => void;
+  label?: string;
+  placeholder?: string;
+}) {
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useGlobalKeydown((event) => {
+    if (
+      event.key !== '/' ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      isEditableTarget(event.target)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    searchRef.current?.focus();
+  });
+
+  return (
+    <input
+      ref={searchRef}
+      id={id}
+      type="search"
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      onKeyDown={(e) => {
+        // Escape exits the search (mirrors the `/` shortcut to enter it).
+        if (e.key === 'Escape') e.currentTarget.blur();
+      }}
+      aria-label={label}
+      aria-keyshortcuts="/ Escape"
+      placeholder={placeholder}
+      className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
+    />
+  );
+}
+
+/** The status / toggle / tag chip row, collapsing behind a disclosure on
+ * mobile. Its own component rather than a `hideSearchAndFilters` flag on
+ * FilterBar: a view that has no job statuses to filter by (the Links table)
+ * simply doesn't render one. */
+export function FilterRow({
   statusFilters = DEFAULT_STATUS_FILTERS,
   statusValue,
   onStatusChange,
   toggleFilters,
   tagFilter,
-  recoveryPanel,
-  actionSlot,
-  hideSearchAndFilters = false,
-  searchSlot,
-  scrollTabsOnMobile = false,
+  trailing,
 }: {
-  tabs: readonly FilterTab[];
-  tabValue: string;
-  onTabChange: (value: string) => void;
-  tabsLabel?: string;
-  query: string;
-  setQuery: (q: string) => void;
-  /** DOM id on the search input so the command launcher can focus it. */
-  searchInputId?: string;
-  searchPlaceholder?: string;
-  searchLabel?: string;
   statusFilters?: StatusOption[];
   statusValue: string;
   onStatusChange: (v: string) => void;
@@ -377,21 +401,8 @@ export function FilterBar({
   /** Multi-select tag narrowing, fenced off with `toggleFilters` behind the
    * same divider — see TagFilterConfig. */
   tagFilter?: TagFilterConfig;
-  recoveryPanel?: React.ReactNode;
-  /** Page-level action rendered as the first slot in the tabs wrap grid (see
-   * SegmentedTabs.leadingItem). */
-  actionSlot?: React.ReactNode;
-  /** Drops the status-filter/recovery row, keeping only the tab row (plus the
-   * search input or searchSlot, if any) — for views (e.g. Links) that have no
-   * use for the job-status filters. */
-  hideSearchAndFilters?: boolean;
-  /** Renders in place of the built-in search input, in the same slot next to
-   * the tabs — for views (e.g. Links) whose search bar carries extra controls
-   * (a page-size picker) and filters through its own state, not `query`. */
-  searchSlot?: React.ReactNode;
-  /** Forwarded to SegmentedTabs — see its `scrollOnMobile`. Use for tab sets
-   * that don't divide evenly into the mobile 4-column grid. */
-  scrollTabsOnMobile?: boolean;
+  /** Rendered at the row's far end (the Feed puts its recovery panel here). */
+  trailing?: React.ReactNode;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
   // Default collapsed — except when something in there is already narrowing the
@@ -405,7 +416,6 @@ export function FilterBar({
       Boolean(toggleFilters?.some((f) => f.active)) ||
       Boolean(tagFilter?.selectedIds.length),
   );
-  const searchRef = useRef<HTMLInputElement>(null);
 
   // Track the < sm (640px) breakpoint in JS so the collapsed panel is also
   // removed from the tab order / AT tree (inert), not just hidden visually.
@@ -422,25 +432,96 @@ export function FilterBar({
 
   const collapsed = isMobile && !filtersOpen;
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key !== '/' ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.shiftKey ||
-        isEditableShortcutTarget(event.target)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      searchRef.current?.focus();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setFiltersOpen((o) => !o)}
+        aria-expanded={filtersOpen}
+        aria-controls="status-filter-bar"
+        className="mx-auto self-start text-button font-medium text-muted transition-ui hover:text-ink sm:hidden"
+      >
+        Filters <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
+      </button>
+      <div
+        id="status-filter-bar"
+        aria-hidden={collapsed || undefined}
+        {...(collapsed
+          ? ({
+              inert: '',
+            } as React.HTMLAttributes<HTMLDivElement> & { inert?: string })
+          : {})}
+        className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
+          collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+        }`}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
+            <div className="flex flex-wrap items-center gap-1">
+              {statusFilters.map(({ label, value }) => (
+                <FilterButton
+                  key={value}
+                  label={label}
+                  active={statusValue === value}
+                  onClick={() => onStatusChange(value)}
+                />
+              ))}
+              {toggleFilters?.length || tagFilter ? (
+                <span
+                  aria-hidden="true"
+                  className="mx-1 h-5 w-px self-center bg-line"
+                />
+              ) : null}
+              {toggleFilters?.map(
+                ({ label, active, onChange, icon, iconClassName }) => (
+                  <FilterButton
+                    key={label}
+                    label={label}
+                    active={active}
+                    onClick={() => onChange(!active)}
+                    icon={icon}
+                    iconClassName={iconClassName}
+                  />
+                ),
+              )}
+              {tagFilter && <TagFilterButton {...tagFilter} />}
+            </div>
+            {trailing}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
+/** The tab row and whatever search belongs beside it, plus an optional filter
+ * row underneath. Knows nothing about which view is showing — callers compose
+ * the pieces they have. */
+export function FilterBar({
+  tabs,
+  tabValue,
+  onTabChange,
+  tabsLabel = 'Content type',
+  actionSlot,
+  scrollTabsOnMobile = false,
+  search,
+  filters,
+}: {
+  tabs: readonly FilterTab[];
+  tabValue: string;
+  onTabChange: (value: string) => void;
+  tabsLabel?: string;
+  /** Page-level action rendered as the first slot in the tabs wrap grid (see
+   * SegmentedTabs.leadingItem). */
+  actionSlot?: React.ReactNode;
+  /** Forwarded to SegmentedTabs — see its `scrollOnMobile`. Use for tab sets
+   * that don't divide evenly into the mobile 4-column grid. */
+  scrollTabsOnMobile?: boolean;
+  /** Usually a `<FilterSearchInput>`; omitted by views with no search. */
+  search?: React.ReactNode;
+  /** Usually a `<FilterRow>`; omitted by views with nothing to filter. */
+  filters?: React.ReactNode;
+}) {
   return (
     <section
       className="mt-8 flex flex-col gap-3"
@@ -457,89 +538,9 @@ export function FilterBar({
             scrollOnMobile={scrollTabsOnMobile}
           />
         </div>
-        {searchSlot ? (
-          <div className="min-w-0 sm:flex-1">{searchSlot}</div>
-        ) : (
-          !hideSearchAndFilters && (
-            <input
-              ref={searchRef}
-              id={searchInputId}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                // Escape exits the search (mirrors the `/` shortcut to enter it).
-                if (e.key === 'Escape') e.currentTarget.blur();
-              }}
-              aria-label={searchLabel}
-              aria-keyshortcuts="/ Escape"
-              placeholder={searchPlaceholder}
-              className="h-9 w-full rounded-md border border-line bg-canvas px-4 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none sm:min-w-0 sm:flex-1"
-            />
-          )
-        )}
+        {search && <div className="min-w-0 sm:flex-1">{search}</div>}
       </div>
-      {!hideSearchAndFilters && (
-        <>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((o) => !o)}
-            aria-expanded={filtersOpen}
-            aria-controls="status-filter-bar"
-            className="mx-auto self-start text-button font-medium text-muted transition-ui hover:text-ink sm:hidden"
-          >
-            Filters{' '}
-            <span aria-hidden="true">{filtersOpen ? '▲' : '▼'}</span>
-          </button>
-          <div
-            id="status-filter-bar"
-            aria-hidden={collapsed || undefined}
-            {...(collapsed
-              ? ({
-                  inert: '',
-                } as React.HTMLAttributes<HTMLDivElement> & { inert?: string })
-              : {})}
-            className={`grid overflow-hidden transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${
-              collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
-            }`}
-          >
-            <div className="min-h-0 overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg border border-line bg-surface p-3">
-                <div className="flex flex-wrap items-center gap-1">
-                  {statusFilters.map(({ label, value }) => (
-                    <FilterButton
-                      key={value}
-                      label={label}
-                      active={statusValue === value}
-                      onClick={() => onStatusChange(value)}
-                    />
-                  ))}
-                  {toggleFilters?.length || tagFilter ? (
-                    <span
-                      aria-hidden="true"
-                      className="mx-1 h-5 w-px self-center bg-line"
-                    />
-                  ) : null}
-                  {toggleFilters?.map(
-                    ({ label, active, onChange, icon, iconClassName }) => (
-                      <FilterButton
-                        key={label}
-                        label={label}
-                        active={active}
-                        onClick={() => onChange(!active)}
-                        icon={icon}
-                        iconClassName={iconClassName}
-                      />
-                    ),
-                  )}
-                  {tagFilter && <TagFilterButton {...tagFilter} />}
-                </div>
-                {recoveryPanel}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {filters}
     </section>
   );
 }

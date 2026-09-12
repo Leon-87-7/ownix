@@ -2,6 +2,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useFeedData } from './useFeedData';
+import type { FeedScope } from '@/lib/feed-scope';
 
 // Default fixture: 2 jobs, total = 2 (well below the 1000 guardrail → client mode).
 const STATS = { total: 2, by_status: { done: 2 }, by_content_type: { short: 2 } };
@@ -26,11 +27,26 @@ const stubFeedOk = () => stubFetch((url) => url.includes('/stats')
 
 afterEach(() => vi.unstubAllGlobals());
 
-/** Render the hook and wait for the initial load to settle. */
-async function renderLoadedFeed(initialContentType?: string) {
-  const { result } = renderHook(() => useFeedData(initialContentType));
-  await waitFor(() => expect(result.current.loading).toBe(false));
-  return result;
+/** Render the hook and wait for the initial load to settle.
+ *
+ * The scope is a prop now, not state the hook owns, so a filter change is a
+ * re-render with a new scope — exactly what the Feed page does when its own
+ * `setFeedScope` lands. `setScope` merges a patch the same way. */
+async function renderLoadedFeed(initialScope: FeedScope = {}) {
+  let scope = initialScope;
+  const view = renderHook(({ s }) => useFeedData(s), {
+    initialProps: { s: scope },
+  });
+  await waitFor(() => expect(view.result.current.loading).toBe(false));
+  return {
+    get current() {
+      return view.result.current;
+    },
+    setScope(patch: FeedScope) {
+      scope = { ...scope, ...patch };
+      view.rerender({ s: scope });
+    },
+  };
 }
 
 describe('useFeedData — client mode (total ≤ 1000)', () => {
@@ -78,7 +94,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const fetchCallsBefore = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
 
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     // Give React a tick to settle.
     await act(async () => { await Promise.resolve(); });
 
@@ -92,7 +108,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const fetchCallsBefore = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
 
-    act(() => result.current.setStFilter('done'));
+    act(() => result.setScope({ status: 'done' }));
     await act(async () => { await Promise.resolve(); });
 
     const fetchCallsAfter = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
@@ -117,7 +133,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const fetchCallsBefore = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
 
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     await act(async () => { await Promise.resolve(); });
 
     // No new fetch.
@@ -142,7 +158,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const result = await renderLoadedFeed();
 
-    act(() => result.current.setStFilter('done'));
+    act(() => result.setScope({ status: 'done' }));
     await act(async () => { await Promise.resolve(); });
 
     // Only exact-match status=done (not processing or pending).
@@ -165,7 +181,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
     const result = await renderLoadedFeed();
     expect(result.current.total).toBe(2);
 
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     await act(async () => { await Promise.resolve(); });
 
     expect(result.current.total).toBe(1);
@@ -177,7 +193,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     expect(result.current.loading).toBe(false);
 
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     // After filter change, loading must remain false (no network call).
     expect(result.current.loading).toBe(false);
   });
@@ -197,7 +213,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const result = await renderLoadedFeed();
 
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     await act(async () => { await Promise.resolve(); });
 
     // by_content_type stays global (for tab chips).
@@ -224,7 +240,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
     const result = await renderLoadedFeed();
     expect(result.current.jobs).toHaveLength(3);
 
-    act(() => result.current.setTagFilter(['t1', 't2']));
+    act(() => result.setScope({ tags: ['t1', 't2'] }));
     await act(async () => { await Promise.resolve(); });
 
     expect(result.current.jobs.map((j) => j.id).sort()).toEqual(['s1', 's2']);
@@ -244,7 +260,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     const result = await renderLoadedFeed();
 
-    expect(result.current.tagFilter).toEqual([]);
+    // A scope with no `tags` narrows nothing — including the job carrying none.
     expect(result.current.jobs).toHaveLength(2);
   });
 
@@ -266,7 +282,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
 
     // Narrowing by content_type/status must not change the usage counts —
     // they describe the tag vocabulary, not the current view.
-    act(() => result.current.setCtFilter('short'));
+    act(() => result.setScope({ contentType: 'short' }));
     await act(async () => { await Promise.resolve(); });
     expect(result.current.tagCounts).toEqual({ t1: 2, t2: 2 });
   });
@@ -337,7 +353,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
     // Mount fires 2 fetches in parallel via Promise.all([fetchAllJobs(), fetchStats()]).
     // fetchAllJobs() calls fetch() first → index 0 (expects jobs body).
     // fetchStats() calls fetch() second → index 1 (expects stats body).
-    const { result } = renderHook(() => useFeedData());
+    const { result } = renderHook(() => useFeedData({}));
     await waitFor(() => expect(resolvers.length).toBeGreaterThanOrEqual(2));
 
     // Resolve initial load so we're settled.
@@ -381,7 +397,7 @@ describe('useFeedData — client mode (total ≤ 1000)', () => {
     const staleJobs   = { items: [{ id: 'stale', content_type: 'short', status: 'done' }], total: 1 };
 
     // Mount fires 2 fetches: index 0 = fetchAllJobs (jobs shape), index 1 = fetchStats (stats shape).
-    const { result } = renderHook(() => useFeedData());
+    const { result } = renderHook(() => useFeedData({}));
     await waitFor(() => expect(resolvers.length).toBeGreaterThanOrEqual(2));
     act(() => {
       resolvers[0]({ ok: true, body: initialJobs }); // fetchAllJobs
@@ -488,7 +504,7 @@ describe('useFeedData — server mode (total > 1000)', () => {
         : { ok: true, body: bigJobs };
     });
 
-    const result = await renderLoadedFeed('long');
+    const result = await renderLoadedFeed({ contentType: 'long' });
 
     const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
     expect(calls.some((u) => u.includes('content_type=long'))).toBe(true);
@@ -523,7 +539,7 @@ describe('useFeedData — server mode (total > 1000)', () => {
 
     const fetchCallsBefore = (fetch as ReturnType<typeof vi.fn>).mock.calls.length;
 
-    act(() => result.current.setCtFilter('long'));
+    act(() => result.setScope({ contentType: 'long' }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     // In server mode, a new fetch SHOULD have been triggered.
@@ -568,7 +584,7 @@ describe('useFeedData — server mode (total > 1000)', () => {
 
     // Server mode filters by tag in SQL now (jobs.link_id), rather than
     // disabling the control — so the selection has to reach the request.
-    act(() => result.current.setTagFilter(['t1', 't2']));
+    act(() => result.setScope({ tags: ['t1', 't2'] }));
     await waitFor(() => {
       const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) =>
         String(c[0]),

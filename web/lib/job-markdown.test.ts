@@ -12,13 +12,13 @@ import {
   buildMarkdown,
   parseLinks,
   linksToMarkdown,
-  isSafeHttpUrl,
-  downloadMarkdownFile,
   ENRICHMENT_FIELDS,
   SHORT_FIELDS,
   stripMarkdown,
   isSpeakable,
-} from '@/lib/job-detail-utils'
+} from '@/lib/job-markdown'
+import { isSafeHttpUrl } from '@/lib/url-utils'
+import { downloadMarkdownFile } from '@/lib/download'
 
 // --- downloadMarkdownFile ---
 
