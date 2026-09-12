@@ -62,9 +62,6 @@ export interface TagFilterConfig {
   counts?: Record<string, number>;
   selectedIds: string[];
   onChange: (ids: string[]) => void;
-  /** Disables the trigger (e.g. server-mode paging, where tag filtering isn't
-   * backed by SQL yet) instead of hiding it — see FilterBar's tagFilter prop. */
-  disabled?: boolean;
 }
 
 // Shared default: feed and doc-parser both filter on the same job statuses.
@@ -245,17 +242,12 @@ function FilterButton({
 /** Dropdown-checkbox trigger for TagFilterConfig — same Radix pattern as
  * tag-picker.tsx's TagMenu, but rows toggle filter selection instead of
  * job attachment, plus a leading "All tags" row that clears the selection. */
-function TagFilterButton({ allTags, counts, selectedIds, onChange, disabled }: TagFilterConfig) {
+function TagFilterButton({ allTags, counts, selectedIds, onChange }: TagFilterConfig) {
   const selected = new Set(selectedIds);
   const active = selectedIds.length > 0;
-  // Native `title` rather than the Radix Tooltip: a disabled button suppresses
-  // pointer/focus events a hover-driven tooltip relies on, but browsers still
-  // surface `title` on disabled elements.
   const trigger = (
     <button
       type="button"
-      disabled={disabled}
-      title={disabled ? "Tag filtering isn't available past 1,000 jobs yet" : undefined}
       aria-label="Filter by tags"
       className={`inline-flex h-7 items-center gap-1.5 rounded-md px-3 text-button font-medium transition-ui disabled:cursor-not-allowed disabled:opacity-50 ${
         active
@@ -274,10 +266,7 @@ function TagFilterButton({ allTags, counts, selectedIds, onChange, disabled }: T
 
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger
-        asChild
-        disabled={disabled}
-      >
+      <DropdownMenu.Trigger asChild>
         {trigger}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
@@ -402,8 +391,17 @@ export function FilterBar({
   scrollTabsOnMobile?: boolean;
 }) {
   // #187: status filters + recovery panel collapse behind a disclosure on mobile.
-  // Default collapsed; component remounts on navigation so it resets naturally.
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Default collapsed — except when something in there is already narrowing the
+  // list. Feed filters now survive back-navigation, so the old assumption that a
+  // remount resets them no longer holds: a restored status/checklist/tag filter
+  // would otherwise be applied but hidden, which is the same silent narrowing
+  // the persistence fix exists to end. Open by default means the user can always
+  // see (and undo) what's filtering their list.
+  const [filtersOpen, setFiltersOpen] = useState(
+    Boolean(statusValue) ||
+      Boolean(toggleFilters?.some((f) => f.active)) ||
+      Boolean(tagFilter?.selectedIds.length),
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Track the < sm (640px) breakpoint in JS so the collapsed panel is also

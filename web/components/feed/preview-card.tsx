@@ -8,7 +8,7 @@ import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
 import { NoPreviewRing } from "@/components/ui/no-preview-ring";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
-import { buildJobHref } from "@/lib/job-detail-utils";
+import { buildJobHref, type FeedScope } from "@/lib/job-detail-utils";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
 // - default: fixed aspect thumbnail (9:16 portrait / 16:9 landscape), full meta.
@@ -23,8 +23,9 @@ interface PreviewCardProps {
   job: JobSummary;
   index: number;
   platformGlyph?: ReactNode;
-  contentType?: string;
-  status?: string;
+  /** The Feed's active narrowing, carried into the job URL so Back can rebuild
+   * it — including from a new tab, which has no history to go back to. */
+  scope?: FeedScope;
   variant?: PreviewCardVariant;
   className?: string;
 }
@@ -93,12 +94,11 @@ export function PreviewCard({
   job,
   index,
   platformGlyph,
-  contentType,
-  status,
+  scope,
   variant = "default",
   className = "",
 }: PreviewCardProps) {
-  const href = buildJobHref(job.id, { contentType, status });
+  const href = buildJobHref(job.id, scope ?? {});
   const display = job.title?.trim() || job.url;
   const titleText = display.length > 30 ? `${display.slice(0, 30)}…` : display;
   const compact = variant === "compact";

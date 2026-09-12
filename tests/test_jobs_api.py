@@ -185,6 +185,7 @@ async def test_get_job_stats_unscoped_omits_content_type_predicate(monkeypatch) 
         [
             [{"status": "done", "cnt": 3}, {"status": "error", "cnt": 5}],
             [{"content_type": "article", "cnt": 9}, {"content_type": "short", "cnt": 2}],
+            [],  # count_jobs_by_tag's GROUP BY
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
@@ -215,6 +216,7 @@ async def test_get_job_stats_scopes_status_breakdown_to_content_type(monkeypatch
                 {"status": "error", "cnt": 5},
             ],
             [{"content_type": "article", "cnt": 9}, {"content_type": "short", "cnt": 2}],
+            [],  # count_jobs_by_tag's GROUP BY
         ]
     )
     monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
@@ -287,6 +289,7 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
 
     response = await jobs.list_jobs(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        tags=None,
         page=1,
         limit=20,
     )
@@ -452,6 +455,7 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
     # Must not raise; with no rows the response is an empty list.
     response = await jobs.list_jobs(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
+        tags=None,
         page=1,
         limit=1000,
     )

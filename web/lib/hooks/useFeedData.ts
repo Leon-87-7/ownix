@@ -7,6 +7,9 @@ export interface FeedStats {
   total: number;
   by_status: Record<string, number>;
   by_content_type: Record<string, number>;
+  /** Global per-tag job counts. The only source of the filter dropdown's counts
+   * past CLIENT_MODE_LIMIT, where the browser isn't holding the jobs to count. */
+  by_tag?: Record<string, number>;
 }
 
 interface JobsResponse {
@@ -40,10 +43,14 @@ async function fetchFeedServerMode(
   st: string,
   restricted = false,
   checklistOnly = false,
+  tagIds: string[] = [],
 ): Promise<{ stats: FeedStats; jobs: JobSummary[]; total: number }> {
   const params = new URLSearchParams();
   if (ct) params.set('content_type', ct);
   if (st) params.set('status', st);
+  // Backed by jobs.link_id since the job->link key is persisted, so tag
+  // narrowing means the same thing here as it does client-side.
+  if (tagIds.length) params.set('tags', tagIds.join(','));
   // Server-side so the count stays truthful past CLIENT_MODE_LIMIT, where the
   // client only holds one 50-row page and can't filter the rest.
   if (checklistOnly) params.set('has_checklist', 'true');
@@ -143,11 +150,18 @@ function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useFeedData(initialContentType = '', restricted = false) {
+export function useFeedData(
+  initialContentType = '',
+  restricted = false,
+  // Seeded from the Feed's URL so a back-navigation remount restores the
+  // narrowing the user left behind, rather than dropping them into an
+  // unfiltered list. The Feed owns writing these back to the URL.
+  initialScope: { status?: string; checklistOnly?: boolean; tags?: string[] } = {},
+) {
   const [ctFilter, setCtFilter] = useState(initialContentType);
-  const [stFilter, setStFilter] = useState('');
-  const [checklistOnly, setChecklistOnly] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const [stFilter, setStFilter] = useState(initialScope.status ?? '');
+  const [checklistOnly, setChecklistOnly] = useState(initialScope.checklistOnly ?? false);
+  const [tagFilter, setTagFilter] = useState<string[]>(initialScope.tags ?? []);
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
@@ -184,6 +198,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
   stRef.current = stFilter;
   const checklistOnlyRef = useRef(checklistOnly);
   checklistOnlyRef.current = checklistOnly;
+  const tagFilterRef = useRef(tagFilter);
+  tagFilterRef.current = tagFilter;
   const serverModeRef = useRef(serverMode);
   serverModeRef.current = serverMode;
 
@@ -230,7 +246,8 @@ export function useFeedData(initialContentType = '', restricted = false) {
   // Server-mode filter fetch (called on filter change when in server mode)
   // -------------------------------------------------------------------------
 
-  const serverLoad = useCallback(async (ct: string, st: string, checklist: boolean) => {
+  const serverLoad = useCallback(
+    async (ct: string, st: string, checklist: boolean, tags: string[]) => {
     const reqId = ++reqIdRef.current;
     const loadId = ++loadIdRef.current;
 
@@ -238,7 +255,13 @@ export function useFeedData(initialContentType = '', restricted = false) {
     setError(null);
 
     try {
-      const { stats, jobs, total } = await fetchFeedServerMode(ct, st, restricted, checklist);
+      const { stats, jobs, total } = await fetchFeedServerMode(
+        ct,
+        st,
+        restricted,
+        checklist,
+        tags,
+      );
       if (reqId !== reqIdRef.current) return;
 
       const filtered = ct ? jobs.filter((j) => j.content_type === ct) : jobs;
@@ -270,6 +293,7 @@ export function useFeedData(initialContentType = '', restricted = false) {
           stRef.current,
           restricted,
           checklistOnlyRef.current,
+          tagFilterRef.current,
         );
         if (reqId !== reqIdRef.current) return;
         const ct = ctRef.current;
@@ -317,11 +341,11 @@ export function useFeedData(initialContentType = '', restricted = false) {
       // active — otherwise (e.g. a deep link carrying ?type=short) the mount
       // data is unscoped, so we must fetch the filtered view rather than show
       // the wrong list.
-      if (!ctFilter && !stFilter && !checklistOnly) return;
+      if (!ctFilter && !stFilter && !checklistOnly && !tagFilter.length) return;
     }
-    serverLoad(ctFilter, stFilter, checklistOnly);
+    serverLoad(ctFilter, stFilter, checklistOnly, tagFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ctFilter, stFilter, checklistOnly, serverLoad]);
+  }, [serverMode, ctFilter, stFilter, checklistOnly, tagFilter, serverLoad]);
 
   // -------------------------------------------------------------------------
   // Derived state (client mode only — computed synchronously, no fetch)
@@ -338,10 +362,12 @@ export function useFeedData(initialContentType = '', restricted = false) {
     [serverMode, allJobs, ctFilter],
   );
 
-  // Server mode has no way to filter by tag (see module comment on deriveJobs),
-  // so counts/selection are meaningless there too — the feed disables the
-  // trigger in that case rather than show numbers that don't affect anything.
-  const tagCounts = useMemo(() => deriveTagCounts(allJobs), [allJobs]);
+  // Client mode counts the jobs it holds; server mode can't (it holds one 50-row
+  // page), so it reads the global GROUP BY the stats endpoint returns.
+  const derivedTagCounts = useMemo(() => deriveTagCounts(allJobs), [allJobs]);
+  const tagCounts = serverMode
+    ? (serverStats?.by_tag ?? {})
+    : derivedTagCounts;
 
   const preloadIndexes = useMemo(
     () => new Map(preloadJobs.map((job, index) => [job.id, index])),
@@ -367,11 +393,6 @@ export function useFeedData(initialContentType = '', restricted = false) {
     tagFilter,
     setTagFilter,
     tagCounts,
-    // ponytail: server-mode tag filtering needs a job→link SQL join that isn't
-    // practical today (jobs has no persisted link_id column — see ADR/PR notes).
-    // Exposed so the feed can disable the tag filter trigger above the
-    // client-mode job cap instead of silently no-op'ing it.
-    tagFilterDisabled: serverMode,
     stats,
     jobs,
     total,

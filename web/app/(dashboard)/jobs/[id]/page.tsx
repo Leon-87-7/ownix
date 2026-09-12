@@ -43,6 +43,9 @@ import {
   buildMarkdown,
   parseLinks,
   jobScopeQuery,
+  feedScopeQuery,
+  buildJobHref,
+  type FeedScope,
   downloadMarkdownFile,
   isSafeHttpUrl,
   isSpeakable,
@@ -374,12 +377,26 @@ function JobHeader({
   const searchParams = useSearchParams();
   const contentType = searchParams.get('content_type') ?? undefined;
   const status = searchParams.get('status') ?? undefined;
+  // Two vocabularies, deliberately: /api/jobs/:id/adjacent takes content_type
+  // and knows nothing about the Feed-only narrowings, while /feed reads `type`
+  // and needs all of them. scopeQuery drives the API call; feedScope drives the
+  // links back out.
   const scopeQuery = useMemo(
     () =>
       new URLSearchParams(
         jobScopeQuery({ contentType, status }),
       ).toString(),
     [contentType, status],
+  );
+  const feedScope: FeedScope = useMemo(
+    () => ({
+      contentType,
+      status,
+      query: searchParams.get('q') ?? undefined,
+      checklistOnly: searchParams.get('checklist') === '1',
+      tags: searchParams.get('tags')?.split(',').filter(Boolean) ?? [],
+    }),
+    [contentType, status, searchParams],
   );
   const [adjacent, setAdjacent] = useState<AdjacentJobs>({
     previous_id: null,
@@ -418,9 +435,18 @@ function JobHeader({
       setTitleSaving(false);
     }
   };
-  const jobHref = (id: string) =>
-    `/jobs/${id}${scopeQuery ? `?${scopeQuery}` : ''}`;
-  const feedHref = `/feed${scopeQuery ? `?${scopeQuery}` : ''}`;
+  // Siblings keep the whole scope so walking Previous/Next never quietly
+  // narrows what Back can restore.
+  const jobHref = (id: string) => {
+    const { pathname, query } = buildJobHref(id, feedScope);
+    const qs = new URLSearchParams(query).toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  };
+  // The Feed's own vocabulary (`type`, not `content_type`) — this rebuilds the
+  // Feed when there's no history to go back to, e.g. a card cmd-clicked into a
+  // new tab. Emitting the API's param names here restored nothing.
+  const feedQs = new URLSearchParams(feedScopeQuery(feedScope)).toString();
+  const feedHref = `/feed${feedQs ? `?${feedQs}` : ''}`;
   const handleBackToFeed = () => {
     if (window.history.length > 1) router.back();
     else router.push(feedHref);

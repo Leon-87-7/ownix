@@ -1,5 +1,6 @@
 import { PreviewCard } from "@/components/feed/preview-card";
 import type { JobSummary } from "@/components/feed/job-card";
+import type { FeedScope } from "@/lib/job-detail-utils";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
 // - uniform: the 3-up grid every typed tab (long/article/repo) uses.
@@ -21,14 +22,12 @@ const GRID_CLASS: Record<PreviewGridVariant, string> = {
 
 export function PreviewGrid({
   jobs,
-  contentType,
-  status,
+  scope,
   variant = "uniform",
   preloadIndexes,
 }: {
   jobs: JobSummary[];
-  contentType?: string;
-  status?: string;
+  scope?: FeedScope;
   variant?: PreviewGridVariant;
   /** Positions in the unfiltered feed used by the server's preload hints. */
   preloadIndexes?: ReadonlyMap<string, number>;
@@ -43,8 +42,7 @@ export function PreviewGrid({
             preloadIndexes?.get(job.id) ??
             (preloadIndexes ? Number.MAX_SAFE_INTEGER : index)
           }
-          contentType={contentType}
-          status={status}
+          scope={scope}
           variant={variant === "shorts" ? "compact" : variant === "bento" ? "bento" : "default"}
           className={
             variant === "bento"

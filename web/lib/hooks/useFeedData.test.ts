@@ -550,7 +550,7 @@ describe('useFeedData — server mode (total > 1000)', () => {
     expect(jobsCall).toContain('limit=1000');
   });
 
-  it('exposes tagFilterDisabled=true (no SQL join to support job→link tag filtering past the client-mode cap)', async () => {
+  it('sends the tag filter to the server past the client-mode cap', async () => {
     const bigJobs = {
       items: Array.from({ length: 50 }, (_, i) => ({
         id: `j${i}`,
@@ -566,6 +566,14 @@ describe('useFeedData — server mode (total > 1000)', () => {
 
     const result = await renderLoadedFeed();
 
-    expect(result.current.tagFilterDisabled).toBe(true);
+    // Server mode filters by tag in SQL now (jobs.link_id), rather than
+    // disabling the control — so the selection has to reach the request.
+    act(() => result.current.setTagFilter(['t1', 't2']));
+    await waitFor(() => {
+      const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) =>
+        String(c[0]),
+      );
+      expect(calls.some((u) => u.includes('tags=t1%2Ct2'))).toBe(true);
+    });
   });
 });

@@ -5,7 +5,7 @@ import { DateTime } from "@/components/ui/date-time";
 import { GeneratedBadge } from "@/components/ui/generated-badge";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
-import { buildJobHref } from "@/lib/job-detail-utils";
+import { buildJobHref, type FeedScope } from "@/lib/job-detail-utils";
 import type { TagSummary } from "@/lib/hooks/useLinkTags";
 
 export interface JobSummary {
@@ -27,12 +27,13 @@ export interface JobSummary {
 
 interface JobCardProps {
   job: JobSummary;
-  contentType?: string;
-  status?: string;
+  /** The Feed's active narrowing, carried into the job URL so Back can rebuild
+   * it — including from a new tab, which has no history to go back to. */
+  scope?: FeedScope;
 }
 
-export function JobCard({ job, contentType, status }: JobCardProps) {
-  const href = buildJobHref(job.id, { contentType, status });
+export function JobCard({ job, scope }: JobCardProps) {
+  const href = buildJobHref(job.id, scope ?? {});
   const display = job.title?.trim() || job.url;
 
   // Overlay link: the anchor covers the whole card (full-card click/navigate),

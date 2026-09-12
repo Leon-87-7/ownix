@@ -117,7 +117,6 @@ function setupMocks(
     tagFilter: [],
     setTagFilter: vi.fn(),
     tagCounts: {},
-    tagFilterDisabled: false,
     stats: STATS,
     jobs: JOBS,
     total: JOBS.length,
@@ -388,10 +387,92 @@ describe('FeedPage', () => {
     expect(screen.getByText('2 jobs')).toBeTruthy();
   });
 
+  // The back-navigation fix: a job detail page is a separate route, so Back
+  // remounts the Feed. Anything not in the URL is gone — which is why the whole
+  // scope, not just ?type=, has to round-trip through it.
+  it('restores the whole filter scope from the URL on a remount', () => {
+    navigationMock.searchParams = new URLSearchParams(
+      'type=short&status=done&q=skill&checklist=1&tags=t1,t2',
+    );
+    render(<FeedTree />);
+    expect(mockUseFeedData).toHaveBeenCalledWith('short', false, {
+      status: 'done',
+      query: 'skill',
+      checklistOnly: true,
+      tags: ['t1', 't2'],
+    });
+    expect(mockUseFuseSearch).toHaveBeenCalledWith(
+      expect.anything(),
+      'skill',
+    );
+  });
+
+  it('writes the search query to the URL so Back can restore it', () => {
+    render(<FeedTree />);
+    fireEvent.change(screen.getByLabelText('Search by title or URL'), {
+      target: { value: 'skill' },
+    });
+    expect(navigationMock.replace).toHaveBeenCalledWith(
+      '/feed?q=skill',
+      { scroll: false },
+    );
+  });
+
+  // searchParams only updates once App Router publishes the previous replace().
+  // A second control touched before that lands must not clone stale params and
+  // silently drop the first filter from the URL.
+  it('keeps an earlier filter when a second one is set before the URL updates', () => {
+    mockUseFuseSearch.mockReturnValue({
+      query: 'skill',
+      setQuery: vi.fn(),
+      displayedJobs: JOBS,
+    } as ReturnType<typeof useFuseSearch>);
+    render(<FeedTree />);
+    // searchParams deliberately left empty — the mock never publishes the write.
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(navigationMock.replace).toHaveBeenCalledWith(
+      '/feed?status=done&q=skill',
+      { scroll: false },
+    );
+  });
+
+  it('deletes a filter param when its filter is cleared', () => {
+    navigationMock.searchParams = new URLSearchParams('q=skill');
+    // The input has to actually hold the query, or clearing it is a no-op event.
+    mockUseFuseSearch.mockReturnValue({
+      query: 'skill',
+      setQuery: vi.fn(),
+      displayedJobs: JOBS,
+    } as ReturnType<typeof useFuseSearch>);
+    render(<FeedTree />);
+    fireEvent.change(screen.getByLabelText('Search by title or URL'), {
+      target: { value: '' },
+    });
+    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+      scroll: false,
+    });
+  });
+
+  it('restores a tag filter from the URL at any feed size', () => {
+    navigationMock.searchParams = new URLSearchParams('tags=t1,t2');
+    render(<FeedTree />);
+    expect(mockUseFeedData).toHaveBeenCalledWith('', false, {
+      status: '',
+      query: '',
+      checklistOnly: false,
+      tags: ['t1', 't2'],
+    });
+  });
+
   it('initializes content type from the URL type param', () => {
     navigationMock.searchParams = new URLSearchParams('type=short');
     render(<FeedTree />);
-    expect(mockUseFeedData).toHaveBeenCalledWith('short', false);
+    expect(mockUseFeedData).toHaveBeenCalledWith('short', false, {
+      status: '',
+      query: '',
+      checklistOnly: false,
+      tags: [],
+    });
   });
 
   it('renders content-type tabs with counts', () => {
@@ -714,11 +795,15 @@ describe('FeedPage', () => {
 
   it('keeps an accepted submission visible when the post-submit refresh fails', async () => {
     // Pass the merged feed through so optimistic rows actually render.
+    // setQuery is hoisted out of the implementation on purpose: the real hook
+    // returns a useState setter, which is stable across renders. Minting a new
+    // mock per render makes anything that keys on it re-run every render.
+    const setQuery = vi.fn();
     mockUseFuseSearch.mockImplementation(
       (jobs: JobSummary[]) =>
         ({
           query: '',
-          setQuery: vi.fn(),
+          setQuery,
           displayedJobs: jobs,
         }) as ReturnType<typeof useFuseSearch>,
     );
@@ -787,11 +872,15 @@ describe('FeedPage', () => {
   });
 
   it('drops the optimistic copy once the refreshed feed carries the job', async () => {
+    // setQuery is hoisted out of the implementation on purpose: the real hook
+    // returns a useState setter, which is stable across renders. Minting a new
+    // mock per render makes anything that keys on it re-run every render.
+    const setQuery = vi.fn();
     mockUseFuseSearch.mockImplementation(
       (jobs: JobSummary[]) =>
         ({
           query: '',
-          setQuery: vi.fn(),
+          setQuery,
           displayedJobs: jobs,
         }) as ReturnType<typeof useFuseSearch>,
     );

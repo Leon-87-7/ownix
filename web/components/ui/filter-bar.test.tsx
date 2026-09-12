@@ -242,13 +242,13 @@ describe('FilterBar', () => {
           allTags: TAGS,
           selectedIds: [],
           onChange: vi.fn(),
-          disabled: true,
         }}
       />,
     );
 
+    // Tag filtering is backed by jobs.link_id in SQL now, so it stays usable
+    // at every feed size rather than disabling itself past the client-mode cap.
     const trigger = screen.getByRole('button', { name: 'Filter by tags' });
-    expect(trigger).toBeDisabled();
-    expect(trigger).toHaveAttribute('title', "Tag filtering isn't available past 1,000 jobs yet");
+    expect(trigger).not.toBeDisabled();
   });
 });

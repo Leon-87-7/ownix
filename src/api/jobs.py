@@ -47,6 +47,13 @@ async def _add_link_ids(items: list[dict], chat_id: int) -> None:
         item["link_id"] = links_by_url[normalized_by_job[item["id"]]]
         if item["id"] in sweepable:
             await database.sweep_job_tags_to_link(item["id"], item["link_id"])
+    # Persist what we just resolved. The key is computed here from
+    # normalize_url(), which SQL can't call, so storing it is the only way tag
+    # filtering gets a column to JOIN on past the client-mode cap. Writing it on
+    # read makes the backfill self-healing: a job is joinable once it's listed.
+    await database.persist_job_link_ids(
+        {item["id"]: item["link_id"] for item in resolved}
+    )
 
 
 class RecoveryRequest(BaseModel):
@@ -104,10 +111,16 @@ async def get_job_stats(
         rows2 = await cur2.fetchall()
         by_content_type: dict[str, int] = {row["content_type"]: row["cnt"] for row in rows2}
 
+    # Always global, like by_content_type: picking one tag must not change
+    # another tag's count in the filter dropdown. Past the client-mode cap this
+    # is the only source of those counts — the browser isn't holding the jobs.
+    by_tag = await database.count_jobs_by_tag(chat_id)
+
     return {
         "total": total,
         "by_status": by_status,
         "by_content_type": by_content_type,
+        "by_tag": by_tag,
     }
 
 
@@ -335,6 +348,7 @@ def _job_scope_where(
     content_type: str | None,
     status: str | None,
     has_checklist: bool | None = None,
+    tag_ids: list[str] | None = None,
 ) -> tuple[str, list]:
     """Feed-scope filter shared by list_jobs and get_adjacent_jobs — the two must
     agree on what's visible or prev/next navigation drifts from the feed.
@@ -359,6 +373,20 @@ def _job_scope_where(
         params.append(status)
     else:
         conditions.append("status != 'cancelled'")
+    if tag_ids:
+        # OR across the selected tags, and job_tags ∪ link_tags per job — the
+        # same effective-tag union batch_list_effective_job_tags builds in
+        # Python, so a tag narrows identically whether the feed is filtering
+        # client-side or here. Relies on jobs.link_id (see persist_job_link_ids).
+        placeholders = ",".join("?" * len(tag_ids))
+        conditions.append(
+            f"(EXISTS (SELECT 1 FROM job_tags jt WHERE jt.job_id = jobs.id "
+            f"AND jt.tag_id IN ({placeholders})) "
+            f"OR EXISTS (SELECT 1 FROM link_tags lt WHERE lt.link_id = jobs.link_id "
+            f"AND lt.tag_id IN ({placeholders})))"
+        )
+        params.extend(tag_ids)
+        params.extend(tag_ids)
     return " AND ".join(conditions), params
 
 
@@ -368,14 +396,20 @@ async def list_jobs(
     content_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
     has_checklist: bool | None = Query(default=None),
+    tags: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=1000),
 ) -> dict:
-    """List jobs for the authenticated user with optional filters and pagination."""
+    """List jobs for the authenticated user with optional filters and pagination.
+
+    *tags* is a comma-separated tag-id list with OR semantics, matching the
+    Feed's multi-select tag filter.
+    """
     chat_id: int = request.state.user["id"]
     offset = (page - 1) * limit
+    tag_ids = [t for t in (tags or "").split(",") if t]
 
-    where, params = _job_scope_where(chat_id, content_type, status, has_checklist)
+    where, params = _job_scope_where(chat_id, content_type, status, has_checklist, tag_ids)
 
     async with database.connection() as conn:
         cur_total = await conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {where}", params)

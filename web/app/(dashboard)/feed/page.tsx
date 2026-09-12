@@ -49,6 +49,11 @@ import {
 import { useRestrictedMode } from '@/lib/restricted/context';
 import { extractSharedUrl } from '@/lib/share-target';
 import {
+  feedScopeQuery,
+  parseFeedScope,
+  type FeedScope,
+} from '@/lib/job-detail-utils';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -58,6 +63,16 @@ import {
 const CONTENT_TYPES = new Set(['short', 'long', 'article', 'repo']);
 
 const LAYOUT_KEY = 'ownix.feed.layout';
+
+/** FeedScope key → the URL param it round-trips as. `contentType` is `type`
+ * here and `content_type` on job URLs — see feedScopeQuery/jobScopeQuery. */
+const FEED_PARAM: Record<keyof FeedScope, string> = {
+  contentType: 'type',
+  status: 'status',
+  query: 'q',
+  checklistOnly: 'checklist',
+  tags: 'tags',
+};
 
 const CONTENT_TYPE_FILTERS = [
   { label: 'All', value: '' },
@@ -150,6 +165,18 @@ function FeedPageContent() {
   const urlContentType = normalizeContentType(
     searchParams.get('type'),
   );
+  // Read once for the initial mount only — a back-navigation is a fresh mount,
+  // which is exactly when this has to seed. Live updates come from setFeedScope
+  // setting state directly, so this deliberately isn't a sync effect.
+  const initialScopeRef = useRef<
+    ReturnType<typeof parseFeedScope> | null
+  >(null);
+  if (initialScopeRef.current === null)
+    initialScopeRef.current = parseFeedScope(searchParams);
+  const initialScope = initialScopeRef.current;
+  // Latest params without making every consumer of setFeedScope re-key on them.
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
   const { restricted, showRestrictedToast } = useRestrictedMode();
   const {
     ctFilter,
@@ -161,7 +188,6 @@ function FeedPageContent() {
     tagFilter,
     setTagFilter,
     tagCounts,
-    tagFilterDisabled,
     stats,
     jobs,
     total,
@@ -169,7 +195,7 @@ function FeedPageContent() {
     error,
     reload,
     preloadIndexes,
-  } = useFeedData(urlContentType, restricted);
+  } = useFeedData(urlContentType, restricted, initialScope);
   // Shared module-level vocabulary cache (also used by JobCardTags), so the
   // filter dropdown doesn't fire its own /api/controls/tags request in the
   // common case. Re-reads on every job-list refresh (background poll, manual
@@ -203,8 +229,10 @@ function FeedPageContent() {
       ...jobs,
     ];
   }, [optimisticJobs, jobs]);
-  const { query, setQuery, displayedJobs } =
-    useFuseSearch(mergedJobs);
+  const { query, setQuery, displayedJobs } = useFuseSearch(
+    mergedJobs,
+    initialScope.query,
+  );
   const { connected: googleConnected } = useGoogleStatus();
   // Poll on mergedJobs, not jobs: an accepted submission held as an optimistic
   // row keeps the poll hot, so a failed post-submit refresh retries until the
@@ -289,22 +317,72 @@ function FeedPageContent() {
     );
   }, [searchParams, restricted]);
 
-  const setContentType = useCallback(
-    (value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('view');
-      if (value) {
-        params.set('type', value);
-      } else {
-        params.delete('type');
+  // The Feed's single URL writer. Every narrowing round-trips through here so
+  // the address bar always describes the list on screen — which is what makes
+  // a back-navigation restore the user's working set instead of dumping them
+  // at the top of an unfiltered feed. One writer, not one per control: the
+  // cleanup effect above deletes params concurrently, and its own comment warns
+  // what happens when several writers race a `replace` into the address bar.
+  // The canonical scope, mirrored from state each render and advanced
+  // synchronously inside setFeedScope. Serializing from `searchParams` instead
+  // loses writes: it only updates once App Router publishes the previous
+  // replace(), so typing `q` and immediately clicking a filter chip would clone
+  // params that don't carry `q` yet and drop it from the URL — while the list
+  // on screen stays filtered. Divergence like that is the bug, not a nuance.
+  const feedScope: FeedScope = {
+    contentType: ctFilter,
+    status: stFilter,
+    query,
+    checklistOnly,
+    tags: tagFilter,
+  };
+  const scopeRef = useRef<FeedScope>(feedScope);
+  scopeRef.current = feedScope;
+  const setFeedScope = useCallback(
+    (patch: Partial<FeedScope>) => {
+      const scope = { ...scopeRef.current, ...patch };
+      scopeRef.current = scope;
+      const params = new URLSearchParams(
+        searchParamsRef.current.toString(),
+      );
+      // A scope change always means the Jobs list, never the Links table.
+      if ('contentType' in patch) params.delete('view');
+      // Every scope param is rewritten from the canonical object, not just the
+      // patched keys — that's what makes a second call landing before the first
+      // replace() commits carry the earlier filter rather than erase it.
+      // feedScopeQuery omits empty values, turning "cleared" into "deleted".
+      const next = feedScopeQuery(scope);
+      for (const param of Object.values(FEED_PARAM)) {
+        if (next[param]) params.set(param, next[param]);
+        else params.delete(param);
       }
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, {
         scroll: false,
       });
-      setCtFilter(value);
+      // No debounce on the `q` path: the jobs are already in memory and Fuse
+      // re-filters them on every keystroke regardless, so this adds a render,
+      // not a fetch. The repo's debounces (useLinksTable, useAddSearch) guard
+      // network calls, which this isn't.
+      if (patch.contentType !== undefined)
+        setCtFilter(patch.contentType);
+      if (patch.status !== undefined) setStFilter(patch.status);
+      if (patch.query !== undefined) setQuery(patch.query);
+      if (patch.checklistOnly !== undefined)
+        setChecklistOnly(patch.checklistOnly);
+      if (patch.tags !== undefined) setTagFilter(patch.tags);
     },
-    [pathname, router, searchParams, setCtFilter],
+    // Deliberately not keyed on `searchParams` — read through the ref instead.
+    // The `q` path writes the URL on every keystroke, so depending on it would
+    // hand every consumer a new setFeedScope per character; registerFeedSearch
+    // below would then unregister/re-register the whole time the user types.
+    // Same reason showingLinksRef exists a few lines down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pathname, router],
+  );
+  const setContentType = useCallback(
+    (value: string) => setFeedScope({ contentType: value }),
+    [setFeedScope],
   );
 
   const switchToLinks = useCallback(() => {
@@ -473,10 +551,13 @@ function FeedPageContent() {
 
   const clearAll = () => {
     setFeedView('jobs');
-    setContentType('');
-    setStFilter('');
-    setChecklistOnly(false);
-    setQuery('');
+    setFeedScope({
+      contentType: '',
+      status: '',
+      query: '',
+      checklistOnly: false,
+      tags: [],
+    });
   };
 
   return (
@@ -544,12 +625,12 @@ function FeedPageContent() {
           setContentType(value);
         }}
         query={query}
-        setQuery={setQuery}
+        setQuery={(next) => setFeedScope({ query: next })}
         searchInputId="feed-search"
         searchPlaceholder="Search by title or URL…"
         searchLabel="Search by title or URL"
         statusValue={stFilter}
-        onStatusChange={setStFilter}
+        onStatusChange={(next) => setFeedScope({ status: next })}
         toggleFilters={[
           {
             // Same mark the cards wear (GeneratedBadge), same paint — the chip
@@ -558,15 +639,14 @@ function FeedPageContent() {
             icon: BookmarkCheck,
             iconClassName: GENERATED_MARK_PAINT,
             active: checklistOnly,
-            onChange: setChecklistOnly,
+            onChange: (next) => setFeedScope({ checklistOnly: next }),
           },
         ]}
         tagFilter={{
           allTags,
           counts: tagCounts,
           selectedIds: tagFilter,
-          onChange: setTagFilter,
-          disabled: tagFilterDisabled,
+          onChange: (next) => setFeedScope({ tags: next }),
         }}
         hideSearchAndFilters={showingLinks}
         searchSlot={
@@ -685,8 +765,7 @@ function FeedPageContent() {
               <PreviewGrid
                 jobs={displayedJobs}
                 preloadIndexes={preloadIndexes}
-                contentType={ctFilter}
-                status={stFilter}
+                scope={feedScope}
                 variant={
                   ctFilter === 'short'
                     ? 'shorts'
@@ -701,8 +780,7 @@ function FeedPageContent() {
                   <JobCard
                     key={job.id}
                     job={job}
-                    contentType={ctFilter}
-                    status={stFilter}
+                    scope={feedScope}
                   />
                 ))}
               </div>
