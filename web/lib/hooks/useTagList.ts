@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { useFetchList, apiPost, apiPut, apiDelete } from '@/lib/fetch-utils';
+import { fetchVocabulary } from '@/lib/hooks/useLinkTags';
 
 export interface Tag {
   id: string;
@@ -29,16 +30,19 @@ export function useTagList() {
       throw new Error(result.status === 409 ? 'Tag name already exists' : result.detail);
     }
     setTags((prev) => [...prev, result.data].sort((a, b) => a.name.localeCompare(b.name)));
+    fetchVocabulary(true);
   }, [setTags]);
 
   const deleteTag = useCallback(async (id: string): Promise<void> => {
     await apiDelete(`/api/controls/tags/${id}`);
     setTags((prev) => prev.filter((t) => t.id !== id));
+    fetchVocabulary(true);
   }, [setTags]);
 
   const updateTag = useCallback(async (id: string, values: TagFormState): Promise<void> => {
     const updated = await apiPut<Tag>(`/api/controls/tags/${id}`, values, 'Update failed');
     setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)).sort((a, b) => a.name.localeCompare(b.name)));
+    fetchVocabulary(true);
   }, [setTags]);
 
   // GoTo quick-jump: any number of a user's own tags can be pinned. Nothing is

@@ -304,6 +304,19 @@ describe('ControlsPage', () => {
     expect(section('Tags').getByText('Beta')).toBeTruthy();
   });
 
+  it('shows a usage count badge per tag when /api/jobs/stats returns by_tag', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/jobs/stats')) {
+        return new Response(JSON.stringify({ by_tag: { t1: 5 } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ telegram_notifications: true }), { status: 200 });
+    }));
+    render(<ControlsPage />);
+    expect(await section('Tags').findByText('5')).toBeTruthy();
+    // Beta (t2) has no entry in by_tag, so it renders no count badge.
+    expect(section('Tags').queryByText('0')).toBeNull();
+  });
+
   it('shows loading state in TagsTab', () => {
     setupTagsMock({ loading: true, tags: [] });
     render(<ControlsPage />);
