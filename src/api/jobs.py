@@ -380,6 +380,8 @@ def _job_scope_where(
         # client-side or here. Relies on jobs.link_id (see persist_job_link_ids).
         placeholders = ",".join("?" * len(tag_ids))
         conditions.append(
+            # nosec B608 -- `placeholders` is only `?` marks, one per tag_id;
+            # every actual value is bound through `params` below.
             f"(EXISTS (SELECT 1 FROM job_tags jt WHERE jt.job_id = jobs.id "
             f"AND jt.tag_id IN ({placeholders})) "
             f"OR EXISTS (SELECT 1 FROM link_tags lt WHERE lt.link_id = jobs.link_id "
