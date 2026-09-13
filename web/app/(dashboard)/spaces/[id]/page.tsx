@@ -17,6 +17,8 @@ import { TabBar } from '@/components/ui/tab-bar';
 import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { IconPicker } from '@/components/spaces/icon-picker';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
 import { DEFAULT_SPACE_ICON, SPACE_ICON_BY_NAME } from '@/lib/space-icons';
 import { apiDelete } from '@/lib/fetch-utils';
 import { toast } from '@/lib/toast';
@@ -64,12 +66,6 @@ export default function SpaceDetailPage() {
   const [deleteFailed, setDeleteFailed] = useState(false);
 
   const handleDelete = useCallback(async () => {
-    if (
-      !window.confirm(
-        'Delete this collection? Saved items will not be deleted.',
-      )
-    )
-      return;
     setDeleting(true);
     setDeleteFailed(false);
     try {
@@ -142,7 +138,8 @@ export default function SpaceDetailPage() {
         href="/spaces"
         className="inline-flex items-center gap-1 text-xs text-muted transition-ui hover:text-ink"
       >
-        <span aria-hidden="true">&#8592;</span> Back to collections
+        <OwnixChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
+        Back to collections
       </Link>
 
       {!editing ? (
@@ -172,13 +169,21 @@ export default function SpaceDetailPage() {
               >
                 Edit
               </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+              <ConfirmDialog
+                title="Delete this collection?"
+                description="Saved items will not be deleted."
+                confirmLabel="Delete collection"
+                pending={deleting}
+                onConfirm={handleDelete}
+                trigger={
+                  <button
+                    disabled={deleting}
+                    className="h-8 rounded-md border border-line px-3 text-button font-medium text-status-error transition-ui hover:bg-raised disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete'}
+                  </button>
+                }
+              />
             </div>
             {deleteFailed && (
               <p className="text-xs text-status-error">

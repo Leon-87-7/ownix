@@ -18,6 +18,9 @@ type ConfirmDialogProps = {
   description: string;
   confirmLabel: string;
   pending?: boolean;
+  /** Confirm-button label while `pending`. Defaults to "Deleting…" — override
+   * for a non-delete action (e.g. "Disconnecting…", "Clearing…"). */
+  pendingLabel?: string;
   /** Disable the confirm button independent of `pending` — e.g. a
    * type-to-confirm field that hasn't matched yet. */
   confirmDisabled?: boolean;
@@ -37,6 +40,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   pending = false,
+  pendingLabel,
   confirmDisabled = false,
   onConfirm,
   children,
@@ -86,7 +90,7 @@ export function ConfirmDialog({
             }}
             className="h-8 rounded-md bg-status-error px-3 text-button font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
           >
-            {pending ? 'Deleting…' : confirmLabel}
+            {pending ? (pendingLabel ?? 'Deleting…') : confirmLabel}
           </button>
         </div>
       </DialogContent>

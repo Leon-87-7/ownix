@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@/test/render';
+import { render, screen, waitFor, within } from '@/test/render';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import IntakePage from './page';
@@ -229,8 +229,6 @@ describe('IntakePage', () => {
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
-    const confirmMock = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirmMock);
 
     render(<IntakePage />);
     const composer = await screen.findByLabelText(/intake composer/i);
@@ -239,12 +237,14 @@ describe('IntakePage', () => {
     await waitFor(() => expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /clear history/i }));
-    expect(confirmMock).toHaveBeenCalled();
+    let dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
     // Declined: the card stays.
     expect(screen.getByText(/received — job_abcd/i)).toBeInTheDocument();
 
-    confirmMock.mockReturnValue(true);
     await user.click(screen.getByRole('button', { name: /clear history/i }));
+    dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /clear history/i }));
     await waitFor(() => expect(screen.getByText(/nothing submitted yet/i)).toBeInTheDocument());
     expect(localStorage.getItem('ownix.intake.thread')).toBe('[]');
   });

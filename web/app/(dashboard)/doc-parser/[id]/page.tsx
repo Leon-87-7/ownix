@@ -9,6 +9,11 @@ import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
 import { downloadBlob } from '@/components/ui/export-modal';
 import { PageShell } from '@/components/shell/page-shell';
 import { Tooltip } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { describeError } from '@/lib/fetch-utils';
 
 const RANDOM_PROMPTS = [
@@ -329,7 +334,7 @@ export default function DocDetail() {
           <button
             onClick={clean}
             disabled={busy}
-            className="rounded-md bg-signal px-4 py-2 text-sm text-onsignal disabled:opacity-50"
+            className="h-8 rounded-md bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:opacity-50"
           >
             {action === 'clean' ? (
               // `.ownix-shimmer` only takes effect under
@@ -345,7 +350,7 @@ export default function DocDetail() {
           <button
             onClick={() => setOpen(true)}
             disabled={busy}
-            className="rounded-md border border-line px-4 py-2 text-sm text-ink disabled:opacity-50"
+            className="h-8 rounded-md border border-line px-4 text-button font-medium text-ink transition-ui hover:bg-raised disabled:opacity-50"
           >
             {action === 'freestyle' ? (
               <span className="ownix-shimmer">Running…</span>
@@ -359,7 +364,7 @@ export default function DocDetail() {
             href={rawParse.content_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md border border-line px-4 py-2 text-sm text-ink"
+            className="inline-flex h-8 items-center rounded-md border border-line px-4 text-button font-medium text-ink transition-ui hover:bg-raised"
           >
             Get Markdown
           </a>
@@ -377,56 +382,48 @@ export default function DocDetail() {
         ))}
       </section>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-        >
-          <div className="w-full max-w-lg rounded-lg border border-line bg-surface p-4">
-            <h2 className="text-lg font-semibold text-ink">
-              Freestyle prompt
-            </h2>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="mt-3 h-36 w-full rounded-md border border-line bg-canvas p-3 text-sm text-ink"
-            />
-            <div className="mt-3 flex justify-between">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogTitle>Freestyle prompt</DialogTitle>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className="mt-3 h-36 w-full rounded-md border border-line bg-canvas p-3 text-copy text-ink outline-none transition-ui focus:border-signal"
+          />
+          <div className="mt-3 flex justify-between">
+            <button
+              onClick={() =>
+                setPrompt(
+                  RANDOM_PROMPTS[
+                    Math.floor(
+                      Math.random() * RANDOM_PROMPTS.length,
+                    )
+                  ],
+                )
+              }
+              className="h-8 rounded-md px-3 text-button font-medium text-body transition-ui hover:bg-raised hover:text-ink"
+            >
+              Shuffle random
+            </button>
+            <div className="flex gap-2">
               <button
-                onClick={() =>
-                  setPrompt(
-                    RANDOM_PROMPTS[
-                      Math.floor(
-                        Math.random() * RANDOM_PROMPTS.length,
-                      )
-                    ],
-                  )
-                }
-                className="text-sm text-body"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="h-8 rounded-md border border-line px-3 text-button font-medium text-ink transition-ui hover:bg-raised disabled:opacity-50"
               >
-                Shuffle random
+                Cancel
               </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setOpen(false)}
-                  disabled={busy}
-                  className="rounded-md px-3 py-2 text-sm text-body disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={freestyle}
-                  disabled={busy}
-                  className="rounded-md bg-signal px-3 py-2 text-sm text-onsignal disabled:opacity-50"
-                >
-                  Run
-                </button>
-              </div>
+              <button
+                onClick={freestyle}
+                disabled={busy}
+                className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright active:bg-signal-deep disabled:opacity-50"
+              >
+                Run
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

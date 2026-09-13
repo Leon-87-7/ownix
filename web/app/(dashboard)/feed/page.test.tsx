@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@/test/render';
+import { fireEvent, render, screen, waitFor, within } from '@/test/render';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -811,10 +811,7 @@ describe('FeedPage', () => {
     });
   });
 
-  it('requires the exact confirmation copy before clearing failed jobs', async () => {
-    const confirmMock = vi.fn(() => true);
-    vi.stubGlobal('confirm', confirmMock);
-
+  it('clears failed jobs only after confirming in the dialog', async () => {
     render(<FeedTree />);
     await openRecoveryActions();
     fireEvent.click(
@@ -823,9 +820,20 @@ describe('FeedPage', () => {
       }),
     );
 
-    expect(confirmMock).toHaveBeenCalledWith(
-      'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.',
+    const dialog = await screen.findByRole('dialog');
+    expect(fetch).not.toHaveBeenCalledWith(
+      '/api/jobs/recovery/clear-failed',
+      expect.anything(),
     );
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear failed' }));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/jobs/recovery/clear-failed',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
   });
 
   it('reloads the feed when the error banner retry is clicked', () => {

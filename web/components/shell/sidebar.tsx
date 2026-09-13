@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { PulsingBorder } from '@paper-design/shaders-react';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
@@ -250,12 +251,6 @@ export function Sidebar() {
   }, [open]);
 
   const handleDisconnect = async () => {
-    if (
-      !window.confirm(
-        'Disconnect Google? Exports to your Drive/Sheets stop until you reconnect (full consent flow).',
-      )
-    )
-      return;
     setDisconnecting(true);
     setDisconnectFailed(false);
     const ok = await disconnect();
@@ -530,21 +525,30 @@ export function Sidebar() {
                     >
                       ·
                     </span>
-                    <button
-                      type="button"
-                      aria-label={
-                        disconnecting ? 'Disconnecting' : 'Disconnect'
+                    <ConfirmDialog
+                      title="Disconnect Google?"
+                      description="Exports to your Drive/Sheets stop until you reconnect (full consent flow)."
+                      confirmLabel="Disconnect"
+                      pending={disconnecting}
+                      pendingLabel="Disconnecting…"
+                      onConfirm={handleDisconnect}
+                      trigger={
+                        <button
+                          type="button"
+                          aria-label={
+                            disconnecting ? 'Disconnecting' : 'Disconnect'
+                          }
+                          disabled={disconnecting}
+                          tabIndex={open ? undefined : -1}
+                          className="-m-2 rounded p-2 text-muted transition-ui hover:text-status-error focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:opacity-50"
+                        >
+                          <Unplug
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                        </button>
                       }
-                      onClick={handleDisconnect}
-                      disabled={disconnecting}
-                      tabIndex={open ? undefined : -1}
-                      className="-m-2 rounded p-2 text-muted transition-ui hover:text-status-error focus:outline-none focus:ring-1 focus:ring-signal active:scale-[0.96] disabled:opacity-50"
-                    >
-                      <Unplug
-                        className="h-4 w-4"
-                        aria-hidden="true"
-                      />
-                    </button>
+                    />
                   </>
                 ) : connected === false ? (
                   <a

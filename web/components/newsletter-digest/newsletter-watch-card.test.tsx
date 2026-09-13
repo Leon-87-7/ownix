@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@/test/render';
+import { fireEvent, render, screen, within } from '@/test/render';
 import { describe, expect, it, vi } from 'vitest';
 import { NewsletterWatchCard } from './newsletter-watch-card';
 import type { NewsletterWatch } from '@/lib/newsletter-digest';
@@ -34,15 +34,25 @@ describe('NewsletterWatchCard', () => {
     expect(screen.getByText('error')).toBeInTheDocument();
   });
 
-  it('calls retry and delete actions with the watch id', () => {
+  it('calls retry with the watch id', () => {
     const onRetry = vi.fn();
-    const onDelete = vi.fn();
-    render(<NewsletterWatchCard watch={watch} onRetry={onRetry} onDelete={onDelete} />);
+    render(<NewsletterWatchCard watch={watch} onRetry={onRetry} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete AI Signals' }));
 
     expect(onRetry).toHaveBeenCalledWith('watch_1');
+  });
+
+  it('calls delete only after confirming in the dialog', async () => {
+    const onDelete = vi.fn();
+    render(<NewsletterWatchCard watch={watch} onDelete={onDelete} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete AI Signals' }));
+    expect(onDelete).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop watching' }));
+
     expect(onDelete).toHaveBeenCalledWith('watch_1');
   });
 });

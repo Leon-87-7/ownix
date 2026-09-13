@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type React from 'react';
 
 import { useRecovery } from '@/lib/hooks/useRecovery';
 import { useSubmitJobOptional } from '@/components/feed/submit-job';
-
-const CLEAR_CONFIRM_COPY = 'Clear failed jobs in this tab? This marks them cancelled; it does not delete them from DB.';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 function RecoveryButton({
   children,
@@ -54,28 +53,28 @@ export function RecoveryPanel({
   const failedActionCount = summary.error_jobs + summary.stale_in_flight;
   const canClearFailed = summary.error_jobs > 0;
 
-  // Mirror Clear Failed into the command launcher (when mounted inside
-  // SubmitJobProvider) so its scope + availability stay in sync with this panel.
-  // useRecovery hands back a fresh clearFailed closure every render, so the
-  // launcher command calls through a ref and the effect re-runs only when
-  // availability flips — depending on the closure directly would loop (register
-  // → setState → re-render → new closure → register …).
+  // Mirrors Clear Failed into the command launcher (when mounted inside
+  // SubmitJobProvider) so its scope + availability stay in sync with this
+  // panel. `requestClearFailed` just opens the one styled confirm below -
+  // shared by this panel's own button, the "c" keyboard shortcut, and the
+  // command palette, instead of each gating its own native confirm().
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const requestClearFailed = useCallback(
+    () => setConfirmClearOpen(true),
+    [],
+  );
+
   const registerFeedRecovery =
     useSubmitJobOptional()?.registerFeedRecovery;
-  const clearFailedRef = useRef(clearFailed);
-  clearFailedRef.current = clearFailed;
   useEffect(() => {
     if (!registerFeedRecovery) return;
     if (!active) {
       registerFeedRecovery(null);
       return;
     }
-    registerFeedRecovery({
-      canClearFailed,
-      clearFailed: () => clearFailedRef.current(),
-    });
+    registerFeedRecovery({ canClearFailed, requestClearFailed });
     return () => registerFeedRecovery(null);
-  }, [active, canClearFailed, registerFeedRecovery]);
+  }, [active, canClearFailed, registerFeedRecovery, requestClearFailed]);
 
   const attentionCount =
     summary.stale_pending + summary.error_jobs + summary.stale_in_flight;
@@ -85,11 +84,6 @@ export function RecoveryPanel({
   useEffect(() => {
     if (attentionCount === 0) setOpen(false);
   }, [attentionCount]);
-
-  const onClear = () => {
-    if (!confirm(CLEAR_CONFIRM_COPY)) return;
-    void clearFailed();
-  };
 
   if (!active) return null;
 
@@ -156,7 +150,7 @@ export function RecoveryPanel({
             </RecoveryButton>
           )}
           {summary.error_jobs > 0 && (
-            <RecoveryButton disabled={disabled} onClick={onClear}>
+            <RecoveryButton disabled={disabled} onClick={requestClearFailed}>
               {acting === 'clear'
                 ? 'Clearing...'
                 : `Clear failed (${summary.error_jobs})`}
@@ -164,6 +158,16 @@ export function RecoveryPanel({
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={confirmClearOpen}
+        onOpenChange={setConfirmClearOpen}
+        title="Clear failed jobs?"
+        description="This marks them cancelled in this tab. It does not delete them from the database."
+        confirmLabel="Clear failed"
+        pending={acting === 'clear'}
+        pendingLabel="Clearing…"
+        onConfirm={() => clearFailed()}
+      />
       {error && (
         <div className="flex w-full items-center justify-end gap-2 text-xs text-muted">
           <span>{error}. Retry recovery when ready.</span>
