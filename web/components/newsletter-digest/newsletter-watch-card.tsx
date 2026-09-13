@@ -68,6 +68,7 @@ export function NewsletterWatchCard({
               title={`Stop watching "${watch.name}"?`}
               description="Its candidates are deleted too. This can't be undone."
               confirmLabel="Stop watching"
+              pending={deleting}
               onConfirm={() => onDelete(watch.id)}
               trigger={
                 <button
