@@ -35,7 +35,7 @@ export default function ControlsPage() {
           <TagsPanel />
         </Section>
         <Section title="Domains" defaultOpen>
-          <p className="mb-4 text-sm text-body">
+          <p className="mb-4 text-copy text-body">
             Decide which sites Ownix processes on its own. Put a domain in
             Allowed and links from it get picked up; put it in Ignored and they
             get skipped. It is how you route around a noisy source without
@@ -43,7 +43,7 @@ export default function ControlsPage() {
           </p>
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+              <h4 className="mb-3 text-label font-semibold text-muted">
                 Allowed
               </h4>
               <DomainPanel
@@ -52,7 +52,7 @@ export default function ControlsPage() {
               />
             </div>
             <div className="md:border-l md:border-line md:pl-6">
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+              <h4 className="mb-3 text-label font-semibold text-muted">
                 Ignored
               </h4>
               <DomainPanel
@@ -65,9 +65,9 @@ export default function ControlsPage() {
         <Section title="Accessibility">
           <AccessibilityPanel />
         </Section>
-        <div className="rounded-lg border border-line bg-surface px-4 py-3">
+        <Section title="Recovery notifications">
           <RecoveryNotificationsPanel />
-        </div>
+        </Section>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
         </Section>

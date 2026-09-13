@@ -11,7 +11,9 @@ import {
 import * as RadixDialog from '@radix-ui/react-dialog';
 
 type ConfirmDialogProps = {
-  trigger: ReactNode;
+  /** Omit when the dialog is opened from elsewhere (`open`/`onOpenChange`
+   * controlled) — e.g. a delete affordance that lives inside a child form. */
+  trigger?: ReactNode;
   title: string;
   description: string;
   confirmLabel: string;
@@ -23,6 +25,10 @@ type ConfirmDialogProps = {
   /** Extra interactive content (e.g. an opt-in checkbox) between the
    * description and the action buttons. */
   children?: ReactNode;
+  /** Controlled open state — pairs with `onOpenChange` when there's no
+   * `trigger` for the dialog to wire itself to. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function ConfirmDialog({
@@ -34,13 +40,17 @@ export function ConfirmDialog({
   confirmDisabled = false,
   onConfirm,
   children,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChangeProp ?? setInternalOpen;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
         hideClose
         onOpenAutoFocus={(event) => {

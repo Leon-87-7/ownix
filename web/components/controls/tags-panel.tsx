@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pin, PinOff, TagPlus } from 'lucide-react';
 import { TagMark } from '@/components/ui/tag-picker';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { TagForm, DEFAULT_COLOR } from '@/components/ui/tag-form';
 import { describeError } from '@/lib/fetch-utils';
 import { useTagList } from '@/lib/hooks/useTagList';
@@ -24,7 +25,7 @@ function TagPill({
 }) {
   return (
     <li
-      className={`inline-flex items-center gap-0.5 rounded-full border bg-raised pr-1 text-xs font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
+      className={`inline-flex items-center gap-0.5 rounded-full border bg-raised pr-1 text-label font-medium text-ink transition-ui hover:border-line-strong ${editing ? 'border-line ring-1 ring-signal-deep' : 'border-line'}`}
     >
       <Tooltip content={tag.meaning || undefined}>
         <button
@@ -82,6 +83,8 @@ export function TagsPanel() {
     toggleTagPinned,
   } = useTagList();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | undefined>();
   const [pinError, setPinError] = useState<string | undefined>();
   const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
@@ -122,13 +125,16 @@ export function TagsPanel() {
 
   const handleDelete = async () => {
     if (!editingTag) return;
-    if (!confirm(`Delete tag "${editingTag.name}"?`)) return;
+    setDeleting(true);
     setDeleteError(undefined);
     try {
       await deleteTag(editingTag.id);
       setEditingId(null);
     } catch (err) {
       setDeleteError(describeError(err, 'Delete failed'));
+      throw err;
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -146,7 +152,7 @@ export function TagsPanel() {
       {/* ponytail: native <details>, open by default. Mobile = collapsible
           "Create tag" disclosure; desktop hides the summary entirely → plain card. */}
       <details open className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden sm:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-copy font-semibold text-ink [&::-webkit-details-marker]:hidden sm:hidden">
           Create tag
           <TagPlus className="h-4 w-4 text-muted" aria-hidden="true" />
         </summary>
@@ -175,24 +181,33 @@ export function TagsPanel() {
             onSubmit={handleSave}
             onCancel={() => setEditingId(null)}
             submitLabel="Save"
-            onDelete={handleDelete}
+            onDelete={() => setConfirmingDelete(true)}
           />
           {deleteError && (
-            <p role="alert" className="mt-2 text-xs text-status-error">
+            <p role="alert" className="mt-2 text-label text-status-error">
               {deleteError}
             </p>
           )}
+          <ConfirmDialog
+            open={confirmingDelete}
+            onOpenChange={setConfirmingDelete}
+            title={`Delete tag "${editingTag.name}"?`}
+            description="This removes the tag from every job it's applied to. This can't be undone."
+            confirmLabel="Delete tag"
+            pending={deleting}
+            onConfirm={handleDelete}
+          />
         </div>
       )}
       <div className="space-y-2">
-        {loading && <p className="text-sm text-body">Loading tags…</p>}
+        {loading && <p className="text-copy text-body">Loading tags…</p>}
         {fetchError && (
-          <p role="alert" className="text-sm text-status-error">
+          <p role="alert" className="text-copy text-status-error">
             {fetchError}
           </p>
         )}
         {!loading && !fetchError && tags.length === 0 && (
-          <p className="text-sm text-muted">No tags yet. Create one above.</p>
+          <p className="text-copy text-muted">No tags yet. Create one above.</p>
         )}
         <ul className="flex flex-wrap justify-center gap-2">
           {tags.map((tag) => (
@@ -209,7 +224,7 @@ export function TagsPanel() {
           ))}
         </ul>
         {pinError && (
-          <p role="alert" className="text-xs text-status-error">
+          <p role="alert" className="text-label text-status-error">
             {pinError}
           </p>
         )}

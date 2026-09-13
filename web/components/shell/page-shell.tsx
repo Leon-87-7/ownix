@@ -50,7 +50,7 @@ export function PageHeader({
         <h1 className="flex flex-1 items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
           {Icon && (
             <Icon
-              className="text-signal"
+              className="text-muted"
               aria-hidden="true"
             />
           )}
@@ -59,7 +59,7 @@ export function PageHeader({
         {action && <div className="shrink-0">{action}</div>}
       </div>
       {description && (
-        <p className="mt-1 text-sm text-body">{description}</p>
+        <p className="mt-1 text-copy text-body">{description}</p>
       )}
     </div>
   );

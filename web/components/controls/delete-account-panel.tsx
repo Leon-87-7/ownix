@@ -29,7 +29,7 @@ export function DeleteAccountPanel() {
 
   return (
     <div className="flex items-stretch gap-4 max-[620px]:flex-col">
-      <p className="text-sm text-body">{DELETE_ACCOUNT_CONSEQUENCES}</p>
+      <p className="text-copy text-body">{DELETE_ACCOUNT_CONSEQUENCES}</p>
       <div className="border-l border-line max-[620px]:hidden" />
       <div className="flex-shrink-0">
         <ConfirmDialog
@@ -51,7 +51,7 @@ export function DeleteAccountPanel() {
             </button>
           }
         >
-          <label className="flex flex-col gap-1 text-xs text-body">
+          <label className="flex flex-col gap-1 text-label text-body">
             Type <span className="font-mono font-semibold text-ink">delete</span>{' '}
             to confirm
             <input
@@ -59,11 +59,11 @@ export function DeleteAccountPanel() {
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               autoComplete="off"
-              className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted focus:border-signal focus:outline-none"
+              className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 text-copy text-ink placeholder-muted focus:border-signal focus:outline-none"
             />
           </label>
           {error && (
-            <p className="mt-2 text-xs text-status-error" role="alert">
+            <p className="mt-2 text-label text-status-error" role="alert">
               {error}
             </p>
           )}
