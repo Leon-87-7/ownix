@@ -8,7 +8,7 @@ import { JobCardTags } from "@/components/feed/job-card-tags";
 import { PlatformGlyph } from "@/components/ui/platform-icon";
 import { NoPreviewRing } from "@/components/ui/no-preview-ring";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
-import { buildJobHref, type FeedScope } from "@/lib/job-detail-utils";
+import { buildJobHref, type FeedScope } from "@/lib/feed-scope";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
 // - default: fixed aspect thumbnail (9:16 portrait / 16:9 landscape), full meta.

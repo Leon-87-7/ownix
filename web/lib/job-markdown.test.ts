@@ -12,13 +12,13 @@ import {
   buildMarkdown,
   parseLinks,
   linksToMarkdown,
-  isSafeHttpUrl,
-  downloadMarkdownFile,
   ENRICHMENT_FIELDS,
   SHORT_FIELDS,
   stripMarkdown,
   isSpeakable,
-} from '@/lib/job-detail-utils'
+} from '@/lib/job-markdown'
+import { isSafeHttpUrl } from '@/lib/url-utils'
+import { downloadMarkdownFile } from '@/lib/download'
 
 // --- downloadMarkdownFile ---
 
@@ -30,10 +30,15 @@ describe('downloadMarkdownFile', () => {
   })
 
   afterEach(() => {
+    // Ahead of restoreAllMocks, and here rather than at the end of the test:
+    // fake timers are worker-global, so a throw mid-test would leak them into
+    // every test that follows.
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
-  it('creates an object URL, clicks a download anchor with the given filename, then revokes it', () => {
+  it('creates an object URL, clicks a download anchor with the given filename, then revokes it', async () => {
+    vi.useFakeTimers()
     downloadMarkdownFile('job-notes.md', '# Notes')
 
     expect(URL.createObjectURL).toHaveBeenCalledOnce()
@@ -46,6 +51,10 @@ describe('downloadMarkdownFile', () => {
     expect(anchor.download).toBe('job-notes.md')
     expect(anchor.href).toContain('blob:download')
 
+    // Deferred to the next task — revoking inline cancels the download in
+    // Firefox, so it must NOT have fired by the time click() returns.
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:download')
   })
 })

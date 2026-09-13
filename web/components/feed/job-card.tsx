@@ -5,7 +5,7 @@ import { DateTime } from "@/components/ui/date-time";
 import { GeneratedBadge } from "@/components/ui/generated-badge";
 import { JobCardTags } from "@/components/feed/job-card-tags";
 import { ShareLinkButton } from "@/components/ui/share-link-button";
-import { buildJobHref, type FeedScope } from "@/lib/job-detail-utils";
+import { buildJobHref, type FeedScope } from "@/lib/feed-scope";
 import type { TagSummary } from "@/lib/hooks/useLinkTags";
 
 export interface JobSummary {

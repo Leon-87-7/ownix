@@ -1,10 +1,10 @@
 ---
-description: Council code review — 5 read-only reviewers in parallel, one synthesis, optional follow-up plan
+description: Council code review — 6 read-only reviewers in parallel, one synthesis, optional follow-up plan
 ---
 
 Run a council code review of `$ARGUMENTS` (default: the current branch's diff vs `main`).
 
-Dispatch these **5 subagents in parallel, in a single message**. Every agent is
+Dispatch these **6 subagents in parallel, in a single message**. Every agent is
 **read-only**: it may Read/Grep/Glob and run its review skill, but MUST NOT Edit,
 Write, or run any command that mutates the repo. State this in each prompt.
 
@@ -21,11 +21,16 @@ No agent applies fixes.
    skill on changed `.tsx`/`.jsx` components in the target.
 5. **python** — `subagent_type: general-purpose`. Invoke the `python-backend-review`
    skill on changed `.py` files in the target.
+6. **thermo** — `subagent_type: general-purpose`. Invoke the
+   `thermo-nuclear-code-quality-review` skill on the target. Harsh maintainability
+   rubric: abstraction quality, giant files, spaghetti conditions, code-judo
+   restructurings. Overlaps ponytail (agent 1) by design — ponytail hunts what to
+   delete, thermo hunts what to restructure; keep both voices in the synthesis.
 
 If the target has no UI / no React changes, agents 3 and 4 report "nothing to review" —
 still dispatch them. Same for agent 5 if the target has no Python changes.
 
-After all 5 return, synthesize ONE report, de-duplicating overlapping findings
+After all 6 return, synthesize ONE report, de-duplicating overlapping findings
 and noting where reviewers disagree. Do not edit anything yourself — this command
 only reviews (the optional planner step below is the one exception, and it only
 writes a plan document, never source).

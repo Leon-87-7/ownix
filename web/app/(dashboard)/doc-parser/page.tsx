@@ -17,7 +17,11 @@ import { describeError } from '@/lib/fetch-utils';
 import { GeneratedBadge } from '@/components/ui/generated-badge';
 import { DocUploadPanel } from '@/components/doc-parser/doc-upload-panel';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
-import { FilterBar } from '@/components/ui/filter-bar';
+import {
+  FilterBar,
+  FilterRow,
+  FilterSearchInput,
+} from '@/components/ui/filter-bar';
 import {
   SkeletonList,
   EmptyState,
@@ -164,12 +168,17 @@ function DocParserWorkspace() {
         onTabChange={setFormat}
         tabsLabel="Document format"
         scrollTabsOnMobile
-        query={q}
-        setQuery={setQ}
-        searchPlaceholder="Search documents…"
-        searchLabel="Search documents"
-        statusValue={status}
-        onStatusChange={setStatus}
+        search={
+          <FilterSearchInput
+            query={q}
+            setQuery={setQ}
+            label="Search documents"
+            placeholder="Search documents…"
+          />
+        }
+        filters={
+          <FilterRow statusValue={status} onStatusChange={setStatus} />
+        }
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

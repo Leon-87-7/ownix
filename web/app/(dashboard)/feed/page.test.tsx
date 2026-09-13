@@ -81,7 +81,7 @@ vi.mock('@/lib/hooks/useFeedData', () => ({
   useFeedData: vi.fn(),
 }));
 vi.mock('@/lib/hooks/useFuseSearch', () => ({
-  useFuseSearch: vi.fn(),
+  useFuseFilter: vi.fn(),
 }));
 vi.mock('@/lib/hooks/useInFlightPolling', () => ({
   useInFlightPolling: vi.fn(),
@@ -99,24 +99,16 @@ vi.mock('@/components/shell/google-status', () => ({
 }));
 
 import { useFeedData } from '@/lib/hooks/useFeedData';
-import { useFuseSearch } from '@/lib/hooks/useFuseSearch';
+import { useFuseFilter } from '@/lib/hooks/useFuseSearch';
 import { useInFlightPolling } from '@/lib/hooks/useInFlightPolling';
 
 const mockUseFeedData = vi.mocked(useFeedData);
-const mockUseFuseSearch = vi.mocked(useFuseSearch);
+const mockUseFuseFilter = vi.mocked(useFuseFilter);
 
 function setupMocks(
   overrides: Partial<ReturnType<typeof useFeedData>> = {},
 ) {
   mockUseFeedData.mockReturnValue({
-    ctFilter: '',
-    setCtFilter: vi.fn(),
-    stFilter: '',
-    setStFilter: vi.fn(),
-    checklistOnly: false,
-    setChecklistOnly: vi.fn(),
-    tagFilter: [],
-    setTagFilter: vi.fn(),
     tagCounts: {},
     stats: STATS,
     jobs: JOBS,
@@ -128,11 +120,7 @@ function setupMocks(
     ...overrides,
   } as ReturnType<typeof useFeedData>);
 
-  mockUseFuseSearch.mockReturnValue({
-    query: '',
-    setQuery: vi.fn(),
-    displayedJobs: JOBS,
-  } as ReturnType<typeof useFuseSearch>);
+  mockUseFuseFilter.mockReturnValue(JOBS);
 
   vi.mocked(useInFlightPolling).mockReturnValue(undefined);
 }
@@ -151,7 +139,7 @@ beforeEach(() => {
   navigationMock.searchParams = new URLSearchParams();
   googleStatusMock.connected = null;
   mockUseFeedData.mockReset();
-  mockUseFuseSearch.mockReset();
+  mockUseFuseFilter.mockReset();
   fetchSpy = vi.spyOn(globalThis, 'fetch');
   setupMocks();
 });
@@ -243,14 +231,12 @@ describe('FeedPage', () => {
   });
 
   it('still drops an unsupported ?type= without a google param', () => {
-    const setCtFilter = vi.fn();
-    setupMocks({ setCtFilter });
+    setupMocks();
     navigationMock.searchParams = new URLSearchParams('type=bogus');
     render(<FeedTree />);
     expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
       scroll: false,
     });
-    expect(setCtFilter).toHaveBeenCalledWith('');
   });
 
   it('hands share_text URLs to the Submit URL dialog and strips share params once', async () => {
@@ -305,11 +291,7 @@ describe('FeedPage', () => {
       stats: undefined,
       error: null,
     });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery: vi.fn(),
-      displayedJobs: [],
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue([]);
     render(<FeedTree />);
     expect(screen.getByText('loading…')).toBeTruthy();
   });
@@ -327,33 +309,22 @@ describe('FeedPage', () => {
       total: 0,
       stats: undefined,
     });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery: vi.fn(),
-      displayedJobs: [],
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue([]);
     render(<FeedTree />);
     expect(screen.getByText(/failed to load jobs/i)).toBeTruthy();
   });
 
   it('shows result count when query is present', () => {
+    navigationMock.searchParams = new URLSearchParams('q=test');
     setupMocks();
-    mockUseFuseSearch.mockReturnValue({
-      query: 'test',
-      setQuery: vi.fn(),
-      displayedJobs: JOBS,
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue(JOBS);
     render(<FeedTree />);
     expect(screen.getByText('1 result')).toBeTruthy();
   });
 
   it('shows empty state when no jobs match and no filters', () => {
     setupMocks({ jobs: [], total: 0, stats: undefined });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery: vi.fn(),
-      displayedJobs: [],
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue([]);
     render(<FeedTree />);
     // empty state renders something when displayedJobs.length === 0 and no first load
     expect(screen.getByText('0 jobs')).toBeTruthy();
@@ -379,11 +350,7 @@ describe('FeedPage', () => {
       },
     ];
     setupMocks({ jobs: multiJobs, total: 2 });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery: vi.fn(),
-      displayedJobs: multiJobs,
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue(multiJobs);
     render(<FeedTree />);
     expect(screen.getByText('2 jobs')).toBeTruthy();
   });
@@ -396,16 +363,75 @@ describe('FeedPage', () => {
       'type=short&status=done&q=skill&checklist=1&tags=t1,t2',
     );
     render(<FeedTree />);
-    expect(mockUseFeedData).toHaveBeenCalledWith('short', false, {
-      status: 'done',
-      query: 'skill',
-      checklistOnly: true,
-      tags: ['t1', 't2'],
-    });
-    expect(mockUseFuseSearch).toHaveBeenCalledWith(
+    expect(mockUseFeedData).toHaveBeenCalledWith(
+      {
+        contentType: 'short',
+        status: 'done',
+        query: 'skill',
+        checklistOnly: true,
+        tags: ['t1', 't2'],
+        view: 'jobs',
+      },
+      false,
+    );
+    expect(mockUseFuseFilter).toHaveBeenCalledWith(
       expect.anything(),
       'skill',
     );
+  });
+
+  // The adoption/projection race: both effects run in the same commit, adoption
+  // first. It only *queues* the incoming scope, so the projection effect still
+  // sees the previous one — and would replace() the URL the user just navigated
+  // to back to the one they left.
+  it('adopts an external /feed navigation instead of restoring the previous scope', () => {
+    navigationMock.searchParams = new URLSearchParams('status=done&q=skill');
+    const { rerender } = render(<FeedTree />);
+    navigationMock.replace.mockClear();
+
+    // Sidebar "Feed" click from an already-filtered feed: new URL, no remount.
+    navigationMock.searchParams = new URLSearchParams();
+    rerender(<FeedTree />);
+
+    expect(navigationMock.replace).not.toHaveBeenCalled();
+    expect(mockUseFeedData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: '', query: '' }),
+      false,
+    );
+  });
+
+  // Every replace() is fed back as the next searchParams, the way App Router
+  // publishes it — so a scope that never settles shows up as a replace() loop
+  // rather than passing on the first render.
+  it('settles the URL after an external navigation instead of ping-ponging', () => {
+    navigationMock.searchParams = new URLSearchParams('status=done&q=skill');
+    const { rerender } = render(<FeedTree />);
+
+    // Navigate to a URL that still needs canonicalizing (?google= is transient),
+    // so there is a real projection to converge on.
+    navigationMock.searchParams = new URLSearchParams(
+      'type=short&checklist=1&google=denied',
+    );
+    navigationMock.replace.mockClear();
+    rerender(<FeedTree />);
+
+    for (let i = 0; i < 5; i += 1) {
+      const call = navigationMock.replace.mock.calls.at(-1);
+      if (!call) break; // nothing new to publish — the URL has settled
+      navigationMock.replace.mockClear();
+      navigationMock.searchParams = new URLSearchParams(
+        (call[0] as string).split('?')[1] ?? '',
+      );
+      rerender(<FeedTree />);
+    }
+
+    expect(navigationMock.searchParams.toString()).toBe('type=short&checklist=1');
+    // The loop above exits on the iteration cap too, so a scope that re-projects
+    // the same canonical URL forever would still reach the assertion above.
+    // Pin the settled state: one more render writes nothing.
+    navigationMock.replace.mockClear();
+    rerender(<FeedTree />);
+    expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
   it('writes the search query to the URL so Back can restore it', () => {
@@ -423,11 +449,7 @@ describe('FeedPage', () => {
   // A second control touched before that lands must not clone stale params and
   // silently drop the first filter from the URL.
   it('keeps an earlier filter when a second one is set before the URL updates', () => {
-    mockUseFuseSearch.mockReturnValue({
-      query: 'skill',
-      setQuery: vi.fn(),
-      displayedJobs: JOBS,
-    } as ReturnType<typeof useFuseSearch>);
+    navigationMock.searchParams = new URLSearchParams('q=skill');
     render(<FeedTree />);
     // searchParams deliberately left empty — the mock never publishes the write.
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
@@ -438,13 +460,8 @@ describe('FeedPage', () => {
   });
 
   it('deletes a filter param when its filter is cleared', () => {
-    navigationMock.searchParams = new URLSearchParams('q=skill');
     // The input has to actually hold the query, or clearing it is a no-op event.
-    mockUseFuseSearch.mockReturnValue({
-      query: 'skill',
-      setQuery: vi.fn(),
-      displayedJobs: JOBS,
-    } as ReturnType<typeof useFuseSearch>);
+    navigationMock.searchParams = new URLSearchParams('q=skill');
     render(<FeedTree />);
     fireEvent.change(screen.getByLabelText('Search by title or URL'), {
       target: { value: '' },
@@ -457,23 +474,33 @@ describe('FeedPage', () => {
   it('restores a tag filter from the URL at any feed size', () => {
     navigationMock.searchParams = new URLSearchParams('tags=t1,t2');
     render(<FeedTree />);
-    expect(mockUseFeedData).toHaveBeenCalledWith('', false, {
-      status: '',
-      query: '',
-      checklistOnly: false,
-      tags: ['t1', 't2'],
-    });
+    expect(mockUseFeedData).toHaveBeenCalledWith(
+      {
+        contentType: '',
+        status: '',
+        query: '',
+        checklistOnly: false,
+        tags: ['t1', 't2'],
+        view: 'jobs',
+      },
+      false,
+    );
   });
 
   it('initializes content type from the URL type param', () => {
     navigationMock.searchParams = new URLSearchParams('type=short');
     render(<FeedTree />);
-    expect(mockUseFeedData).toHaveBeenCalledWith('short', false, {
-      status: '',
-      query: '',
-      checklistOnly: false,
-      tags: [],
-    });
+    expect(mockUseFeedData).toHaveBeenCalledWith(
+      {
+        contentType: 'short',
+        status: '',
+        query: '',
+        checklistOnly: false,
+        tags: [],
+        view: 'jobs',
+      },
+      false,
+    );
   });
 
   it('renders content-type tabs with counts', () => {
@@ -648,8 +675,7 @@ describe('FeedPage', () => {
   });
 
   it('updates the type query param when a content tab is clicked', () => {
-    const setCtFilter = vi.fn();
-    setupMocks({ setCtFilter });
+    setupMocks();
 
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /long 2/i }));
@@ -658,7 +684,6 @@ describe('FeedPage', () => {
       '/feed?type=long',
       { scroll: false },
     );
-    expect(setCtFilter).toHaveBeenCalledWith('long');
   });
 
   it('renders the all tab as the bento grid by default', () => {
@@ -699,7 +724,8 @@ describe('FeedPage', () => {
   });
 
   it('hides the layout toggle on typed tabs', () => {
-    setupMocks({ ctFilter: 'short' });
+    setupMocks();
+    navigationMock.searchParams = new URLSearchParams('type=short');
     render(<FeedTree />);
 
     expect(
@@ -708,7 +734,8 @@ describe('FeedPage', () => {
   });
 
   it('renders the short tab as the compact shorts grid', () => {
-    setupMocks({ ctFilter: 'short' });
+    setupMocks();
+    navigationMock.searchParams = new URLSearchParams('type=short');
     render(<FeedTree />);
 
     const card = screen.getByRole('link', {
@@ -720,7 +747,8 @@ describe('FeedPage', () => {
   });
 
   it('renders typed tabs as preview cards', () => {
-    setupMocks({ ctFilter: 'short' });
+    setupMocks();
+    navigationMock.searchParams = new URLSearchParams('type=short');
 
     render(<FeedTree />);
     // Preview cards use a stretched overlay link; flex/p-3 and the date text live
@@ -737,7 +765,8 @@ describe('FeedPage', () => {
   });
 
   it('renders the recovery panel from the active tab summary', async () => {
-    setupMocks({ ctFilter: 'short' });
+    setupMocks();
+    navigationMock.searchParams = new URLSearchParams('type=short');
 
     render(<FeedTree />);
     await openRecoveryActions();
@@ -759,7 +788,8 @@ describe('FeedPage', () => {
 
   it('refreshes recovery summary and feed data after retrying pending jobs', async () => {
     const reload = vi.fn();
-    setupMocks({ ctFilter: 'short', reload });
+    setupMocks({ reload });
+    navigationMock.searchParams = new URLSearchParams('type=short');
 
     render(<FeedTree />);
     await openRecoveryActions();
@@ -807,11 +837,7 @@ describe('FeedPage', () => {
       stats: undefined,
       reload,
     });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery: vi.fn(),
-      displayedJobs: [],
-    } as ReturnType<typeof useFuseSearch>);
+    mockUseFuseFilter.mockReturnValue([]);
 
     render(<FeedTree />);
     fireEvent.click(screen.getByRole('button', { name: /^retry$/i }));
@@ -821,30 +847,11 @@ describe('FeedPage', () => {
 
   it('keeps an accepted submission visible when the post-submit refresh fails', async () => {
     // Pass the merged feed through so optimistic rows actually render.
-    // setQuery is hoisted out of the implementation on purpose: the real hook
-    // returns a useState setter, which is stable across renders. Minting a new
-    // mock per render makes anything that keys on it re-run every render.
-    const setQuery = vi.fn();
-    mockUseFuseSearch.mockImplementation(
-      (jobs: JobSummary[]) =>
-        ({
-          query: '',
-          setQuery,
-          displayedJobs: jobs,
-        }) as ReturnType<typeof useFuseSearch>,
-    );
+    mockUseFuseFilter.mockImplementation((jobs: JobSummary[]) => jobs);
     // reload resolves without delivering the new job - useFeedData swallows
     // background fetch errors, so a failed refresh looks exactly like this.
     const reload = vi.fn(async () => {});
     mockUseFeedData.mockReturnValue({
-      ctFilter: '',
-      setCtFilter: vi.fn(),
-      stFilter: '',
-      setStFilter: vi.fn(),
-      checklistOnly: false,
-      setChecklistOnly: vi.fn(),
-      tagFilter: [],
-      setTagFilter: vi.fn(),
       tagCounts: {},
       tagFilterDisabled: false,
       stats: STATS,
@@ -898,28 +905,9 @@ describe('FeedPage', () => {
   });
 
   it('drops the optimistic copy once the refreshed feed carries the job', async () => {
-    // setQuery is hoisted out of the implementation on purpose: the real hook
-    // returns a useState setter, which is stable across renders. Minting a new
-    // mock per render makes anything that keys on it re-run every render.
-    const setQuery = vi.fn();
-    mockUseFuseSearch.mockImplementation(
-      (jobs: JobSummary[]) =>
-        ({
-          query: '',
-          setQuery,
-          displayedJobs: jobs,
-        }) as ReturnType<typeof useFuseSearch>,
-    );
+    mockUseFuseFilter.mockImplementation((jobs: JobSummary[]) => jobs);
     const reload = vi.fn(async () => {});
     const feedState = {
-      ctFilter: '',
-      setCtFilter: vi.fn(),
-      stFilter: '',
-      setStFilter: vi.fn(),
-      checklistOnly: false,
-      setChecklistOnly: vi.fn(),
-      tagFilter: [],
-      setTagFilter: vi.fn(),
       tagCounts: {},
       tagFilterDisabled: false,
       stats: STATS,
@@ -988,38 +976,44 @@ describe('FeedPage', () => {
     );
   });
 
+  // The sidebar's own "Feed" link, clicked from an already-filtered feed,
+  // changes the params without remounting this page. The scope is seeded at
+  // mount, so it has to adopt an outside navigation explicitly.
+  it('adopts a /feed navigation that lands without a remount', () => {
+    navigationMock.searchParams = new URLSearchParams('type=short');
+    const { rerender } = render(<FeedTree />);
+    expect(mockUseFeedData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ contentType: 'short' }),
+      false,
+    );
+
+    navigationMock.searchParams = new URLSearchParams();
+    rerender(<FeedTree />);
+
+    expect(mockUseFeedData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ contentType: '', view: 'jobs' }),
+      false,
+    );
+  });
+
   it('clears every filter from the empty-state Clear button', () => {
-    const setStFilter = vi.fn();
-    const setQuery = vi.fn();
-    const setChecklistOnly = vi.fn();
-    setupMocks({
-      stFilter: 'error',
-      checklistOnly: true,
-      jobs: [],
-      total: 0,
-      stats: undefined,
-      setStFilter,
-      setChecklistOnly,
-    });
-    mockUseFuseSearch.mockReturnValue({
-      query: '',
-      setQuery,
-      displayedJobs: [],
-    } as ReturnType<typeof useFuseSearch>);
+    // "Every filter" has to include the toggle chips — an active one that
+    // survives Clear strands the feed in a filtered view with nothing left
+    // to click. The bare '/feed' the projection writes is the proof: the
+    // address bar is the scope, so a param left behind is a filter left on.
+    navigationMock.searchParams = new URLSearchParams(
+      'status=error&checklist=1&q=skill',
+    );
+    setupMocks({ jobs: [], total: 0, stats: undefined });
+    mockUseFuseFilter.mockReturnValue([]);
 
     render(<FeedTree />);
     fireEvent.click(
       screen.getByRole('button', { name: /clear filters/i }),
     );
 
-    expect(navigationMock.replace).toHaveBeenCalledWith('/feed', {
+    expect(navigationMock.replace).toHaveBeenLastCalledWith('/feed', {
       scroll: false,
     });
-    expect(setStFilter).toHaveBeenCalledWith('');
-    expect(setQuery).toHaveBeenCalledWith('');
-    // "Every filter" has to include the toggle chips — an active one that
-    // survives Clear strands the feed in a filtered view with nothing left
-    // to click.
-    expect(setChecklistOnly).toHaveBeenCalledWith(false);
   });
 });

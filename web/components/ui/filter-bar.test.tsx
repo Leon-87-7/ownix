@@ -3,25 +3,63 @@ import { fireEvent, render, screen } from '@/test/render';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { BookmarkCheck } from 'lucide-react';
-import { FilterBar } from './filter-bar';
+import {
+  FilterBar,
+  FilterRow,
+  FilterSearchInput,
+  type StatusOption,
+  type TagFilterConfig,
+  type ToggleFilter,
+} from './filter-bar';
 
 const tabs = [
   { label: 'All', value: '', count: 2 },
   { label: 'Short', value: 'short', count: 1 },
 ];
 
-function renderFilterBar() {
-  render(
+/** FilterBar's search and filter row are separate components now (a view with
+ * nothing to filter just omits one). These tests assert the rendered result of
+ * the usual three together, so they compose it here rather than each spelling
+ * the arrangement out; the composition itself is covered by the Feed and
+ * doc-parser page tests. */
+function TestFilterBar({
+  query = '',
+  setQuery = vi.fn(),
+  statusFilters,
+  statusValue = '',
+  onStatusChange = vi.fn(),
+  toggleFilters,
+  tagFilter,
+}: {
+  query?: string;
+  setQuery?: (q: string) => void;
+  statusFilters?: StatusOption[];
+  statusValue?: string;
+  onStatusChange?: (v: string) => void;
+  toggleFilters?: readonly ToggleFilter[];
+  tagFilter?: TagFilterConfig;
+}) {
+  return (
     <FilterBar
       tabs={tabs}
       tabValue=""
       onTabChange={vi.fn()}
-      query=""
-      setQuery={vi.fn()}
-      statusValue=""
-      onStatusChange={vi.fn()}
-    />,
+      search={<FilterSearchInput query={query} setQuery={setQuery} />}
+      filters={
+        <FilterRow
+          statusFilters={statusFilters}
+          statusValue={statusValue}
+          onStatusChange={onStatusChange}
+          toggleFilters={toggleFilters}
+          tagFilter={tagFilter}
+        />
+      }
+    />
   );
+}
+
+function renderFilterBar() {
+  render(<TestFilterBar />);
 }
 
 describe('FilterBar', () => {
@@ -37,15 +75,7 @@ describe('FilterBar', () => {
     render(
       <>
         <input aria-label="External editor" />
-        <FilterBar
-          tabs={tabs}
-          tabValue=""
-          onTabChange={vi.fn()}
-          query=""
-          setQuery={vi.fn()}
-          statusValue=""
-          onStatusChange={vi.fn()}
-        />
+        <TestFilterBar />
       </>,
     );
 
@@ -59,14 +89,7 @@ describe('FilterBar', () => {
   it('renders toggle filters and reports the flipped value', () => {
     const onChange = vi.fn();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         toggleFilters={[
           { label: 'Checklist', active: false, onChange },
         ]}
@@ -84,14 +107,7 @@ describe('FilterBar', () => {
   it('keeps an icon-only toggle named and pressable', () => {
     const onChange = vi.fn();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         toggleFilters={[
           {
             label: 'Checklist generated',
@@ -125,14 +141,7 @@ describe('FilterBar', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           counts: { t1: 3, t2: 0 },
@@ -156,14 +165,7 @@ describe('FilterBar', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           selectedIds: ['t1', 't2'],
@@ -182,14 +184,7 @@ describe('FilterBar', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           selectedIds: ['t1'],
@@ -206,14 +201,7 @@ describe('FilterBar', () => {
 
   it('shows the tag name on the trigger when exactly one tag is selected', async () => {
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           selectedIds: ['t1'],
@@ -227,14 +215,7 @@ describe('FilterBar', () => {
 
   it('falls back to the numeric count when more than one tag is selected', async () => {
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           selectedIds: ['t1', 't2'],
@@ -249,14 +230,7 @@ describe('FilterBar', () => {
   it('shows an empty-vocabulary message instead of hiding the trigger', async () => {
     const user = userEvent.setup();
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: [],
           selectedIds: [],
@@ -272,14 +246,7 @@ describe('FilterBar', () => {
 
   it('disables the trigger and explains why via title when tagFilter.disabled is set', () => {
     render(
-      <FilterBar
-        tabs={tabs}
-        tabValue=""
-        onTabChange={vi.fn()}
-        query=""
-        setQuery={vi.fn()}
-        statusValue=""
-        onStatusChange={vi.fn()}
+      <TestFilterBar
         tagFilter={{
           allTags: TAGS,
           selectedIds: [],

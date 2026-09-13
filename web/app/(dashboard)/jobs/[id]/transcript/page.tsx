@@ -11,7 +11,7 @@ import { PageShell } from '@/components/shell/page-shell';
 import { SkeletonBlock } from '@/components/feed/feed-states';
 import { Tooltip } from '@/components/ui/tooltip';
 import { OwnixChevronRight } from '@/components/svg/ownix-chevron-right';
-import { jobScopeQuery } from '@/lib/job-detail-utils';
+import { jobUrlQuery, parseJobScope } from '@/lib/feed-scope';
 
 const MarkdownEditor = dynamic(
   () => import('@/components/ui/markdown-editor'),
@@ -25,19 +25,17 @@ const MarkdownEditor = dynamic(
   },
 );
 
-// Carries the job-list's active filter scope (content_type/status) back to
-// the job detail page, matching JobHeader's own scopeQuery in ../page.tsx -
-// otherwise a user who opened this from a filtered feed loses that filter.
+// Carries the job-list's active filter scope back to the job detail page,
+// matching JobHeader's own scopeQuery in ../page.tsx - otherwise a user who
+// opened this from a filtered feed loses that filter. The whole scope rides
+// along, q/checklist/tags included, not just content_type/status.
 const BackLink = ({ id }: { id: string }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const scopeQuery = useMemo(
     () =>
       new URLSearchParams(
-        jobScopeQuery({
-          contentType: searchParams.get('content_type') ?? undefined,
-          status: searchParams.get('status') ?? undefined,
-        }),
+        jobUrlQuery(parseJobScope(new URLSearchParams(searchParams))),
       ).toString(),
     [searchParams],
   );

@@ -1,6 +1,6 @@
 import { PreviewCard } from "@/components/feed/preview-card";
 import type { JobSummary } from "@/components/feed/job-card";
-import type { FeedScope } from "@/lib/job-detail-utils";
+import type { FeedScope } from "@/lib/feed-scope";
 
 // CONTEXT.md: `Bento feed grid` / `Short grid`.
 // - uniform: the 3-up grid every typed tab (long/article/repo) uses.

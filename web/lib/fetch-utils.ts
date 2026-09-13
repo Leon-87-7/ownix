@@ -74,16 +74,37 @@ export function useFetchList<T>(url: string, errorLabel: string) {
   return { data, setData, loading, fetchError, reload: load };
 }
 
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; detail: string; status: number };
+
+/** POST JSON, reporting failure as a value rather than an exception — for UI
+ * flows that render the message inline.
+ *
+ * Total: it never throws. A request that never reaches the server used to
+ * reject with a bare TypeError while HTTP errors came back as `{ ok: false }`,
+ * so every caller needed a try/catch *and* an `!result.ok` branch for the same
+ * one call. Network failures are now the same shape, with `status: 0` to say
+ * "no response".
+ *
+ * The `*OrThrow` helpers below are the other, deliberate family: they raise, for
+ * data-layer callers that already work in try/catch. */
 export async function apiPost<T>(
   url: string,
   body: unknown,
   fallback = 'Create failed',
-): Promise<{ ok: true; data: T } | { ok: false; detail: string; status: number }> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+): Promise<ApiResult<T>> {
+  let res: Response;
+  try {
+    // nosemgrep -- same-origin relative API path built by the caller, not user input
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, detail: describeError(err, fallback), status: 0 };
+  }
   if (!res.ok) {
     const payload = await res.json().catch(() => ({}));
     const detail = (payload as { detail?: string }).detail ?? fallback;

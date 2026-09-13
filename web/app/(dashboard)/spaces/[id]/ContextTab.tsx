@@ -6,7 +6,7 @@ import { useSpaceContext } from '@/lib/hooks/useSpaceContext';
 import { SkeletonLine } from '@/components/feed/feed-states';
 import { ReorderButtons } from '@/components/ui/reorder-buttons';
 import { ListenButton } from '@/components/ui/listen-button';
-import { stripMarkdown } from '@/lib/job-detail-utils';
+import { stripMarkdown } from '@/lib/job-markdown';
 
 const MarkdownEditor = dynamic(() => import('@/components/ui/markdown-editor'), {
   ssr: false,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobSummary } from '@/components/feed/job-card';
+import type { FeedScope } from '@/lib/feed-scope';
 
 export interface FeedStats {
   total: number;
@@ -150,18 +151,23 @@ function deriveStats(allJobs: JobSummary[], ct: string): FeedStats {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useFeedData(
-  initialContentType = '',
-  restricted = false,
-  // Seeded from the Feed's URL so a back-navigation remount restores the
-  // narrowing the user left behind, rather than dropping them into an
-  // unfiltered list. The Feed owns writing these back to the URL.
-  initialScope: { status?: string; checklistOnly?: boolean; tags?: string[] } = {},
-) {
-  const [ctFilter, setCtFilter] = useState(initialContentType);
-  const [stFilter, setStFilter] = useState(initialScope.status ?? '');
-  const [checklistOnly, setChecklistOnly] = useState(initialScope.checklistOnly ?? false);
-  const [tagFilter, setTagFilter] = useState<string[]>(initialScope.tags ?? []);
+/**
+ * Feed data for a given narrowing.
+ *
+ * The scope is a parameter, not state owned here: the Feed page holds it and
+ * projects it onto the URL, so there is exactly one copy of "what is the user
+ * looking at". This hook used to own `ctFilter`/`stFilter`/... and hand back
+ * setters, which meant the same narrowing lived in two places and had to be
+ * reconciled by effects on every change.
+ */
+export function useFeedData(scope: FeedScope, restricted = false) {
+  const ctFilter = scope.contentType ?? '';
+  const stFilter = scope.status ?? '';
+  const checklistOnly = scope.checklistOnly ?? false;
+  const tagFilter = useMemo(() => scope.tags ?? [], [scope.tags]);
+  // Effects below key on this rather than the array identity: a caller that
+  // rebuilds its scope object each render would otherwise re-fetch forever.
+  const tagKey = tagFilter.join(',');
 
   // The full unfiltered job list (client mode) or the per-filter list (server mode).
   const [allJobs, setAllJobs] = useState<JobSummary[]>([]);
@@ -190,16 +196,10 @@ export function useFeedData(
   // background reload() can never strand loading=true).
   const loadIdRef = useRef(0);
 
-  // Keep refs so reload() always sees current filter values without
-  // being listed in the useCallback deps array.
-  const ctRef = useRef(ctFilter);
-  ctRef.current = ctFilter;
-  const stRef = useRef(stFilter);
-  stRef.current = stFilter;
-  const checklistOnlyRef = useRef(checklistOnly);
-  checklistOnlyRef.current = checklistOnly;
-  const tagFilterRef = useRef(tagFilter);
-  tagFilterRef.current = tagFilter;
+  // reload() is called by background polling and must always read the current
+  // narrowing without being re-created (and re-subscribed) on every change.
+  const scopeRef = useRef({ ctFilter, stFilter, checklistOnly, tagFilter });
+  scopeRef.current = { ctFilter, stFilter, checklistOnly, tagFilter };
   const serverModeRef = useRef(serverMode);
   serverModeRef.current = serverMode;
 
@@ -288,15 +288,16 @@ export function useFeedData(
     try {
       if (serverModeRef.current) {
         // Server mode: re-fetch with current filters.
+        const current = scopeRef.current;
         const { stats, jobs, total } = await fetchFeedServerMode(
-          ctRef.current,
-          stRef.current,
+          current.ctFilter,
+          current.stFilter,
           restricted,
-          checklistOnlyRef.current,
-          tagFilterRef.current,
+          current.checklistOnly,
+          current.tagFilter,
         );
         if (reqId !== reqIdRef.current) return;
-        const ct = ctRef.current;
+        const ct = current.ctFilter;
         const filtered = ct ? jobs.filter((j) => j.content_type === ct) : jobs;
         setServerStats(stats);
         setServerJobs(filtered);
@@ -345,7 +346,7 @@ export function useFeedData(
     }
     serverLoad(ctFilter, stFilter, checklistOnly, tagFilter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ctFilter, stFilter, checklistOnly, tagFilter, serverLoad]);
+  }, [serverMode, ctFilter, stFilter, checklistOnly, tagKey, serverLoad]);
 
   // -------------------------------------------------------------------------
   // Derived state (client mode only — computed synchronously, no fetch)
@@ -384,14 +385,6 @@ export function useFeedData(
   const total = serverMode ? serverFilteredTotal : (derivedJobs?.length ?? 0);
 
   return {
-    ctFilter,
-    setCtFilter,
-    stFilter,
-    setStFilter,
-    checklistOnly,
-    setChecklistOnly,
-    tagFilter,
-    setTagFilter,
     tagCounts,
     stats,
     jobs,

@@ -1,5 +1,5 @@
 import { OwnixShareIcon } from "@/components/svg/ownix-share-icon";
-import { isSafeHttpUrl } from "@/lib/job-detail-utils";
+import { isSafeHttpUrl } from "@/lib/url-utils";
 
 /** External-link glyph for a job card's title row; renders nothing for unsafe/non-http URLs. */
 export function ShareLinkButton({ url }: { url: string }) {

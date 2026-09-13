@@ -17,7 +17,7 @@ import {
   ENRICHMENT_FIELDS,
   buildMarkdown,
   isEmpty,
-} from '@/lib/job-detail-utils'
+} from '@/lib/job-markdown'
 import type { JobDetail } from '@/lib/hooks/useJobDetail'
 
 // ---------------------------------------------------------------------------
