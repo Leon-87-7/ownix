@@ -426,6 +426,12 @@ describe('FeedPage', () => {
     }
 
     expect(navigationMock.searchParams.toString()).toBe('type=short&checklist=1');
+    // The loop above exits on the iteration cap too, so a scope that re-projects
+    // the same canonical URL forever would still reach the assertion above.
+    // Pin the settled state: one more render writes nothing.
+    navigationMock.replace.mockClear();
+    rerender(<FeedTree />);
+    expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
   it('writes the search query to the URL so Back can restore it', () => {

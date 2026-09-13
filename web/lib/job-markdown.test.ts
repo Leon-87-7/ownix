@@ -30,6 +30,10 @@ describe('downloadMarkdownFile', () => {
   })
 
   afterEach(() => {
+    // Ahead of restoreAllMocks, and here rather than at the end of the test:
+    // fake timers are worker-global, so a throw mid-test would leak them into
+    // every test that follows.
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -52,7 +56,6 @@ describe('downloadMarkdownFile', () => {
     expect(URL.revokeObjectURL).not.toHaveBeenCalled()
     vi.runAllTimers()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:download')
-    vi.useRealTimers()
   })
 })
 
