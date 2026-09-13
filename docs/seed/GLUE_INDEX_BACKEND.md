@@ -236,7 +236,7 @@ a scanned/image-only PDF).
 #### `deliver_markdown(job: dict) -> None` — `src/processors/document.py`
 **Does:** On-demand: serves the cached/freshly-parsed `.md` rendering of a
 document job as a Telegram document (the "📄 Get Markdown" button).
-**Called from:** `_cb_document_md` in `src/telegram/webhook.py`.
+**Called from:** `_cb_document_md` in `src/telegram/callbacks.py`.
 
 #### `_deliver(job, text, tools, references) -> None` — `src/processors/document.py`
 **Does:** Sends the raw parsed `.txt`, then the enrichment summary, then the
@@ -707,7 +707,7 @@ and, if the user is still `pending`, notifies the operator for approval.
 
 ## Telegram Webhook Dispatch
 
-`src/telegram/webhook.py` (2003 lines — the main bot's entire command surface)
+`src/telegram/` — `webhook.py` registers the routes and fans an update out; the handlers live in `callbacks.py` (inline-keyboard presses), `commands.py` (the slash table), `routing.py` (invite gate, text/URL/file routing) and `ops.py` (the ops bot), over shared plumbing in `context.py`
 and `src/telegram/sender.py` (outbound Telegram Bot API wrappers this whole
 file, and every processor, calls into).
 
@@ -729,7 +729,7 @@ individually exception-guarded so one bad update can't 500 the whole webhook.
 **Entry point:** Telegram's servers POST every update here (registered at
 startup by `main._register_webhook`).
 
-#### `_CALLBACK_TABLE` + `_handle_callback` — `src/telegram/webhook.py`
+#### `_CALLBACK_TABLE` + `_handle_callback` — `src/telegram/callbacks.py`
 **Does:** `data.partition(":")` splits `"prefix:payload"`; `_CALLBACK_TABLE`
 maps the prefix to one of 17 `_cb_*` handlers (all take a `CallbackCtx`). Every
 callback except `invite_approve`/`invite_block` re-checks the invite gate
@@ -760,7 +760,7 @@ Handler groups (all `(ctx: CallbackCtx) -> None`, all in `webhook.py`):
 - **`_cb_repo_pick`** — resolves a numbered repo-followup choice via
   `services.repo_followup.enqueue_repo_pick` and enqueues the analysis.
 
-#### `_SLASH_TABLE` + `_dispatch_slash` — `src/telegram/webhook.py`
+#### `_SLASH_TABLE` + `_dispatch_slash` — `src/telegram/commands.py`
 **Does:** Maps `/command` text to a `_cmd_*` handler (`(ctx: SlashCtx) -> None`);
 clears any pending chat_state/template on every command except `/cancel`
 (which reads the state first, to report what it's canceling).
@@ -793,7 +793,7 @@ Handler groups (all in `webhook.py`):
   cache table `article.py` uses, sent back as a Telegram document.
 - **`_cmd_cancel`/`_cmd_start`/`_cmd_help`** — chat-state cleanup and static help text.
 
-#### `_route_url` / `_route_video` / `_route_article` / `_route_repo` / `_route_document_url` — `src/telegram/webhook.py`
+#### `_route_url` / `_route_video` / `_route_article` / `_route_repo` / `_route_document_url` — `src/telegram/routing.py`
 **Does:** The plain-URL (non-slash-command) routing engine: reads and clears
 any `pending_template:{chat_id}` Redis key, runs `detect_pipeline`, then
 dispatches by pipeline. `_route_video` special-cases a pending `freestyle`
@@ -804,7 +804,7 @@ the next video/article); `_route_document_url` fetches the PDF itself
 re-validated) before handing off to `_enqueue_document_job`.
 **Called from:** `_route_text` (step 4, the final fallback after slash/chat-state/user-template checks).
 
-#### `_route_text` — `src/telegram/webhook.py`
+#### `_route_text` — `src/telegram/routing.py`
 **Does:** The top-level per-message router, in order: 1) invite gate 2) slash
 command 3) armed chat_state (`awaiting_freestyle`/`awaiting_intent` —
 delegates to `_handle_awaiting_freestyle`/`_handle_awaiting_intent`) 3b)
@@ -812,7 +812,7 @@ plain-text command shortcut (`"find x"` → `/find x`) 3c) user-template shortcu
 (`-mytemplate <url>`) 4) plain URL routing.
 **Called from:** `_webhook_route_text` (wraps it in a top-level exception guard that messages the user on any unhandled error).
 
-#### `_handle_awaiting_intent` / `_handle_awaiting_freestyle` — `src/telegram/webhook.py`
+#### `_handle_awaiting_intent` / `_handle_awaiting_freestyle` — `src/telegram/routing.py`
 **Does:** Resolve an armed chat_state against the user's next text message.
 `_handle_awaiting_intent` special-cases a URL reply as an *interrupt* — cancels
 the pending intent and starts a new job instead of treating the URL as intent
@@ -821,7 +821,7 @@ prompt, then branches on the job's `content_type`/`status` to pick which queue
 task to fire (finding #2 — the one function every content type's freestyle path funnels through).
 **Called from:** `_route_text`.
 
-#### `_invite_gate_allows` / `_remember_invite_identity` — `src/telegram/webhook.py`
+#### `admit_or_park` / `_remember_invite_identity` — `src/telegram/routing.py`
 **Does:** The access-control gate every text/photo/document message and most
 callbacks pass through: `approved` → proceed; `blocked` → refuse; unset email
 → arm `awaiting_email` and prompt; email set but not yet approved → "waiting on
@@ -829,14 +829,14 @@ operator" message. Opportunistically upserts the user's display identity on
 every pass (skipped if unchanged, to avoid a write per message).
 **Called from:** `_route_text`, `_webhook_route_photo`, `_webhook_route_document`, `_handle_callback`.
 
-#### `_handle_user_template_shortcut` — `src/telegram/webhook.py`
+#### `_handle_user_template_shortcut` — `src/telegram/routing.py`
 **Does:** `-mytemplate <url>` syntax: looks up a **user-defined** template
 (distinct from built-ins — finding #4) by name, and if found, runs it through
 `create_and_enqueue_job` with the template's `extra_instructions` as a
 freestyle prompt (repo URLs skip this — they always run the standard repo prompt).
 **Called from:** `_route_text` (step 3b, before falling through to plain URL routing).
 
-#### Media-group / photo ingest — `_accumulate_media_group`, `_process_media_group`, `_handle_photo_update`, `_handle_single_photo`, `_report_photo_links` — `src/telegram/webhook.py`
+#### Media-group / photo ingest — `_accumulate_media_group`, `_process_media_group`, `_handle_photo_update`, `_handle_single_photo`, `_report_photo_links` — `src/telegram/routing.py`
 **Does:** Telegram sends each photo in a multi-image send as a separate update
 sharing a `media_group_id`; `_accumulate_media_group` appends file_ids to a
 Redis list and restarts a 1-second debounce task per group (canceling any
@@ -847,7 +847,7 @@ Per ADR-0003, this whole path runs inline in the webhook request (via
 `spawn_background`), never through the job queue.
 **Called from:** `_webhook_route_photo`.
 
-#### Document ingest — `_handle_document_update`, `_enqueue_document_job`, `_ingest_document`, `_safe_get_pdf` — `src/telegram/webhook.py`
+#### Document ingest — `_handle_document_update`, `_enqueue_document_job`, `_ingest_document`, `_safe_get_pdf` — `src/telegram/routing.py`
 **Does:** Validates a Telegram-uploaded file is a PDF by mime/extension and
 under the 20MB Bot API `getFile` cap, then downloads it in the background
 (`spawn_background`, mirroring the photo path) and verifies the `%PDF` magic
@@ -855,7 +855,7 @@ bytes before enqueuing — `_enqueue_document_job` is the shared
 store-content-addressed-then-queue step also used by the URL path (`_route_document_url`).
 **Called from:** `_webhook_route_document`.
 
-#### `POST /webhook/ops` + `_handle_ops_callback`, `_ops_cb_invite_decision`, `_ops_cb_approve_pending[_cancel]`, `_settle_ops_invite_card` — `src/telegram/webhook.py`
+#### `POST /webhook/ops` + `_handle_ops_callback`, `_ops_cb_invite_decision`, `_ops_cb_approve_pending[_cancel]`, `_settle_ops_invite_card` — `src/telegram/ops.py`
 **Does:** The Ops bot's separate webhook (own HMAC secret
 `OPS_WEBHOOK_SECRET`, own admin gate `ops_bot.can_admin`, own if/elif callback
 dispatch rather than a table — finding #5). `_ops_cb_invite_decision` does an
@@ -873,7 +873,7 @@ from the same image, per `CLAUDE.md`'s architecture summary.
 
 #### `lifespan(app) -> AsyncIterator[None]` — `src/main.py`
 **Does:** FastAPI startup/shutdown hook: `database.init_db()`, then (only if
-`GOOGLE_DRIVE_FOLDER_BRAIN` is set) `brain.init_db()` + starts an
+`GOOGLE_DRIVE_FOLDER_BRAIN` is set) `brain.preflight()` + starts an
 `AsyncIOScheduler` cron job (`brain.refresh_stale_links`, Sun/Wed 9am) — the
 one scheduled job in the whole system — then registers both Telegram webhooks.
 On shutdown: closes the sender's HTTP client, the Redis queue client, and the session store.

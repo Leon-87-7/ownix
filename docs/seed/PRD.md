@@ -3271,7 +3271,7 @@ The same `_rebuild_lock` is checked by `refresh_stale_links` — if held, the sc
 | Long — Phase 1              | After description links extracted   | `asyncio.create_task(brain.ingest_links(links, topic, job_id))`                                                                                |
 | Long — Phase 2 (enrichment) | After enrichment JSON parsed        | `asyncio.create_task(brain.ingest_links([{url: t.url, label: t.name} for t in tools if t.url], topic=ai_topic, source_job_id=job_id))`         |
 | Long — Phase 3 (PRD)        | After PRD JSON parsed (both slots)  | `asyncio.create_task(brain.ingest_links([{url: t.url, label: t.name} for t in tech_stack if t.url], topic=prd.project, source_job_id=job_id))` |
-| `main.py` startup           | Before serving requests             | `await brain.init_db()` + register APScheduler                                                                                                 |
+| `main.py` startup           | Before serving requests             | `await brain.preflight()` + register APScheduler                                                                                                 |
 
 **Symmetry note:** All four model-extracted link sources (short Vision, long description, long enrichment tools, long PRD tech_stack) feed brain through the same fire-and-forget call. Soft dedup means a tool appearing in multiple sources for the same video produces `seen_count += 1` per source — stronger signal, not duplicate noise.
 

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import jobs
-from src.api.jobs import is_persistable_short_platform, resolve_thumbnail
+from src.api.job_thumbnails import is_persistable_short_platform, resolve_thumbnail
 
 
 def _use_fake_connection(monkeypatch, factory) -> None:
