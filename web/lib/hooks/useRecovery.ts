@@ -83,7 +83,7 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
     return () => controller.abort();
   }, [load]);
 
-  const act = useCallback(async (key: string, path: string) => {
+  const act = useCallback(async (key: string, path: string, opts?: { rethrow?: boolean }) => {
     setActing(key);
     setError(null);
     try {
@@ -93,6 +93,7 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
       await onRecovered();
     } catch (err) {
       if (mountedRef.current) setError(err instanceof Error ? err.message : 'Recovery action failed');
+      if (opts?.rethrow) throw err;
     } finally {
       if (mountedRef.current) setActing(null);
     }
@@ -106,6 +107,7 @@ export function useRecovery(contentType: string, onRecovered: () => Promise<void
     reload: () => load(),
     retryPending: () => act('pending', '/api/jobs/recovery/retry-pending'),
     retryError: () => act('error', '/api/jobs/recovery/retry-error'),
-    clearFailed: () => act('clear', '/api/jobs/recovery/clear-failed'),
+    // Rethrows so ConfirmDialog's onConfirm keeps the dialog open on failure.
+    clearFailed: () => act('clear', '/api/jobs/recovery/clear-failed', { rethrow: true }),
   };
 }

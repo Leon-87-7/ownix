@@ -74,10 +74,11 @@ export default function SpaceDetailPage() {
       // Navigating away - skip state updates so nothing fires mid-unmount.
       router.push('/spaces');
       return;
-    } catch {
+    } catch (err) {
       setDeleteFailed(true);
+      setDeleting(false);
+      throw err;
     }
-    setDeleting(false);
   }, [id, router]);
 
   if (fetchState === 'loading') {

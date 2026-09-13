@@ -71,6 +71,7 @@ export function NewsletterDigestDashboard() {
       toast('Newsletter removed');
     } catch (err) {
       setFormError(describeError(err, 'Could not stop watching that newsletter'));
+      throw err;
     } finally {
       setBusyId(null);
     }

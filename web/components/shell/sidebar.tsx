@@ -254,8 +254,11 @@ export function Sidebar() {
     setDisconnecting(true);
     setDisconnectFailed(false);
     const ok = await disconnect();
-    if (!ok) setDisconnectFailed(true);
     setDisconnecting(false);
+    if (!ok) {
+      setDisconnectFailed(true);
+      throw new Error('Google disconnect failed');
+    }
   };
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -269,7 +272,9 @@ export function Sidebar() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      // Skip if a nested layer (e.g. the disconnect ConfirmDialog) already
+      // handled this Escape — Radix's DismissableLayer preventDefault()s it.
+      if (e.key === 'Escape' && !e.defaultPrevented) setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

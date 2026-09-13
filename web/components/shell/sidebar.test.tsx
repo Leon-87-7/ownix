@@ -126,8 +126,10 @@ describe('Sidebar Google connection state', () => {
     await waitFor(() =>
       expect(screen.getByText(/couldn.t disconnect/i)).toBeTruthy(),
     );
+    // Dialog stays open on failure (handleDisconnect rethrows) so the user can retry.
+    expect(screen.getByRole('dialog')).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Disconnect', hidden: true }),
+      within(dialog).getByRole('button', { name: 'Disconnect' }),
     ).not.toBeDisabled();
   });
 });

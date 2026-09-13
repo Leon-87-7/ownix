@@ -10,10 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import * as RadixDialog from '@radix-ui/react-dialog';
 
-type ConfirmDialogProps = {
-  /** Omit when the dialog is opened from elsewhere (`open`/`onOpenChange`
-   * controlled) — e.g. a delete affordance that lives inside a child form. */
-  trigger?: ReactNode;
+type ConfirmDialogBaseProps = {
   title: string;
   description: string;
   confirmLabel: string;
@@ -28,11 +25,16 @@ type ConfirmDialogProps = {
   /** Extra interactive content (e.g. an opt-in checkbox) between the
    * description and the action buttons. */
   children?: ReactNode;
-  /** Controlled open state — pairs with `onOpenChange` when there's no
-   * `trigger` for the dialog to wire itself to. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 };
+
+// `trigger` (uncontrolled) and `open`/`onOpenChange` (controlled — e.g. a
+// delete affordance that lives inside a child form) are mutually exclusive
+// and each pair is all-or-nothing, so neither half can be supplied alone.
+type ConfirmDialogProps = ConfirmDialogBaseProps &
+  (
+    | { trigger: ReactNode; open?: undefined; onOpenChange?: undefined }
+    | { trigger?: undefined; open: boolean; onOpenChange: (open: boolean) => void }
+  );
 
 export function ConfirmDialog({
   trigger,
