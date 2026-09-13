@@ -305,8 +305,11 @@ async def get_thumbnail_job_ids(job_ids: list[str]) -> set[str]:
 
 async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], status: str) -> None:
     """Set prd_auto_status or prd_intent_status without leaking column names to callers."""
-    col = "prd_auto_status" if slot == "auto" else "prd_intent_status"
-    sql = f"UPDATE jobs SET {col} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"  # nosec B608
+    sql = (
+        "UPDATE jobs SET prd_auto_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        if slot == "auto"
+        else "UPDATE jobs SET prd_intent_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
     async with core.connection() as conn:
         await conn.execute(sql, (status, job_id))
         await conn.commit()
