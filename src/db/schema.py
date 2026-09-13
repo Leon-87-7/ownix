@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url);
 CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
+CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 
 -- Tag vocabulary for job tagging (issue #87 / S4).
 CREATE TABLE IF NOT EXISTS tags (
