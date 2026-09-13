@@ -63,7 +63,6 @@ export function NewsletterDigestDashboard() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm('Stop watching this newsletter and delete its candidates?')) return;
     setBusyId(id);
     setFormError(null);
     try {
@@ -72,6 +71,7 @@ export function NewsletterDigestDashboard() {
       toast('Newsletter removed');
     } catch (err) {
       setFormError(describeError(err, 'Could not stop watching that newsletter'));
+      throw err;
     } finally {
       setBusyId(null);
     }

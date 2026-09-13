@@ -10,12 +10,14 @@ import {
 } from '@/components/ui/dialog';
 import * as RadixDialog from '@radix-ui/react-dialog';
 
-type ConfirmDialogProps = {
-  trigger: ReactNode;
+type ConfirmDialogBaseProps = {
   title: string;
   description: string;
   confirmLabel: string;
   pending?: boolean;
+  /** Confirm-button label while `pending`. Defaults to "Deleting…" — override
+   * for a non-delete action (e.g. "Disconnecting…", "Clearing…"). */
+  pendingLabel?: string;
   /** Disable the confirm button independent of `pending` — e.g. a
    * type-to-confirm field that hasn't matched yet. */
   confirmDisabled?: boolean;
@@ -25,22 +27,36 @@ type ConfirmDialogProps = {
   children?: ReactNode;
 };
 
+// `trigger` (uncontrolled) and `open`/`onOpenChange` (controlled — e.g. a
+// delete affordance that lives inside a child form) are mutually exclusive
+// and each pair is all-or-nothing, so neither half can be supplied alone.
+type ConfirmDialogProps = ConfirmDialogBaseProps &
+  (
+    | { trigger: ReactNode; open?: undefined; onOpenChange?: undefined }
+    | { trigger?: undefined; open: boolean; onOpenChange: (open: boolean) => void }
+  );
+
 export function ConfirmDialog({
   trigger,
   title,
   description,
   confirmLabel,
   pending = false,
+  pendingLabel,
   confirmDisabled = false,
   onConfirm,
   children,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChangeProp ?? setInternalOpen;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent
         hideClose
         onOpenAutoFocus={(event) => {
@@ -76,7 +92,7 @@ export function ConfirmDialog({
             }}
             className="h-8 rounded-md bg-status-error px-3 text-button font-medium text-[#1b1309] transition-ui hover:brightness-110 disabled:opacity-50"
           >
-            {pending ? 'Deleting…' : confirmLabel}
+            {pending ? (pendingLabel ?? 'Deleting…') : confirmLabel}
           </button>
         </div>
       </DialogContent>

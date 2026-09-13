@@ -50,10 +50,10 @@ export function DomainPanel({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-line bg-surface p-4">
-        <h3 className="mb-3 text-sm font-semibold text-ink">Add domain</h3>
+        <h3 className="mb-3 text-copy font-semibold text-ink">Add domain</h3>
         <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label htmlFor={inputId} className="text-xs font-medium text-body">
+            <label htmlFor={inputId} className="text-label font-medium text-body">
               Domain or URL
             </label>
             <input
@@ -63,7 +63,7 @@ export function DomainPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="example.com"
-              className="w-full sm:w-72 rounded-md border border-line bg-canvas px-3 py-1.5 text-sm text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
+              className="w-full sm:w-72 rounded-md border border-line bg-canvas px-3 py-1.5 text-copy text-ink placeholder-muted transition-ui hover:border-line-strong focus:border-signal focus:outline-none"
             />
           </div>
           <button
@@ -74,22 +74,22 @@ export function DomainPanel({
             {adding ? 'Adding…' : 'Add'}
           </button>
           {addError && (
-            <p className="w-full text-xs text-status-error">{addError}</p>
+            <p className="w-full text-label text-status-error">{addError}</p>
           )}
         </form>
       </div>
 
       {loading && (
-        <p className="px-4 text-sm text-body">Loading {label.toLowerCase()}…</p>
+        <p className="px-4 text-copy text-body">Loading {label.toLowerCase()}…</p>
       )}
       {fetchError && (
-        <p className="px-4 text-sm text-status-error">{fetchError}</p>
+        <p className="px-4 text-copy text-status-error">{fetchError}</p>
       )}
       {removeError && (
-        <p className="px-4 text-sm text-status-error">{removeError}</p>
+        <p className="px-4 text-copy text-status-error">{removeError}</p>
       )}
       {!loading && !fetchError && domains.length === 0 && (
-        <p className="px-4 text-sm text-muted">
+        <p className="px-4 text-copy text-muted">
           No {label.toLowerCase()} yet. Add one above.
         </p>
       )}
@@ -100,12 +100,12 @@ export function DomainPanel({
               key={domain}
               className="flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3"
             >
-              <span className="min-w-0 flex-1 font-mono text-sm text-ink">
+              <span className="min-w-0 flex-1 font-mono text-label text-ink">
                 {domain}
               </span>
               <button
                 onClick={() => handleRemove(domain)}
-                className="rounded px-2 py-1 text-xs font-medium text-status-error transition-ui hover:bg-raised"
+                className="rounded px-2 py-1 text-label font-medium text-status-error transition-ui hover:bg-raised"
               >
                 Remove
               </button>

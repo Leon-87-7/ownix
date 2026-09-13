@@ -57,7 +57,7 @@ export function DiscordPairingPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-body">
+      <p className="text-copy text-body">
         Send links from Discord: generate a one-time code here, then DM it to
         the Ownix bot. The code expires in 5 minutes and works once. After
         that, anything you DM the bot lands in your Index.
@@ -66,12 +66,12 @@ export function DiscordPairingPanel() {
         type="button"
         onClick={handlePair}
         disabled={pairing}
-        className="h-9 rounded-md bg-signal px-4 text-sm font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:opacity-50"
+        className="h-9 rounded-md bg-signal px-4 text-copy font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:opacity-50"
       >
         {pairing ? 'Generating…' : 'Generate pairing code'}
       </button>
       {code && live && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-sm text-ink">
+        <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-label text-ink">
           <span className="break-all">{code}</span>
           <span className="flex shrink-0 items-center gap-3">
             <span className="font-sans text-label text-muted">
@@ -87,7 +87,7 @@ export function DiscordPairingPanel() {
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-status-error/40 bg-status-error-tint px-3 py-2 text-sm text-status-error"
+          className="rounded-md border border-status-error/40 bg-status-error-tint px-3 py-2 text-copy text-status-error"
         >
           {error}
         </p>

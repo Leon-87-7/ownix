@@ -8,6 +8,7 @@ import { MessageSquareText } from 'lucide-react';
 import { useTemplateList } from '@/lib/hooks/useTemplateList';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { describeError } from '@/lib/fetch-utils';
 import type {
   Template,
@@ -148,17 +149,21 @@ function UserTemplateRow({
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
+  const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<
     string | undefined
   >();
 
   const handleDelete = async () => {
-    if (!confirm(`Delete template "-${template.name}"?`)) return;
+    setDeleting(true);
     setDeleteError(undefined);
     try {
       await onDelete(template.name);
     } catch (err) {
       setDeleteError(describeError(err, 'Delete failed'));
+      throw err;
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -273,12 +278,18 @@ function UserTemplateRow({
           >
             Edit
           </button>
-          <button
-            onClick={handleDelete}
-            className="rounded px-2 py-1 text-xs font-medium text-status-error transition-ui hover:bg-raised"
-          >
-            Delete
-          </button>
+          <ConfirmDialog
+            title={`Delete template "-${template.name}"?`}
+            description="This can't be undone."
+            confirmLabel="Delete template"
+            pending={deleting}
+            onConfirm={handleDelete}
+            trigger={
+              <button className="rounded px-2 py-1 text-xs font-medium text-status-error transition-ui hover:bg-raised">
+                Delete
+              </button>
+            }
+          />
         </div>
       </div>
       {deleteError && (

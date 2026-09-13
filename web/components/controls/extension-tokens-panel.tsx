@@ -80,7 +80,7 @@ export function ExtensionTokensPanel() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-sm text-body">
+        <p className="text-copy text-body">
           Connect the Ownix Chrome extension by generating a one-time pairing
           code here, then pasting it into the extension&apos;s options page.
           The code expires in 5 minutes and works once.
@@ -89,12 +89,12 @@ export function ExtensionTokensPanel() {
           type="button"
           onClick={handlePair}
           disabled={pairing}
-          className="mt-3 h-9 rounded-md bg-signal px-4 text-sm font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:opacity-50"
+          className="mt-3 h-9 rounded-md bg-signal px-4 text-copy font-medium text-onsignal transition-ui hover:bg-signal-bright disabled:opacity-50"
         >
           {pairing ? 'Generating…' : 'Generate pairing code'}
         </button>
         {pairingCode && (
-          <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-sm text-ink">
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-line bg-raised px-3 py-2 font-mono text-label text-ink">
             <span className="break-all">{pairingCode}</span>
             <span className="flex shrink-0 items-center gap-3">
               <span className="font-sans text-label text-muted">
@@ -109,26 +109,26 @@ export function ExtensionTokensPanel() {
       {error && (
         <p
           role="alert"
-          className="rounded-md border border-status-error/40 bg-status-error-tint px-3 py-2 text-sm text-status-error"
+          className="rounded-md border border-status-error/40 bg-status-error-tint px-3 py-2 text-copy text-status-error"
         >
           {error}
         </p>
       )}
 
       <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+        <h4 className="mb-2 text-label font-semibold text-muted">
           Connected extensions
         </h4>
-        {loading && <p className="text-sm text-muted">Loading…</p>}
+        {loading && <p className="text-copy text-muted">Loading…</p>}
         {!loading && tokens.length === 0 && (
-          <p className="text-sm text-muted">No paired extensions yet.</p>
+          <p className="text-copy text-muted">No paired extensions yet.</p>
         )}
         {!loading && tokens.length > 0 && (
           <ul className="space-y-2">
             {tokens.map((token) => (
               <li
                 key={token.id}
-                className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 py-2 text-copy"
               >
                 <span className="text-body">
                   {token.label ?? 'Unnamed device'}, last used:{' '}
@@ -142,7 +142,7 @@ export function ExtensionTokensPanel() {
                   type="button"
                   onClick={() => handleRevoke(token.id)}
                   disabled={revokingId === token.id}
-                  className="h-7 rounded-md border border-line px-2 text-xs font-medium text-body transition-ui hover:border-status-error hover:text-status-error disabled:opacity-50"
+                  className="h-7 rounded-md border border-line px-2 text-label font-medium text-body transition-ui hover:border-status-error hover:text-status-error disabled:opacity-50"
                 >
                   {revokingId === token.id ? 'Revoking…' : 'Revoke'}
                 </button>

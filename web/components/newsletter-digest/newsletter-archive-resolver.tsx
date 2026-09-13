@@ -101,7 +101,7 @@ export function NewsletterArchiveResolver({
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
       <div className="flex items-center gap-2">
-        <Search className="h-5 w-5 text-signal" aria-hidden="true" />
+        <Search className="h-5 w-5 text-muted" aria-hidden="true" />
         <h2 className="text-title font-semibold text-ink">Find a newsletter</h2>
       </div>
 

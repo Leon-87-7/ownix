@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from '@/test/render';
+import { act, fireEvent, render, screen, waitFor, within } from '@/test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from './sidebar';
 import type { InviteUser } from './invite-gate';
@@ -98,19 +98,16 @@ describe('Sidebar Google connection state', () => {
     expect(screen.queryByText('Connect Google')).toBeNull();
   });
 
-  it('disconnects only after window.confirm', async () => {
+  it('disconnects only after confirming in the dialog', async () => {
     googleMock.connected = true;
-    const confirmMock = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirmMock);
     render(<Sidebar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect', hidden: true }));
-    expect(confirmMock).toHaveBeenCalled();
     expect(googleMock.disconnect).not.toHaveBeenCalled();
 
-    confirmMock.mockReturnValue(true);
+    const dialog = await screen.findByRole('dialog');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Disconnect', hidden: true }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
     });
     expect(googleMock.disconnect).toHaveBeenCalledTimes(1);
   });
@@ -118,18 +115,21 @@ describe('Sidebar Google connection state', () => {
   it('surfaces a failure message when disconnect fails', async () => {
     googleMock.connected = true;
     googleMock.disconnect = vi.fn(async () => false);
-    vi.stubGlobal('confirm', vi.fn(() => true));
     render(<Sidebar />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect', hidden: true }));
+    const dialog = await screen.findByRole('dialog');
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Disconnect', hidden: true }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
     });
 
     await waitFor(() =>
       expect(screen.getByText(/couldn.t disconnect/i)).toBeTruthy(),
     );
+    // Dialog stays open on failure (handleDisconnect rethrows) so the user can retry.
+    expect(screen.getByRole('dialog')).toBeTruthy();
     expect(
-      screen.getByRole('button', { name: 'Disconnect', hidden: true }),
+      within(dialog).getByRole('button', { name: 'Disconnect' }),
     ).not.toBeDisabled();
   });
 });

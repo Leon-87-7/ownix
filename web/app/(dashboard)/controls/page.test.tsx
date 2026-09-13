@@ -443,12 +443,13 @@ describe('ControlsPage', () => {
   it('deletes the tag from the edit panel after confirmation', async () => {
     const deleteTag = vi.fn().mockResolvedValue(undefined);
     setupTagsMock({ deleteTag });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<ControlsPage />);
     fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
     fireEvent.click(
       section('Tags').getByRole('button', { name: 'Delete Alpha' }),
     );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete tag' }));
     await waitFor(() => expect(deleteTag).toHaveBeenCalledWith('t1'));
     await waitFor(() =>
       expect(
@@ -457,15 +458,16 @@ describe('ControlsPage', () => {
     );
   });
 
-  it('does not delete when the confirmation dialog is declined', () => {
+  it('does not delete when the confirmation dialog is declined', async () => {
     const deleteTag = vi.fn();
     setupTagsMock({ deleteTag });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<ControlsPage />);
     fireEvent.click(section('Tags').getByRole('button', { name: 'Edit Alpha' }));
     fireEvent.click(
       section('Tags').getByRole('button', { name: 'Delete Alpha' }),
     );
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(deleteTag).not.toHaveBeenCalled();
   });
 

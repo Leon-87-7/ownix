@@ -17,7 +17,6 @@ import { IngestLinkDialog } from '@/components/feed/ingest-link-dialog';
 import {
   CommandLauncher,
   IntakeSheet,
-  CLEAR_FAILED_CONFIRM,
   type FeedRecoveryCommands,
   type FeedSearchCommands,
   type IntakeActionKey,
@@ -205,12 +204,8 @@ export function SubmitJobProvider({ children }: { children: ReactNode }) {
     u: () => setAddLinkOpen(true),
     l: () => window.location.assign('/feed?view=links'),
     c: () => {
-      if (
-        !restricted &&
-        feedRecovery?.canClearFailed &&
-        window.confirm(CLEAR_FAILED_CONFIRM)
-      )
-        feedRecovery.clearFailed();
+      if (!restricted && feedRecovery?.canClearFailed)
+        feedRecovery.requestClearFailed();
     },
     '/': () => feedSearch?.focusSearch(),
     '*': () => feedSearch?.focusLinkSearch(),

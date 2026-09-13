@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Newspaper, RotateCcw, Trash2 } from 'lucide-react';
 import { DateTime } from '@/components/ui/date-time';
 import { StatusBadge } from '@/components/ui/badges';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { NewsletterWatch } from '@/lib/newsletter-digest';
 
 function asUtcIso(raw: string): string {
@@ -31,7 +32,7 @@ export function NewsletterWatchCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Link href={`/newsletter-digest/${watch.id}`} className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <Newspaper className="h-5 w-5 shrink-0 text-signal" aria-hidden="true" />
+            <Newspaper className="h-5 w-5 shrink-0 text-muted" aria-hidden="true" />
             <h2 className="truncate text-title font-semibold text-ink">{watch.name}</h2>
           </div>
           <p className="mt-1 truncate font-mono text-label text-muted">{watch.archive_url}</p>
@@ -63,15 +64,23 @@ export function NewsletterWatchCard({
             </button>
           )}
           {onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(watch.id)}
-              disabled={deleting}
-              aria-label={`Delete ${watch.name}`}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition-ui hover:bg-surface hover:text-status-error active:scale-[0.96] disabled:text-muted"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
+            <ConfirmDialog
+              title={`Stop watching "${watch.name}"?`}
+              description="Its candidates are deleted too. This can't be undone."
+              confirmLabel="Stop watching"
+              pending={deleting}
+              onConfirm={() => onDelete(watch.id)}
+              trigger={
+                <button
+                  type="button"
+                  disabled={deleting}
+                  aria-label={`Delete ${watch.name}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted transition-ui hover:bg-surface hover:text-status-error active:scale-[0.96] disabled:text-muted"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              }
+            />
           )}
         </div>
       </div>

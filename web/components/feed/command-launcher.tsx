@@ -48,10 +48,13 @@ export const INTAKE_ACTIONS: ReadonlyArray<{
 
 /** Recovery action the Feed registers so the launcher can drive it with the
  * live scope + availability the Feed's useRecovery already computes. (Retry
- * pending/failed stay in the contextual recovery panel, not the palette.) */
+ * pending/failed stay in the contextual recovery panel, not the palette.)
+ * `requestClearFailed` opens RecoveryPanel's own confirmation dialog rather
+ * than clearing directly - one styled confirm shared by every entry point
+ * (this palette, the keyboard shortcut, and the panel's own button). */
 export interface FeedRecoveryCommands {
   canClearFailed: boolean;
-  clearFailed: () => void;
+  requestClearFailed: () => void;
 }
 
 /** Feed search focus, registered so the launcher can jump into the Feed's
@@ -60,9 +63,6 @@ export interface FeedSearchCommands {
   focusSearch: () => void;
   focusLinkSearch: () => void;
 }
-
-export const CLEAR_FAILED_CONFIRM =
-  'Clear failed jobs in this tab? This marks them cancelled; it does not delete them.';
 
 // Space-separated keys render as individual right-aligned kbd chips so a
 // chord like "R P" reads as two keys.
@@ -90,7 +90,7 @@ function CommandGroup({
 }) {
   return (
     <div>
-      <p className="mb-2 text-xs uppercase tracking-widest text-muted">
+      <p className="mb-2 font-mono text-label uppercase tracking-wide text-muted">
         {label}
       </p>
       <div className="space-y-1">{children}</div>
@@ -267,9 +267,8 @@ export function CommandLauncher({
                 shortcut="C"
                 disabled={!recovery.canClearFailed}
                 onSelect={() => {
-                  if (!window.confirm(CLEAR_FAILED_CONFIRM)) return;
                   close();
-                  recovery.clearFailed();
+                  recovery.requestClearFailed();
                 }}
               />
             </CommandGroup>

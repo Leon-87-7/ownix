@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import SpaceDetailPage from './page';
 
@@ -158,12 +158,14 @@ describe('SpaceDetailPage', () => {
   });
 
   it('shows an error and re-enables Delete when the DELETE request fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<SpaceDetailPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete collection' }));
+
     await waitFor(() => expect(screen.getByText(/couldn.t delete/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /delete/i })).not.toBeDisabled();
   });
