@@ -790,7 +790,7 @@ async def _cmd_find(ctx: SlashCtx) -> None:
 async def _cmd_rebuild_graph(ctx: SlashCtx) -> None:
     from src import brain
 
-    if brain._rebuild_lock.locked():
+    if brain.rebuild_in_progress():
         await send_message(ctx.chat_id, "Rebuild already in progress — please wait.")
         return
     await send_message(ctx.chat_id, "Brain rebuild started — will take a few minutes")

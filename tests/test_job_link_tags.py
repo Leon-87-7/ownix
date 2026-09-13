@@ -2,6 +2,7 @@
 
 import asyncio
 
+import aiosqlite
 import pytest
 
 from src import database
@@ -190,15 +191,18 @@ def test_persist_job_link_ids_opens_no_write_when_already_current(tag_db, monkey
     item, _ = _run(_seed("article"))
     _run(_add_link_ids([item], 7))  # first call: real write, sets link_id
 
-    real_connection = database.connection
+    # Counted at aiosqlite.connect, not at any one module's `connection` name:
+    # the read goes through src.db.core and the write through src.db.jobs, and
+    # patching either module's binding would miss the other and pass falsely.
+    real_connect = aiosqlite.connect
     call_count = 0
 
-    def _counting_connection():
+    def _counting_connect(*args, **kwargs):
         nonlocal call_count
         call_count += 1
-        return real_connection()
+        return real_connect(*args, **kwargs)
 
-    monkeypatch.setattr(database, "connection", _counting_connection)
+    monkeypatch.setattr(aiosqlite, "connect", _counting_connect)
     _run(database.persist_job_link_ids({item["id"]: "link-existing"}))
 
     # Only the read (_fetch_in's SELECT) should open a connection -- an

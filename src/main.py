@@ -171,7 +171,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # Poll watched newsletter publications every 15 minutes (ADR-0060, #610).
     scheduler.add_job(_enqueue_due_newsletter_polls, "interval", minutes=15)
     if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
-        await brain.init_db()
+        await brain.preflight()
         scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
     scheduler.start()
     log.info("scheduler_started")
