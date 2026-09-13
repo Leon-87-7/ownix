@@ -2994,3 +2994,73 @@ async def test_cmd_addlink_rejects_non_url(monkeypatch):
     created.assert_not_awaited()
     args, _ = sent.await_args
     assert "valid HTTP(S) URL or bare domain" in args[1]
+
+
+@pytest.mark.asyncio
+async def test_cmd_ignore_all_invalid_tokens_still_sends_text(monkeypatch):
+    """Every token invalid must still produce a non-empty reply.
+
+    _format_domain_report joins only non-empty sections, so without an invalid
+    section this sent "" and Telegram rejected the send with HTTP 400.
+    """
+    from src.telegram.commands import _cmd_ignore
+    from src.telegram.context import SlashCtx
+
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_message", sent)
+    added = AsyncMock()
+    monkeypatch.setattr("src.telegram.commands.database.add_ignored_domain", added)
+
+    await _cmd_ignore(SlashCtx(chat_id=42, parts=["/ignore", "not_a_domain"], message_id=None))
+
+    added.assert_not_awaited()
+    args, _ = sent.await_args
+    assert args[1].strip(), "reply body must not be empty"
+    assert "not_a_domain" in args[1]
+
+
+@pytest.mark.asyncio
+async def test_debounce_cleanup_keeps_the_replacement_task(monkeypatch):
+    """A photo arriving mid-processing must not orphan the task it just stored.
+
+    The cancelled task's `finally` runs after the replacement is already in
+    _BATCH_TASKS, so an unconditional pop dropped the live task and the next
+    photo started a second one — processing the group twice.
+    """
+    import asyncio
+
+    from src.telegram import routing
+
+    real_sleep = asyncio.sleep  # keep a handle before patching the debounce delay
+    started = asyncio.Event()
+    release = asyncio.Event()  # never set: holds the task inside the try block
+
+    monkeypatch.setattr(routing, "_BATCH_TASKS", {})
+    monkeypatch.setattr(routing.queue, "_client", lambda: AsyncMock())
+
+    async def _blocking_process(chat_id, media_group_id):
+        started.set()
+        await release.wait()
+
+    async def _no_debounce_delay(_seconds):
+        return None
+
+    monkeypatch.setattr(routing, "_process_media_group", _blocking_process)
+    monkeypatch.setattr(routing.asyncio, "sleep", _no_debounce_delay)
+
+    await routing._accumulate_media_group(7, "grp", "file1")
+    first = routing._BATCH_TASKS["grp"]
+    await asyncio.wait_for(started.wait(), timeout=2)  # first task is now inside the try
+
+    # Second photo: cancels `first` mid-processing, then stores its own task
+    # under the same key before `first`'s `finally` has had a chance to run.
+    await routing._accumulate_media_group(7, "grp", "file2")
+    second = routing._BATCH_TASKS["grp"]
+    assert second is not first
+
+    for _ in range(5):  # let the cancellation be delivered and `finally` run
+        await real_sleep(0)
+    assert first.cancelled() or first.done()
+    assert routing._BATCH_TASKS.get("grp") is second
+
+    second.cancel()

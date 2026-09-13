@@ -134,17 +134,32 @@ async def get_job(job_id: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def _set_clause(col: str) -> str:
+    """`<col> = ?` for a caller-supplied column name, rejecting anything else.
+
+    A `**fields` key is NOT constrained to an identifier — `f(**{"a; DROP ...": 1})`
+    is legal Python — so a caller that splats a request-derived dict would put
+    attacker text straight into the SET list. Every caller today passes literals;
+    this makes that safe by construction rather than by audit. An identifier can
+    carry no quote, space, semicolon or comment, so a wrong one is an
+    OperationalError rather than an injection.
+    """
+    if not col.isidentifier():
+        raise ValueError(f"invalid column name: {col!r}")
+    return f"{col} = ?"
+
+
 async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
     """Update status + updated_at, plus any additional columns passed as kwargs."""
     set_parts = ["status = ?", "updated_at = CURRENT_TIMESTAMP"]
     params: list[Any] = [status]
     for col, val in fields.items():
-        set_parts.append(f"{col} = ?")
+        set_parts.append(_set_clause(col))
         params.append(val)
     params.append(job_id)
     async with core.connection() as conn:
-        # Interpolated text is only `<col> = ?`, and `col` is a **fields key, so
-        # Python has already constrained it to an identifier. Values bind as `?`.
+        # Interpolated text is only `<col> = ?`, with `col` identifier-checked
+        # above. Every value binds as `?`.
         await conn.execute(  # nosemgrep
             f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",  # nosec B608
             params,
@@ -189,12 +204,12 @@ async def update_job_fields(job_id: str, **fields: Any) -> None:
     set_parts = ["updated_at = CURRENT_TIMESTAMP"]
     params: list[Any] = []
     for col, val in fields.items():
-        set_parts.append(f"{col} = ?")
+        set_parts.append(_set_clause(col))
         params.append(val)
     params.append(job_id)
     async with core.connection() as conn:
-        # Same as update_job_status: only `<col> = ?` is interpolated, and `col`
-        # is a **fields key. Values bind as `?`.
+        # Same as update_job_status: only identifier-checked `<col> = ?` is
+        # interpolated. Values bind as `?`.
         await conn.execute(  # nosemgrep
             f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",  # nosec B608
             params,

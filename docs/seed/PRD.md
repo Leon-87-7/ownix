@@ -3076,8 +3076,9 @@ Single-responsibility module — touches only SQLite, the Gemini Embedding API, 
 **Public async functions:**
 
 ```python
-async def init_db(db_path: str) -> None
-    # Create links table if absent, then run Drive pre-flight write check
+async def preflight() -> None
+    # Drive pre-flight write check only — the links/tags tables are created by
+    # database.init_db() from the DDL in src/db/schema.py
 
 async def ingest_links(links: list[dict], topic: str, source_job_id: str) -> None
     # Soft-dedup, embed, write/update Obsidian .md files to Drive
@@ -3096,7 +3097,7 @@ async def refresh_stale_links() -> None
 
 ### 13.3 Database Schema
 
-**Drive pre-flight write check (runs inside `init_db`):**
+**Drive pre-flight write check (runs inside `preflight`):**
 On FastAPI startup, write then immediately delete `.brain_preflight.tmp` in `GOOGLE_DRIVE_FOLDER_BRAIN`. Catches wrong folder ID (404), missing service account share (403), or read-only folder (403 on insert). Failure crashes startup with:
 
 ```

@@ -76,7 +76,14 @@ async def _accumulate_media_group(chat_id: int, media_group_id: str, file_id: st
         try:
             await _process_media_group(chat_id, media_group_id)
         finally:
-            _BATCH_TASKS.pop(media_group_id, None)
+            # Only clear the slot if it still points at *this* task. A photo that
+            # lands while _process_media_group is running cancels us and stores
+            # its replacement before our `finally` gets to run, so an
+            # unconditional pop would drop the live task: the next photo would
+            # find no entry, start a second task, and the group would be
+            # processed twice (two "📸 Processing N image(s)" messages).
+            if _BATCH_TASKS.get(media_group_id) is asyncio.current_task():
+                del _BATCH_TASKS[media_group_id]
 
     _BATCH_TASKS[media_group_id] = asyncio.create_task(_debounce())
 

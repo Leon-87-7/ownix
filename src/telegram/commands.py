@@ -534,10 +534,14 @@ async def _cmd_ignore(ctx: SlashCtx) -> None:
     if len(ctx.parts) < 2:
         await sender.send_message(ctx.chat_id, "Usage: /ignore <domain or URL> [more...]")
         return
-    added, protected = [], []
+    added, protected, invalid = [], [], []
     for raw in ctx.parts[1:]:
         domain = _normalize_domain(raw)
         if not is_valid_domain_name(domain):
+            # Reported rather than skipped: with every token invalid the other
+            # two lists stay empty, and _format_domain_report's "" would reach
+            # send_message, which Telegram rejects with a 400.
+            invalid.append(domain)
             continue
         if domain in _PROTECTED_DOMAINS:
             protected.append(domain)
@@ -546,7 +550,11 @@ async def _cmd_ignore(ctx: SlashCtx) -> None:
         added.append(domain)
     await sender.send_message(
         ctx.chat_id,
-        _format_domain_report(("🚫 Ignored:", added), ("⛔ Cannot ignore:", protected)),
+        _format_domain_report(
+            ("🚫 Ignored:", added),
+            ("⛔ Cannot ignore:", protected),
+            ("⚠️ Not a domain:", invalid),
+        ),
     )
 
 

@@ -737,7 +737,7 @@ before dispatching — a blocked/unapproved user's stale inline keyboard can't b
 used to bypass the gate.
 **Entry point:** every inline-keyboard button tap in the main bot.
 
-Handler groups (all `(ctx: CallbackCtx) -> None`, all in `webhook.py`):
+Handler groups (all `(ctx: CallbackCtx) -> None`, all in `callbacks.py`):
 - **Gemini/template flow** — `_cb_gemini_no` (mark done, skip enrichment),
   `_cb_gemini_yes` (offer the 5-template keyboard), `_cb_template_pick`
   (persist template, enqueue `enrichment`), `_cb_template_freestyle` (arm
@@ -766,7 +766,7 @@ clears any pending chat_state/template on every command except `/cancel`
 (which reads the state first, to report what it's canceling).
 **Entry point:** any message starting with `/`, routed through `_route_text` step 1.
 
-Handler groups (all in `webhook.py`):
+Handler groups (all in `commands.py`):
 - **Job creation shortcuts** — `_cmd_addlink` (`/addlink <url>` → Add-Link,
   same dedup semantics as the dashboard's `_create_link_job`), `_cmd_force`
   (`/force <url>` — three-way branch: existing job → reset+reprocess in place;

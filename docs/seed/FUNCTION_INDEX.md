@@ -613,8 +613,8 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 **Called from:** `ingest_links` (same file).
 **Usage:** `canonical = normalize_url(raw_url)`
 
-#### `init_db() -> None`
-**Does:** Creates the `links` table and (if `GOOGLE_DRIVE_FOLDER_BRAIN` is set) does a Drive pre-flight check by uploading and immediately deleting a temp file — fails loudly at startup if Drive write access is broken. **Distinct from `database.init_db()`** — see top finding backend-#2.
+#### `preflight() -> None`
+**Does:** If `GOOGLE_DRIVE_FOLDER_BRAIN` is set, does a Drive pre-flight check by uploading and immediately deleting a temp file — fails loudly at startup if Drive write access is broken. Creates no tables: `links`, `tags` and `link_tags` are declared in `src/db/schema.py` and created by `database.init_db()`, which `main.py` runs first.
 **Called from:** Startup path in `src/main.py`.
 **Usage:** `await brain.preflight()` (once, at startup — checks Drive access; creates no tables)
 
