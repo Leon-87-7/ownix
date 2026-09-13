@@ -10,9 +10,11 @@ from html import unescape
 from urllib.parse import urlsplit, urlunsplit
 from typing import Any
 
+import aiosqlite
 import numpy as np
 
 from src.config import settings
+from src import database
 from src.database import generate_id
 from src.services.drive import update_file, upload_file
 from src.utils.logger import get_logger
@@ -26,50 +28,16 @@ EMBEDDING_DIM = 768
 
 _rebuild_lock = asyncio.Lock()
 
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS links (
-    id            TEXT PRIMARY KEY,
-    chat_id       INTEGER,
-    url           TEXT NOT NULL,
-    title         TEXT,
-    topic         TEXT,
-    description   TEXT,
-    source_job    TEXT NOT NULL,
-    embedding     BLOB,
-    drive_file_id TEXT,
-    seen_count    INTEGER NOT NULL DEFAULT 1,
-    last_seen_at  TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL,
-    stars         INTEGER,
-    pushed_at     TEXT,
-    archived      INTEGER NOT NULL DEFAULT 0,
-    og_image_url  TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_links_url ON links(url);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_links_chat_url_unique ON links(chat_id, url);
-CREATE INDEX IF NOT EXISTS idx_links_updated_at ON links(updated_at);
-CREATE INDEX IF NOT EXISTS idx_links_created_at ON links(created_at);
 
--- Tag tables are owned by src/database.py; mirrored here so brain-standalone
--- databases (tests, tooling) support the tag-aware link search.
-CREATE TABLE IF NOT EXISTS tags (
-    id         TEXT PRIMARY KEY,
-    chat_id    INTEGER NOT NULL,
-    name       TEXT NOT NULL,
-    meaning    TEXT NOT NULL DEFAULT '',
-    color      TEXT NOT NULL DEFAULT '#8b5cf6',
-    icon       TEXT,
-    pinned     INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(chat_id, name)
-);
-CREATE TABLE IF NOT EXISTS link_tags (
-    link_id TEXT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
-    tag_id  TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (link_id, tag_id)
-);
-"""
+def rebuild_in_progress() -> bool:
+    """True while a graph rebuild holds the lock.
+
+    Callers outside this module ask through here rather than reading
+    `_rebuild_lock` directly, so the exclusion mechanism stays brain's to
+    change.
+    """
+    return _rebuild_lock.locked()
+
 
 
 def _embed_sync(text: str, *, api_key: str) -> np.ndarray:
@@ -308,15 +276,15 @@ def _github_owner_repo(url: str) -> tuple[str, str] | None:
     return segments[0], segments[1]
 
 
-async def init_db() -> None:
-    """Create the links table and verify Drive pre-flight write access."""
-    import aiosqlite
+async def preflight() -> None:
+    """Verify Drive write access for the Brain folder before the scheduler starts.
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        await conn.executescript(SCHEMA_SQL)
-        await conn.commit()
-    log.info("brain.db_initialized", path=settings.DB_PATH)
-
+    Creating tables is not this function's job any more: `links`, `tags` and
+    `link_tags` are declared once in `src/db/schema.py` and reach the database
+    through `database.init_db()`, which the API already runs at startup. Brain
+    previously carried its own copy of that DDL, which meant a column added by
+    a migration silently did not exist for anyone who only ran this.
+    """
     if not settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         log.warning("brain.preflight_skipped", reason="GOOGLE_DRIVE_FOLDER_BRAIN not set")
         return
@@ -429,10 +397,7 @@ async def _touch_existing_link(
 
 
 async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str, now_iso: str) -> None:
-    import aiosqlite
-
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         cursor = await conn.execute("SELECT chat_id FROM jobs WHERE id = ?", (source_job_id,))
         owner = await cursor.fetchone()
         if owner is None:
@@ -441,8 +406,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
         chat_id = owner["chat_id"]
 
     # --- Soft dedup (own short connection) ---
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         cursor = await conn.execute(
             """SELECT id, seen_count, drive_file_id, title, topic
                FROM links
@@ -475,8 +439,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
     embedding_arr = await _embed(embed_doc)
     embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         link_id = generate_id()
         # Atomic upsert: a concurrent ingest that inserted this owner+URL while
         # we were fetching becomes a seen_count bump, never a duplicate
@@ -654,10 +617,7 @@ def _build_obsidian_md(
 
 async def get_graph() -> dict[str, list[dict]]:
     """Return Brain graph nodes and on-request derived cosine edges."""
-    import aiosqlite
-
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         cursor = await conn.execute(
             """SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
                FROM links l
@@ -719,7 +679,6 @@ async def list_links(
     returned tag payload are constrained to ``viewer_chat_id`` when given.
     # ponytail: substring LIKE, not typo-tolerant fuzzy; add FTS5 if a profiler/users ask.
     """
-    import aiosqlite
     import json
 
     # Every query below is a join of static fragments with bound parameters —
@@ -776,8 +735,7 @@ async def list_links(
         ]
     )
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         count_cursor = await conn.execute(count_sql, filter_params)
         count_row = await count_cursor.fetchone()
         cursor = await conn.execute(rows_sql, (*filter_params, limit, offset))
@@ -835,10 +793,7 @@ async def get_link_preview(link_id: str) -> dict[str, Any] | None:
     URL. Empty results are retried on a later selection because OG markup and
     crawler responses change over time.
     """
-    import aiosqlite
-
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         cursor = await conn.execute(
             "SELECT id, url, og_image_url FROM links WHERE id = ?",
             (link_id,),
@@ -853,8 +808,7 @@ async def get_link_preview(link_id: str) -> dict[str, Any] | None:
         page = await fetch_public_html(link["url"])
         if page is not None:
             candidate = extract_og_image_url(page.html, page.final_url) or ""
-            async with aiosqlite.connect(settings.DB_PATH) as conn:
-                conn.row_factory = aiosqlite.Row
+            async with database.connection() as conn:
                 cursor = await conn.execute(
                     """UPDATE links SET og_image_url = ?
                        WHERE id = ? AND (og_image_url IS NULL OR og_image_url = '')
@@ -879,16 +833,13 @@ async def get_link_preview(link_id: str) -> dict[str, Any] | None:
 
 async def search_links(query: str, top_k: int = 5) -> list[dict]:
     """Embed query and return top-k semantically similar links."""
-    import aiosqlite
-
     top_k = min(top_k, 20)
     query_vec = await _embed(query)
     if query_vec is None:
         log.warning("brain.search_embed_failed", query=query[:60])
         return []
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
         cursor = await conn.execute(
             """SELECT l.id, l.url, l.title, l.topic, l.embedding
                FROM links l
@@ -930,14 +881,11 @@ async def search_links(query: str, top_k: int = 5) -> list[dict]:
 
 async def rebuild_graph() -> int:
     """Recompute all related links and rewrite Drive .md for every node."""
-    import aiosqlite
-
     if _rebuild_lock.locked():
         raise RuntimeError("rebuild_in_progress")
 
     async with _rebuild_lock:
-        async with aiosqlite.connect(settings.DB_PATH) as conn:
-            conn.row_factory = aiosqlite.Row
+        async with database.connection() as conn:
             cursor = await conn.execute("SELECT * FROM links")
             all_links = [dict(r) for r in await cursor.fetchall()]
 
@@ -946,8 +894,7 @@ async def rebuild_graph() -> int:
         id_to_link = {lnk["id"]: lnk for lnk in all_links}
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        async with aiosqlite.connect(settings.DB_PATH) as conn:
-            conn.row_factory = aiosqlite.Row
+        async with database.connection() as conn:
             for lnk in all_links:
                 await _rebuild_one_link(conn, lnk, ids_list, matrix, id_to_link, now_iso)
             await conn.commit()
@@ -1203,16 +1150,13 @@ async def refresh_links_for_job(job_id: str) -> int:
     drive_file_id NULL), so the global sweep is still a correct, if slow,
     fallback. Returns the count of rows touched.
     """
-    import aiosqlite
-
     if _rebuild_lock.locked():
         log.info("brain.job_refresh_skipped", reason="rebuild_in_progress", job_id=job_id)
         return 0
 
     t0 = time.monotonic()
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
 
         cursor = await conn.execute(
             """
@@ -1257,16 +1201,13 @@ async def refresh_links_for_job(job_id: str) -> int:
 
 async def refresh_stale_links() -> None:
     """APScheduler job — repair NULL embeddings and refresh oldest Drive .md files."""
-    import aiosqlite
-
     if _rebuild_lock.locked():
         log.info("brain.refresh_skipped", reason="rebuild_in_progress")
         return
 
     t0 = time.monotonic()
 
-    async with aiosqlite.connect(settings.DB_PATH) as conn:
-        conn.row_factory = aiosqlite.Row
+    async with database.connection() as conn:
 
         cursor = await conn.execute("SELECT COUNT(*) FROM links")
         row = await cursor.fetchone()

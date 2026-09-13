@@ -16,12 +16,12 @@ import time
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from src import database
-from src.api.jobs import (
-    detail_fields_for,
+from src.api.job_thumbnails import (
     is_persistable_short_platform,
     resolve_thumbnail,
     thumbnail_response,
 )
+from src.api.jobs import detail_fields_for
 from src.config import settings
 
 PREVIEW_COOKIE_NAME = "ownix_preview"

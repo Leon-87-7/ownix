@@ -4,13 +4,18 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
+
+from src.telegram import routing
 
 
 @pytest.fixture
 def patched(monkeypatch):
     """Patch the I/O seams the document handlers touch; return the mocks."""
-    from src.telegram import webhook
+    from src import database, job_queue as queue
+    from src.services import storage
+    from src.telegram import sender as sender_module
 
     mocks = {
         "send_message": AsyncMock(),
@@ -19,12 +24,12 @@ def patched(monkeypatch):
         "enqueue": AsyncMock(),
         "upload": AsyncMock(),
     }
-    monkeypatch.setattr(webhook, "send_message", mocks["send_message"])
-    monkeypatch.setattr(webhook, "download_file", mocks["download_file"])
-    monkeypatch.setattr(webhook.database, "create_job", mocks["create_job"])
-    monkeypatch.setattr(webhook.queue, "enqueue", mocks["enqueue"])
-    monkeypatch.setattr(webhook.storage, "upload", mocks["upload"])
-    return webhook, mocks
+    monkeypatch.setattr(sender_module, "send_message", mocks["send_message"])
+    monkeypatch.setattr(sender_module, "download_file", mocks["download_file"])
+    monkeypatch.setattr(database, "create_job", mocks["create_job"])
+    monkeypatch.setattr(queue, "enqueue", mocks["enqueue"])
+    monkeypatch.setattr(storage, "upload", mocks["upload"])
+    return routing, mocks
 
 
 @pytest.mark.asyncio
@@ -126,9 +131,9 @@ async def test_photo_message_does_not_hit_document_handler(monkeypatch):
 
     photo_handler = AsyncMock()
     doc_handler = AsyncMock()
-    monkeypatch.setattr(webhook, "_invite_gate_allows", AsyncMock(return_value=True))
-    monkeypatch.setattr(webhook, "_handle_photo_update", photo_handler)
-    monkeypatch.setattr(webhook, "_handle_document_update", doc_handler)
+    monkeypatch.setattr(routing, "admit_or_park", AsyncMock(return_value=True))
+    monkeypatch.setattr(routing, "_handle_photo_update", photo_handler)
+    monkeypatch.setattr(routing, "_handle_document_update", doc_handler)
 
     class _Req:
         async def json(self):
@@ -140,10 +145,10 @@ async def test_photo_message_does_not_hit_document_handler(monkeypatch):
     doc_handler.assert_not_called()
 
 
-def _patch_httpx(monkeypatch, webhook, *, content: bytes, raise_exc: Exception | None = None,
+def _patch_httpx(monkeypatch, *, content: bytes, raise_exc: Exception | None = None,
                  content_length: int | None = None):
     """Patch the SSRF host check + httpx streaming client to yield `content` (no redirect)."""
-    monkeypatch.setattr(webhook, "_is_public_host", AsyncMock(return_value=True))
+    monkeypatch.setattr(routing, "_is_public_host", AsyncMock(return_value=True))
 
     resp = MagicMock()
     resp.is_redirect = False
@@ -168,13 +173,13 @@ def _patch_httpx(monkeypatch, webhook, *, content: bytes, raise_exc: Exception |
     async def _fake_client(*a, **k):
         yield client
 
-    monkeypatch.setattr(webhook.httpx, "AsyncClient", _fake_client)
+    monkeypatch.setattr(httpx, "AsyncClient", _fake_client)
 
 
 @pytest.mark.asyncio
 async def test_route_document_url_fetches_uploads_enqueues(patched, monkeypatch):
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=b"%PDF-1.5 from url")
+    _patch_httpx(monkeypatch, content=b"%PDF-1.5 from url")
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/a.pdf", message_id=3)
 
@@ -188,7 +193,7 @@ async def test_route_document_url_fetches_uploads_enqueues(patched, monkeypatch)
 @pytest.mark.asyncio
 async def test_route_document_url_unsupported_body_rejected(patched, monkeypatch):
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=b"<html>not a document</html>")
+    _patch_httpx(monkeypatch, content=b"<html>not a document</html>")
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/a.pdf", message_id=3)
 
@@ -200,7 +205,7 @@ async def test_route_document_url_unsupported_body_rejected(patched, monkeypatch
 async def test_route_document_url_office_body_accepted(patched, monkeypatch, office_samples):
     """A .docx URL whose body sniffs as docx is stored under documents/<sha>.docx."""
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=office_samples["report.docx"])
+    _patch_httpx(monkeypatch, content=office_samples["report.docx"])
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/report.docx", message_id=3)
 
@@ -213,7 +218,7 @@ async def test_route_document_url_office_body_accepted(patched, monkeypatch, off
 @pytest.mark.asyncio
 async def test_route_document_url_fetch_failure_rejected(patched, monkeypatch):
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=b"", raise_exc=RuntimeError("boom"))
+    _patch_httpx(monkeypatch, content=b"", raise_exc=RuntimeError("boom"))
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/a.pdf", message_id=3)
 
@@ -225,7 +230,7 @@ async def test_route_document_url_fetch_failure_rejected(patched, monkeypatch):
 async def test_route_document_url_oversized_body_rejected(patched, monkeypatch):
     """A body exceeding the 20MB cap is dropped mid-stream, never uploaded."""
     webhook, m = patched
-    _patch_httpx(monkeypatch, webhook, content=b"%PDF" + b"x" * (21 * 1024 * 1024),
+    _patch_httpx(monkeypatch, content=b"%PDF" + b"x" * (21 * 1024 * 1024),
                  content_length=0)  # lie about length → must be caught by the stream counter
 
     await webhook._route_document_url(chat_id=9, url="https://x.tld/a.pdf", message_id=3)
@@ -286,7 +291,7 @@ async def test_route_document_url_blocks_ssrf(patched, monkeypatch, url):
         called["got"] = True
         yield MagicMock()
 
-    monkeypatch.setattr(webhook.httpx, "AsyncClient", _boom)
+    monkeypatch.setattr(httpx, "AsyncClient", _boom)
 
     await webhook._route_document_url(chat_id=9, url=url, message_id=3)
 

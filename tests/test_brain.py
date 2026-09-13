@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+
+from src.config import settings as real_settings
 
 from src.brain import (
     EMBEDDING_DIM,
@@ -33,6 +36,23 @@ from src.brain import (
 def _make_blob(vec: np.ndarray) -> bytes:
     """Serialize a float32 array to the expected BLOB format."""
     return vec.astype(np.float32).tobytes()
+
+
+@contextmanager
+def _brain_settings(db_path: str):
+    """Patch brain's settings and point the db layer at the same file.
+
+    brain no longer opens connections itself — every read and write goes
+    through `database.connection()`, which reads the real `src.config.settings`
+    — so a test database has to be visible to both objects, not just to the
+    mock brain sees.
+    """
+    with (
+        patch("src.brain.settings") as mock_settings,
+        patch.object(real_settings, "DB_PATH", db_path),
+    ):
+        mock_settings.DB_PATH = db_path
+        yield mock_settings
 
 
 def _rand_vec() -> np.ndarray:
@@ -196,7 +216,8 @@ async def test_soft_dedup_seen_count():
     import aiosqlite
     import tempfile
     import os
-    from src.brain import ingest_links, SCHEMA_SQL
+    from src.brain import ingest_links
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -205,24 +226,16 @@ async def test_soft_dedup_seen_count():
         # Bootstrap schema
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            # Also need the jobs table for source-job lookup
-            await conn.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS jobs (
-                    id TEXT PRIMARY KEY,
-                    chat_id INTEGER,
-                    url TEXT,
-                    drive_url TEXT
-                );
-                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_001', 1, 'https://yt.com/watch?v=1', NULL);
-                """
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, drive_url) "
+                "VALUES ('job_001', 1, 'https://yt.com/watch?v=1', 'long', NULL)"
             )
             await conn.commit()
 
         url = "https://example.com/tool"
         link = {"url": url, "title": "Example Tool"}
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
              patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
              patch(
@@ -267,7 +280,8 @@ async def test_touch_existing_link_updates_drive_file_in_place():
     import aiosqlite
     import tempfile
     import os
-    from src.brain import ingest_links, SCHEMA_SQL
+    from src.brain import ingest_links
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -277,13 +291,7 @@ async def test_touch_existing_link_updates_drive_file_in_place():
             await conn.executescript(SCHEMA_SQL)
             await conn.executescript(
                 """
-                CREATE TABLE IF NOT EXISTS jobs (
-                    id TEXT PRIMARY KEY,
-                    chat_id INTEGER,
-                    url TEXT,
-                    drive_url TEXT
-                );
-                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_001', 1, 'https://yt.com/watch?v=1', NULL);
+                INSERT INTO jobs (id, chat_id, url, content_type, drive_url) VALUES ('job_001', 1, 'https://yt.com/watch?v=1', 'long', NULL);
                 """
             )
             await conn.commit()
@@ -291,7 +299,7 @@ async def test_touch_existing_link_updates_drive_file_in_place():
         url = "https://example.com/tool"
         link = {"url": url, "title": "Example Tool"}
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
              patch("src.brain.update_file", new_callable=AsyncMock) as mock_update, \
              patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
@@ -366,7 +374,7 @@ async def test_search_returns_empty_on_no_corpus():
     import tempfile
     import os
     import aiosqlite
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -374,12 +382,9 @@ async def test_search_returns_empty_on_no_corpus():
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute(
-                "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT)"
-            )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch("src.brain._embed", new_callable=AsyncMock) as mock_embed:
 
             mock_settings.DB_PATH = db_path
@@ -400,7 +405,7 @@ async def test_normalized_url_dedup_variants():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -409,12 +414,11 @@ async def test_normalized_url_dedup_variants():
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
             await conn.executescript("""
-                CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, chat_id INTEGER, url TEXT, drive_url TEXT);
-                INSERT INTO jobs (id, chat_id, url, drive_url) VALUES ('job_norm', 1, 'https://yt.com/watch?v=1', NULL);
+                INSERT INTO jobs (id, chat_id, url, content_type, drive_url) VALUES ('job_norm', 1, 'https://yt.com/watch?v=1', 'long', NULL);
             """)
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock) as mock_upload, \
              patch("src.brain._embed", new_callable=AsyncMock) as mock_embed, \
              patch("src.brain._resolve_identity", new=AsyncMock(return_value=("Tool", "", True))):
@@ -448,16 +452,15 @@ async def test_get_graph_empty_corpus():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, status TEXT)")
             await conn.commit()
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             mock_settings.BRAIN_MIN_SCORE = 0.5
             assert await get_graph() == {"nodes": [], "edges": []}
@@ -470,7 +473,7 @@ async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_bu
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -478,9 +481,8 @@ async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_bu
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
             await conn.executemany(
-                "INSERT INTO jobs (id, status) VALUES (?, ?)",
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) VALUES (?, 1, '', 'link', ?)",
                 [("job_done", "done"), ("job_cancelled", "cancelled")],
             )
             await conn.executemany(
@@ -536,7 +538,7 @@ async def test_list_links_orders_by_last_seen_paginates_and_filters_cancelled_bu
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             first_page = await list_links(limit=2, offset=0)
             second_page = await list_links(limit=2, offset=2)
@@ -561,7 +563,7 @@ async def test_link_preview_keeps_transient_fetch_failure_retryable() -> None:
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -577,7 +579,7 @@ async def test_link_preview_keeps_transient_fetch_failure_retryable() -> None:
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings, patch(
+        with _brain_settings(db_path) as mock_settings, patch(
             "src.brain.fetch_public_html", new=AsyncMock(return_value=None)
         ):
             mock_settings.DB_PATH = db_path
@@ -599,7 +601,7 @@ async def test_link_preview_rechecks_a_cached_empty_og_image() -> None:
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
     from src.utils.public_html import PublicHtmlResult
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
@@ -626,7 +628,7 @@ async def test_link_preview_rechecks_a_cached_empty_og_image() -> None:
                 ),
             ]
         )
-        with patch("src.brain.settings") as mock_settings, patch(
+        with _brain_settings(db_path) as mock_settings, patch(
             "src.brain.fetch_public_html", new=fetch
         ):
             mock_settings.DB_PATH = db_path
@@ -675,16 +677,18 @@ async def test_list_links_q_filters_by_substring_across_url_title_description():
     import aiosqlite
     import os
     import tempfile
-    from unittest.mock import patch
-    from src.brain import SCHEMA_SQL, list_links
+    from src.brain import list_links
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
             await conn.executemany(
                 """INSERT INTO links
                    (id, url, title, topic, description, source_job, seen_count, last_seen_at, created_at, updated_at)
@@ -698,7 +702,7 @@ async def test_list_links_q_filters_by_substring_across_url_title_description():
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             res = await list_links(q="github")  # case-insensitive; url/title/description
             empty = await list_links(q="   ")  # blank q is ignored, returns all
@@ -721,7 +725,7 @@ async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
     import os
     import tempfile
     from datetime import datetime, timedelta, timezone
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -729,8 +733,10 @@ async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('job_repo', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('job_repo', 1, '', 'link', 'done')"
+            )
             await conn.execute("""
                 INSERT INTO links (id, url, title, topic, source_job, embedding, drive_file_id, seen_count, last_seen_at, created_at, updated_at, archived)
                 VALUES ('fresh', 'https://github.com/owner/fresh', 'Fresh', 'repo', 'job_repo', ?, 'drive', 1, ?, ?, ?, 0),
@@ -741,7 +747,7 @@ async def test_refresh_repo_metadata_skips_archived_and_updates_stale():
         async def fake_bundle(owner, repo, token):
             return {"metadata": {"stars": 42, "pushed_at": "2026-06-01T00:00:00Z", "archived": False}}
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch("src.brain.upload_file", new_callable=AsyncMock), \
              patch("src.services.github.fetch_repo_bundle", new=AsyncMock(side_effect=fake_bundle)) as mock_fetch:
             mock_settings.DB_PATH = db_path
@@ -766,16 +772,18 @@ async def test_list_links_sorts_by_last_seen_in_both_directions():
     import aiosqlite
     import os
     import tempfile
-    from unittest.mock import patch
-    from src.brain import SCHEMA_SQL, list_links
+    from src.brain import list_links
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
             await conn.executemany(
                 """INSERT INTO links
                    (id, url, title, topic, source_job, seen_count, last_seen_at, created_at, updated_at)
@@ -788,7 +796,7 @@ async def test_list_links_sorts_by_last_seen_in_both_directions():
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             descending = await list_links(order="desc")
             ascending = await list_links(order="asc")
@@ -823,15 +831,17 @@ async def test_list_links_search_is_standalone_and_matches_exact_tags():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
             # Three sibling links sharing one video topic mentioning svg.
             await conn.executemany(
                 """INSERT INTO links
@@ -854,7 +864,7 @@ async def test_list_links_search_is_standalone_and_matches_exact_tags():
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             result = await list_links(q="svg")
 
@@ -877,15 +887,17 @@ async def test_list_links_pinned_only_filters_to_viewers_pinned_tags():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
             await conn.executemany(
                 """INSERT INTO links
                    (id, url, source_job, seen_count, last_seen_at, created_at, updated_at)
@@ -906,7 +918,7 @@ async def test_list_links_pinned_only_filters_to_viewers_pinned_tags():
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             result = await list_links(viewer_chat_id=1, pinned_only=True)
 
@@ -926,15 +938,17 @@ async def test_list_links_pinned_only_combines_with_q_without_dropping_params():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT)")
-            await conn.execute("INSERT INTO jobs (id, status) VALUES ('j', 'done')")
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
             await conn.executemany(
                 """INSERT INTO links
                    (id, url, title, source_job, seen_count, last_seen_at, created_at, updated_at)
@@ -954,7 +968,7 @@ async def test_list_links_pinned_only_combines_with_q_without_dropping_params():
             )
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             # Must not raise (a dropped bound param means a parameter-count
             # mismatch at execute time) and must AND both filters.
@@ -974,7 +988,7 @@ async def test_refresh_repairs_missing_description_and_reembeds():
     import aiosqlite
     import os
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
@@ -982,7 +996,6 @@ async def test_refresh_repairs_missing_description_and_reembeds():
         old_vec = _rand_vec()
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT)")
             await conn.execute(
                 """INSERT INTO links
                    (id, url, title, topic, description, source_job, embedding, drive_file_id,
@@ -1000,7 +1013,7 @@ async def test_refresh_repairs_missing_description_and_reembeds():
             embed_calls.append(doc)
             return new_vec
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch(
                  "src.brain._resolve_identity",
                  new=AsyncMock(return_value=("Example Tool", GOOD_DESC, True)),
@@ -1043,13 +1056,12 @@ async def _make_scoped_refresh_db():
     """Two links needing repair, owned by different jobs — proves scoping."""
     import aiosqlite
     import tempfile
-    from src.brain import SCHEMA_SQL
+    from src.db.schema import SCHEMA_SQL
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
     async with aiosqlite.connect(db_path) as conn:
         await conn.executescript(SCHEMA_SQL)
-        await conn.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, url TEXT, drive_url TEXT)")
         await conn.execute(
             """INSERT INTO links
                (id, url, title, topic, description, source_job, embedding, drive_file_id,
@@ -1070,7 +1082,7 @@ async def test_refresh_links_for_job_only_touches_that_jobs_links():
 
     db_path = await _make_scoped_refresh_db()
     try:
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch(
                  "src.brain._resolve_identity",
                  new=AsyncMock(return_value=("Resolved", GOOD_DESC, True)),
@@ -1113,7 +1125,7 @@ async def test_refresh_links_for_job_no_rows_is_a_noop():
 
     db_path = await _make_scoped_refresh_db()
     try:
-        with patch("src.brain.settings") as mock_settings:
+        with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             repaired = await refresh_links_for_job("no-such-job")
         assert repaired == 0
@@ -1134,7 +1146,7 @@ async def test_refresh_links_for_job_enriches_links_of_a_deleted_job():
             await conn.execute("DELETE FROM jobs WHERE id = 'bookmark-job'")
             await conn.commit()
 
-        with patch("src.brain.settings") as mock_settings, \
+        with _brain_settings(db_path) as mock_settings, \
              patch(
                  "src.brain._resolve_identity",
                  new=AsyncMock(return_value=("Resolved", GOOD_DESC, True)),
@@ -1161,7 +1173,7 @@ async def test_refresh_links_for_job_skipped_while_rebuild_locked():
     db_path = await _make_scoped_refresh_db()
     try:
         async with _rebuild_lock:
-            with patch("src.brain.settings") as mock_settings:
+            with _brain_settings(db_path) as mock_settings:
                 mock_settings.DB_PATH = db_path
                 repaired = await refresh_links_for_job("bookmark-job")
         assert repaired == 0

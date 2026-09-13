@@ -9,8 +9,18 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import jobs
-from src.api.jobs import is_persistable_short_platform, resolve_thumbnail
+from src.api.job_thumbnails import is_persistable_short_platform, resolve_thumbnail
 
+
+def _use_fake_connection(monkeypatch, factory) -> None:
+    """Point both the route's `database.connection` and the db layer's own at *factory*.
+
+    `src/db/core.py` owns the shared query helpers (`_fetch_in`, `_fetch_one`, …)
+    that the batch tag and thumbnail lookups go through, so patching only the
+    `src.database` facade would leave those reaching a real database.
+    """
+    monkeypatch.setattr(jobs.database, "connection", factory)
+    monkeypatch.setattr("src.db.core.connection", factory)
 
 @pytest.mark.asyncio
 async def test_resolve_thumbnail_long_youtube_watch() -> None:
@@ -188,7 +198,7 @@ async def test_get_job_stats_unscoped_omits_content_type_predicate(monkeypatch) 
             [],  # count_jobs_by_tag's GROUP BY
         ]
     )
-    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    _use_fake_connection(monkeypatch, lambda: _RecordingConnection(conn))
     # Not under test here — skip the link_id backfill pass entirely.
     monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
@@ -221,7 +231,7 @@ async def test_get_job_stats_scopes_status_breakdown_to_content_type(monkeypatch
             [],  # count_jobs_by_tag's GROUP BY
         ]
     )
-    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    _use_fake_connection(monkeypatch, lambda: _RecordingConnection(conn))
     # Not under test here — skip the link_id backfill pass entirely.
     monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
@@ -289,7 +299,7 @@ async def test_list_jobs_includes_resolved_thumbnail_fields(monkeypatch) -> None
         async def __aexit__(self, *_args):
             return None
 
-    monkeypatch.setattr(jobs.database, "connection", lambda: FakeConnection())
+    _use_fake_connection(monkeypatch, lambda: FakeConnection())
 
     response = await jobs.list_jobs(
         SimpleNamespace(state=SimpleNamespace(user={"id": 1})),
@@ -360,7 +370,7 @@ class _AdjacentConn:
 @pytest.mark.asyncio
 async def test_get_adjacent_jobs_queries_and_payload(monkeypatch) -> None:
     conn = _AdjacentConn([{"id": "older"}, None])
-    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    _use_fake_connection(monkeypatch, lambda: _RecordingConnection(conn))
 
     async def _fake_get_owned_job(job_id, _request):
         return {"id": job_id, "created_at": "2026-07-04 09:00:00"}
@@ -394,7 +404,7 @@ async def test_get_adjacent_jobs_honors_checklist_and_tag_scope(monkeypatch) -> 
     checklist- or tag-filtered feed lands on a job outside it (Codex review,
     PR #626)."""
     conn = _AdjacentConn([None, None])
-    monkeypatch.setattr(jobs.database, "connection", lambda: _RecordingConnection(conn))
+    _use_fake_connection(monkeypatch, lambda: _RecordingConnection(conn))
     # Not under test here — skip the link_id backfill pass entirely.
     monkeypatch.setattr(jobs.database, "jobs_missing_link_id", AsyncMock(return_value=[]))
 
@@ -477,7 +487,7 @@ async def test_list_jobs_accepts_limit_1000(monkeypatch) -> None:
         async def __aexit__(self, *_args):
             return None
 
-    monkeypatch.setattr(jobs.database, "connection", lambda: FakeConnection())
+    _use_fake_connection(monkeypatch, lambda: FakeConnection())
 
     async def _fake_get_thumbnail_job_ids(_ids: list) -> set:
         return set()

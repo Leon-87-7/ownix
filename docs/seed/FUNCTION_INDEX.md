@@ -27,7 +27,7 @@ underneath.
 **Backend:**
 
 1. **`is_video_url()` in `src/utils/validators.py` is dead code.** Fully implemented and unit-tested, but nothing outside `tests/test_validators.py` calls it — `detect_pipeline()` is used directly everywhere instead. Reuse it or delete it.
-2. **Two unrelated functions are both named `init_db()`** — `database.py`'s (schema+migrations) and `brain.py`'s (links table + Drive pre-flight check). Both run separately at startup. Always qualify as `database.init_db()` / `brain.init_db()`.
+2. **`database.init_db()` is the only schema owner.** It applies `SCHEMA_SQL` and the migration ladder for every table, `links` included. brain's old same-named `init_db()` no longer creates anything and is now `brain.preflight()` — a Drive write-access check the API runs at startup.
 3. **CodeGraph systematically misses this codebase's `import module; module.func()` call style.** Several real, active functions showed "zero callers" and needed grep verification: `transcript.py`'s `fetch_transcript`/`fetch_metadata`, all of `pdf_intake.py`, `filter_vision_links`, `build_transcript_markdown`, `append_short_row`/`append_long_row`, `notify_invite`, `fetch_public_image`. Treat a "no callers" result on this repo as a lead to verify, not a verdict.
 4. **`sheets.py` has five near-identical append/update-row pairs** (repo/short/long/article/document) funneled through shared `_append_row_logged`/`_update_row_logged` wrappers — not duplication, it's the template to copy for a new content-type export.
 5. **`slugify()` vs `sanitize_filename_chars()`** (`utils/validators.py`) look redundant but aren't: `slugify` makes a lowercase URL slug, `sanitize_filename_chars` preserves case/spaces for a human-readable filename. Reach for the right one instead of writing a third variant.
@@ -64,12 +64,12 @@ underneath.
 
 #### `object_key(kind: str, sha256: str, ext: str) -> str`
 **Does:** Builds the content-addressed GCS object key, e.g. `documents/<sha256>.pdf`, `parsed/<sha256>.txt`. Pure string formatting, no I/O.
-**Called from:** `_create_document_job` (`src/api/parsed.py`), `_cached_parse`/`run` (`src/processors/document.py`), `_enqueue_document_job` (`src/telegram/webhook.py`).
+**Called from:** `_create_document_job` (`src/api/parsed.py`), `_cached_parse`/`run` (`src/processors/document.py`), `_enqueue_document_job` (`src/telegram/routing.py`).
 **Usage:** `key = object_key("documents", sha256_hex, "pdf")`
 
 #### `upload(key: str, data: bytes, content_type: str) -> None`
 **Does:** Uploads bytes to the GCS bucket at `key` (wraps the sync `google-cloud-storage` client in `asyncio.to_thread`, since that client has no native async API).
-**Called from:** `_create_document_job`/`_generate_output` (`src/api/parsed.py`), `_cached_parse`/`run` (`src/processors/document.py`), `_enqueue_document_job` (`src/telegram/webhook.py`).
+**Called from:** `_create_document_job`/`_generate_output` (`src/api/parsed.py`), `_cached_parse`/`run` (`src/processors/document.py`), `_enqueue_document_job` (`src/telegram/routing.py`).
 **Usage:** `await storage.upload(key, pdf_bytes, "application/pdf")`
 
 #### `download(key: str) -> bytes`
@@ -149,7 +149,7 @@ Encrypted per-user Google OAuth token store (Fernet, keyed by `GOOGLE_TOKEN_ENCR
 
 #### `fetch_markdown(url: str) -> tuple[str, str]`
 **Does:** Fetches a URL through the Jina Reader proxy (`r.jina.ai`) and returns `(title, body)` with Jina's preamble block stripped out. Raises `JinaFetchError` on any non-200 response.
-**Called from:** `_resolve_identity` (`src/brain.py`), `run` (`src/processors/article.py`), `_cmd_download_md` (`src/telegram/webhook.py`).
+**Called from:** `_resolve_identity` (`src/brain.py`), `run` (`src/processors/article.py`), `_cmd_download_md` (`src/telegram/commands.py`).
 **Usage:** `title, body = await fetch_markdown(article_url)`
 
 ### repo_followup.py
@@ -166,7 +166,7 @@ Encrypted per-user Google OAuth token store (Fernet, keyed by `GOOGLE_TOKEN_ENCR
 
 #### `enqueue_repo_pick(source_job_id: str, idx_raw: str) -> dict | None`
 **Does:** Resolves a repo-followup keyboard tap back to its cached candidate list, then creates+enqueues a new `repo` job for the picked URL via `create_and_enqueue_job`.
-**Called from:** `_cb_repo_pick` in `src/telegram/webhook.py`.
+**Called from:** `_cb_repo_pick` in `src/telegram/callbacks.py`.
 **Usage:** `new_job = await enqueue_repo_pick(source_job_id, "0")`
 
 ### google_workspace.py
@@ -185,7 +185,7 @@ Encrypted per-user Google OAuth token store (Fernet, keyed by `GOOGLE_TOKEN_ENCR
 
 #### `notify_operator_invite(chat_id: int, email: str, *, dev: bool = False) -> bool`
 **Does:** Thin, shared entry point (used by both the Telegram bot and the web dashboard's auth flow) that gates on `OPS_DEV_NOTIFICATIONS`/`OPS_BOT_TOKEN` config, then delegates to `ops_bot.notify_invite` to actually send the admin approval card.
-**Called from:** `dev_login`, `set_email` (`src/api/auth.py`), `_notify_operator_invite` (`src/telegram/webhook.py`).
+**Called from:** `dev_login`, `set_email` (`src/api/auth.py`), `_notify_operator_invite` (`src/telegram/routing.py`).
 **Usage:** `await notify_operator_invite(chat_id, "user@example.com")`
 
 ### frames.py
@@ -201,12 +201,12 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 #### `can_read(chat_id) / can_admin(chat_id) / can_deliver_to(ctx: OpsCtx) -> bool`
 **Does:** Authorization checks against `settings.ops_chat_ids` / `ops_admin_chat_ids`. `can_deliver_to` additionally allows a user to receive results in their own DM even if they're not a listed ops chat.
-**Called from:** `handle_command` (same file), `_handle_ops_callback` (`src/telegram/webhook.py`).
+**Called from:** `handle_command` (same file), `_handle_ops_callback` (`src/telegram/ops.py`).
 **Usage:** `if not can_admin(sender_id): reject()`
 
 #### `send_ops_message` / `send_ops_keyboard` / `send_ops_document` / `answer_ops_callback` / `edit_ops_reply_markup`
 **Does:** Telegram send/edit primitives pinned to the ops bot's own token, so ops replies never leak through the main user-facing bot.
-**Called from:** `deliver_rows`, `notify_invite`, `handle_command` (same file); callback handlers in `src/telegram/webhook.py`.
+**Called from:** `deliver_rows`, `notify_invite`, `handle_command` (same file); callback handlers in `src/telegram/ops.py`.
 **Usage:** `await send_ops_message(admin_chat_id, "3 pending users")`
 
 #### `notify_invite(chat_id: int, email: str, *, dev: bool = False) -> bool`
@@ -226,7 +226,7 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 #### `create_approval_batch` / `approve_pending_batch` / `approve_pending_domain`
 **Does:** Two-step bulk-approve flow for `/approve_pending`: `create_approval_batch` caches the target `tg_id` list in Redis (15 min TTL) behind a random batch id so a confirm-button tap can re-fetch the exact set without re-querying; `approve_pending_batch` redeems it. `approve_pending_domain` is the direct (non-batched) path used by tests/automation.
-**Called from:** `handle_command` (batch creation); `_ops_cb_approve_pending` in `src/telegram/webhook.py` (redemption).
+**Called from:** `handle_command` (batch creation); `_ops_cb_approve_pending` in `src/telegram/ops.py` (redemption).
 **Usage:** `batch_id = await create_approval_batch("example.com", pending_rows)`
 
 #### `list_users(status=None, *, email_domain=None, limit=20) -> list[dict]`
@@ -236,7 +236,7 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 #### `handle_command(ctx: OpsCtx) -> None`
 **Does:** The Ops bot's full command router — `/start`, `/help`, `/pending`, `/users [...]`, `/approve_pending <domain>`. Single entry point every ops Telegram message flows through.
-**Called from:** `ops_webhook` in `src/telegram/webhook.py`.
+**Called from:** `ops_webhook` in `src/telegram/ops.py`.
 **Usage:** `await handle_command(OpsCtx(chat_id=..., sender_id=..., parts=text.split()))`
 
 ### transcript.py
@@ -265,7 +265,7 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 #### `call_gemini_photo_links(images: list[dict], *, caption=None) -> dict`
 **Does:** OCR-style extraction of URLs/domains that are **verbatim visible** in one or more photos (screenshots). After the model call, runs `_filter_grounded_links` to drop any URL whose domain isn't literally present in the model's own quoted "verbatim" text or the summary — a guard against Gemini hallucinating plausible-looking URLs.
-**Called from:** `_handle_single_photo`, `_process_media_group` in `src/telegram/webhook.py`.
+**Called from:** `_handle_single_photo`, `_process_media_group` in `src/telegram/routing.py`.
 **Usage:** `result = await call_gemini_photo_links(images, caption=msg.caption)`
 
 #### `resolve_tool_urls(tools: list[dict]) -> list[dict]`
@@ -307,7 +307,7 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 #### `enrich_github_links(links: list[dict]) -> list[dict]`
 **Does:** Mutates a list of extracted links in place, attaching star/fork/language/age metadata (via `enrich_repo`) to every `github.com` URL found; passes non-GitHub links through untouched.
-**Called from:** `_report_photo_links`, `_cmd_find` in `src/telegram/webhook.py`.
+**Called from:** `_report_photo_links` (`src/telegram/routing.py`), `_cmd_find` (`src/telegram/commands.py`).
 **Usage:** `enriched = await enrich_github_links(extracted_links)`
 
 ### google_auth.py
@@ -360,12 +360,12 @@ Dashboard-triggered recovery for stuck/failed jobs — the backing logic for the
 
 #### `task_for_content_type(content_type, *, default) -> str | None`
 **Does:** Maps a job's `content_type` to the worker-queue task discriminator: `short`/`long` both collapse to `"video"`; `article`/`repo`/`document`/`link` pass through unchanged.
-**Called from:** `retry_pending`, `retry_error` (`job_recovery.py`); `create_and_enqueue_job` (same file); `_cb_reprocess`, `_cmd_force` (`src/telegram/webhook.py`).
+**Called from:** `retry_pending`, `retry_error` (`job_recovery.py`); `create_and_enqueue_job` (same file); `_cb_reprocess` (`src/telegram/callbacks.py`), `_cmd_force` (`src/telegram/commands.py`).
 **Usage:** `task = task_for_content_type("short", default=None)` → `"video"`
 
 #### `create_and_enqueue_job(chat_id, url, content_type, *, template=None, message_id=None, freestyle_prompt=None, skip_cache=False) -> dict`
 **Does:** **The** shared job-creation entry point (ADR-0033) — owns cache/dedup and the create-row + enqueue-to-Redis write path. Deliberately does **not** notify Telegram or the HTTP caller — every ingest surface owns its own result notification on top of this.
-**Called from:** `_create_link_job`, `_create_pipeline_job` (`src/api/jobs.py`); `_cmd_template`, `_cmd_addlink`, `_handle_user_template_shortcut`, `_enqueue_simple_job`, `_route_video` (`src/telegram/webhook.py`).
+**Called from:** `_create_link_job`, `_create_pipeline_job` (`src/api/jobs.py`); `_cmd_template`, `_cmd_addlink` (`src/telegram/commands.py`); `_handle_user_template_shortcut`, `_enqueue_simple_job`, `_route_video` (`src/telegram/routing.py`).
 **Usage:** `job = await create_and_enqueue_job(chat_id, url, "article")`
 
 ### pdf_intake.py
@@ -426,7 +426,7 @@ Consolidated-workbook writer (ADR-0013) — one fixed tab per content type insid
 
 #### `spawn_background(coro: Coroutine) -> asyncio.Task`
 **Does:** `asyncio.create_task()` but keeps a strong module-level reference until the task finishes and logs any unhandled exception — works around the Python gotcha where a task with no retained reference can be silently garbage-collected mid-run. **Every** fire-and-forget call site in the codebase is expected to go through this instead of calling `asyncio.create_task` directly.
-**Called from:** `run` (`short_video.py`, `repo.py`), `_deliver_prd` (`prd.py`), `_report_photo_links`, `_cmd_rebuild_graph`, `_handle_document_update`, `_handle_photo_update` (`src/telegram/webhook.py`).
+**Called from:** `run` (`short_video.py`, `repo.py`), `_deliver_prd` (`prd.py`), `_cmd_rebuild_graph` (`src/telegram/commands.py`); `_report_photo_links`, `_handle_document_update`, `_handle_photo_update` (`src/telegram/routing.py`).
 **Usage:** `spawn_background(long_running_coroutine())`
 
 ### markdown.py
@@ -448,7 +448,7 @@ Consolidated-workbook writer (ADR-0013) — one fixed tab per content type insid
 
 #### `build_enriched_links_message(links: list[dict]) -> str`
 **Does:** Formats a mixed link list (some GitHub-enriched, some not) into one `🔗 Links Found:` Telegram section, sorting enriched GitHub links by stars+forks descending and rendering star/fork/language/age metadata inline for those.
-**Called from:** `_report_photo_links` in `src/telegram/webhook.py`.
+**Called from:** `_report_photo_links` in `src/telegram/routing.py`.
 **Usage:** `text = build_enriched_links_message(enriched_links)`
 
 ### og_image.py
@@ -503,17 +503,17 @@ Hardened public-HTML/image fetching for any URL derived from user content (SSRF-
 
 #### `normalize_email(email: str) -> str | None`
 **Does:** Lowercases/trims and validates against a simple `x@y.z` regex + RFC 5321 254-char length cap; returns `None` for anything invalid.
-**Called from:** `set_email` (`src/api/auth.py`), `_invite_gate_allows` (`src/telegram/webhook.py`).
+**Called from:** `set_email` (`src/api/auth.py`), `admit_or_park` (`src/telegram/routing.py`).
 **Usage:** `email = normalize_email(" User@Example.COM ")`
 
 #### `is_valid_domain_name(domain: str) -> bool`
 **Does:** DNS-label-level validation, stricter than a bare regex-URL check — used for domain allowlist/ignorelist entries.
-**Called from:** `_cmd_ignore`, `_cmd_allowlist` in `src/telegram/webhook.py`.
+**Called from:** `_cmd_ignore`, `_cmd_allowlist` in `src/telegram/commands.py`.
 **Usage:** `if not is_valid_domain_name(user_input): reject()`
 
 #### `detect_pipeline(url: str, extra_domains=frozenset()) -> Pipeline`
 **Does:** **The** URL router for the whole ingestion system — classifies a URL into `short` / `long` / `repo` / `document` / `article` / `rejected` based on host+path pattern matching. This is the single source of truth other ad-hoc "is this a video URL" checks should call into rather than reimplementing.
-**Called from:** `_create_pipeline_job`, `_github_repo_path`, `resolve_thumbnail` (`src/api/jobs.py`); numerous command handlers in `src/telegram/webhook.py`; `is_video_url` (same file).
+**Called from:** `_create_pipeline_job`, `_github_repo_path`, `resolve_thumbnail` (`src/api/jobs.py`); numerous command handlers in `src/telegram/commands.py`; `is_video_url` (same file).
 **Usage:** `pipeline = detect_pipeline(url, extra_domains=chat_allowlist)`
 
 #### `normalize_repo_url(url: str) -> str`
@@ -563,7 +563,7 @@ Async SQLite (WAL mode) data-access layer — the whole app's persistence. ~122 
 **Usage:** `new_id = generate_id()`
 
 #### `init_db() -> None`
-**Does:** Creates `data/jobs.db` if absent, applies `SCHEMA_SQL`, and runs the `_MIGRATIONS` ladder via `PRAGMA user_version` (fresh databases skip straight to schema-current). Also dedupes any pre-constraint duplicate `links.url` rows before a fresh schema install. **Not the same function as `brain.init_db()`** — see top finding backend-#2.
+**Does:** Creates `data/jobs.db` if absent, applies `SCHEMA_SQL`, and runs the migration ladder (`src/db/migrations/`) via `PRAGMA user_version` (fresh databases skip straight to schema-current). Also dedupes any pre-constraint duplicate `links.url` rows before a fresh schema install. The single source of schema truth — see top finding backend-#2.
 **Called from:** Startup path in `src/main.py`.
 **Usage:** `await database.init_db()` (once, at startup)
 
@@ -613,10 +613,10 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 **Called from:** `ingest_links` (same file).
 **Usage:** `canonical = normalize_url(raw_url)`
 
-#### `init_db() -> None`
-**Does:** Creates the `links` table and (if `GOOGLE_DRIVE_FOLDER_BRAIN` is set) does a Drive pre-flight check by uploading and immediately deleting a temp file — fails loudly at startup if Drive write access is broken. **Distinct from `database.init_db()`** — see top finding backend-#2.
+#### `preflight() -> None`
+**Does:** If `GOOGLE_DRIVE_FOLDER_BRAIN` is set, does a Drive pre-flight check by uploading and immediately deleting a temp file — fails loudly at startup if Drive write access is broken. Creates no tables: `links`, `tags` and `link_tags` are declared in `src/db/schema.py` and created by `database.init_db()`, which `main.py` runs first.
 **Called from:** Startup path in `src/main.py`.
-**Usage:** `await brain.init_db()` (once, at startup)
+**Usage:** `await brain.preflight()` (once, at startup — checks Drive access; creates no tables)
 
 #### `ingest_links(links: list[dict], topic: str, source_job_id: str) -> None`
 **Does:** Fire-and-forget: normalizes and persists each link as a Brain graph node (new node, or bump `seen_count`/`last_seen` on an existing one), computing an embedding and rewriting its Obsidian `.md` file in Drive. Per-link failures are caught and logged individually so one bad link can't abort the batch.
@@ -640,7 +640,7 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 
 #### `search_links(query: str, top_k=5) -> list[dict]`
 **Does:** Embeds `query` and returns the top-k links by cosine similarity above `settings.BRAIN_MIN_SCORE`, capped at 20.
-**Called from:** `_cmd_find` in `src/telegram/webhook.py`; `GET /search` route in `src/api/brain.py`.
+**Called from:** `_cmd_find` in `src/telegram/commands.py`; `GET /search` route in `src/api/brain.py`.
 **Usage:** `hits = await brain.search_links("redis caching patterns", top_k=5)`
 
 #### `rebuild_graph() -> int`

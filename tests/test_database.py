@@ -1909,3 +1909,32 @@ async def test_identity_links_migration_succeeds_without_duplicates(tmp_path):
             "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_users_email_nocase'"
         )
         assert await cur.fetchone() is not None
+
+
+@pytest.mark.asyncio
+async def test_update_job_fields_rejects_non_identifier_column(temp_db):
+    """A `**fields` key that isn't an identifier must not reach the SET clause.
+
+    Python does not constrain `**` keys — `f(**{"a; DROP TABLE x--": 1})` is
+    legal — so without this guard a caller that splats a request-derived dict
+    would be interpolating attacker text straight into the UPDATE.
+    """
+    from src import database
+
+    with pytest.raises(ValueError, match="invalid column name"):
+        await database.update_job_fields(
+            "job_1", **{"title = 'x', status = 'done' WHERE 1=1 --": "boom"}
+        )
+
+    # The jobs table must be untouched and still queryable.
+    async with database.connection() as conn:
+        cur = await conn.execute("SELECT COUNT(*) FROM jobs")
+        assert (await cur.fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_update_job_status_rejects_non_identifier_column(temp_db):
+    from src import database
+
+    with pytest.raises(ValueError, match="invalid column name"):
+        await database.update_job_status("job_1", "done", **{"a-b": 1})

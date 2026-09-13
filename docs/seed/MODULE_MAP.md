@@ -9,7 +9,7 @@ Code-level reference: every `src/` module, what it owns, and how modules call ea
 
 | Module | Role |
 |---|---|
-| `src/main.py` | FastAPI app — wires the Telegram webhook router, the ops-bot webhook (`/webhook/ops`), the dashboard API routers (`src/api/`), and the session middleware (`src/auth/`); calls `database.init_db()` + `brain.init_db()` on startup, registers Telegram webhook URL, starts APScheduler for `brain.refresh_stale_links` (Sun/Wed 09:00) |
+| `src/main.py` | FastAPI app — wires the Telegram webhook router, the ops-bot webhook (`/webhook/ops`), the dashboard API routers (`src/api/`), and the session middleware (`src/auth/`); calls `database.init_db()` + `brain.preflight()` on startup, registers Telegram webhook URL, starts APScheduler for `brain.refresh_stale_links` (Sun/Wed 09:00) |
 | `src/worker.py` | Background worker — dequeues task envelopes from Redis, dispatches to processors; runs `prd.reaper()` + `prd.reaper_intent()` on startup to un-stick stale `generating` jobs |
 
 ---
