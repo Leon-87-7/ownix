@@ -40,6 +40,7 @@ async def run_migrations(conn: aiosqlite.Connection) -> None:
         except Exception:
             log.exception("db_migration_failed", target_version=new_version)
             raise
-        await conn.execute(f"PRAGMA user_version = {new_version}")
+        # PRAGMA takes no bind parameters; `new_version` is the step's declared int.
+        await conn.execute(f"PRAGMA user_version = {new_version}")  # nosemgrep
         await conn.commit()
         log.info("db_migration_applied", version=new_version)

@@ -93,7 +93,8 @@ async def _fetch_in(sql_template: str, ids: list[str], *extra_params) -> list[di
         return []
     placeholders = ",".join("?" * len(ids))
     async with connection() as conn:
-        cur = await conn.execute(
+        # `placeholders` is only `?` marks; every id binds through the params tuple.
+        cur = await conn.execute(  # nosemgrep
             sql_template.format(placeholders=placeholders), (*extra_params, *ids)
         )
         return [dict(r) for r in await cur.fetchall()]

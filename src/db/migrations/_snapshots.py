@@ -116,11 +116,13 @@ async def _rebuild_jobs_table(
     copy_cols = [c for c in cols if c in existing]
     if copy_cols:
         col_str = ", ".join(copy_cols)
-        await conn.execute(
-            f"INSERT OR IGNORE INTO {tmp_name} ({col_str}) SELECT {col_str} FROM jobs"
+        # `tmp_name` is a literal from the calling migration step and `col_str`
+        # comes from PRAGMA table_info; neither can carry caller input.
+        await conn.execute(  # nosemgrep
+            f"INSERT OR IGNORE INTO {tmp_name} ({col_str}) SELECT {col_str} FROM jobs"  # nosec B608
         )
     await conn.execute("DROP TABLE jobs")
-    await conn.execute(f"ALTER TABLE {tmp_name} RENAME TO jobs")
+    await conn.execute(f"ALTER TABLE {tmp_name} RENAME TO jobs")  # nosemgrep
     await conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)"
     )

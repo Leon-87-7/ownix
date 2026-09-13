@@ -965,7 +965,8 @@ async def _migrate_jobs_link_id(conn: aiosqlite.Connection) -> None:
 
     link_backed = ("link", "article", "repo")
     cur_jobs = await conn.execute(
-        "SELECT id, chat_id, url FROM jobs "
+        # Only `?` marks are interpolated; the values bind from `link_backed`.
+        "SELECT id, chat_id, url FROM jobs "  # nosec B608
         f"WHERE link_id IS NULL AND content_type IN ({','.join('?' * len(link_backed))})",
         link_backed,
     )

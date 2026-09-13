@@ -165,7 +165,8 @@ async def init_db() -> None:
             await conn.executescript(SCHEMA_SQL)
             if is_fresh:
                 # DDL already includes all columns; skip past all migration steps.
-                await conn.execute(f"PRAGMA user_version = {len(MIGRATIONS)}")
+                # PRAGMA takes no bind parameters; the value is a list length.
+                await conn.execute(f"PRAGMA user_version = {len(MIGRATIONS)}")  # nosemgrep
                 await conn.commit()
             else:
                 await run_migrations(conn)

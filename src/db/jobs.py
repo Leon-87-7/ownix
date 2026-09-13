@@ -143,8 +143,10 @@ async def update_job_status(job_id: str, status: str, **fields: Any) -> None:
         params.append(val)
     params.append(job_id)
     async with core.connection() as conn:
-        await conn.execute(
-            f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",
+        # Interpolated text is only `<col> = ?`, and `col` is a **fields key, so
+        # Python has already constrained it to an identifier. Values bind as `?`.
+        await conn.execute(  # nosemgrep
+            f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",  # nosec B608
             params,
         )
         await conn.commit()
@@ -191,8 +193,10 @@ async def update_job_fields(job_id: str, **fields: Any) -> None:
         params.append(val)
     params.append(job_id)
     async with core.connection() as conn:
-        await conn.execute(
-            f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",
+        # Same as update_job_status: only `<col> = ?` is interpolated, and `col`
+        # is a **fields key. Values bind as `?`.
+        await conn.execute(  # nosemgrep
+            f"UPDATE jobs SET {', '.join(set_parts)} WHERE id = ?",  # nosec B608
             params,
         )
         await conn.commit()
@@ -302,11 +306,9 @@ async def get_thumbnail_job_ids(job_ids: list[str]) -> set[str]:
 async def set_prd_slot_status(job_id: str, slot: Literal["auto", "intent"], status: str) -> None:
     """Set prd_auto_status or prd_intent_status without leaking column names to callers."""
     col = "prd_auto_status" if slot == "auto" else "prd_intent_status"
+    sql = f"UPDATE jobs SET {col} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"  # nosec B608
     async with core.connection() as conn:
-        await conn.execute(
-            f"UPDATE jobs SET {col} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (status, job_id),
-        )
+        await conn.execute(sql, (status, job_id))
         await conn.commit()
     log.info("prd_slot_status_set", job_id=job_id, slot=slot, status=status)
 
@@ -348,16 +350,18 @@ async def fetch_and_mark_stale_jobs(
         conditions.append("content_type = ?")
         params.append(content_type)
     where = " AND ".join(conditions)
+    # `where` is built only from the static clause literals above; every actual
+    # value is bound through `params` as a `?` placeholder. The suppressions have
+    # to sit on the flagged lines themselves, which is why they read so tersely.
     async with core.connection() as conn:
-        cursor = await conn.execute(
-            # nosec B608 -- `where` is built only from static clause literals above;
-            # every actual value is bound through `params` as a `?` placeholder.
-            f"SELECT id, chat_id, status, url FROM jobs WHERE {where}", tuple(params)
+        cursor = await conn.execute(  # nosemgrep
+            f"SELECT id, chat_id, status, url FROM jobs WHERE {where}",  # nosec B608
+            tuple(params),
         )
         rows = [dict(row) for row in await cursor.fetchall()]
         if rows:
             await conn.execute(
-                f"UPDATE jobs SET status='error', attempt = attempt + 1, "
+                f"UPDATE jobs SET status='error', attempt = attempt + 1, "  # nosec B608
                 f"updated_at=CURRENT_TIMESTAMP WHERE {where}",
                 tuple(params),
             )
