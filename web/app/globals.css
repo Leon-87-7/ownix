@@ -125,6 +125,35 @@
   }
 }
 
+/* Settings accordions (`<details class="accordion">`) grow and shrink instead
+   of popping. `interpolate-size` is what makes the `auto` keyword animatable
+   at all, and `content-visibility` needs `allow-discrete` so the content stays
+   painted for the whole close rather than vanishing on frame one. Chromium and
+   Safari only — Firefox has no `::details-content`, so it keeps the instant
+   native toggle, which is exactly what this page did before. Scoped to
+   `.accordion` because `overflow: hidden` on the content box would clip any
+   tooltip or popover escaping a `<details>` that isn't already clipping. */
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  details.accordion::details-content {
+    block-size: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      block-size 300ms theme("transitionTimingFunction.out-quart"),
+      opacity 220ms theme("transitionTimingFunction.out-quart"),
+      content-visibility 300ms allow-discrete;
+  }
+
+  details.accordion[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+}
+
 /* Hold-to-confirm progress cue. The glow is a loader spinner: an arc that
    sweeps from 12 o'clock clockwise and lands back at 12, over the hold
    window. Carved out of a conic disc with a radial mask, then blurred so it
