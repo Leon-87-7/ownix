@@ -7,11 +7,19 @@ import ipaddress
 import socket
 
 
+_RESOLVE_TIMEOUT_SECONDS = 5.0
+
+
 async def resolve_public_host(host: str) -> list | None:
-    """Resolve *host* via getaddrinfo (off the event loop). None on DNS failure."""
+    """Resolve *host* via getaddrinfo (off the event loop). None on DNS failure
+    or if resolution doesn't complete within `_RESOLVE_TIMEOUT_SECONDS` — an
+    unresponsive/blackholed resolver must not hang the caller indefinitely."""
     try:
-        return await asyncio.to_thread(socket.getaddrinfo, host, None)
-    except socket.gaierror:
+        return await asyncio.wait_for(
+            asyncio.to_thread(socket.getaddrinfo, host, None),
+            timeout=_RESOLVE_TIMEOUT_SECONDS,
+        )
+    except (socket.gaierror, asyncio.TimeoutError):
         return None
 
 

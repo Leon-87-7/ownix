@@ -11,6 +11,7 @@ import { AccessibilityPanel } from '@/components/controls/accessibility-panel';
 import { RecoveryNotificationsPanel } from '@/components/controls/recovery-notifications-panel';
 import { DeleteAccountPanel } from '@/components/controls/delete-account-panel';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
+import { McpTokensPanel } from '@/components/controls/mcp-tokens-panel';
 import { DiscordPairingPanel } from '@/components/controls/discord-pairing-panel';
 
 export default function ControlsPage() {
@@ -70,6 +71,9 @@ export default function ControlsPage() {
         </Section>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />
+        </Section>
+        <Section title="MCP clients">
+          <McpTokensPanel />
         </Section>
         <Section title="Discord">
           <DiscordPairingPanel />

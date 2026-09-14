@@ -16,6 +16,7 @@ from src.api.extension_auth import extension_auth_router
 from src.api.google_oauth import google_oauth_router
 from src.api.intake import intake_router
 from src.api.jobs import jobs_router
+from src.api.mcp_auth import mcp_auth_router
 from src.api.newsletter_digest import newsletter_digest_router
 from src.api.parsed import parsed_router
 from src.api.preview import preview_router
@@ -23,6 +24,7 @@ from src.api.spaces import spaces_router
 from src.api.templates import templates_router
 from src.auth.middleware import SessionMiddleware
 from src.config import settings
+from src.mcp_server import mcp, mcp_asgi_app
 from src.telegram import sender, webhook
 from src.utils.logger import configure_logging, get_logger
 
@@ -158,33 +160,34 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     from src.config import settings
 
     log.info("api_starting")
-    await database.init_db()
-    from src import brain
+    async with mcp.session_manager.run():
+        await database.init_db()
+        from src import brain
 
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-    scheduler = AsyncIOScheduler()
-    # Drain purge_tasks outbox to Redis every 30 seconds.
-    scheduler.add_job(_drain_purge_outbox, "interval", seconds=30)
-    # Reap expired dashboard/Telegram pending intake state every 60 seconds.
-    scheduler.add_job(_reap_intake_state, "interval", seconds=60)
-    # Poll watched newsletter publications every 15 minutes (ADR-0060, #610).
-    scheduler.add_job(_enqueue_due_newsletter_polls, "interval", minutes=15)
-    if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
-        await brain.preflight()
-        scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
-    scheduler.start()
-    log.info("scheduler_started")
-    await _register_webhook()
-    await _register_ops_webhook()
-    log.info("api_ready")
-    yield
-    log.info("api_shutting_down")
-    await sender.close()
-    await queue.close()
-    from src.auth import session as session_store
+        scheduler = AsyncIOScheduler()
+        # Drain purge_tasks outbox to Redis every 30 seconds.
+        scheduler.add_job(_drain_purge_outbox, "interval", seconds=30)
+        # Reap expired dashboard/Telegram pending intake state every 60 seconds.
+        scheduler.add_job(_reap_intake_state, "interval", seconds=60)
+        # Poll watched newsletter publications every 15 minutes (ADR-0060, #610).
+        scheduler.add_job(_enqueue_due_newsletter_polls, "interval", minutes=15)
+        if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
+            await brain.preflight()
+            scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")
+        scheduler.start()
+        log.info("scheduler_started")
+        await _register_webhook()
+        await _register_ops_webhook()
+        log.info("api_ready")
+        yield
+        log.info("api_shutting_down")
+        await sender.close()
+        await queue.close()
+        from src.auth import session as session_store
 
-    await session_store.close()
+        await session_store.close()
 
 
 app = FastAPI(title="vig — Video Intelligence Gateway", lifespan=lifespan)
@@ -208,11 +211,14 @@ app.include_router(jobs_router)
 app.include_router(newsletter_digest_router)
 app.include_router(intake_router)
 app.include_router(extension_auth_router)
+app.include_router(mcp_auth_router)
 app.include_router(google_oauth_router)
 app.include_router(parsed_router)
 app.include_router(spaces_router)
 app.include_router(templates_router)
 app.include_router(preview_router)
+
+app.mount("/api/mcp", mcp_asgi_app)
 
 
 @app.get("/health")

@@ -661,6 +661,18 @@ async def get_graph() -> dict[str, list[dict]]:
     return {"nodes": nodes, "edges": edges}
 
 
+# Shared by list_links and get_link_preview — both scope a `links l` row
+# (LEFT JOIN'd to `jobs j`) to its owning chat, falling back through the
+# source job's chat then to the operator chat. One fragment so a fix to the
+# scoping rule can't land in one query and drift from the other.
+_OWNER_SCOPE_SQL = "COALESCE(l.chat_id, j.chat_id, ?) = ?"
+
+
+def _owner_scope_params(owner_chat_id: int | None) -> list[Any]:
+    """Params for `_OWNER_SCOPE_SQL`, in bind order."""
+    return [settings.OPERATOR_CHAT_ID, owner_chat_id]
+
+
 async def list_links(
     limit: int = 50,
     offset: int = 0,
@@ -668,6 +680,7 @@ async def list_links(
     order: str = "desc",
     viewer_chat_id: int | None = None,
     pinned_only: bool = False,
+    owner_chat_id: int | None = None,
 ) -> dict[str, Any]:
     """Return deduplicated Brain links with configurable sorting and pagination.
 
@@ -687,6 +700,9 @@ async def list_links(
     # itself never varies with the caller.
     where_parts = ["COALESCE(j.status, '') != 'cancelled'"]
     filter_params: list[Any] = []
+    if owner_chat_id is not None:
+        where_parts.append(_OWNER_SCOPE_SQL)
+        filter_params.extend(_owner_scope_params(owner_chat_id))
     if pinned_only:
         where_parts.append(
             """EXISTS (
@@ -785,18 +801,33 @@ async def list_links(
     }
 
 
-async def get_link_preview(link_id: str) -> dict[str, Any] | None:
-    """Return a link's preview payload for the Links table's hover/arrow-key panel.
+async def _fetch_link_with_og_image(
+    link_id: str, owner_chat_id: int | None
+) -> dict[str, Any] | None:
+    """Row fetch + lazy og:image resolution shared by `get_link_preview` (the
+    dashboard Links-table hover/arrow-key panel, operator-wide) and
+    `get_owned_link_detail` (the Gardener MCP tool, tenant-scoped). Returns
+    every column either caller might want; each public wrapper below projects
+    the shape its consumer actually needs.
 
     ``og_image_url`` is cached on the row lazily: NULL means never checked, ''
     means a previous lookup found none, and non-empty is the resolved og:image
     URL. Empty results are retried on a later selection because OG markup and
     crawler responses change over time.
     """
+    where = ["l.id = ?"]
+    params: list[Any] = [link_id]
+    if owner_chat_id is not None:
+        where.append(_OWNER_SCOPE_SQL)
+        params.extend(_owner_scope_params(owner_chat_id))
+
     async with database.connection() as conn:
         cursor = await conn.execute(
-            "SELECT id, url, og_image_url FROM links WHERE id = ?",
-            (link_id,),
+            f"""SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
+                       l.created_at, l.last_seen_at, l.og_image_url
+                FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+                WHERE {" AND ".join(where)}""",
+            params,
         )
         row = await cursor.fetchone()
         if row is None:
@@ -827,8 +858,30 @@ async def get_link_preview(link_id: str) -> dict[str, Any] | None:
 
     return {
         "id": link["id"],
+        "url": link["url"],
+        "title": link.get("title"),
+        "topic": link.get("topic"),
+        "description": link.get("description"),
+        "seen_count": link.get("seen_count") or 1,
+        "first_seen": link.get("created_at"),
+        "last_seen": link.get("last_seen_at"),
         "og_image_url": og_image_url or None,
     }
+
+
+async def get_link_preview(link_id: str) -> dict[str, Any] | None:
+    """Operator-wide preview for the dashboard Links table's hover/arrow-key
+    panel — id and og_image_url only; see `_fetch_link_with_og_image`."""
+    link = await _fetch_link_with_og_image(link_id, None)
+    if link is None:
+        return None
+    return {"id": link["id"], "og_image_url": link["og_image_url"]}
+
+
+async def get_owned_link_detail(link_id: str, owner_chat_id: int) -> dict[str, Any] | None:
+    """Full link detail for the Gardener MCP `get_item_detail` tool, scoped to
+    the caller's own links; see `_fetch_link_with_og_image`."""
+    return await _fetch_link_with_og_image(link_id, owner_chat_id)
 
 
 async def search_links(query: str, top_k: int = 5) -> list[dict]:

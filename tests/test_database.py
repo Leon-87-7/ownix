@@ -1938,3 +1938,23 @@ async def test_update_job_status_rejects_non_identifier_column(temp_db):
 
     with pytest.raises(ValueError, match="invalid column name"):
         await database.update_job_status("job_1", "done", **{"a-b": 1})
+
+@pytest.mark.asyncio
+async def test_gardener_delete_link_records_drive_purge(temp_db):
+    """#635: the existing hard-delete primitive also purges its Drive node."""
+    from src import database as db
+
+    job = await db.create_job(chat_id=1, url="https://example.com", content_type="article")
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links
+               (id, chat_id, url, source_job, drive_file_id, last_seen_at, created_at, updated_at)
+               VALUES ('garden-link', 1, 'https://example.com/g', ?, 'drive-node', 't', 't', 't')""",
+            (job,),
+        )
+        await conn.commit()
+
+    assert await db.delete_link("garden-link", chat_id=1) is True
+    tasks = await db.list_pending_purge_tasks()
+    task = next(record for record in tasks if record["task_payload"]["job_id"] == "garden-link")
+    assert task["task_payload"]["drive_file_ids"] == ["drive-node"]

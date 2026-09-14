@@ -19,3 +19,5 @@ dnspython>=2.6.1  # MX lookup before welcome emails (src/services/email.py)
 discord.py>=2.6,<3  # DM-only Gateway client; reconnect/resume handled by the library
 
 cryptography>=42.0
+
+mcp==1.29.0  # official Model Context Protocol Python SDK
