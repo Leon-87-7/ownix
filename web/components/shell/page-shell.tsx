@@ -34,6 +34,12 @@ export function PageShell({
  * and midpoint are seeded from the icon's own name, so each page's header icon
  * reads as its own mark rather than a repeated template. Deterministic (not
  * Math.random()) so it doesn't flicker between server and client render.
+ *
+ * gradientUnits="userSpaceOnUse" with fixed x1/y1/x2/y2 in the icon's own 24x24
+ * viewBox — not the default objectBoundingBox — is load-bearing: a Lucide icon
+ * is several sibling <path>s, and objectBoundingBox sizes the gradient to each
+ * path's own bounding box, so every stroke segment would paint its own
+ * independent little gradient instead of the icon showing one continuous sweep.
  */
 function headerIconGradient(icon: LucideIcon) {
   const seed = icon.displayName || icon.name || 'ownix';
@@ -42,10 +48,17 @@ function headerIconGradient(icon: LucideIcon) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
   hash = Math.abs(hash);
+  const angle = (hash % 180) * (Math.PI / 180);
+  const radius = 17; // > half the 24x24 diagonal, so the line spans the icon at any angle
+  const dx = Math.cos(angle) * radius;
+  const dy = Math.sin(angle) * radius;
   return {
     id: `ownix-header-icon-${hash}`,
-    angle: hash % 180,
     midOffset: 30 + (hash % 40),
+    x1: 12 - dx,
+    y1: 12 - dy,
+    x2: 12 + dx,
+    y2: 12 + dy,
   };
 }
 
@@ -73,7 +86,14 @@ export function PageHeader({
             <>
               <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
                 <defs>
-                  <linearGradient id={gradient.id} gradientTransform={`rotate(${gradient.angle}, 0.5, 0.5)`}>
+                  <linearGradient
+                    id={gradient.id}
+                    gradientUnits="userSpaceOnUse"
+                    x1={gradient.x1}
+                    y1={gradient.y1}
+                    x2={gradient.x2}
+                    y2={gradient.y2}
+                  >
                     <stop offset="0%" stopColor="#d99a45" />
                     <stop offset={`${gradient.midOffset}%`} stopColor="#c6c1b8" />
                     <stop offset="100%" stopColor="#94e6ee" />
