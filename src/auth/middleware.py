@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from src import database
-from src.auth import extension_tokens, session as session_store
+from src.auth import extension_tokens, mcp_tokens, session as session_store
 from src.config import settings
 
 COOKIE_NAME = "vig_session"
@@ -34,6 +34,7 @@ _OPEN_API_PATHS = frozenset(
         # The pairing code itself is the credential here (issue #479) — there
         # is no session to check yet when the extension redeems it.
         "/api/extension/token",
+        "/api/mcp/token",
     ]
 )
 _OPEN_API_PREFIXES = ("/api/preview/",)
@@ -57,7 +58,7 @@ _HANDOFF_TOKEN_PATHS = frozenset(["/api/google/connect"])
 # never carry the same authority as a full dashboard session (account email
 # changes, Google disconnect, job deletes, minting more pairing codes, …).
 # Least-privilege: only these prefixes will even attempt bearer resolution.
-_BEARER_ALLOWED_PREFIXES = ("/api/intake/",)
+_BEARER_ALLOWED_PREFIXES = ("/api/intake/", "/api/mcp/")
 
 
 class SessionMiddleware(BaseHTTPMiddleware):
@@ -82,9 +83,14 @@ class SessionMiddleware(BaseHTTPMiddleware):
             auth_header = request.headers.get("authorization", "")
             if auth_header.lower().startswith(_BEARER_PREFIX):
                 token = auth_header[len(_BEARER_PREFIX) :].strip()
-                chat_id = await extension_tokens.resolve_extension_token(token) if token else None
+                if path.startswith("/api/mcp/"):
+                    chat_id = await mcp_tokens.resolve_mcp_token(token) if token else None
+                    auth_source = "mcp_token"
+                else:
+                    chat_id = await extension_tokens.resolve_extension_token(token) if token else None
+                    auth_source = "extension_token"
                 if chat_id is not None:
-                    user = {"id": chat_id, "auth": "extension_token"}
+                    user = {"id": chat_id, "auth": auth_source}
 
         # A stale/expired same-origin cookie must not block the handoff-token
         # fallback — fall back to it whenever cookie resolution didn't yield a user.

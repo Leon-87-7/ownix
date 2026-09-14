@@ -20,6 +20,7 @@ from src.brain import (
     rebuild_graph,
     get_graph,
     get_link_preview,
+    get_owned_link_detail,
     ingest_links,
     list_links,
     normalize_url,
@@ -975,6 +976,88 @@ async def test_list_links_pinned_only_combines_with_q_without_dropping_params():
             result = await list_links(viewer_chat_id=1, q="Pinned Match", pinned_only=True)
 
         assert [item["url"] for item in result["items"]] == ["https://pinned-match.example"]
+    finally:
+        os.unlink(db_path)
+
+
+# ---------------------------------------------------------------------------
+# MCP Gardener (#633) — owner_chat_id tenant isolation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_list_links_owner_chat_id_scopes_to_tenant():
+    """Gardener's list_items must never surface another tenant's links —
+    verified with two real chat ids, not assumed from the passed-through kwarg."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, chat_id, url, source_job, seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'j', 1, 't', 't', 't')""",
+                [
+                    ("mine", 1, "https://mine.example"),
+                    ("theirs", 2, "https://theirs.example"),
+                ],
+            )
+            await conn.commit()
+
+        with _brain_settings(db_path) as mock_settings:
+            mock_settings.OPERATOR_CHAT_ID = 999999
+            mine = await list_links(owner_chat_id=1)
+            theirs = await list_links(owner_chat_id=2)
+
+        assert [item["url"] for item in mine["items"]] == ["https://mine.example"]
+        assert [item["url"] for item in theirs["items"]] == ["https://theirs.example"]
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_get_owned_link_detail_rejects_foreign_link():
+    """Gardener's get_item_detail must 404-shape (None) a link owned by another
+    tenant, not leak its content — verified with two real chat ids."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
+            await conn.execute(
+                """INSERT INTO links
+                   (id, chat_id, url, source_job, seen_count, last_seen_at,
+                    created_at, updated_at, og_image_url)
+                   VALUES ('theirs', 2, 'https://theirs.example', 'j', 1, 't', 't', 't',
+                           'https://images.example/og.png')"""
+            )
+            await conn.commit()
+
+        with _brain_settings(db_path) as mock_settings:
+            mock_settings.OPERATOR_CHAT_ID = 999999
+            as_owner = await get_owned_link_detail("theirs", 2)
+            as_foreign_tenant = await get_owned_link_detail("theirs", 1)
+
+        assert as_owner is not None and as_owner["url"] == "https://theirs.example"
+        assert as_foreign_tenant is None
     finally:
         os.unlink(db_path)
 
