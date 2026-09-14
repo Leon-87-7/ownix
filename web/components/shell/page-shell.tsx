@@ -93,7 +93,7 @@ export function PageHeader({
                     x2={gradient.x2}
                     y2={gradient.y2}
                   >
-                    <stop offset="0%" stopColor="#efb566" />
+                    <stop offset="0%" stopColor="#f6921e" />
                     <stop offset="100%" stopColor="#9ec9ff" />
                   </linearGradient>
                 </defs>
