@@ -54,7 +54,6 @@ function headerIconGradient(icon: LucideIcon) {
   const dy = Math.sin(angle) * radius;
   return {
     id: `ownix-header-icon-${hash}`,
-    midOffset: 30 + (hash % 40),
     x1: 12 - dx,
     y1: 12 - dy,
     x2: 12 + dx,
@@ -94,9 +93,8 @@ export function PageHeader({
                     x2={gradient.x2}
                     y2={gradient.y2}
                   >
-                    <stop offset="0%" stopColor="#d99a45" />
-                    <stop offset={`${gradient.midOffset}%`} stopColor="#c6c1b8" />
-                    <stop offset="100%" stopColor="#94e6ee" />
+                    <stop offset="0%" stopColor="#efb566" />
+                    <stop offset="100%" stopColor="#9ec9ff" />
                   </linearGradient>
                 </defs>
               </svg>

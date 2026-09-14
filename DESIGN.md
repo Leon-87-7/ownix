@@ -264,7 +264,7 @@ content type.
 
 - **Brain Gradient** (`#7c3aed` → `#22d3ee`): The shared-knowledge layer. Use it at meaningful scale on Brain surfaces only. Never miniaturize it to an icon, use it on buttons, or apply it as text fill.
 - **Contrasignal** (`#94e6ee`, `#9ec9ff`, `#649ca1`): A cool supporting accent for secondary informational emphasis. It must not compete with Index Amber for action.
-- **Header Icon Gradient** (signal `#d99a45` → contrasignal `#94e6ee`, the wordmark/extension-mark family): The one exception to the Amber Rule and the One Gradient Rule — see both below. Permitted only on the `PageHeader` icon (`web/components/shell/page-shell.tsx`), nowhere else.
+- **Header Icon Gradient** (Index Amber Bright `#efb566` → Contrasignal Bright `#9ec9ff`, the wordmark/extension-mark family): The one exception to the Amber Rule and the One Gradient Rule — see both below. Permitted only on the `PageHeader` icon (`web/components/shell/page-shell.tsx`), nowhere else. Uses the bright pair, not the base amber/contrasignal, so the mark reads as vivid rather than the muted tone the base pair carries elsewhere in the system.
 
 ### Neutral
 
@@ -304,13 +304,14 @@ of that gradient, not a standalone decorative fill.
 
 **The Header Icon Gradient Rule.** Every `PageHeader` icon (never a nav icon,
 inline icon, button icon, or badge) carries a static, non-animated linear
-gradient from Index Amber to Contrasignal — the same family `.ownix-shimmer`
-draws from, but fixed rather than in-flight. The gradient's angle and stop
-offsets are seeded from the page title, so each page's icon reads as its own
-mark rather than a repeated template, the way the extension's icon variants
-do. It does not animate (that vocabulary stays reserved for
-`.ownix-shimmer`'s in-flight acknowledgement, DESIGN.md §Shimmer) and it does
-not extend to gradient text, buttons, or badges anywhere else in the system.
+gradient from Index Amber Bright to Contrasignal Bright — the bright pair, for
+a vivid mark, not the muted base tones `.ownix-shimmer` cycles through. The
+gradient's angle is seeded from the icon's own name, so each page's icon
+reads as its own mark rather than a repeated template, the way the
+extension's icon variants do. It does not animate (that vocabulary stays
+reserved for `.ownix-shimmer`'s in-flight acknowledgement, DESIGN.md
+§Shimmer) and it does not extend to gradient text, buttons, or badges
+anywhere else in the system.
 
 **The Ownership Rule.** Surfaces should make ownership legible. Users should be
 able to tell whether an item is in their private Index, visible in their Feed,
@@ -324,7 +325,7 @@ badge carries a text label.
 **The One Gradient Rule.** The Brain gradient (violet → cyan) is the product's
 entire decoration budget for the *shared* layer. Use it only where the Brain
 itself is the subject — never miniaturized to an icon, a button, or text fill.
-The Header Icon Gradient (amber → contrasignal, above) is a separate, narrower
+The Header Icon Gradient (amber-bright → contrasignal-bright, above) is a separate, narrower
 budget spent once per page, on the `PageHeader` icon only; it does not license
 gradients anywhere else.
 
