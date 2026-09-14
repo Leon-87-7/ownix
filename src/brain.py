@@ -821,14 +821,14 @@ async def _fetch_link_with_og_image(
         where.append(_OWNER_SCOPE_SQL)
         params.extend(_owner_scope_params(owner_chat_id))
 
+    query = (
+        "SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count, "
+        "l.created_at, l.last_seen_at, l.og_image_url "
+        "FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
+        "WHERE " + " AND ".join(where)
+    )
     async with database.connection() as conn:
-        cursor = await conn.execute(
-            f"""SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
-                       l.created_at, l.last_seen_at, l.og_image_url
-                FROM links l LEFT JOIN jobs j ON j.id = l.source_job
-                WHERE {" AND ".join(where)}""",
-            params,
-        )
+        cursor = await conn.execute(query, params)
         row = await cursor.fetchone()
         if row is None:
             return None
