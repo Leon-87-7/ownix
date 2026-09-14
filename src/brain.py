@@ -801,6 +801,22 @@ async def list_links(
     }
 
 
+_LINK_DETAIL_QUERY = """SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
+           l.created_at, l.last_seen_at, l.og_image_url
+    FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+    WHERE l.id = ?"""
+
+# Same query, additionally scoped to an owner. Spelled out as its own literal
+# rather than assembled from `_LINK_DETAIL_QUERY` at request time (or even at
+# import time) — static analyzers flag any string built via concatenation or
+# interpolation that reaches `execute()`, regardless of whether the pieces
+# are user input; every bound value here is already a `?` placeholder.
+_LINK_DETAIL_QUERY_OWNER_SCOPED = """SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
+           l.created_at, l.last_seen_at, l.og_image_url
+    FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+    WHERE l.id = ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?"""
+
+
 async def _fetch_link_with_og_image(
     link_id: str, owner_chat_id: int | None
 ) -> dict[str, Any] | None:
@@ -815,18 +831,13 @@ async def _fetch_link_with_og_image(
     URL. Empty results are retried on a later selection because OG markup and
     crawler responses change over time.
     """
-    where = ["l.id = ?"]
-    params: list[Any] = [link_id]
     if owner_chat_id is not None:
-        where.append(_OWNER_SCOPE_SQL)
-        params.extend(_owner_scope_params(owner_chat_id))
+        query = _LINK_DETAIL_QUERY_OWNER_SCOPED
+        params: list[Any] = [link_id, *_owner_scope_params(owner_chat_id)]
+    else:
+        query = _LINK_DETAIL_QUERY
+        params = [link_id]
 
-    query = (
-        "SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count, "
-        "l.created_at, l.last_seen_at, l.og_image_url "
-        "FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
-        "WHERE " + " AND ".join(where)
-    )
     async with database.connection() as conn:
         cursor = await conn.execute(query, params)
         row = await cursor.fetchone()
