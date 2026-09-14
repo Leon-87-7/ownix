@@ -50,7 +50,7 @@ async def _with_health(item: dict[str, Any]) -> dict[str, Any]:
     enriched = dict(item)
     try:
         enriched["health"] = await check_link(item["url"])
-    except Exception:
+    except Exception:  # noqa: BLE001 — one bad link must not fail the whole list
         enriched["health"] = {
             "status": "transient_failure",
             "http_status": None,
@@ -75,7 +75,7 @@ async def list_items(
     """List the caller's Brain links, with a fresh reachability signal for each."""
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if not 1 <= limit <= 100 or offset < 0 or len(q) > 300:
+    if not 1 <= limit <= 100 or offset < 0 or len(q) > 300 or order not in {"asc", "desc"}:
         raise ToolError("Invalid pagination or search parameters")
     result = await brain.list_links(
         limit=limit, offset=offset, q=q, order=order, viewer_chat_id=chat_id, owner_chat_id=chat_id

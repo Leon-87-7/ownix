@@ -17,7 +17,8 @@ export function McpTokensPanel() {
   const [tokens, setTokens] = useState<McpToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [pairingExpiresIn, setPairingExpiresIn] = useState<number | null>(null);
+  const [pairingDeadline, setPairingDeadline] = useState<number | null>(null);
+  const [pairingRemaining, setPairingRemaining] = useState(0);
   const [pairing, setPairing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -38,17 +39,23 @@ export function McpTokensPanel() {
 
   // The code is single-use server-side, but nothing clears it from the
   // screen once it's expired — count down and drop it so a user can't copy
-  // a code that will just 401.
+  // a code that will just 401. Ticks off an absolute deadline (not a
+  // decrementing counter) so a throttled background tab still shows the
+  // correct remaining time, and expires promptly, once it wakes up.
   useEffect(() => {
-    if (pairingExpiresIn == null) return;
-    if (pairingExpiresIn <= 0) {
-      setPairingCode(null);
-      setPairingExpiresIn(null);
-      return;
-    }
-    const timeout = setTimeout(() => setPairingExpiresIn((s) => (s ?? 1) - 1), 1000);
-    return () => clearTimeout(timeout);
-  }, [pairingExpiresIn]);
+    if (pairingDeadline == null) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((pairingDeadline - Date.now()) / 1000));
+      setPairingRemaining(remaining);
+      if (remaining <= 0) {
+        setPairingCode(null);
+        setPairingDeadline(null);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [pairingDeadline]);
 
   const handlePair = async () => {
     setPairing(true);
@@ -56,7 +63,7 @@ export function McpTokensPanel() {
     try {
       const { code, expires_in } = await createMcpPairingCode();
       setPairingCode(code);
-      setPairingExpiresIn(expires_in);
+      setPairingDeadline(Date.now() + expires_in * 1000);
     } catch (err) {
       setError(describeError(err, 'Failed to create a pairing code.'));
     } finally {
@@ -98,7 +105,7 @@ export function McpTokensPanel() {
             <span className="break-all">{pairingCode}</span>
             <span className="flex shrink-0 items-center gap-3">
               <span className="font-sans text-label text-muted">
-                Expires in {pairingExpiresIn}s
+                Expires in {pairingRemaining}s
               </span>
               <CopyButton value={pairingCode} ariaLabel="Copy pairing code" />
             </span>

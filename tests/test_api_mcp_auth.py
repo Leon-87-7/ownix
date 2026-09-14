@@ -71,6 +71,16 @@ def test_extension_token_cannot_authenticate_mcp(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_mcp_token_cannot_manage_pairing_or_tokens(client: TestClient) -> None:
+    """A leaked MCP bearer token must not double as authority to mint more
+    pairing codes or list/revoke its own chat's tokens (#632 authz bypass)."""
+    token = issue(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.post("/api/mcp/pair", headers=headers).status_code == 401
+    assert client.get("/api/mcp/tokens", headers=headers).status_code == 401
+    assert client.delete("/api/mcp/tokens/whatever", headers=headers).status_code == 401
+
+
 def test_revocation_and_tenant_checked_management(client: TestClient) -> None:
     token = issue(client)
     login(client)

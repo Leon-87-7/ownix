@@ -19,7 +19,7 @@ async def resolve_public_host(host: str) -> list | None:
             asyncio.to_thread(socket.getaddrinfo, host, None),
             timeout=_RESOLVE_TIMEOUT_SECONDS,
         )
-    except (socket.gaierror, asyncio.TimeoutError):
+    except (socket.gaierror, TimeoutError):
         return None
 
 

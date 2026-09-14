@@ -175,3 +175,16 @@ Uncommitted working-tree changes implementing #632–#635 in full, tests per
 each issue's acceptance criteria, and a short summary of what was done per
 issue plus anything that blocked you (e.g. the exact MCP SDK package/version
 chosen, if current docs suggest something other than an obvious default).
+
+## Post-implementation note
+
+The landed PR deviates from "do not generalize `extension_tokens.py` and
+`mcp_tokens.py` into a shared module" above: both now delegate to a new
+`src/auth/bearer_token_store.py::BearerTokenStore`, namespaced per caller
+(`"extension"` / `"mcp"`). Once written out, the two facades were the same
+helpers with a different key prefix — extracting that shared piece was less
+risk than maintaining two copies of the same Redis/memory dance. Each
+facade's public surface (`mint_pairing_code`/`redeem_pairing_code`/
+`issue_*_token`/`resolve_*_token`/`list_*_tokens`/`revoke_*_token`) is still
+a distinct, namespaced module — nothing calls into the other facade's
+namespace directly.

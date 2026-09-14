@@ -1044,8 +1044,10 @@ async def test_get_owned_link_detail_rejects_foreign_link():
             )
             await conn.execute(
                 """INSERT INTO links
-                   (id, chat_id, url, source_job, seen_count, last_seen_at, created_at, updated_at)
-                   VALUES ('theirs', 2, 'https://theirs.example', 'j', 1, 't', 't', 't')"""
+                   (id, chat_id, url, source_job, seen_count, last_seen_at,
+                    created_at, updated_at, og_image_url)
+                   VALUES ('theirs', 2, 'https://theirs.example', 'j', 1, 't', 't', 't',
+                           'https://images.example/og.png')"""
             )
             await conn.commit()
 

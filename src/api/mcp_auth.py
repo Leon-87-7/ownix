@@ -12,9 +12,23 @@ from src.intake import rate_limit
 mcp_auth_router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
 
+def _require_session_auth(request: Request) -> int:
+    """Reject an MCP bearer token on the pairing/token-management routes.
+
+    A token minted for MCP tool calls must not also double as authority to
+    mint more pairing codes or list/revoke credentials for its own chat —
+    that requires the full dashboard session, same least-privilege boundary
+    the extension bearer token respects on non-intake routes.
+    """
+    user = request.state.user
+    if user.get("auth") == "mcp_token":
+        raise HTTPException(status_code=401, detail="Session authentication required")
+    return user["id"]
+
+
 @mcp_auth_router.post("/pair")
 async def create_pairing_code(request: Request) -> dict:
-    chat_id: int = request.state.user["id"]
+    chat_id = _require_session_auth(request)
     rate_limit.enforce(f"mcp_pair:{chat_id}", max_requests=10)
     code = await mcp_tokens.mint_pairing_code(chat_id)
     return {"code": code, "expires_in": mcp_tokens.PAIRING_TTL_SECONDS}
@@ -37,14 +51,14 @@ async def redeem_pairing_code(request: Request, body: PairingRedeemRequest) -> d
 
 @mcp_auth_router.get("/tokens")
 async def list_tokens(request: Request) -> list[dict]:
-    chat_id: int = request.state.user["id"]
+    chat_id = _require_session_auth(request)
     rate_limit.enforce(f"mcp_tokens_list:{chat_id}", max_requests=60)
     return await mcp_tokens.list_mcp_tokens(chat_id)
 
 
 @mcp_auth_router.delete("/tokens/{token_id}", status_code=204)
 async def revoke_token(token_id: str, request: Request) -> Response:
-    chat_id: int = request.state.user["id"]
+    chat_id = _require_session_auth(request)
     rate_limit.enforce(f"mcp_tokens_revoke:{chat_id}", max_requests=30)
     if not await mcp_tokens.revoke_mcp_token(chat_id, token_id):
         raise HTTPException(status_code=404, detail="Token not found")

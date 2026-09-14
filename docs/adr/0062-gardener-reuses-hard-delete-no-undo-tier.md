@@ -34,11 +34,12 @@ Gardener's confirm-gated delete tool calls the existing `delete_link`
 primitive as-is. No new soft-delete column, no trash tier, no undo window.
 
 The safeguard against agent misclassification is the approval step itself,
-not a recovery path after the fact: `flag_item` surfaces its reasoning to
-the user at approval time (not just a bare verdict), and copy avoids
-loaded framing ("not worth keeping," never "garbage"/"junk") so a flag reads
-as a question the user is settling, not a verdict already reached. See
-`docs/mcp-roadmap.md` Phase 1 UX requirements.
+not a recovery path after the fact: the agent narrates its reasoning to the
+user at approval time (not just a bare verdict) — there is no separate
+`flag_item` tool, flagging is conversational, not a persistent tool call —
+and copy avoids loaded framing ("not worth keeping," never "garbage"/"junk")
+so a flag reads as a question the user is settling, not a verdict already
+reached. See `docs/mcp-roadmap.md` Phase 1 UX requirements.
 
 ## Considered options
 
@@ -57,8 +58,8 @@ friction, and defeats the point of an MCP tool.
 
 ## Consequences
 
-- Gardener's `flag_item`/delete-confirm tools are a thin MCP wrapper over
-  existing primitives (`delete_link`) — no new schema, no new migration.
+- Gardener's confirm-gated delete tool is a thin MCP wrapper over the
+  existing `delete_link` primitive — no new schema, no new migration.
 - If real-world Gardener usage later shows misclassification is a bigger
   problem than the approval step alone handles, revisit this — the fix at
   that point is tightening the approval UX (e.g. requiring the reason to be

@@ -35,12 +35,21 @@ def _is_dns_failure(exc: BaseException) -> bool:
     return False
 
 
-async def _host_is_blocked(hostname: str) -> bool:
-    """True when *hostname* resolves to a private/loopback/link-local/cloud-metadata
-    address (see `src.utils.ssrf`). An unresolvable hostname is *not* blocked here —
-    that's a DNS failure, left for the request below to raise and classify."""
+async def _resolve_pinned_ip(hostname: str) -> tuple[str | None, str | None]:
+    """Resolve *hostname* to a pinned public IP, or (None, reason) if it can't be used.
+
+    Returns the IP to connect to (rather than letting the HTTP client re-resolve
+    the hostname itself) so a DNS rebind between this check and the request can't
+    swap in a private/loopback/metadata address — the same TOCTOU class
+    `src.utils.public_html._resolve_safe_public_url` guards against.
+    """
     resolved = await resolve_public_host(hostname)
-    return resolved is not None and not all(is_public_ip(info[4][0]) for info in resolved)
+    if resolved is None:
+        return None, "dns_failure"
+    ips = [info[4][0] for info in resolved]
+    if not all(is_public_ip(ip) for ip in ips):
+        return None, "blocked_host"
+    return ips[0], None
 
 
 async def check_link(url: str, *, client: httpx.AsyncClient | None = None) -> LinkHealth:
@@ -50,7 +59,9 @@ async def check_link(url: str, *, client: httpx.AsyncClient | None = None) -> Li
     stored, user-supplied link URLs — so every hop (initial URL and each
     redirect) is re-validated against the SSRF host guard before it's requested,
     the same way `src.telegram.routing._safe_get_pdf` re-validates manually
-    followed redirects.
+    followed redirects. The request itself is pinned to the resolved IP (Host
+    header and TLS SNI kept as the original hostname) rather than handed the
+    hostname, so the HTTP client can't re-resolve it to something else.
     """
     owns_client = client is None
     active_client = client or httpx.AsyncClient(timeout=httpx.Timeout(5.0), follow_redirects=False)
@@ -60,10 +71,17 @@ async def check_link(url: str, *, client: httpx.AsyncClient | None = None) -> Li
             parts = urlsplit(target)
             if parts.scheme not in {"http", "https"} or not parts.hostname:
                 return _result("confirmed_dead", reason="invalid_url")
-            if await _host_is_blocked(parts.hostname):
-                return _result("confirmed_dead", reason="blocked_host")
+            ip, block_reason = await _resolve_pinned_ip(parts.hostname)
+            if ip is None:
+                return _result("confirmed_dead", reason=block_reason)
 
-            response = await active_client.head(target)
+            pinned_host = f"[{ip}]" if ":" in ip else ip
+            port_suffix = f":{parts.port}" if parts.port else ""
+            pinned_url = parts._replace(netloc=f"{pinned_host}{port_suffix}").geturl()
+            extensions = {"sni_hostname": parts.hostname} if parts.scheme == "https" else {}
+            response = await active_client.head(
+                pinned_url, headers={"Host": parts.hostname}, extensions=extensions
+            )
             if not response.is_redirect:
                 break
             location = response.headers.get("location")

@@ -1,27 +1,27 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@/test/render';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { McpTokensPanel } from './mcp-tokens-panel';
 
-function jsonResponse(body: unknown, init?: ResponseInit): Response {
-  return new Response(JSON.stringify(body), {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
-}
+const server = setupServer();
 
-beforeEach(() => {
-  vi.restoreAllMocks();
-});
-
+beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
-  vi.restoreAllMocks();
+  server.resetHandlers();
+  vi.unstubAllGlobals();
 });
+afterAll(() => server.close());
+
+function useTokens(tokens: unknown[] = []) {
+  server.use(http.get('/api/mcp/tokens', () => HttpResponse.json(tokens)));
+}
 
 describe('McpTokensPanel', () => {
   it('shows "no paired MCP clients" when the token list is empty', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(jsonResponse([]));
+    useTokens([]);
 
     render(<McpTokensPanel />);
 
@@ -31,9 +31,7 @@ describe('McpTokensPanel', () => {
   });
 
   it('lists existing tokens with a revoke button', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      jsonResponse([{ id: 'hash1', created_at: 1000, last_used_at: null, label: null }]),
-    );
+    useTokens([{ id: 'hash1', created_at: 1000, last_used_at: null, label: null }]);
 
     render(<McpTokensPanel />);
 
@@ -44,13 +42,10 @@ describe('McpTokensPanel', () => {
 
   it('generating a pairing code displays it', async () => {
     const user = userEvent.setup();
-    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      if (url.includes('/api/mcp/pair')) {
-        return jsonResponse({ code: 'ABC123', expires_in: 300 });
-      }
-      return jsonResponse([]);
-    });
+    useTokens([]);
+    server.use(
+      http.post('/api/mcp/pair', () => HttpResponse.json({ code: 'ABC123', expires_in: 300 })),
+    );
 
     render(<McpTokensPanel />);
     await user.click(screen.getByRole('button', { name: /generate pairing code/i }));
@@ -61,13 +56,10 @@ describe('McpTokensPanel', () => {
   it('copies the pairing code to the clipboard', async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText');
-    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      if (url.includes('/api/mcp/pair')) {
-        return jsonResponse({ code: 'ABC123', expires_in: 300 });
-      }
-      return jsonResponse([]);
-    });
+    useTokens([]);
+    server.use(
+      http.post('/api/mcp/pair', () => HttpResponse.json({ code: 'ABC123', expires_in: 300 })),
+    );
 
     render(<McpTokensPanel />);
     await user.click(screen.getByRole('button', { name: /generate pairing code/i }));
@@ -79,13 +71,10 @@ describe('McpTokensPanel', () => {
 
   it('revoking a token removes it from the list', async () => {
     const user = userEvent.setup();
-    vi.spyOn(global, 'fetch').mockImplementation(async (input, init) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      if (url.includes('/api/mcp/tokens/hash1') && init?.method === 'DELETE') {
-        return new Response(null, { status: 204 });
-      }
-      return jsonResponse([{ id: 'hash1', created_at: 1000, last_used_at: null, label: null }]);
-    });
+    useTokens([{ id: 'hash1', created_at: 1000, last_used_at: null, label: null }]);
+    server.use(
+      http.delete('/api/mcp/tokens/hash1', () => new HttpResponse(null, { status: 204 })),
+    );
 
     render(<McpTokensPanel />);
     await screen.findByRole('button', { name: /revoke/i });
