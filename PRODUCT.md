@@ -54,7 +54,9 @@ customer feels this is a serious, well-made product.
   elastic motion, jokey copy. Too informal for a tool you operate daily.
 - Plus the universal slop bans: gradient text, the hero-metric template,
   identical icon+heading card grids, side-stripe borders, and a tracked
-  uppercase eyebrow above every section.
+  uppercase eyebrow above every section. (The `PageHeader` icon's gradient
+  stroke is a named exception — DESIGN.md's Header Icon Gradient Rule — not a
+  slop pattern to flag.)
 
 ## Design Principles
 
