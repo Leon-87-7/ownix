@@ -209,3 +209,146 @@ guesses.
 `contact.me@leondev.xyz` is the public contact on the privacy, terms and
 accessibility pages. Do not publish it until stage 6 passes; an address that
 does not deliver is worse than none.
+
+---
+
+## 11. MCP Gardener — connecting AI agents (Claude Code, Codex, and others)
+
+Phase 1 of the [[MCP brain server]] (`docs/mcp-roadmap.md`, ADR-0062, #632–#635):
+an in-process MCP server exposes each user's own Second Brain **links** to
+their own AI agents, over Streamable HTTP, at `/api/mcp/`. User-initiated
+only — nothing runs unless a human opens a session and asks. Every call is
+scoped to the pairing owner's own chat; there is no cross-tenant access.
+
+### Step 1 — mint a pairing code (dashboard, session-authed)
+
+Log into the dashboard → **Controls** → "Connect an MCP client" → **Generate
+pairing code**. Under the hood this is `POST /api/mcp/pair`, which requires an
+active dashboard session (an MCP bearer token cannot call it — see the authz
+note below) and returns:
+
+```json
+{ "code": "AB12CD34", "expires_in": 300 }
+```
+
+The code is single-use and expires in 5 minutes (10 mints/min per chat).
+
+### Step 2 — redeem the code for a bearer token
+
+From wherever the MCP client runs (may be a different machine — the code, not
+a session, is the credential here):
+
+```bash
+curl -X POST https://api.leondev.xyz/api/mcp/token \
+  -H "Content-Type: application/json" \
+  -d '{"code": "AB12CD34"}'
+# → {"token": "<raw token>", "chat_id": 123456789}
+```
+
+The raw token is shown **once** — only its hash is stored server-side. Save it
+somewhere durable (secrets manager, local `.env`, password manager); it can
+only be revoked afterward, never re-displayed. Redemption is rate-limited to
+20/min per client.
+
+### Step 3 — point the MCP client at the server
+
+- **Endpoint:** `https://api.leondev.xyz/api/mcp/` (Streamable HTTP — keep the
+  trailing slash; the mount redirects `/api/mcp` → `/api/mcp/` otherwise).
+- **Auth:** `Authorization: Bearer <token>` header on every request.
+
+**Claude Code:**
+```bash
+claude mcp add --transport http ownix-gardener https://api.leondev.xyz/api/mcp/ \
+  --header "Authorization: Bearer <token>"
+```
+or in `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "ownix-gardener": {
+      "type": "http",
+      "url": "https://api.leondev.xyz/api/mcp/",
+      "headers": { "Authorization": "Bearer ${OWNIX_MCP_TOKEN}" }
+    }
+  }
+}
+```
+Export `OWNIX_MCP_TOKEN` in the shell rather than committing the raw token if
+`.mcp.json` is checked in. Verify with `/mcp` inside Claude Code — it should
+list `ownix-gardener` as `connected`.
+
+**Codex CLI:**
+```bash
+export OWNIX_MCP_TOKEN=<token>
+codex mcp add ownix-gardener --url https://api.leondev.xyz/api/mcp/ \
+  --bearer-token-env-var OWNIX_MCP_TOKEN
+```
+Codex reads the token from the env var at connect time — it is never written
+to `config.toml`. Equivalent manual config:
+```toml
+[mcp_servers.ownix-gardener]
+url = "https://api.leondev.xyz/api/mcp/"
+bearer_token_env_var = "OWNIX_MCP_TOKEN"
+```
+
+**Other MCP-compatible agents** (Cursor, Windsurf, Claude Desktop, …) — most
+accept the same shape:
+```json
+{
+  "mcpServers": {
+    "ownix-gardener": {
+      "url": "https://api.leondev.xyz/api/mcp/",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+Check the specific client's docs for the config file's location and whether
+it needs an explicit `"type"`/`"transport"` field.
+
+### What the agent can do (Gardener tools, Phase 1)
+
+All three are scoped to the paired chat's own links only:
+
+| Tool | Purpose |
+|------|---------|
+| `list_items(limit, offset, q, order)` | Paginated links, each with a live (non-cached) reachability check |
+| `get_item_detail(link_id)` | Full detail + live reachability check for one link |
+| `delete_item(link_id, confirm=true)` | Hard delete — irreversible, requires `confirm=true` |
+
+There is no `flag_item` tool — flagging is the agent narrating its reasoning
+in conversation before the human approves a delete, not a persisted call.
+Deletes are permanent (ADR-0062): no soft-delete/trash tier, no undo window.
+
+### Managing tokens
+
+From the dashboard's Controls → MCP panel, or directly:
+- `GET /api/mcp/tokens` (session-authed) → `[{id, created_at, last_used_at, label}]`
+- `DELETE /api/mcp/tokens/{id}` (session-authed) → `204`
+
+Revocation is immediate — no cache/TTL, the very next request with a revoked
+token gets `401`. **An MCP bearer token cannot mint, list, or revoke tokens
+itself** — `/api/mcp/pair`, `/api/mcp/tokens`, and `/api/mcp/tokens/{id}`
+require the full dashboard session. A leaked MCP token is limited to the
+Gardener tools above; it cannot touch its own or any other credential.
+
+### Rate limits (per chat/client, 60s sliding window)
+
+| Action | Limit |
+|--------|-------|
+| Pairing code mint | 10/min |
+| Code redemption | 20/min |
+| Token list | 60/min |
+| Token revoke | 30/min |
+| Tool calls (list/detail/delete) | 60/min |
+
+### Troubleshooting
+
+- **`401` on a tool call or `/api/mcp/ping`** — token revoked or malformed
+  header; confirm `Authorization: Bearer <token>` exactly, and that the token
+  wasn't revoked from the dashboard.
+- **`401` on `/api/mcp/pair` or `/api/mcp/tokens*` using the MCP token** —
+  expected: those routes require a dashboard session, not an MCP bearer
+  token (see authz note above). Use the dashboard, or a session cookie.
+- **Pairing code rejected** — codes are single-use and expire after 5
+  minutes; generate a new one from the dashboard.
