@@ -67,11 +67,15 @@ def _allowed_hosts() -> list[str]:
 
     FastMCP's DNS-rebinding guard 421s any Host header not in this list;
     left at the SDK default (localhost only) it would reject every request
-    that arrives through the real domain/Cloudflare tunnel.
+    that arrives through the real domain/Cloudflare tunnel. A `:*`-suffixed
+    entry only matches a header that literally starts with `host:` — a
+    standard HTTPS request omits the default port, sending a bare
+    `Host: api.leondev.xyz` — so the bare hostname must be listed too.
     """
     hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     webhook_host = urlparse(settings.WEBHOOK_URL).hostname
     if webhook_host:
+        hosts.append(webhook_host)
         hosts.append(f"{webhook_host}:*")
     return hosts
 
