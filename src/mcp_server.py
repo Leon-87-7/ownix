@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 from contextvars import ContextVar, Token
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
 
 from src import brain, database
+from src.config import settings
 from src.intake import rate_limit
 from src.services.link_health import check_link
 
@@ -59,12 +62,27 @@ async def _with_health(item: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def _allowed_hosts() -> list[str]:
+    """Localhost (dev/tests) plus the real API host, from WEBHOOK_URL.
+
+    FastMCP's DNS-rebinding guard 421s any Host header not in this list;
+    left at the SDK default (localhost only) it would reject every request
+    that arrives through the real domain/Cloudflare tunnel.
+    """
+    hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    webhook_host = urlparse(settings.WEBHOOK_URL).hostname
+    if webhook_host:
+        hosts.append(f"{webhook_host}:*")
+    return hosts
+
+
 mcp = FastMCP(
     "Ownix Gardener",
     instructions="Inspect and deliberately delete links in the caller's private Index.",
     streamable_http_path="/",
     stateless_http=True,
     json_response=True,
+    transport_security=TransportSecuritySettings(allowed_hosts=_allowed_hosts()),
 )
 
 
