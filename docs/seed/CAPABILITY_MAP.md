@@ -1,6 +1,11 @@
 # vig — Capability Map
 
-**Last Updated:** 2026-07-25
+**Last Updated:** 2026-09-15
+
+**Route vs. UI label:** a few dashboard routes kept their original folder name while the
+displayed label changed — `spaces` route shows as **Collections**, `prompts` route shows
+as **Recipes**, `controls` route shows as **Settings**. Routes below are listed by folder
+name; current on-screen label is noted per row.
 
 `MODULE_MAP.md` is module-first (pick a module, see what it does). This file is
 capability-first (pick a user-facing function, see which module owns it) —
@@ -14,18 +19,27 @@ the lookup the rest of `docs/seed/` doesn't provide. Same facts, opposite index.
 | Long YouTube video → transcript + enrichment | `processors/long_video.py`, `processors/enrichment.py` | `transcript`, `drive`, `sheets`, `analysis`, `templates`, `brain` | `detect_pipeline` → `video` task, content_type=`long`; enrichment is a separate queued task | PRD.md §2.2.6, §13 |
 | Article ingestion (Substack/Medium/dev.to/Ghost/…) | `processors/article.py` | `jina`, `gemini_client`, `database` (markdown_cache), `sheets`, `brain` | `detect_pipeline` → `article` task (domain allowlist or `/allowlist`) | README.md "The Article Pipeline" |
 | GitHub repo analysis | `processors/repo.py` | `github` (REST + Redis cache), `gemini_client`, `drive`, `sheets`, `brain` | `detect_pipeline` → `repo` task | ADR-0014, ADR-0021 |
-| PDF document parsing | `processors/document.py` | `storage` (GCS), `parse` (liteparse), `gemini_client`, `database` | `detect_pipeline` → `document` task (`.pdf` URL or upload) | ADR-0023 |
+| Document parsing (.pdf, .docx, .xlsx, .pptx, .png) | `processors/document.py` | `storage` (GCS), `parse` (liteparse), `gemini_client`, `database` | `detect_pipeline` → `document` task (URL or upload); dashboard "Docs" surface | ADR-0023 |
 | Photo / screenshot link extraction | inline in `telegram/webhook.py` (no queue) | `gemini_photo`, `utils/markdown.py`, `github` (repo enrichment) | Telegram photo message → inline pipeline | ADR-0003, ADR-0005, ADR-0024 (batch) |
 | Direct link add (no processing) | `processors/link.py` (via `brain.ingest_links`) | `og_image`, `brain` | `/addlink <url>` or dashboard "Ingest Link" modal | ADR-0039 |
 | Second Brain (semantic search / link graph) | `brain.py` | Gemini embeddings, NumPy cosine similarity, Drive (Obsidian `.md`) | `/find`, `GET /api/brain/search`, `GET /api/brain/graph` | ADR-0027, ADR-0028 |
 | Mini-PRD generation (auto + intent slots) | `processors/prd.py` | `gemini_client`, `drive`, `sheets`, `brain`, `telegram/sender` | auto-fires post-enrichment; `/spec <suffix> [intent]`; dashboard "Build Spec" | ADR-0004, PRD.md §14 |
 | Freestyle / custom-prompt reprocessing | `enrichment.py` / `article.py` via `chat_state` | `gemini_client` | `/freestyle <url>`, "✍️ Freestyle" button | — |
+| Recipes (named, saved custom prompts) | `db/templates.py` | `gemini_client` | `prompts` route, UI label **Recipes** | — |
+| Collections (group saves to revisit/annotate/export together) | `db/spaces.py` | `database` | `spaces` route, UI label **Collections** | — |
+| Tags | `db/tags.py` | `database` | Settings → Tags | — |
+| Domain allow/ignore rules | `api/controls.py`, `utils/validators.py` (`detect_pipeline` `extra_domains`) | `database` (users) | Settings → Domains, `/allowlist` | — |
+| Chrome Extension pairing | `auth/extension_tokens.py`, `api/extension_auth.py` | bearer token store | Settings → Chrome Extension | — |
+| MCP client pairing | `auth/mcp_tokens.py`, `api/mcp_auth.py` | bearer token store | Settings → MCP clients | — |
+| Discord channel pairing | `channels/discord/adapter.py`, `channels/discord/gateway.py` | `database` (users) | Settings → Discord | — |
+| Newsletter Digest (follow a publication, surface new issues) | `processors/email_digest.py`, `processors/newsletter_poll.py`, `services/newsletter_archive.py` | `jina`, `database` (newsletter) | `api/newsletter_digest.py`; dashboard "Newsletter Digest" (preview/restricted) | — |
+| Intake (unified paste-URL / command / note surface) | `src/intake/` (`router.py`, `commands.py`, `models.py`) | `services/jobs.py` | `intake` route | — |
 | Dashboard job submission & shared dedup | `services/jobs.py` | `database`, `queue` | `POST /api/jobs`, Telegram webhook, repo follow-up (3 shared callers) | ADR-0033, ADR-0032 |
 | Job recovery (stale/failed jobs) | `services/job_recovery.py` | `database` | Dashboard Recovery panel | ADR-0026 |
 | Auth (Telegram Login + sessions) | `src/auth/` | Redis sessions | `POST /api/auth`, `/api/*` middleware | ADR-0016 |
 | Invite gate / onboarding | `services/invite_notifications.py` | `database` (users, invites) | Signup flow (Telegram + web) | ADR-0031 |
 | Ops bot (user/invite administration) | `services/ops_bot.py` | `database` | `POST /webhook/ops` | ADR-0036 |
-| Web dashboard surfaces (Feed, Brain, Spaces, Prompts, Controls, Doc Parser) | `web/app/(dashboard)/*`, `src/api/*` | session cookie → FastAPI `/api/*` | Next.js routes (Vercel) | WEB-PRD.md, ADR-0034 |
+| Web dashboard surfaces (Feed, Intake, Brain, Collections, Recipes, Settings, Docs, Newsletter Digest) | `web/app/(dashboard)/*`, `src/api/*` | session cookie → FastAPI `/api/*` | Next.js routes (Vercel) | WEB-PRD.md, ADR-0034 |
 
 ---
 

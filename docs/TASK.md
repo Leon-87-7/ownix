@@ -26,8 +26,6 @@ _Raw one-line ideas go here. `/pre-grill` consumes them._
 
 - make all detail job pages titles editable
 
-- custom recipes ("Your recipes" on the Prompts page) are not offered by the dashboard's Run Gemini picker; explicit `-name <url>` Telegram shortcuts remain supported (discovered while grilling task 35)
-
 ---
 
 ## Briefs
@@ -1661,3 +1659,79 @@ Telegram bot.
 - What test coverage exists on `_handle_single_photo` today, to catch a
   regression when its core logic gets extracted out from under the Telegram
   path?
+
+## 38. Recipes have a working apply path but no discoverable UI — surface it
+
+> **Grill:** `/grilling` — pure product/UX scope call (which surface(s) get
+> the affordance); no external integration, and the one domain decision this
+> touches (custom recipes excluded from the Run Gemini picker) was already
+> made deliberately in task 35/ADR-0050, not left ambiguous.
+
+> **Grounded:** 2026-09-16
+
+**Correction to the starting premise:** "Recipes is broken" turned out to be
+wrong on investigation — there **is** a fully-wired, working apply path
+today. It's just invisible in the UI. `-<name> <url>` typed as a message
+(e.g. `-mytemplate https://...`) is parsed by
+`user_template_shortcut` (`src/intake/commands.py:267`), which looks up the
+caller's saved recipe via `database.get_user_template_by_name`
+(`src/db/templates.py:32`), seeds it as the job's `freestyle_prompt`, and
+enqueues through the standard `create_and_enqueue_job` core
+(`src/services/jobs.py`) — the same shape every other entry point uses. This
+runs identically from **Telegram** (`routing.py:815` →
+`_handle_user_template_shortcut`) and from the **dashboard Intake page**
+composer (`POST /api/intake/message`, `src/api/intake.py:61` →
+`src/intake/router.py:79`, per the migration note in `commands.py:272-275`).
+
+**What's actually missing is discoverability, confirmed by absence in three
+places:**
+- The Recipes page itself (`web/app/(dashboard)/prompts/page.tsx`) has full
+  CRUD (create/edit/delete a recipe, `src/api/templates.py`) but no "run
+  this" action anywhere on the row/card.
+- **Feed's own submit box** (`submit-job.tsx:277`) posts straight to
+  `POST /api/jobs`, not `/api/intake/message` — so the `-name <url>`
+  shortcut silently does **not** work there; typing it just gets treated as
+  a plain (invalid) URL submission via the wrong endpoint.
+- Job-detail's "Run Gemini" recipe picker (task 35, shipped, ADR-0050)
+  explicitly ships built-ins + Freestyle only — custom recipes were
+  deliberately scoped out of that slice, with this exact gap flagged in its
+  own brief as "its own Inbox idea" (now this task; the prior one-liner that
+  said the same thing has been folded in here).
+
+**Wanted:** a user who has saved a recipe can actually find and run it
+without already knowing the `-name <url>` syntax exists.
+
+**Backend**
+
+- Likely nothing new needed for the core mechanism — `user_template_shortcut`
+  already does the real work. The open question is whether Feed's submit box
+  gains intake-shortcut support (route through `/api/intake/message` instead
+  of/alongside `POST /api/jobs`) or whether a UI affordance calls
+  `create_and_enqueue_job` directly with a chosen recipe's
+  `extra_instructions` as `freestyle_prompt` — **reuse, don't fork** either
+  way; no new resolution logic belongs in this task.
+
+**UI**
+
+- Candidate surfaces (pick one or more in grill): a "Run" action per row on
+  the Recipes page (needs a URL input at the point of use — recipes aren't
+  tied to a job until applied); adding custom recipes as options in the
+  job-detail Run Gemini picker (reopens task 35's deliberate v1 exclusion —
+  confirm it's still deliberate, not just deferred); Feed's submit box
+  gaining shortcut awareness so typing `-name <url>` there works instead of
+  silently misrouting.
+
+**Open questions** (resolve in grill)
+
+- Which surface(s) actually get the affordance — one, or all three
+  candidates above? Start narrow (cheapest slice) or cover all entry points
+  at once?
+- Does the Recipes page need a "run against a URL" flow (implies a URL input
+  living on a management page, a new interaction shape for that page), or is
+  surfacing the existing shortcut syntax *in place* (e.g. a copyable
+  `-name <url>` hint on each recipe row) enough for v1?
+- If Feed's submit box gains shortcut support, does it detect `-name` in the
+  URL field client-side and route to `/api/intake/message`, or does
+  `POST /api/jobs` itself learn to resolve a leading `-name` token
+  server-side (changes that endpoint's contract for every caller, not just
+  Feed)?
