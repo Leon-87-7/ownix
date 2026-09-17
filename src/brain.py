@@ -901,7 +901,8 @@ _RELATED_SELF_QUERY = """SELECT l.id, l.embedding
 
 _RELATED_OTHERS_QUERY = """SELECT l.id, l.embedding
     FROM links l LEFT JOIN jobs j ON j.id = l.source_job
-    WHERE l.embedding IS NOT NULL AND l.id != ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?"""
+    WHERE l.embedding IS NOT NULL AND l.id != ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?
+      AND COALESCE(j.status, '') != 'cancelled'"""
 
 
 async def find_related_links(link_id: str, owner_chat_id: int) -> list[dict[str, Any]] | None:

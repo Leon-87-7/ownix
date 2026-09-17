@@ -1066,16 +1066,23 @@ async def test_get_owned_link_detail_rejects_foreign_link():
 @pytest.mark.asyncio
 async def test_find_related_links_scopes_to_owner_and_gates_by_score():
     """Gardener Phase 2's find_related must stay within the caller's own
-    links (never surface a foreign tenant's, even a near-identical one) and
-    must drop matches below BRAIN_MIN_SCORE rather than always returning 3."""
+    links (never surface a foreign tenant's, even a near-identical one),
+    must drop matches below BRAIN_MIN_SCORE rather than always returning 3,
+    and must exclude candidates whose source job is cancelled — matching
+    list_links/search_links, which already hide those (#codex P2 finding on
+    PR #640: cancelled-job links leaking through find_related)."""
     import aiosqlite
     import os
     import tempfile
     from src.db.schema import SCHEMA_SQL
 
+    def _near(vec: np.ndarray) -> np.ndarray:
+        v = vec + np.random.normal(0, 0.01, EMBEDDING_DIM).astype(np.float32)
+        return v / (np.linalg.norm(v) + 1e-10)
+
     base = _rand_vec()
-    close = base + np.random.normal(0, 0.01, EMBEDDING_DIM).astype(np.float32)
-    close = close / (np.linalg.norm(close) + 1e-10)
+    close = _near(base)
+    cancelled_close = _near(base)
     # Gram-Schmidt against base so this vector's cosine similarity is ~0,
     # reliably below BRAIN_MIN_SCORE regardless of base's random draw.
     raw = np.random.rand(EMBEDDING_DIM).astype(np.float32)
@@ -1087,20 +1094,28 @@ async def test_find_related_links_scopes_to_owner_and_gates_by_score():
     try:
         async with aiosqlite.connect(db_path) as conn:
             await conn.executescript(SCHEMA_SQL)
-            await conn.execute(
-                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
-                "VALUES ('j', 1, '', 'link', 'done')"
+            await conn.executemany(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) VALUES (?, 1, '', 'link', ?)",
+                [("j", "done"), ("j-cancelled", "cancelled")],
             )
             await conn.executemany(
                 """INSERT INTO links
                    (id, chat_id, url, title, topic, source_job, embedding,
                     seen_count, last_seen_at, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, 't', 'j', ?, 1, 't', 't', 't')""",
+                   VALUES (?, ?, ?, ?, 't', ?, ?, 1, 't', 't', 't')""",
                 [
-                    ("self", 1, "https://self.example", "Self", _make_blob(base)),
-                    ("close", 1, "https://close.example", "Close", _make_blob(close)),
-                    ("far", 1, "https://far.example", "Far", _make_blob(orthogonal)),
-                    ("theirs", 2, "https://theirs.example", "Theirs", _make_blob(close)),
+                    ("self", 1, "https://self.example", "Self", "j", _make_blob(base)),
+                    ("close", 1, "https://close.example", "Close", "j", _make_blob(close)),
+                    ("far", 1, "https://far.example", "Far", "j", _make_blob(orthogonal)),
+                    ("theirs", 2, "https://theirs.example", "Theirs", "j", _make_blob(close)),
+                    (
+                        "cancelled",
+                        1,
+                        "https://cancelled.example",
+                        "Cancelled",
+                        "j-cancelled",
+                        _make_blob(cancelled_close),
+                    ),
                 ],
             )
             await conn.commit()
