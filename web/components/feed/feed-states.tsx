@@ -157,9 +157,6 @@ function EmptyStateArt({
         className={`absolute inset-x-0 flex flex-col items-center gap-1 px-6 text-center ${copyPositionClass}`}
       >
         <p className="text-headline font-semibold tracking-headline text-ink">
-          Your Index starts here
-        </p>
-        <p className="text-copy leading-normal text-body">
           You haven&apos;t saved anything yet.
         </p>
         <p className="max-w-[34ch] text-copy leading-normal text-body">
