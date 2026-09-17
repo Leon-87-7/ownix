@@ -116,7 +116,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
             not settings.VIEWER_LOGIN_ENABLED
             and (
                 user.get("source") == "viewer_login"
-                or user.get("username") == "viewer"
+                or user.get("id") == settings.VIEWER_LOGIN_USER_ID
             )
         ):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)

@@ -700,6 +700,29 @@ class TestSessionMiddleware:
 
         assert resp.status_code == 401
 
+    def test_disabled_viewer_login_rejects_by_id_even_without_source(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CodeRabbit finding on PR #639: matching on username == "viewer" was
+        collision-prone (a real Telegram user could pick that exact username);
+        the check must key off the synthetic id instead, which real chat ids
+        (always positive) can never collide with. This session deliberately
+        omits both `source` and `username` to prove the id comparison alone
+        is what rejects it."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_ENABLED", False)
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123002)
+        asyncio.run(database.set_user_status(-900123002, "approved"))
+        user = {"id": -900123002}
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:viewer-sid-2"] = json.dumps(user)
+
+        resp = auth_client.get("/api/jobs", cookies={"vig_session": "viewer-sid-2"})
+
+        assert resp.status_code == 401
+
     def test_viewer_login_is_disabled_by_default(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
