@@ -43,9 +43,11 @@ No separate `flag_item` tool. Flagging is the agent narrating its reasoning in c
 
 ## Phase 2 — Connection-finding
 
-**Blocked on:** confirming whether the current index supports embeddings/vector similarity, or only structured metadata search. If only the latter, this phase starts with building that similarity layer — infrastructure work, not agent-prompt work. This needs to be checked before any timeline is set.
+**Status: shipped (2026-09-17).** The infra blocker below turned out to already be resolved — `src/brain.py` already carries Gemini embeddings + cosine similarity, used since Phase 1 to compute each link's top-3 related items at ingest time (the Obsidian `.md` "Related" section) and for `/find` semantic search. No new similarity layer was needed.
 
-**MCP tool (once infra exists):** `find_related(item_id)` — returns nearest neighbors by content similarity; agent narrates why they're related.
+**Infra check (resolved):** confirming whether the current index supports embeddings/vector similarity, or only structured metadata search — it supports embeddings/vector similarity.
+
+**MCP tool:** `find_related(link_id)` in `src/mcp_server.py`, backed by `brain.find_related_links()` — same owner-scoping as Phase 1's `get_item_detail`, returns up to 3 nearest neighbors gated by `settings.BRAIN_MIN_SCORE`; agent narrates why they're related from the returned `{id, url, title, topic, score}` data, no reasoning baked into the tool itself.
 
 **Risk to design against:** raw embedding similarity often produces shallow connections (same domain, same tags) rather than genuinely useful ones. Define upfront what counts as a good connection vs. noise — otherwise this looks impressive in a demo and gets ignored in daily use.
 

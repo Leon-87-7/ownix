@@ -18,6 +18,7 @@ from src.brain import (
     _rebuild_lock,
     _resolve_identity,
     rebuild_graph,
+    find_related_links,
     get_graph,
     get_link_preview,
     get_owned_link_detail,
@@ -1058,6 +1059,62 @@ async def test_get_owned_link_detail_rejects_foreign_link():
 
         assert as_owner is not None and as_owner["url"] == "https://theirs.example"
         assert as_foreign_tenant is None
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_find_related_links_scopes_to_owner_and_gates_by_score():
+    """Gardener Phase 2's find_related must stay within the caller's own
+    links (never surface a foreign tenant's, even a near-identical one) and
+    must drop matches below BRAIN_MIN_SCORE rather than always returning 3."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    base = _rand_vec()
+    close = base + np.random.normal(0, 0.01, EMBEDDING_DIM).astype(np.float32)
+    close = close / (np.linalg.norm(close) + 1e-10)
+    # Gram-Schmidt against base so this vector's cosine similarity is ~0,
+    # reliably below BRAIN_MIN_SCORE regardless of base's random draw.
+    raw = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+    orthogonal = raw - np.dot(raw, base) * base
+    orthogonal = orthogonal / (np.linalg.norm(orthogonal) + 1e-10)
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) "
+                "VALUES ('j', 1, '', 'link', 'done')"
+            )
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, chat_id, url, title, topic, source_job, embedding,
+                    seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 't', 'j', ?, 1, 't', 't', 't')""",
+                [
+                    ("self", 1, "https://self.example", "Self", _make_blob(base)),
+                    ("close", 1, "https://close.example", "Close", _make_blob(close)),
+                    ("far", 1, "https://far.example", "Far", _make_blob(orthogonal)),
+                    ("theirs", 2, "https://theirs.example", "Theirs", _make_blob(close)),
+                ],
+            )
+            await conn.commit()
+
+        with _brain_settings(db_path) as mock_settings:
+            mock_settings.OPERATOR_CHAT_ID = 999999
+            mock_settings.BRAIN_MIN_SCORE = 0.5
+            related = await find_related_links("self", owner_chat_id=1)
+            missing = await find_related_links("nope", owner_chat_id=1)
+            foreign = await find_related_links("theirs", owner_chat_id=1)
+
+        assert [r["id"] for r in related] == ["close"]
+        assert missing is None
+        assert foreign is None
     finally:
         os.unlink(db_path)
 
