@@ -22,7 +22,7 @@ from src.auth import session as session_store
 from src.auth.hmac_verify import verify_telegram_auth
 from src.auth.identity import resolve_owner
 from src.auth.telegram_miniapp import trusted_chat_id, verify_init_data
-from src.auth.middleware import COOKIE_NAME
+from src.auth.middleware import COOKIE_NAME, VIEW_AS_COOKIE
 from src.config import settings
 from src.intake import rate_limit
 from src.services.account import delete_account
@@ -441,6 +441,11 @@ class ReviewerLoginPayload(BaseModel):
     password: str = Field(..., max_length=256)
 
 
+class ViewerLoginPayload(BaseModel):
+    email: str = Field(..., max_length=254)
+    password: str = Field(..., max_length=256)
+
+
 @auth_router.post("/telegram")
 async def telegram_login(payload: TelegramPayload, response: Response) -> dict:
     # Build string-typed dict for HMAC verification (Telegram uses string values)
@@ -517,6 +522,85 @@ async def reviewer_login(payload: ReviewerLoginPayload, response: Response) -> d
         secure=settings.SESSION_COOKIE_SECURE,
     )
     log.info("auth.reviewer_login", reviewer_id=reviewer_id)
+    return {"ok": True}
+
+
+@auth_router.post("/viewer-login")
+async def viewer_login(payload: ViewerLoginPayload, response: Response) -> dict:
+    configured_email = normalize_email(settings.VIEWER_LOGIN_EMAIL)
+    submitted_email = normalize_email(payload.email)
+    configured_password = settings.VIEWER_LOGIN_PASSWORD
+    submitted_password = payload.password.strip()
+    if not (settings.VIEWER_LOGIN_ENABLED and configured_email and configured_password):
+        raise HTTPException(status_code=404, detail="Viewer login is disabled")
+    rate_limit.enforce(f"viewer_login:{submitted_email}", max_requests=5)
+    if submitted_email != configured_email or not hmac.compare_digest(
+        submitted_password.encode("utf-8"), configured_password.encode("utf-8")
+    ):
+        raise HTTPException(status_code=401, detail="Invalid viewer credentials")
+
+    viewer_id = settings.VIEWER_LOGIN_USER_ID
+    resumed = await _resume_deletion_if_stuck(viewer_id)
+    if resumed is not None:
+        return resumed
+    await database.upsert_user(
+        tg_id=viewer_id, username="viewer", first_name="Viewer", last_name=None, photo_url=None
+    )
+    await database.set_user_email(viewer_id, configured_email)
+    await database.set_user_status(viewer_id, "approved")
+    session_id = await session_store.mint(
+        {"id": viewer_id, "first_name": "Viewer", "username": "viewer",
+         "photo_url": None, "source": "viewer_login"}
+    )
+    response.set_cookie(
+        key=COOKIE_NAME, value=session_id, httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE, samesite="lax",
+        max_age=_COOKIE_MAX_AGE, path="/",
+    )
+    response.delete_cookie("ownix_preview", path="/", secure=settings.SESSION_COOKIE_SECURE)
+    log.info("auth.viewer_login", viewer_id=viewer_id)
+    return {"ok": True}
+
+
+@auth_router.post("/view-as")
+async def start_view_as(request: Request, response: Response) -> dict:
+    real_id = int(request.state.user["real_id"])
+    if not settings.is_operator(real_id):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    configured_email = normalize_email(settings.VIEWER_LOGIN_EMAIL)
+    if not settings.VIEWER_LOGIN_ENABLED or not configured_email:
+        raise HTTPException(status_code=404, detail="Viewer account not configured")
+    # Mirror viewer_login(): must run before upsert_user, or a deletion left
+    # mid-flight (e.g. a prior DELETE /api/auth/me on the viewer session)
+    # gets resurrected instead of resumed.
+    resumed = await _resume_deletion_if_stuck(settings.VIEWER_LOGIN_USER_ID)
+    if resumed is not None:
+        return resumed
+    await database.upsert_user(
+        tg_id=settings.VIEWER_LOGIN_USER_ID, username="viewer", first_name="Viewer",
+        last_name=None, photo_url=None,
+    )
+    # Seed the same email viewer_login() would set — otherwise the very first
+    # toggle-in (before anyone has used the standalone viewer-login form)
+    # creates an approved account with no email, and InviteGate's
+    # needsEmail = !user.email blocks the dashboard behind the "Email
+    # required" modal instead of showing the member view.
+    await database.set_user_email(settings.VIEWER_LOGIN_USER_ID, configured_email)
+    await database.set_user_status(settings.VIEWER_LOGIN_USER_ID, "approved")
+    response.set_cookie(
+        key=VIEW_AS_COOKIE, value="1", httponly=True,
+        secure=settings.SESSION_COOKIE_SECURE, samesite="lax", path="/",
+    )
+    return {"ok": True}
+
+
+@auth_router.delete("/view-as")
+async def stop_view_as(request: Request, response: Response) -> dict:
+    real_id = int(request.state.user["real_id"])
+    if not settings.is_operator(real_id):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    response.delete_cookie(VIEW_AS_COOKIE, path="/", secure=settings.SESSION_COOKIE_SECURE,
+                           httponly=True, samesite="lax")
     return {"ok": True}
 
 
@@ -626,6 +710,7 @@ async def me(request: Request, response: Response) -> dict:
     tg_id = int(session_user["id"])
     db_user = await database.get_user(tg_id)
     status = await database.get_user_status(tg_id)
+    real_id = int(session_user.get("real_id", tg_id))
     if status == "approved" and "ownix_preview" in request.cookies:
         # A stale preview cookie on an approved session would render the
         # dashboard in Restricted mode (ADR-0035 §1 says approved users get
@@ -635,6 +720,9 @@ async def me(request: Request, response: Response) -> dict:
         **session_user,
         "email": db_user.get("email") if db_user else None,
         "status": status,
+        "is_admin": settings.is_operator(tg_id),
+        "can_view_as": settings.is_operator(real_id) and settings.VIEWER_LOGIN_ENABLED,
+        "viewing_as": real_id != tg_id,
     }
 
 

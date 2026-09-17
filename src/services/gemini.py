@@ -6,6 +6,8 @@ import asyncio
 import base64
 import json
 import re
+import time
+from collections import deque
 
 from src.config import settings
 from src.utils.logger import get_logger
@@ -13,6 +15,11 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 _GEMINI_TIMEOUT_MS = 90_000  # 90s — bounds hung requests in the shared to_thread pool
+_GEMINI_FAILURE_WINDOW_SECONDS = 5 * 60
+_GEMINI_FAILURE_THRESHOLD = 5
+_GEMINI_ALERT_COOLDOWN_SECONDS = 60 * 60
+_gemini_failures: deque[float] = deque()
+_gemini_last_alert_at: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +199,44 @@ async def _call_with_fallback(fn, *args, log_ok: str, log_fail: str, **fn_kwargs
         except Exception as exc:
             last_error = str(exc).splitlines()[0][:120]
             log.warning(log_fail, error=last_error)
-    raise GeminiUnavailableError(last_error or "Both Gemini keys failed")
+    error = last_error or "Both Gemini keys failed"
+    await _maybe_alert_gemini_failures(error)
+    raise GeminiUnavailableError(error)
+
+
+async def _maybe_alert_gemini_failures(error: str) -> None:
+    """Alert operators when total Gemini failures cluster in a rolling window."""
+    global _gemini_last_alert_at
+
+    now = time.monotonic()
+    cutoff = now - _GEMINI_FAILURE_WINDOW_SECONDS
+    while _gemini_failures and _gemini_failures[0] < cutoff:
+        _gemini_failures.popleft()
+    _gemini_failures.append(now)
+    if len(_gemini_failures) < _GEMINI_FAILURE_THRESHOLD:
+        return
+    if (
+        _gemini_last_alert_at is not None
+        and now - _gemini_last_alert_at < _GEMINI_ALERT_COOLDOWN_SECONDS
+    ):
+        return
+
+    from src.services.ops_bot import admin_chat_ids, send_ops_message
+
+    targets = admin_chat_ids()
+    if not targets:
+        log.warning("gemini.failure_alert_no_admins", failures=len(_gemini_failures))
+        return
+    message = (
+        f"⚠️ Gemini unavailable {len(_gemini_failures)} times in the last "
+        f"{_GEMINI_FAILURE_WINDOW_SECONDS // 60} minutes. Latest error: {error}"
+    )
+    try:
+        await asyncio.gather(*(send_ops_message(chat_id, message) for chat_id in targets))
+    except Exception:
+        log.exception("gemini.failure_alert_failed")
+        return
+    _gemini_last_alert_at = now
 
 
 # ---------------------------------------------------------------------------

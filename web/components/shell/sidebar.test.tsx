@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@/test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Sidebar } from './sidebar';
+import { Sidebar, visibleNav, ADMIN_ONLY_HREFS } from './sidebar';
 import type { InviteUser } from './invite-gate';
 
 vi.mock('next/navigation', () => ({
@@ -131,5 +131,40 @@ describe('Sidebar Google connection state', () => {
     expect(
       within(dialog).getByRole('button', { name: 'Disconnect' }),
     ).not.toBeDisabled();
+  });
+});
+
+describe('visibleNav (admin gating)', () => {
+  it('hides ADMIN_ONLY_HREFS entries for a non-admin user', () => {
+    const nav = visibleNav({ ...USER, is_admin: false });
+    expect(nav.some((item) => ADMIN_ONLY_HREFS.has(item.href))).toBe(false);
+  });
+
+  it('hides ADMIN_ONLY_HREFS entries when there is no session yet', () => {
+    const nav = visibleNav(null);
+    expect(nav.some((item) => ADMIN_ONLY_HREFS.has(item.href))).toBe(false);
+  });
+
+  it('keeps ADMIN_ONLY_HREFS entries for an admin user', () => {
+    const nav = visibleNav({ ...USER, is_admin: true });
+    expect(nav.some((item) => item.href === '/newsletter-digest')).toBe(true);
+  });
+});
+
+describe('Sidebar nav visibility', () => {
+  it('hides the Digest link for a non-admin session', () => {
+    sessionMock.user = { ...USER, is_admin: false };
+    render(<Sidebar />);
+    expect(
+      screen.queryByRole('link', { name: 'Digest', hidden: true }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the Digest link for an admin session', () => {
+    sessionMock.user = { ...USER, is_admin: true };
+    render(<Sidebar />);
+    expect(
+      screen.getAllByRole('link', { name: 'Digest', hidden: true }).length,
+    ).toBeGreaterThan(0);
   });
 });

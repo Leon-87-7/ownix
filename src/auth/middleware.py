@@ -11,6 +11,7 @@ from src.auth import extension_tokens, mcp_tokens, session as session_store
 from src.config import settings
 
 COOKIE_NAME = "vig_session"
+VIEW_AS_COOKIE = "ownix_view_as"
 _BEARER_PREFIX = "bearer "
 
 # Paths that bypass the session gate entirely
@@ -22,6 +23,7 @@ _OPEN_API_PATHS = frozenset(
         "/api/auth/telegram",
         "/api/auth/dev-login",
         "/api/auth/reviewer-login",
+        "/api/auth/viewer-login",
         "/api/auth/miniapp/session",
         "/api/auth/handoff",
         "/api/auth/github/connect",
@@ -110,7 +112,23 @@ class SessionMiddleware(BaseHTTPMiddleware):
             )
         ):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if (
+            not settings.VIEWER_LOGIN_ENABLED
+            and (
+                user.get("source") == "viewer_login"
+                or user.get("id") == settings.VIEWER_LOGIN_USER_ID
+            )
+        ):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
+        real_id = int(user["id"])
+        user = {**user, "real_id": real_id}
+        if (
+            settings.is_operator(real_id)
+            and settings.VIEWER_LOGIN_ENABLED
+            and request.cookies.get(VIEW_AS_COOKIE)
+        ):
+            user["id"] = settings.VIEWER_LOGIN_USER_ID
         request.state.user = user
         # Only these auth routes are intentionally reachable before approval.
         if path in _PRE_APPROVAL_AUTH_PATHS:
@@ -119,5 +137,8 @@ class SessionMiddleware(BaseHTTPMiddleware):
         status = await database.get_user_status(int(user["id"]))
         if status != "approved":
             return JSONResponse({"detail": "Approval required"}, status_code=403)
+
+        if path.startswith("/api/newsletter") and not settings.is_operator(int(user["id"])):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
 
         return await call_next(request)

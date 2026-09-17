@@ -232,3 +232,84 @@ async def test_generate_strips_em_dashes(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert result == "path - purpose"
     assert "—" not in result
+
+
+# ---------------------------------------------------------------------------
+# Test 10: sustained failures alert the ops-admin channel (cloud-patch,
+# docs/superpowers/plans/2026-09-17-admin-viewer-visibility.md Task 9)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_generate_both_keys_fail_triggers_ops_alert_after_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.services.gemini as gemini_module
+
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    monkeypatch.setattr(gemini_module, "_gemini_failures", type(gemini_module._gemini_failures)())
+    monkeypatch.setattr(gemini_module, "_gemini_last_alert_at", None)
+    monkeypatch.setattr(gemini_module, "_GEMINI_FAILURE_THRESHOLD", 2)
+
+    sent: list[tuple[int, str]] = []
+
+    async def fake_send_ops_message(chat_id, text, **kwargs):
+        sent.append((chat_id, text))
+        return {}
+
+    monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: (42,))
+    monkeypatch.setattr("src.services.ops_bot.send_ops_message", fake_send_ops_message)
+
+    with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
+        for _ in range(2):
+            with pytest.raises(GeminiUnavailableError):
+                await generate("prompt", model="gemini-2.5-flash")
+
+    assert len(sent) == 1
+    assert sent[0][0] == 42
+    assert "2 times" in sent[0][1]
+
+
+@pytest.mark.asyncio
+async def test_generate_failure_alert_has_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.services.gemini as gemini_module
+
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    monkeypatch.setattr(gemini_module, "_gemini_failures", type(gemini_module._gemini_failures)())
+    monkeypatch.setattr(gemini_module, "_gemini_last_alert_at", None)
+    monkeypatch.setattr(gemini_module, "_GEMINI_FAILURE_THRESHOLD", 1)
+
+    sent_count = {"n": 0}
+
+    async def fake_send_ops_message(chat_id, text, **kwargs):
+        sent_count["n"] += 1
+        return {}
+
+    monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: (42,))
+    monkeypatch.setattr("src.services.ops_bot.send_ops_message", fake_send_ops_message)
+
+    with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
+        for _ in range(3):
+            with pytest.raises(GeminiUnavailableError):
+                await generate("prompt", model="gemini-2.5-flash")
+
+    assert sent_count["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_failure_alert_skips_when_no_admins_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import src.services.gemini as gemini_module
+
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    monkeypatch.setattr(gemini_module, "_gemini_failures", type(gemini_module._gemini_failures)())
+    monkeypatch.setattr(gemini_module, "_gemini_last_alert_at", None)
+    monkeypatch.setattr(gemini_module, "_GEMINI_FAILURE_THRESHOLD", 1)
+    monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: ())
+
+    with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
+        with pytest.raises(GeminiUnavailableError):
+            await generate("prompt", model="gemini-2.5-flash")

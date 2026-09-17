@@ -297,7 +297,56 @@ function UserTemplateRow({
           {deleteError}
         </p>
       )}
+      <ApplyRecipeForm template={template.name} />
     </li>
+  );
+}
+
+function ApplyRecipeForm({ template }: { template: string }) {
+  const [url, setUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string>();
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage(undefined);
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim(), template }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || 'Could not apply recipe');
+      }
+      setUrl('');
+      setMessage('Link queued');
+    } catch (error) {
+      setMessage(describeError(error, 'Could not apply recipe'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+      <label className="sr-only" htmlFor={`recipe-url-${template}`}>Link to apply {template}</label>
+      <input
+        id={`recipe-url-${template}`}
+        type="url"
+        required
+        value={url}
+        onChange={(event) => setUrl(event.target.value)}
+        placeholder="https://…"
+        className="h-8 min-w-52 flex-1 rounded-md border border-line bg-canvas px-3 text-sm text-ink placeholder-muted focus:border-signal focus:outline-none"
+      />
+      <button type="submit" disabled={submitting} className="h-8 rounded-md bg-signal px-3 text-button font-medium text-onsignal hover:bg-signal-bright disabled:bg-surface disabled:text-muted">
+        {submitting ? 'Applying…' : 'Apply to a link'}
+      </button>
+      {message && <span role="status" className="text-xs text-body">{message}</span>}
+    </form>
   );
 }
 

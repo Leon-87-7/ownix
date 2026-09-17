@@ -241,12 +241,17 @@ async def _create_link_job(chat_id: int, url: str) -> dict:
     }
 
 
-def _resolve_job_template(pipeline: str, template: str | None, freestyle_prompt: str | None) -> tuple[str | None, str | None]:
+async def _resolve_job_template(
+    chat_id: int, pipeline: str, template: str | None, freestyle_prompt: str | None
+) -> tuple[str | None, str | None]:
     if pipeline == "repo":
         return None, None
     if template == "freestyle" and not freestyle_prompt:
         raise HTTPException(status_code=422, detail="freestyle_prompt is required for freestyle")
     if template and template != "freestyle" and template not in PROMPT_TEMPLATES:
+        recipe = await database.get_user_template_by_name(chat_id, template)
+        if recipe:
+            return "freestyle", recipe["extra_instructions"]
         raise HTTPException(status_code=422, detail="Unknown template")
     return template, freestyle_prompt
 
@@ -260,7 +265,9 @@ async def _create_pipeline_job(body: JobCreateRequest, chat_id: int, url: str) -
 
     template = body.template.strip() if body.template else None
     freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
-    template, freestyle_prompt = _resolve_job_template(pipeline, template, freestyle_prompt)
+    template, freestyle_prompt = await _resolve_job_template(
+        chat_id, pipeline, template, freestyle_prompt
+    )
 
     url_for_job = normalize_repo_url(url) if pipeline == "repo" else url
     job = await create_and_enqueue_job(
@@ -801,7 +808,9 @@ async def enrich_job(job_id: str, request: Request, body: JobEnrichRequest) -> d
     if not template:
         raise HTTPException(status_code=422, detail="template is required")
     freestyle_prompt = body.freestyle_prompt.strip() if body.freestyle_prompt else None
-    template, freestyle_prompt = _resolve_job_template("long", template, freestyle_prompt)
+    template, freestyle_prompt = await _resolve_job_template(
+        int(job["chat_id"]), "long", template, freestyle_prompt
+    )
     claimed = await database.claim_job_enrichment(
         job_id, template, freestyle_prompt if template == "freestyle" else None
     )

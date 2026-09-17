@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from src.api import jobs
@@ -1037,3 +1037,76 @@ class TestJobThumbnailCaching:
 
         resp = jobs_client.get("/api/jobs/s1/thumbnail")
         assert resp.status_code == 403
+
+
+@pytest.fixture
+def template_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    db_file = tmp_path / "resolve_job_template_test.db"
+    monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+    monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    from src import database
+
+    asyncio.run(database.init_db())
+    return database
+
+
+class TestResolveJobTemplate:
+    """Covers the cloud-patch fix for the missing Recipes apply path — see
+    docs/superpowers/plans/2026-09-17-admin-viewer-visibility.md Task 7."""
+
+    @pytest.mark.asyncio
+    async def test_passes_through_builtin_template(self, template_db) -> None:
+        template, freestyle_prompt = await jobs._resolve_job_template(
+            123, "long", "summary", None
+        )
+        assert template == "summary"
+        assert freestyle_prompt is None
+
+    @pytest.mark.asyncio
+    async def test_repo_pipeline_ignores_template(self, template_db) -> None:
+        template, freestyle_prompt = await jobs._resolve_job_template(
+            123, "repo", "summary", None
+        )
+        assert template is None
+        assert freestyle_prompt is None
+
+    @pytest.mark.asyncio
+    async def test_resolves_saved_recipe_to_freestyle(self, template_db) -> None:
+        await template_db.create_user_template(
+            chat_id=123,
+            name="my-recipe",
+            description="test recipe",
+            extra_instructions="Summarize as a bulleted checklist.",
+        )
+
+        template, freestyle_prompt = await jobs._resolve_job_template(
+            123, "long", "my-recipe", None
+        )
+
+        assert template == "freestyle"
+        assert freestyle_prompt == "Summarize as a bulleted checklist."
+
+    @pytest.mark.asyncio
+    async def test_recipe_lookup_is_scoped_to_owner(self, template_db) -> None:
+        await template_db.create_user_template(
+            chat_id=123,
+            name="my-recipe",
+            description="test recipe",
+            extra_instructions="Only chat_id 123 owns this.",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await jobs._resolve_job_template(456, "long", "my-recipe", None)
+        assert exc_info.value.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_unknown_name_still_422s(self, template_db) -> None:
+        with pytest.raises(HTTPException) as exc_info:
+            await jobs._resolve_job_template(123, "long", "not-a-real-template", None)
+        assert exc_info.value.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_freestyle_without_prompt_still_422s(self, template_db) -> None:
+        with pytest.raises(HTTPException) as exc_info:
+            await jobs._resolve_job_template(123, "long", "freestyle", None)
+        assert exc_info.value.status_code == 422

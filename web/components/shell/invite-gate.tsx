@@ -14,6 +14,9 @@ export interface InviteUser {
   photo_url?: string | null;
   email?: string | null;
   status: UserStatus;
+  is_admin?: boolean;
+  can_view_as?: boolean;
+  viewing_as?: boolean;
 }
 
 // Session identity (CONTEXT.md): the gate's single /api/auth/me fetch is the

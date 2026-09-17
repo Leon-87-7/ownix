@@ -49,6 +49,14 @@ const NAV: NavItem[] = [
   { href: '/controls', label: 'Settings', icon: SlidersHorizontal },
 ];
 
+export const ADMIN_ONLY_HREFS = new Set(['/newsletter-digest']);
+
+export function visibleNav(user: InviteUser | null): NavItem[] {
+  return NAV.filter(
+    (item) => !ADMIN_ONLY_HREFS.has(item.href) || user?.is_admin === true,
+  );
+}
+
 const AVATAR_BORDER_COLORS = [
   statusColors.processing,
   statusColors.pending,
@@ -341,7 +349,7 @@ export function Sidebar() {
           className="flex flex-col items-center gap-1"
           aria-label="Primary"
         >
-          {NAV.map((item) => (
+          {visibleNav(user).map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -461,7 +469,7 @@ export function Sidebar() {
           className="flex flex-col gap-1"
           aria-label="Primary expanded"
         >
-          {NAV.map((item) => (
+          {visibleNav(user).map((item) => (
             <NavLink
               key={item.href}
               item={item}

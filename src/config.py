@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     REVIEWER_LOGIN_EMAIL: str = ""
     REVIEWER_LOGIN_PASSWORD: str = ""
     REVIEWER_LOGIN_USER_ID: int = -900_000_001
+    VIEWER_LOGIN_ENABLED: bool = False
+    VIEWER_LOGIN_EMAIL: str = ""
+    VIEWER_LOGIN_PASSWORD: str = ""
+    VIEWER_LOGIN_USER_ID: int = -900_000_002
 
     # Ops bot (ADR-0036) — separate internal Telegram operations surface.
     OPS_BOT_TOKEN: str = ""
@@ -193,6 +197,10 @@ class Settings(BaseSettings):
             and chat_id is not None
             and chat_id != self.OPERATOR_CHAT_ID
         )
+
+    def is_operator(self, chat_id: int | None) -> bool:
+        """Return whether *chat_id* identifies the configured operator."""
+        return self.OPERATOR_CHAT_ID is not None and chat_id == self.OPERATOR_CHAT_ID
 
     def _has_readable_google_token(self, chat_id: int) -> bool:
         """Sync helper — runs inside asyncio.to_thread by export_blocked."""
