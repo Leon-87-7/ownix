@@ -895,6 +895,52 @@ async def get_owned_link_detail(link_id: str, owner_chat_id: int) -> dict[str, A
     return await _fetch_link_with_og_image(link_id, owner_chat_id)
 
 
+_RELATED_SELF_QUERY = """SELECT l.id, l.embedding
+    FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+    WHERE l.id = ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?"""
+
+_RELATED_OTHERS_QUERY = """SELECT l.id, l.embedding
+    FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+    WHERE l.embedding IS NOT NULL AND l.id != ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?
+      AND COALESCE(j.status, '') != 'cancelled'"""
+
+
+async def find_related_links(link_id: str, owner_chat_id: int) -> list[dict[str, Any]] | None:
+    """Top-3 semantically related links for the Gardener MCP `find_related`
+    tool (Phase 2), scoped to the caller's own links via the same owner-scope
+    rule as `get_owned_link_detail`. `None` means the link doesn't exist,
+    isn't owned by this chat, or has no embedding yet — same not-found
+    contract as `get_owned_link_detail`."""
+    async with database.connection() as conn:
+        cursor = await conn.execute(
+            _RELATED_SELF_QUERY, (link_id, settings.OPERATOR_CHAT_ID, owner_chat_id)
+        )
+        self_row = await cursor.fetchone()
+        if self_row is None or not self_row["embedding"]:
+            return None
+
+        other_cursor = await conn.execute(
+            _RELATED_OTHERS_QUERY, (link_id, settings.OPERATOR_CHAT_ID, owner_chat_id)
+        )
+        other_rows = [dict(r) for r in await other_cursor.fetchall()]
+
+        self_ids, self_matrix = _load_embeddings([dict(self_row)])
+        if not self_ids:
+            return None
+        ids_list, matrix = _load_embeddings(other_rows)
+        related = _compute_related(link_id, self_matrix[0], ids_list, matrix)
+
+        results = []
+        for r in related:
+            detail_cursor = await conn.execute(
+                "SELECT id, url, title, topic FROM links WHERE id = ?", (r["id"],)
+            )
+            row = await detail_cursor.fetchone()
+            if row:
+                results.append({**dict(row), "score": r["score"]})
+        return results
+
+
 async def search_links(query: str, top_k: int = 5) -> list[dict]:
     """Embed query and return top-k semantically similar links."""
     top_k = min(top_k, 20)

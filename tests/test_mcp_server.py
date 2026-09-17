@@ -71,6 +71,42 @@ async def test_detail_foreign_and_missing_are_same_not_found(
 
 
 @pytest.mark.asyncio
+async def test_find_related_passes_tenant_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def fake_find_related(link_id: str, owner_chat_id: int) -> list[dict[str, Any]]:
+        seen["link_id"] = link_id
+        seen["owner_chat_id"] = owner_chat_id
+        return [{"id": "b", "url": "https://b", "title": "B", "topic": "x", "score": 0.9}]
+
+    monkeypatch.setattr(mcp_server.brain, "find_related_links", fake_find_related)
+    token = mcp_server._current_chat_id.set(50)
+    try:
+        result = await mcp_server.find_related("a")
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+    assert seen == {"link_id": "a", "owner_chat_id": 50}
+    assert result == {"items": [{"id": "b", "url": "https://b", "title": "B", "topic": "x", "score": 0.9}]}
+
+
+@pytest.mark.asyncio
+async def test_find_related_foreign_and_missing_are_same_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def missing(link_id: str, owner_chat_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(mcp_server.brain, "find_related_links", missing)
+    token = mcp_server._current_chat_id.set(20)
+    try:
+        with pytest.raises(ToolError, match="Link not found"):
+            await mcp_server.find_related("foreign-or-missing")
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+
+@pytest.mark.asyncio
 async def test_delete_requires_confirmation_and_deletes_only_explicit_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

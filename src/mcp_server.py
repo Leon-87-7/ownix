@@ -1,4 +1,8 @@
-"""In-process MCP Gardener server for tenant-owned Brain links (Phase 1)."""
+"""In-process MCP Gardener server for tenant-owned Brain links.
+
+Phase 1 (cleanup): list_items, get_item_detail, delete_item.
+Phase 2 (connection-finding): find_related.
+"""
 
 from __future__ import annotations
 
@@ -121,6 +125,17 @@ async def get_item_detail(link_id: str) -> dict[str, Any]:
     if item is None:
         raise ToolError("Link not found")
     return await _with_health(item)
+
+
+@mcp.tool(name="find_related")
+async def find_related(link_id: str) -> dict[str, Any]:
+    """Up to 3 links from the caller's own Brain most semantically related to one link."""
+    chat_id = _chat_id()
+    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
+    related = await brain.find_related_links(link_id, chat_id)
+    if related is None:
+        raise ToolError("Link not found")
+    return {"items": related}
 
 
 @mcp.tool(name="delete_item")
