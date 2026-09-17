@@ -122,3 +122,56 @@ def test_routing_phrase_now_counts_toward_mismatch_scoring() -> None:
     # must also count toward the method score used by the mismatch warning.
     scores = score_template_match("tutorial tutorial tutorial")
     assert scores["method"] > 0
+
+
+# ---------------------------------------------------------------------------
+# "freestyle" is a reserved name (CodeRabbit finding on PR #639): a saved
+# recipe literally named "freestyle" would be unreachable, since
+# _resolve_job_template (src/api/jobs.py) checks `template == "freestyle"`
+# before ever looking up a user template by that name.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def api_templates_db(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    db_file = tmp_path / "api_templates_test.db"
+    monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
+    monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    import asyncio
+
+    from src import database
+
+    asyncio.run(database.init_db())
+    return database
+
+
+def _fake_request(chat_id: int):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(state=SimpleNamespace(user={"id": chat_id}))
+
+
+class TestFreestyleIsReserved:
+    def test_create_template_rejects_freestyle_name(self, api_templates_db) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from src.api.templates import TemplateIn, create_template
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                create_template(
+                    TemplateIn(name="freestyle", description="", extra_instructions=""),
+                    _fake_request(123),
+                )
+            )
+        assert exc_info.value.status_code == 409
+
+    def test_require_user_template_rejects_freestyle_name(self) -> None:
+        from fastapi import HTTPException
+
+        from src.api.templates import _require_user_template
+
+        with pytest.raises(HTTPException) as exc_info:
+            _require_user_template("freestyle", "modify")
+        assert exc_info.value.status_code == 403

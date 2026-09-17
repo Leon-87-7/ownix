@@ -677,6 +677,29 @@ class TestSessionMiddleware:
 
         assert resp.status_code == 401
 
+    def test_disabled_viewer_login_rejects_existing_viewer_session(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CodeRabbit finding on PR #639: a stale viewer_login session must be
+        rejected once VIEWER_LOGIN_ENABLED flips off, mirroring the existing
+        reviewer_login treatment above rather than staying valid forever."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_ENABLED", False)
+        asyncio.run(database.set_user_status(-900123002, "approved"))
+        user = {
+            "id": -900123002,
+            "username": "viewer",
+            "source": "viewer_login",
+        }
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:viewer-sid"] = json.dumps(user)
+
+        resp = auth_client.get("/api/jobs", cookies={"vig_session": "viewer-sid"})
+
+        assert resp.status_code == 401
+
     def test_viewer_login_is_disabled_by_default(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -776,6 +799,11 @@ class TestSessionMiddleware:
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123003)
         monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123003)
+        # TestClient talks to http://testserver (plain HTTP): a Secure-flagged
+        # cookie set via Set-Cookie is correctly dropped by the jar and never
+        # resent, same as a real browser would over HTTP. Match config.py's own
+        # documented intent ("set False only for local HTTP dev").
+        monkeypatch.setattr("src.api.auth.settings.SESSION_COOKIE_SECURE", False)
         asyncio.run(database.set_user_status(999, "approved"))
         asyncio.run(database.set_user_status(-900123003, "approved"))
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
@@ -820,6 +848,7 @@ class TestSessionMiddleware:
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123005)
         monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123005)
+        monkeypatch.setattr("src.api.auth.settings.SESSION_COOKIE_SECURE", False)
         asyncio.run(database.set_user_status(999, "approved"))
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
         fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
@@ -870,6 +899,30 @@ class TestSessionMiddleware:
 
         assert resp.status_code == 404
 
+    def test_newsletter_routes_stay_open_when_no_operator_configured(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mirrors Settings.export_blocked's existing precedent ("an unset
+        OPERATOR_CHAT_ID ... passes"): a deployment that hasn't configured an
+        operator has no admin/member distinction to enforce yet, so the gate
+        must not lock every approved user out of Newsletter Digest. Explicit
+        and environment-independent on purpose — this is what makes the fix
+        correct in CI (no OPERATOR_CHAT_ID configured there) regardless of
+        what any given dev machine's own .env happens to set."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", None)
+        asyncio.run(database.set_user_status(111, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:member-sid"] = json.dumps({"id": 111, "first_name": "Member"})
+
+        resp = auth_client.get(
+            "/api/newsletter/probe", cookies={"vig_session": "member-sid"}
+        )
+
+        assert resp.status_code == 200
+
     def test_me_reports_admin_and_viewing_as_flags(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -881,6 +934,7 @@ class TestSessionMiddleware:
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123004)
         monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123004)
+        monkeypatch.setattr("src.api.auth.settings.SESSION_COOKIE_SECURE", False)
         asyncio.run(database.set_user_status(999, "approved"))
         asyncio.run(database.set_user_status(-900123004, "approved"))
         fr: FakeRedis = session_module._redis  # type: ignore[assignment]
@@ -1254,6 +1308,37 @@ class TestAccountDeletionLock:
         assert resp.json() == {"ok": True, "account_deleted": True}
         assert "vig_session=" not in resp.headers.get("set-cookie", "")
         assert asyncio.run(database.get_user(555005)) is None
+
+    def test_view_as_toggle_resumes_stuck_deletion_instead_of_resurrecting(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CodeRabbit finding on PR #639: start_view_as is a fifth path that
+        can upsert the viewer row — it must check _resume_deletion_if_stuck
+        first too, same as reviewer_login/viewer_login/_login_telegram_user,
+        or a viewer account mid-deletion gets resurrected instead of resumed."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", 555006)
+        asyncio.run(database.set_user_status(999, "approved"))
+        asyncio.run(
+            database.upsert_user(
+                tg_id=555006, username="viewer", first_name="Viewer", last_name=None, photo_url=None
+            )
+        )
+        asyncio.run(database.set_user_status(555006, "deleting"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        resp = auth_client.post("/api/auth/view-as")
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert resp.json() == {"ok": True, "account_deleted": True}
+        assert asyncio.run(database.get_user(555006)) is None
 
     def test_set_email_rejected_during_deletion(self, auth_client: TestClient) -> None:
         """/email is pre-approval-reachable by design (middleware.py), so it

@@ -570,6 +570,12 @@ async def start_view_as(request: Request, response: Response) -> dict:
     configured_email = normalize_email(settings.VIEWER_LOGIN_EMAIL)
     if not settings.VIEWER_LOGIN_ENABLED or not configured_email:
         raise HTTPException(status_code=404, detail="Viewer account not configured")
+    # Mirror viewer_login(): must run before upsert_user, or a deletion left
+    # mid-flight (e.g. a prior DELETE /api/auth/me on the viewer session)
+    # gets resurrected instead of resumed.
+    resumed = await _resume_deletion_if_stuck(settings.VIEWER_LOGIN_USER_ID)
+    if resumed is not None:
+        return resumed
     await database.upsert_user(
         tg_id=settings.VIEWER_LOGIN_USER_ID, username="viewer", first_name="Viewer",
         last_name=None, photo_url=None,
@@ -704,7 +710,7 @@ async def me(request: Request, response: Response) -> dict:
     tg_id = int(session_user["id"])
     db_user = await database.get_user(tg_id)
     status = await database.get_user_status(tg_id)
-    real_id = int(session_user["real_id"])
+    real_id = int(session_user.get("real_id", tg_id))
     if status == "approved" and "ownix_preview" in request.cookies:
         # A stale preview cookie on an approved session would render the
         # dashboard in Restricted mode (ADR-0035 §1 says approved users get

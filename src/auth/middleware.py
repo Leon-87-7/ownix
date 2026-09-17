@@ -112,6 +112,14 @@ class SessionMiddleware(BaseHTTPMiddleware):
             )
         ):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if (
+            not settings.VIEWER_LOGIN_ENABLED
+            and (
+                user.get("source") == "viewer_login"
+                or user.get("username") == "viewer"
+            )
+        ):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
         real_id = int(user["id"])
         user = {**user, "real_id": real_id}
@@ -126,7 +134,11 @@ class SessionMiddleware(BaseHTTPMiddleware):
         if status != "approved":
             return JSONResponse({"detail": "Approval required"}, status_code=403)
 
-        if path.startswith("/api/newsletter") and not settings.is_operator(int(user["id"])):
+        if (
+            path.startswith("/api/newsletter")
+            and settings.OPERATOR_CHAT_ID is not None
+            and not settings.is_operator(int(user["id"]))
+        ):
             return JSONResponse({"detail": "Not found"}, status_code=404)
 
         return await call_next(request)

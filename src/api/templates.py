@@ -67,7 +67,7 @@ async def list_templates(request: Request) -> list[dict]:
 async def create_template(body: TemplateIn, request: Request) -> dict:
     """Create a user-defined template. Returns 409 on name collision."""
     chat_id: int = request.state.user["id"]
-    if body.name in PROMPT_TEMPLATES:
+    if body.name in PROMPT_TEMPLATES or body.name == "freestyle":
         raise HTTPException(status_code=409, detail="Name collides with a built-in template")
 
     try:
@@ -89,7 +89,7 @@ async def create_template(body: TemplateIn, request: Request) -> dict:
 def _require_user_template(name: str, action: str) -> str:
     """Lowercase *name*; 403 if it names a built-in template."""
     name_lower = name.lower()
-    if name_lower in PROMPT_TEMPLATES:
+    if name_lower in PROMPT_TEMPLATES or name_lower == "freestyle":
         raise HTTPException(status_code=403, detail=f"Cannot {action} a built-in template")
     return name_lower
 
