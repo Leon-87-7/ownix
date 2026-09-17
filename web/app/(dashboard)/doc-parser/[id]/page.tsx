@@ -1,8 +1,8 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { Check, Copy, Download, PencilSparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Check, Copy, Download, PencilSparkles, Square, Volume2 } from 'lucide-react';
 import { OwnixShareIcon } from '@/components/svg/ownix-share-icon';
 import { DocumentSourceChip } from '@/components/doc-parser/document-source-chip';
 import { TelegramToggle } from '@/components/doc-parser/telegram-toggle';
@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { describeError } from '@/lib/fetch-utils';
+import { stripMarkdown } from '@/lib/job-markdown';
+import { useSpeech } from '@/lib/hooks/useSpeech';
 
 const RANDOM_PROMPTS = [
   'Summarize into the 5 most important takeaways',
@@ -44,7 +46,8 @@ type OutputActionState =
   | 'idle'
   | 'copied'
   | 'copy_failed'
-  | 'download_failed';
+  | 'download_failed'
+  | 'listen_failed';
 
 const FILENAME_FORBIDDEN = /[/\\:*?"<>|]/g;
 
@@ -106,6 +109,17 @@ async function fetchJsonOrThrow<T>(url: string): Promise<T> {
 function OutputCard({ job, output }: { job: Job; output: Output }) {
   const [actionState, setActionState] =
     useState<OutputActionState>('idle');
+  const [fullText, setFullText] = useState<string | null>(null);
+  const pendingSpeakRef = useRef(false);
+  const { supported: speechSupported, speaking, toggle: toggleSpeech } =
+    useSpeech(fullText ?? '');
+
+  useEffect(() => {
+    if (pendingSpeakRef.current && fullText !== null) {
+      pendingSpeakRef.current = false;
+      toggleSpeech();
+    }
+  }, [fullText, toggleSpeech]);
 
   useEffect(() => {
     if (actionState === 'idle') return;
@@ -138,6 +152,22 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
     }
   }
 
+  function listen() {
+    // Stopping never needs fresh content, and starting always refetches —
+    // `clean`/`summary` outputs upsert in place on a Clean re-run (same id,
+    // same gcs_key), so a cached fullText would silently go stale.
+    if (speaking) {
+      toggleSpeech();
+      return;
+    }
+    fetchOutputContent(output)
+      .then((text) => {
+        pendingSpeakRef.current = true;
+        setFullText(stripMarkdown(text));
+      })
+      .catch(() => setActionState('listen_failed'));
+  }
+
   const copyLabel =
     actionState === 'copied'
       ? 'Copied'
@@ -148,6 +178,11 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
     actionState === 'download_failed'
       ? 'Download failed'
       : 'Download full output';
+  const listenLabel = speaking
+    ? 'Stop'
+    : actionState === 'listen_failed'
+      ? 'Listen failed'
+      : 'Listen to full output';
   const liveMessage =
     actionState === 'copied'
       ? 'Copied'
@@ -155,7 +190,9 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
         ? 'Copy failed'
         : actionState === 'download_failed'
           ? 'Download failed'
-          : '';
+          : actionState === 'listen_failed'
+            ? 'Listen failed'
+            : '';
 
   return (
     <article className="rounded-lg border border-line bg-surface p-4">
@@ -188,6 +225,22 @@ function OutputCard({ job, output }: { job: Job; output: Output }) {
             <Download className="h-4 w-4" />
           </button>
         </Tooltip>
+        {speechSupported && (
+          <Tooltip content={listenLabel}>
+            <button
+              type="button"
+              onClick={listen}
+              aria-label={listenLabel}
+              className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-md transition-ui hover:text-ink active:scale-[0.96] ${actionState === 'listen_failed' ? 'text-status-error' : 'text-muted'}`}
+            >
+              {speaking ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content="Open full output">
           <a
             href={output.content_url}

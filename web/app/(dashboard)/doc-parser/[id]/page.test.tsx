@@ -1,7 +1,26 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@/test/render';
+import { act, fireEvent, render, screen, waitFor } from '@/test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DocDetail from './page';
+
+class MockUtterance {
+  onstart: (() => void) | null = null;
+  onend: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  voice: SpeechSynthesisVoice | null = null;
+  constructor(public text: string) {}
+}
+
+function installSpeech() {
+  const synthesis = {
+    cancel: vi.fn(),
+    speak: vi.fn((utterance: MockUtterance) => utterance.onstart?.()),
+    getVoices: vi.fn(() => [] as SpeechSynthesisVoice[]),
+  };
+  vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance);
+  vi.stubGlobal('speechSynthesis', synthesis);
+  return synthesis;
+}
 
 let routeId = 'job-1';
 
@@ -154,6 +173,44 @@ describe('DocDetail', () => {
     const clickMock = vi.mocked(HTMLAnchorElement.prototype.click);
     const anchor = clickMock.mock.contexts[0] as HTMLAnchorElement;
     expect(anchor.download).toBe('ownix-13 things_ mentally_strong-raw_txt.txt');
+  });
+
+  it('hides the listen button when speech synthesis is unsupported', async () => {
+    render(<DocDetail />);
+
+    await screen.findAllByRole('button', { name: /copy full output/i });
+    expect(screen.queryByRole('button', { name: /listen to full output/i })).toBeNull();
+  });
+
+  it('speaks the full output, not the truncated preview, and toggles to Stop', async () => {
+    const synthesis = installSpeech();
+    render(<DocDetail />);
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /listen to full output/i }))[0]);
+
+    await waitFor(() => expect(synthesis.speak).toHaveBeenCalledOnce());
+    expect(synthesis.speak.mock.calls[0][0].text).toBe('full raw content');
+    expect(await screen.findByRole('button', { name: 'Stop' })).toBeTruthy();
+
+    act(() => fireEvent.click(screen.getByRole('button', { name: 'Stop' })));
+    expect(synthesis.cancel).toHaveBeenCalled();
+    expect((await screen.findAllByRole('button', { name: /listen to full output/i }))[0]).toBeTruthy();
+  });
+
+  it('shows listen failed feedback when the output fetch rejects', async () => {
+    installSpeech();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/jobs/job-1') return Response.json(job);
+      if (url === '/api/parsed/job-1/outputs') return Response.json(outputs);
+      return new Response('error', { status: 500 });
+    }));
+
+    render(<DocDetail />);
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /listen to full output/i }))[0]);
+
+    expect(await screen.findByText('Listen failed')).toBeTruthy();
   });
 
   it('shows the backend load failure detail', async () => {
