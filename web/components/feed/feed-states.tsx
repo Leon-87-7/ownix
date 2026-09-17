@@ -160,7 +160,7 @@ function EmptyStateArt({
           Your Index starts here
         </p>
         <p className="text-copy leading-normal text-body">
-          Nothing has been saved yet.
+          You haven&apos;t saved anything yet.
         </p>
         <p className="max-w-[34ch] text-copy leading-normal text-body">
           Send the bot something worth returning to.
