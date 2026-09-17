@@ -532,7 +532,7 @@ function FeedPageContent() {
         </section>
       )}
 
-      {stats && (
+      {stats && !(empty && !hasFilters) && (
         <StatsOverview
           stats={stats}
           contentType={ctFilter}

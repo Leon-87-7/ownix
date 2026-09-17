@@ -40,7 +40,13 @@ describe('DocParserPage', () => {
 
     render(<DocParserPage />);
 
-    await waitFor(() => expect(screen.getByText(/nothing saved yet/i)).toBeInTheDocument());
+    // Both the mobile and desktop plates render in jsdom (only CSS hides one),
+    // so this can match twice.
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(/you haven.t saved anything yet/i).length,
+      ).toBeGreaterThan(0),
+    );
   });
 
   it('filters the job list by format tab (derived from the source extension)', async () => {
