@@ -67,4 +67,4 @@ No separate `flag_item` tool. Flagging is the agent narrating its reasoning in c
 
 ## Sequencing note
 
-This is not "ship all three, see what sticks." Phase 2 is blocked on unconfirmed infrastructure. Phase 3 is blocked on usage data that doesn't exist yet. Realistic path: ship Phase 1, get real users on it, then decide what Phase 2 vs. Phase 3 should actually look like — don't commit to a Phase 2/3 timeline until Phase 1 has been used by real people.
+This is not "ship all three, see what sticks." Phase 2 is complete — its infra blocker was already resolved by Phase 1's embeddings work, so it shipped without waiting on usage data. Phase 3 is still blocked on usage data that doesn't exist yet: don't scope or commit to a Phase 3 timeline until Phase 1 and 2 have been used by real people.
