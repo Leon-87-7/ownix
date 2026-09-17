@@ -64,6 +64,11 @@ def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
     monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
     monkeypatch.setattr("src.config.settings.SESSION_BACKEND", "memory")
+    # Newsletter Digest is admin-only (src/auth/middleware.py): this suite
+    # tests the feature itself, not the admin gate, so its test user is the
+    # configured operator — matching the actual intended usage.
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", CHAT_ID)
+    monkeypatch.setattr("src.auth.middleware.settings.OPERATOR_CHAT_ID", CHAT_ID)
 
     from src import database
     from src.api.newsletter_digest import newsletter_digest_router

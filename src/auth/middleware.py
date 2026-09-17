@@ -123,7 +123,11 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
         real_id = int(user["id"])
         user = {**user, "real_id": real_id}
-        if settings.is_operator(real_id) and request.cookies.get(VIEW_AS_COOKIE):
+        if (
+            settings.is_operator(real_id)
+            and settings.VIEWER_LOGIN_ENABLED
+            and request.cookies.get(VIEW_AS_COOKIE)
+        ):
             user["id"] = settings.VIEWER_LOGIN_USER_ID
         request.state.user = user
         # Only these auth routes are intentionally reachable before approval.
@@ -134,11 +138,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
         if status != "approved":
             return JSONResponse({"detail": "Approval required"}, status_code=403)
 
-        if (
-            path.startswith("/api/newsletter")
-            and settings.OPERATOR_CHAT_ID is not None
-            and not settings.is_operator(int(user["id"]))
-        ):
+        if path.startswith("/api/newsletter") and not settings.is_operator(int(user["id"])):
             return JSONResponse({"detail": "Not found"}, status_code=404)
 
         return await call_next(request)

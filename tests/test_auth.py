@@ -905,6 +905,42 @@ class TestSessionMiddleware:
 
         assert resp.status_code == 404
 
+    def test_stale_view_as_cookie_ignored_once_viewer_login_disabled(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Codex adversarial-review finding on PR #639: the middleware's
+        disabled-viewer-session check runs BEFORE the view-as substitution
+        and only inspects the real, already-resolved session — so it never
+        sees an operator whose ownix_view_as cookie is still set from before
+        VIEWER_LOGIN_ENABLED flipped off. Without gating the substitution
+        itself on VIEWER_LOGIN_ENABLED, that stale cookie would keep working
+        as a backdoor even after the feature is supposedly disabled."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123006)
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123006)
+        monkeypatch.setattr("src.api.auth.settings.SESSION_COOKIE_SECURE", False)
+        asyncio.run(database.set_user_status(999, "approved"))
+        asyncio.run(database.set_user_status(-900123006, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        toggle_on = auth_client.post("/api/auth/view-as")
+        assert toggle_on.status_code == 200
+        probe_while_enabled = auth_client.get("/api/probe")
+        assert probe_while_enabled.json()["user"]["id"] == -900123006
+
+        # The cookie is still set at this point — only the feature flag changes.
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_ENABLED", False)
+
+        probe_after_disable = auth_client.get("/api/probe")
+        assert probe_after_disable.json()["user"]["id"] == 999
+
     def test_newsletter_routes_404_for_non_admin(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -922,16 +958,17 @@ class TestSessionMiddleware:
 
         assert resp.status_code == 404
 
-    def test_newsletter_routes_stay_open_when_no_operator_configured(
+    def test_newsletter_routes_404_when_no_operator_configured(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Mirrors Settings.export_blocked's existing precedent ("an unset
-        OPERATOR_CHAT_ID ... passes"): a deployment that hasn't configured an
-        operator has no admin/member distinction to enforce yet, so the gate
-        must not lock every approved user out of Newsletter Digest. Explicit
-        and environment-independent on purpose — this is what makes the fix
-        correct in CI (no OPERATOR_CHAT_ID configured there) regardless of
-        what any given dev machine's own .env happens to set."""
+        """Codex adversarial-review finding on PR #639: an earlier version of
+        this gate treated an unset OPERATOR_CHAT_ID as "don't restrict"
+        (mirroring Settings.export_blocked's precedent), but that makes a
+        misconfigured or not-yet-configured deployment fail OPEN on the one
+        feature this PR exists to hide. Fail closed instead: with no operator
+        configured, is_operator() is false for everyone, so nobody (not even
+        an unconfigured "almost-operator") reaches Newsletter Digest until
+        OPERATOR_CHAT_ID is actually set."""
         import src.auth.session as session_module
         from src import database
 
@@ -944,7 +981,7 @@ class TestSessionMiddleware:
             "/api/newsletter/probe", cookies={"vig_session": "member-sid"}
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 404
 
     def test_me_reports_admin_and_viewing_as_flags(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
