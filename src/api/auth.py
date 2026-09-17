@@ -567,12 +567,19 @@ async def start_view_as(request: Request, response: Response) -> dict:
     real_id = int(request.state.user["real_id"])
     if not settings.is_operator(real_id):
         raise HTTPException(status_code=403, detail="Operator access required")
-    if not settings.VIEWER_LOGIN_ENABLED:
+    configured_email = normalize_email(settings.VIEWER_LOGIN_EMAIL)
+    if not settings.VIEWER_LOGIN_ENABLED or not configured_email:
         raise HTTPException(status_code=404, detail="Viewer account not configured")
     await database.upsert_user(
         tg_id=settings.VIEWER_LOGIN_USER_ID, username="viewer", first_name="Viewer",
         last_name=None, photo_url=None,
     )
+    # Seed the same email viewer_login() would set — otherwise the very first
+    # toggle-in (before anyone has used the standalone viewer-login form)
+    # creates an approved account with no email, and InviteGate's
+    # needsEmail = !user.email blocks the dashboard behind the "Email
+    # required" modal instead of showing the member view.
+    await database.set_user_email(settings.VIEWER_LOGIN_USER_ID, configured_email)
     await database.set_user_status(settings.VIEWER_LOGIN_USER_ID, "approved")
     response.set_cookie(
         key=VIEW_AS_COOKIE, value="1", httponly=True,

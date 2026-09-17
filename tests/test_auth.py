@@ -773,6 +773,7 @@ class TestSessionMiddleware:
 
         monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123003)
         monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123003)
         asyncio.run(database.set_user_status(999, "approved"))
@@ -803,6 +804,55 @@ class TestSessionMiddleware:
         newsletter_after = auth_client.get("/api/newsletter/probe")
         assert newsletter_after.status_code == 200
 
+    def test_view_as_toggle_seeds_viewer_email_on_first_use(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression test for the Codex-review finding: entering view-as
+        before the standalone viewer-login has ever run must not leave the
+        viewer account without an email, or InviteGate's needsEmail check
+        (!user.email) blocks the dashboard behind the Email required modal
+        instead of showing the member view."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123005)
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123005)
+        asyncio.run(database.set_user_status(999, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        toggle_on = auth_client.post("/api/auth/view-as")
+        assert toggle_on.status_code == 200
+
+        viewer = asyncio.run(database.get_user(-900123005))
+        assert viewer is not None
+        assert viewer["email"] == "viewer@example.com"
+
+        me_while_viewing = auth_client.get("/api/auth/me")
+        assert me_while_viewing.json()["email"] == "viewer@example.com"
+
+    def test_view_as_toggle_requires_configured_viewer_email(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "")
+        asyncio.run(database.set_user_status(999, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        resp = auth_client.post("/api/auth/view-as")
+
+        assert resp.status_code == 404
+
     def test_newsletter_routes_404_for_non_admin(
         self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -828,6 +878,7 @@ class TestSessionMiddleware:
 
         monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
         monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123004)
         monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123004)
         asyncio.run(database.set_user_status(999, "approved"))
