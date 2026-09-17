@@ -75,3 +75,23 @@ def test_settings_rejects_bad_ops_chat_id() -> None:
     s = Settings(**_base_env(OPS_ADMIN_CHAT_IDS="1, nope"))
     with pytest.raises(ValueError):
         _ = s.ops_admin_chat_ids
+
+
+def test_is_operator_matches_configured_id() -> None:
+    config = Settings(**_base_env(), OPERATOR_CHAT_ID=123)
+    assert config.is_operator(123) is True
+
+
+def test_is_operator_rejects_other_id() -> None:
+    config = Settings(**_base_env(), OPERATOR_CHAT_ID=123)
+    assert config.is_operator(456) is False
+
+
+def test_is_operator_rejects_none() -> None:
+    config = Settings(**_base_env(), OPERATOR_CHAT_ID=123)
+    assert config.is_operator(None) is False
+
+
+def test_is_operator_is_false_when_unconfigured() -> None:
+    config = Settings(**_base_env(), OPERATOR_CHAT_ID=None)
+    assert config.is_operator(123) is False

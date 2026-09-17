@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from '@/test/render';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import PromptsPage from './page';
 
 vi.mock('next/navigation', () => ({
@@ -132,5 +132,97 @@ describe('PromptsPage', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /edit/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(screen.getByText('-my-template')).toBeTruthy();
+  });
+});
+
+// ApplyRecipeForm — covers the cloud-patch fix for the missing Recipes apply
+// path (docs/superpowers/plans/2026-09-17-admin-viewer-visibility.md Task 8).
+describe('ApplyRecipeForm', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts the recipe name and pasted URL to /api/jobs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'job123', job_id: 'job123' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<PromptsPage />);
+
+    const urlInput = screen.getByLabelText(/link to apply my-template/i);
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/x' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /apply to a link/i }),
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://example.com/x',
+          template: 'my-template',
+        }),
+      });
+    });
+    expect(await screen.findByText('Link queued')).toBeTruthy();
+    expect((urlInput as HTMLInputElement).value).toBe('');
+  });
+
+  it('shows the server error and keeps the URL when the request fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ detail: 'Unsupported URL' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<PromptsPage />);
+
+    const urlInput = screen.getByLabelText(/link to apply my-template/i);
+    fireEvent.change(urlInput, {
+      target: { value: 'https://example.com/bad' },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /apply to a link/i }),
+    );
+
+    expect(await screen.findByText('Unsupported URL')).toBeTruthy();
+    expect((urlInput as HTMLInputElement).value).toBe(
+      'https://example.com/bad',
+    );
+  });
+
+  it('disables the submit button while the request is in flight', async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<PromptsPage />);
+
+    fireEvent.change(screen.getByLabelText(/link to apply my-template/i), {
+      target: { value: 'https://example.com/x' },
+    });
+    const submitButton = screen.getByRole('button', {
+      name: /apply to a link/i,
+    });
+    fireEvent.click(submitButton);
+
+    expect(
+      await screen.findByRole('button', { name: /applying/i }),
+    ).toBeDisabled();
+
+    resolveFetch({ ok: true, json: async () => ({ id: 'job123' }) });
+    await waitFor(() => {
+      expect(screen.getByText('Link queued')).toBeTruthy();
+    });
   });
 });

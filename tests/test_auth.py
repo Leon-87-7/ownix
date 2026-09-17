@@ -255,6 +255,10 @@ def auth_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     async def google_connect_probe(request: Request) -> dict:
         return {"user": request.state.user}
 
+    @test_app.get("/api/newsletter/probe")
+    async def newsletter_probe(request: Request) -> dict:
+        return {"user": request.state.user}
+
     @test_app.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
@@ -672,6 +676,175 @@ class TestSessionMiddleware:
         resp = auth_client.get("/api/jobs", cookies={"vig_session": "reviewer-sid"})
 
         assert resp.status_code == 401
+
+    def test_viewer_login_is_disabled_by_default(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", False)
+
+        resp = auth_client.post(
+            "/api/auth/viewer-login",
+            json={"email": "viewer@example.com", "password": "viewer-code"},
+        )
+
+        assert resp.status_code == 404
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_viewer_login_rejects_invalid_credentials(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_PASSWORD", "viewer-code")
+
+        resp = auth_client.post(
+            "/api/auth/viewer-login",
+            json={"email": "viewer@example.com", "password": "wrong"},
+        )
+
+        assert resp.status_code == 401
+        assert "vig_session=" not in resp.headers.get("set-cookie", "")
+
+    def test_viewer_login_succeeds_and_creates_approved_member(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src import database
+
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_EMAIL", "viewer@example.com")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_PASSWORD", "viewer-code")
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123002)
+
+        resp = auth_client.post(
+            "/api/auth/viewer-login",
+            json={"email": "viewer@example.com", "password": "viewer-code"},
+        )
+
+        assert resp.status_code == 200, f"Unexpected: {resp.text}"
+        assert "vig_session=" in resp.headers["set-cookie"]
+        user = asyncio.run(database.get_user(-900123002))
+        assert user is not None
+        assert user["status"] == "approved"
+
+    def test_view_as_toggle_requires_operator(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        asyncio.run(database.set_user_status(111, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:member-sid"] = json.dumps({"id": 111, "first_name": "Member"})
+
+        resp = auth_client.post(
+            "/api/auth/view-as", cookies={"vig_session": "member-sid"}
+        )
+
+        assert resp.status_code == 403
+
+    def test_view_as_toggle_requires_viewer_login_enabled(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", False)
+        asyncio.run(database.set_user_status(999, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+
+        resp = auth_client.post(
+            "/api/auth/view-as", cookies={"vig_session": "op-sid"}
+        )
+
+        assert resp.status_code == 404
+
+    def test_view_as_toggle_substitutes_effective_id_and_hides_newsletter(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression test for the bug the cloud-patch diff shipped with: the
+        newsletter gate must key off the *effective* (post-toggle) identity,
+        not the real one, or a toggled-in admin still sees a member-hidden
+        route the nav claims to have hidden."""
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123003)
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123003)
+        asyncio.run(database.set_user_status(999, "approved"))
+        asyncio.run(database.set_user_status(-900123003, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        newsletter_before = auth_client.get("/api/newsletter/probe")
+        assert newsletter_before.status_code == 200
+
+        toggle_on = auth_client.post("/api/auth/view-as")
+        assert toggle_on.status_code == 200
+
+        probe = auth_client.get("/api/probe")
+        assert probe.json()["user"]["id"] == -900123003
+        assert probe.json()["user"]["real_id"] == 999
+
+        newsletter_while_viewing = auth_client.get("/api/newsletter/probe")
+        assert newsletter_while_viewing.status_code == 404
+
+        toggle_off = auth_client.delete("/api/auth/view-as")
+        assert toggle_off.status_code == 200
+
+        probe_after = auth_client.get("/api/probe")
+        assert probe_after.json()["user"]["id"] == 999
+
+        newsletter_after = auth_client.get("/api/newsletter/probe")
+        assert newsletter_after.status_code == 200
+
+    def test_newsletter_routes_404_for_non_admin(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        asyncio.run(database.set_user_status(111, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:member-sid"] = json.dumps({"id": 111, "first_name": "Member"})
+
+        resp = auth_client.get(
+            "/api/newsletter/probe", cookies={"vig_session": "member-sid"}
+        )
+
+        assert resp.status_code == 404
+
+    def test_me_reports_admin_and_viewing_as_flags(
+        self, auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import src.auth.session as session_module
+        from src import database
+
+        monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_ENABLED", True)
+        monkeypatch.setattr("src.api.auth.settings.VIEWER_LOGIN_USER_ID", -900123004)
+        monkeypatch.setattr("src.auth.middleware.settings.VIEWER_LOGIN_USER_ID", -900123004)
+        asyncio.run(database.set_user_status(999, "approved"))
+        asyncio.run(database.set_user_status(-900123004, "approved"))
+        fr: FakeRedis = session_module._redis  # type: ignore[assignment]
+        fr._store["session:op-sid"] = json.dumps({"id": 999, "first_name": "Operator"})
+        auth_client.cookies.set("vig_session", "op-sid")
+
+        me_before = auth_client.get("/api/auth/me")
+        assert me_before.json()["is_admin"] is True
+        assert me_before.json()["can_view_as"] is True
+        assert me_before.json()["viewing_as"] is False
+
+        auth_client.post("/api/auth/view-as")
+        me_after = auth_client.get("/api/auth/me")
+        assert me_after.json()["is_admin"] is False
+        assert me_after.json()["viewing_as"] is True
 
 
 class TestAuthRouter:

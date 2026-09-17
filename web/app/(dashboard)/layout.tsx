@@ -8,6 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ToastHost } from '@/components/ui/toast-host';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import DevPersonaSwitch from '@/components/ui/dev-persona-switch';
+import ViewAsSwitch from '@/components/shell/view-as-switch';
 import { isRestrictedRequest } from '@/lib/restricted/server';
 import { cookies, headers } from 'next/headers';
 
@@ -58,6 +59,7 @@ export default async function DashboardLayout({
                   </div>
                 </main>
               </div>
+              <ViewAsSwitch />
             </SubmitJobProvider>
           </GoogleStatusProvider>
         </InviteGate>
