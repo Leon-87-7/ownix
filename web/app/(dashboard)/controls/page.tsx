@@ -6,7 +6,7 @@ import { RestrictedFacade } from '@/components/shell/restricted-facade';
 import { PageShell, PageHeader } from '@/components/shell/page-shell';
 import { Section } from '@/components/controls/section';
 import { TagsPanel } from '@/components/controls/tags-panel';
-import { DomainPanel } from '@/components/controls/domain-panel';
+import { DomainsPanel } from '@/components/controls/domains-panel';
 import { AccessibilityPanel } from '@/components/controls/accessibility-panel';
 import { RecoveryNotificationsPanel } from '@/components/controls/recovery-notifications-panel';
 import { DeleteAccountPanel } from '@/components/controls/delete-account-panel';
@@ -43,26 +43,7 @@ export default function ControlsPage() {
             get skipped. It is how you route around a noisy source without
             having to reject its links one by one.
           </p>
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <h4 className="mb-3 text-label font-semibold text-muted">
-                Allowed
-              </h4>
-              <DomainPanel
-                apiPath="/api/controls/allowed-domains"
-                label="Allowed Domains"
-              />
-            </div>
-            <div className="md:border-l md:border-line md:pl-6">
-              <h4 className="mb-3 text-label font-semibold text-muted">
-                Ignored
-              </h4>
-              <DomainPanel
-                apiPath="/api/controls/ignored-domains"
-                label="Ignored Domains"
-              />
-            </div>
-          </div>
+          <DomainsPanel />
         </Section>
         <Section title="Accessibility">
           <AccessibilityPanel />
