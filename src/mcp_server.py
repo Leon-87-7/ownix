@@ -277,16 +277,20 @@ async def update_space(
     await _owned_space(space_id, chat_id)
     name = _validate_name(name, 120)
     _validate_color(color)
-    if not await database.update_space(
-        chat_id=chat_id, space_id=space_id, name=name, color=color, icon=icon
-    ):
+    try:
+        updated = await database.update_space(
+            chat_id=chat_id, space_id=space_id, name=name, color=color, icon=icon
+        )
+    except aiosqlite.IntegrityError:
+        raise ToolError("Space name already exists")
+    if not updated:
         raise ToolError("Space not found")
     return await database.get_space(space_id)
 
 
 @mcp.tool(name="delete_space")
 async def delete_space(space_id: str, confirm: bool = False) -> dict[str, Any]:
-    """Delete a Space — cascades to its pinned jobs and context blobs. Set confirm=true."""
+    """Delete a Space — unpins jobs and cascades to context blobs. Set confirm=true."""
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if confirm is not True:

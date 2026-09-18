@@ -265,6 +265,24 @@ async def test_create_space_duplicate_name_raises_tool_error(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
+async def test_update_space_duplicate_name_raises_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_get_space(space_id: str) -> dict[str, Any]:
+        return _space(chat_id=10, space_id=space_id)
+
+    async def fake_update(**kwargs: Any) -> bool:
+        raise aiosqlite.IntegrityError()
+
+    monkeypatch.setattr(mcp_server.database, "get_space", fake_get_space)
+    monkeypatch.setattr(mcp_server.database, "update_space", fake_update)
+    token = mcp_server._current_chat_id.set(10)
+    try:
+        with pytest.raises(ToolError, match="already exists"):
+            await mcp_server.update_space("sp1", name="Taken", confirm=True)
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+
+@pytest.mark.asyncio
 async def test_delete_space_requires_ownership_and_confirm(monkeypatch: pytest.MonkeyPatch) -> None:
     deleted = False
 
