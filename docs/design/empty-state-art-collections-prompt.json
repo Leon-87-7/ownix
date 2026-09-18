@@ -1,0 +1,73 @@
+{
+  "type": "app_empty_state_background_asset",
+  "canvas": {
+    "aspect_ratio": "1:1",
+    "background_color": "#16181c"
+  },
+  "scene": {
+    "style": "flat vector illustration of satin-stitch embroidery outlines on a notebook cover, thread-line texture is the only permitted texture, no fabric grain, no photorealism, no 3D",
+    "backdrop": {
+      "base_color": "#0d0e10",
+      "note": "no sky, stars, or moon in this scene — this is a tabletop/notebook composition, not the Feed's night scene"
+    },
+    "notebook": {
+      "shape": "flat rectangle notebook/journal, slightly angled, filling the lower two-thirds of frame",
+      "cover_color": "#202329",
+      "spine": "visible running-stitch binding along the left edge, thread color #948e84"
+    },
+    "hoop": {
+      "shape": "flat circle, embroidery hoop outline stitched onto the notebook cover, centered in upper two-thirds of frame",
+      "diameter_relative_to_frame_height": 0.6,
+      "fill_color": "#16181c",
+      "stitch_edge": "satin-stitch outline, outer ring thread color #a57534 opacity 15%, inner ring thread color #94e6ee opacity 15%",
+      "note": "the hoop's interior sits behind the center safe zone, but nothing else should render inside it"
+    },
+    "thread_details": {
+      "layer_count": 2,
+      "colors": ["#948e84", "#30343d"],
+      "placement": "loose running-stitch thread lines trailing from the hoop's edge, left and right thirds only, kept clear of frame center"
+    },
+    "stitch_path": {
+      "style": "short running-stitch thread line, visible only in the lower third, fading to nothing as it approaches the center safe zone",
+      "fill": "gradient from #948e84 to transparent",
+      "glow": "none — no emblem exists yet to cast light, keep the thread matte",
+      "object": "single flat stitched folder-tab icon, soft blur #94e6ee, resting at the stitch line's near end"
+    }
+  },
+  "safe_zones": [
+    {
+      "name": "logo_zone",
+      "region": "center",
+      "shape": "circle",
+      "diameter_relative_to_frame_height": 0.22,
+      "description": "must stay flat, empty, and unobstructed — the real product logo (a separate vector asset) will be composited here in code. Do not draw any emblem, mark, or focal object inside this circle."
+    },
+    {
+      "name": "copy_zone",
+      "region": "bottom",
+      "height_fraction": 0.35,
+      "description": "must stay flat solid #16181c with no scene elements — the real HTML headline, subhead, and button render here outside the image."
+    }
+  ],
+  "style_keywords": [
+    "flat vector illustration",
+    "dark premium SaaS aesthetic",
+    "embroidered thread-line silhouettes",
+    "single rationed warm accent",
+    "background plate designed to have a separate logo asset composited on top",
+    "transparent-background-friendly composition",
+    "same family accent palette as the Feed empty-state asset, different scene medium (embroidery, not night sky)"
+  ],
+  "negative_prompt": [
+    "photorealism",
+    "3D render",
+    "any text or lettering",
+    "any emblem, badge, icon, or focal mark in the center",
+    "extra logos or watermarks",
+    "bright saturated colors",
+    "lens flare",
+    "additional characters, animals, or vehicles",
+    "fabric grain or woven texture beyond the stitch lines",
+    "moon, sky, stars, or road (reserved for the Feed asset)"
+  ]
+}

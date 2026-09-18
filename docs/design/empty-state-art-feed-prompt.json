@@ -1,0 +1,66 @@
+{
+  "type": "app_empty_state_background_asset",
+  "canvas": {
+    "aspect_ratio": "1:1",
+    "background_color": "#16181c"
+  },
+  "scene": {
+    "style": "flat vector illustration, layered paper-cutout silhouettes, minimal geometric shapes, no textures, no grain, no photorealism",
+    "sky": {
+      "base_color": "#0d0e10",
+      "stars": "sparse small white dots, upper half only",
+      "clouds": "one single-line outline cloud, no fill, color #948e84, upper corner, kept clear of frame center"
+    },
+    "moon": {
+      "shape": "flat circle, upper two-thirds of frame",
+      "diameter_relative_to_frame_height": 0.6,
+      "fill_color": "#202329",
+      "edge_glow": "soft outer glow, color #a57534, opacity 15%. soft inner glow, color #94e6ee, opacity 15%",
+      "note": "the moon's disc sit behind the center safe zone, but nothing else should render inside it"
+    },
+    "hills": {
+      "layer_count": 2,
+      "colors": ["#16181c", "#0d0e10"],
+      "placement": "left and right thirds only, receding toward the horizon, kept clear of frame center"
+    },
+    "path": {
+      "style": "short winding ribbon, visible only in the lower third, fading to nothing as it approaches the center safe zone",
+      "fill": "gradient from #948e84 to transparent",
+      "glow": "none — no emblem exists yet to cast light, keep the path matte",
+      "object": "paper plane, in soft blur #94e6ee"
+    }
+  },
+  "safe_zones": [
+    {
+      "name": "logo_zone",
+      "region": "center",
+      "shape": "circle",
+      "diameter_relative_to_frame_height": 0.22,
+      "description": "must stay flat, empty, and unobstructed — the real product logo (a separate vector asset) will be composited here in code. Do not draw any emblem, mark, or focal object inside this circle."
+    },
+    {
+      "name": "copy_zone",
+      "region": "bottom",
+      "height_fraction": 0.35,
+      "description": "must stay flat solid #16181c with no scene elements — the real HTML headline, subhead, and button render here outside the image."
+    }
+  ],
+  "style_keywords": [
+    "flat vector illustration",
+    "dark premium SaaS aesthetic",
+    "layered silhouettes",
+    "single rationed warm accent",
+    "background plate designed to have a separate logo asset composited on top",
+    "transparent-background-friendly composition"
+  ],
+  "negative_prompt": [
+    "photorealism",
+    "3D render",
+    "any text or lettering",
+    "any emblem, badge, icon, or focal mark in the center",
+    "extra logos or watermarks",
+    "bright saturated colors",
+    "lens flare",
+    "additional characters, animals, or vehicles"
+  ]
+}
