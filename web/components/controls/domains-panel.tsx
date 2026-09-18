@@ -131,13 +131,13 @@ export function DomainsPanel() {
             {adding ? 'Adding…' : 'Add'}
           </button>
           {addError && (
-            <p className="w-full text-label text-status-error">{addError}</p>
+            <p role="alert" className="w-full text-label text-status-error">{addError}</p>
           )}
         </form>
       </div>
 
       {removeError && (
-        <p className="px-4 text-copy text-status-error">{removeError}</p>
+        <p role="alert" className="px-4 text-copy text-status-error">{removeError}</p>
       )}
 
       {(['allowed', 'ignored'] as const).map((k) => {
@@ -151,7 +151,7 @@ export function DomainsPanel() {
               <p className="text-copy text-body">Loading {k} domains…</p>
             )}
             {fetchError && (
-              <p className="text-copy text-status-error">{fetchError}</p>
+              <p role="alert" className="text-copy text-status-error">{fetchError}</p>
             )}
             {!loading && !fetchError && domains.length === 0 && (
               <p className="text-copy text-muted">No {k} domains yet.</p>
