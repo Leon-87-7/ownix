@@ -2,6 +2,7 @@
 
 Phase 1 (cleanup): list_items, get_item_detail, delete_item.
 Phase 2 (connection-finding): find_related.
+Phase 3 (scouting): scout, get_scout_settings.
 """
 
 from __future__ import annotations
@@ -148,6 +149,34 @@ async def delete_item(link_id: str, confirm: bool = False) -> dict[str, Any]:
     if not await database.delete_link(link_id, chat_id):
         raise ToolError("Link not found")
     return {"deleted": True, "id": link_id}
+
+
+@mcp.tool(name="get_scout_settings")
+async def get_scout_settings() -> dict[str, Any]:
+    """Whether the caller has opted in to autonomous scouting.
+
+    Check this before searching the Brain unprompted. If false, only call
+    `scout` when the user explicitly asks you to check their saved items.
+    """
+    chat_id = _chat_id()
+    enabled = await database.get_scout_autonomous_enabled(chat_id)
+    return {"autonomous_enabled": enabled}
+
+
+@mcp.tool(name="scout")
+async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
+    """Search the caller's own Brain for saved items relevant to `query`.
+
+    Reuse, not accumulation: this only surfaces what's already saved. Always
+    fine to call when the user explicitly asks; see `get_scout_settings`
+    before calling it on your own initiative.
+    """
+    chat_id = _chat_id()
+    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
+    if not query.strip() or len(query) > 300 or not 1 <= top_k <= 20:
+        raise ToolError("Invalid query or top_k")
+    items = await brain.search_links_scoped(query, chat_id, top_k=top_k)
+    return {"items": items}
 
 
 mcp_asgi_app = McpIdentityMiddleware(mcp.streamable_http_app())

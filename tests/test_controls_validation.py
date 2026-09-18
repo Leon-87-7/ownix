@@ -67,6 +67,14 @@ def test_accessibility_settings_endpoints_roundtrip(controls_client: TestClient)
     }
 
 
+def test_scout_settings_endpoints_roundtrip(controls_client: TestClient) -> None:
+    endpoint = "/api/controls/scout-settings"
+    assert controls_client.get(endpoint).json() == {"autonomous_enabled": False}
+    saved = controls_client.put(endpoint, json={"autonomous_enabled": True})
+    assert saved.json() == {"autonomous_enabled": True}
+    assert controls_client.get(endpoint).json() == {"autonomous_enabled": True}
+
+
 def test_tag_endpoints_return_409_for_canonical_collisions(
     controls_client: TestClient,
 ) -> None:

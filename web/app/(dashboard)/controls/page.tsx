@@ -12,6 +12,7 @@ import { RecoveryNotificationsPanel } from '@/components/controls/recovery-notif
 import { DeleteAccountPanel } from '@/components/controls/delete-account-panel';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 import { McpTokensPanel } from '@/components/controls/mcp-tokens-panel';
+import { ScoutSettingsPanel } from '@/components/controls/scout-settings-panel';
 import { DiscordPairingPanel } from '@/components/controls/discord-pairing-panel';
 
 export default function ControlsPage() {
@@ -73,7 +74,17 @@ export default function ControlsPage() {
           <ExtensionTokensPanel />
         </Section>
         <Section title="MCP clients">
-          <McpTokensPanel />
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <McpTokensPanel />
+            </div>
+            <div className="md:border-l md:border-line md:pl-6">
+              <h4 className="mb-3 text-label font-semibold text-muted">
+                Scouting
+              </h4>
+              <ScoutSettingsPanel />
+            </div>
+          </div>
         </Section>
         <Section title="Discord">
           <DiscordPairingPanel />

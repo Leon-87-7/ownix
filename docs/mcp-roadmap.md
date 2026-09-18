@@ -57,14 +57,16 @@ No separate `flag_item` tool. Flagging is the agent narrating its reasoning in c
 
 ## Phase 3 — Scouting: brain-as-source for current work
 
-**Status:** intentionally unscoped for now. This is the vaguest of the three and the most likely to produce generic, low-value output if defined too early.
+**Status: shipped (2026-09-18).** Scoped ahead of the usage-data gate this roadmap originally set (see Sequencing note) at explicit user request, not because Phase 1/2 usage data materialized.
 
-**Do not scope until:** Phase 1 and 2 are live and there's real usage data on how people actually use an agent-connected brain. What "scout" should mean will likely change once real usage patterns are visible.
+**MCP tools:** `scout(query, top_k=5)` in `src/mcp_server.py`, backed by `brain.search_links_scoped()` — owner-scoped semantic search over the caller's own links, reusing `/find`'s tuned `0.58` relevance bar (`_SCOUT_MIN_SCORE`) instead of the looser `BRAIN_MIN_SCORE` to keep noise down. `get_scout_settings()` returns the caller's autonomy toggle so the agent knows whether it may search unprompted.
 
-**Rough shape (subject to revision):** during a work session, the agent searches the *existing* brain — not external search — and surfaces already-saved items (tools, references, prior notes) relevant to what the user is currently building. This is reuse, not accumulation: nothing new enters the brain, the agent pulls from what's already there. The pitch isn't "AI knows a good tool," it's "you already saved this three months ago and forgot." Will need tight scoping rules to avoid generic, low-signal suggestions.
+**Autonomy toggle:** off by default, opt-in via the dashboard Controls page ("MCP clients" section, alongside the existing pairing/token UI → `ScoutSettingsPanel`, `GET/PUT /api/controls/scout-settings`), stored as `mcp_scout_autonomous` in the existing `user_settings` table. This is advisory, not enforced server-side — MCP has no mechanism to compel the calling agent's behavior, only to tell it the account's preference via `get_scout_settings`'s docstring instruction.
+
+**UX principle (kept from the rough shape):** this is reuse, not accumulation — nothing new enters the brain, the agent pulls from what's already there. The pitch isn't "AI knows a good tool," it's "you already saved this three months ago and forgot."
 
 ---
 
 ## Sequencing note
 
-This is not "ship all three, see what sticks." Phase 2 is complete — its infra blocker was already resolved by Phase 1's embeddings work, so it shipped without waiting on usage data. Phase 3 is still blocked on usage data that doesn't exist yet: don't scope or commit to a Phase 3 timeline until Phase 1 and 2 have been used by real people.
+This is not "ship all three, see what sticks." Phase 2 is complete — its infra blocker was already resolved by Phase 1's embeddings work, so it shipped without waiting on usage data. Phase 3 shipped without the usage-data validation this roadmap called for — a deliberate deviation, not evidence the gate was wrong for the next roadmap that follows this shape.

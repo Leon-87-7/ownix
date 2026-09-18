@@ -107,6 +107,53 @@ async def test_find_related_foreign_and_missing_are_same_not_found(
 
 
 @pytest.mark.asyncio
+async def test_scout_passes_tenant_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def fake_search(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict[str, Any]]:
+        seen["query"] = query
+        seen["owner_chat_id"] = owner_chat_id
+        seen["top_k"] = top_k
+        return [{"id": "a", "url": "https://a", "title": "A", "topic": "x", "score": 0.7}]
+
+    monkeypatch.setattr(mcp_server.brain, "search_links_scoped", fake_search)
+    token = mcp_server._current_chat_id.set(60)
+    try:
+        result = await mcp_server.scout("some task", top_k=3)
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+    assert seen == {"query": "some task", "owner_chat_id": 60, "top_k": 3}
+    assert result == {"items": [{"id": "a", "url": "https://a", "title": "A", "topic": "x", "score": 0.7}]}
+
+
+@pytest.mark.asyncio
+async def test_scout_rejects_blank_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    token = mcp_server._current_chat_id.set(60)
+    try:
+        with pytest.raises(ToolError, match="Invalid query"):
+            await mcp_server.scout("   ")
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_get_scout_settings_reads_account_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_enabled(chat_id: int) -> bool:
+        assert chat_id == 70
+        return True
+
+    monkeypatch.setattr(mcp_server.database, "get_scout_autonomous_enabled", fake_enabled)
+    token = mcp_server._current_chat_id.set(70)
+    try:
+        result = await mcp_server.get_scout_settings()
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+    assert result == {"autonomous_enabled": True}
+
+
+@pytest.mark.asyncio
 async def test_delete_requires_confirmation_and_deletes_only_explicit_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

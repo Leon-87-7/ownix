@@ -989,6 +989,69 @@ async def search_links(query: str, top_k: int = 5) -> list[dict]:
     return results
 
 
+#: Mirrors `/find`'s tuned bar (`src/intake/commands.py:_FIND_MIN_SCORE`) —
+#: `settings.BRAIN_MIN_SCORE` is tuned for "related" suggestions, not a
+#: standalone results list, and is too loose for scout's noise risk.
+_SCOUT_MIN_SCORE = 0.58
+
+
+async def search_links_scoped(
+    query: str, owner_chat_id: int, top_k: int = 5, min_score: float = _SCOUT_MIN_SCORE
+) -> list[dict]:
+    """Owner-scoped semantic search for the Gardener MCP `scout` tool (Phase 3).
+
+    Unlike `search_links` (issue #459, used by the tenant-agnostic `/find`),
+    this only searches the caller's own links — same owner-scope rule as
+    `find_related_links`.
+    """
+    top_k = min(top_k, 20)
+    query_vec = await _embed(query)
+    if query_vec is None:
+        log.warning("brain.scout_embed_failed", query=query[:60])
+        return []
+
+    async with database.connection() as conn:
+        cursor = await conn.execute(
+            """SELECT l.id, l.url, l.title, l.topic, l.embedding
+               FROM links l
+               LEFT JOIN jobs j ON j.id = l.source_job
+               WHERE l.embedding IS NOT NULL AND COALESCE(j.status, '') != 'cancelled'
+                 AND COALESCE(l.chat_id, j.chat_id, ?) = ?""",
+            (settings.OPERATOR_CHAT_ID, owner_chat_id),
+        )
+        rows = [dict(r) for r in await cursor.fetchall()]
+
+    if not rows:
+        return []
+
+    ids_list, matrix = _load_embeddings(rows)
+    if not ids_list:
+        return []
+
+    sims = [(ids_list[i], _cosine_similarity(query_vec, matrix[i])) for i in range(len(ids_list))]
+    sims.sort(key=lambda x: x[1], reverse=True)
+
+    id_to_row = {r["id"]: r for r in rows}
+    results = []
+    for rid, score in sims:
+        if score < min_score:
+            break
+        row = id_to_row.get(rid, {})
+        results.append(
+            {
+                "id": rid,
+                "title": row.get("title") or row.get("url", ""),
+                "url": row.get("url", ""),
+                "topic": row.get("topic") or "",
+                "score": round(score, 4),
+            }
+        )
+        if len(results) >= top_k:
+            break
+
+    return results
+
+
 async def rebuild_graph() -> int:
     """Recompute all related links and rewrite Drive .md for every node."""
     if _rebuild_lock.locked():
