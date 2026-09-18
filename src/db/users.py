@@ -170,6 +170,18 @@ async def set_recovery_telegram_notifications_enabled(chat_id: int, enabled: boo
     await set_user_setting(chat_id, _RECOVERY_TELEGRAM_NOTIFICATIONS_KEY, "1" if enabled else "0")
 
 
+_SCOUT_AUTONOMOUS_KEY = "mcp_scout_autonomous"
+
+
+async def get_scout_autonomous_enabled(chat_id: int) -> bool:
+    value = await get_user_setting(chat_id, _SCOUT_AUTONOMOUS_KEY)
+    return value == "1"
+
+
+async def set_scout_autonomous_enabled(chat_id: int, enabled: bool) -> None:
+    await set_user_setting(chat_id, _SCOUT_AUTONOMOUS_KEY, "1" if enabled else "0")
+
+
 async def add_allowed_domain(chat_id: int, domain: str) -> bool:
     """Insert (chat_id, domain) into allowed_domains. Returns True if inserted, False if already present."""
     return (

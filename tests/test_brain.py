@@ -28,6 +28,7 @@ from src.brain import (
     refresh_links_for_job,
     refresh_stale_links,
     search_links,
+    search_links_scoped,
 )
 
 
@@ -1130,6 +1131,61 @@ async def test_find_related_links_scopes_to_owner_and_gates_by_score():
         assert [r["id"] for r in related] == ["close"]
         assert missing is None
         assert foreign is None
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_search_links_scoped_excludes_foreign_and_cancelled():
+    """Gardener Phase 3's scout tool must stay within the caller's own links
+    and skip candidates whose source job is cancelled — same owner-scope and
+    cancelled-job exclusion as find_related_links (test above), but exercised
+    through search_links_scoped's own query/embed path rather than mocked out."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    base = _rand_vec()
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executemany(
+                "INSERT INTO jobs (id, chat_id, url, content_type, status) VALUES (?, 1, '', 'link', ?)",
+                [("j", "done"), ("j-cancelled", "cancelled")],
+            )
+            await conn.executemany(
+                """INSERT INTO links
+                   (id, chat_id, url, title, topic, source_job, embedding,
+                    seen_count, last_seen_at, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, 't', ?, ?, 1, 't', 't', 't')""",
+                [
+                    ("mine", 1, "https://mine.example", "Mine", "j", _make_blob(base)),
+                    ("theirs", 2, "https://theirs.example", "Theirs", "j", _make_blob(base)),
+                    (
+                        "cancelled",
+                        1,
+                        "https://cancelled.example",
+                        "Cancelled",
+                        "j-cancelled",
+                        _make_blob(base),
+                    ),
+                ],
+            )
+            await conn.commit()
+
+        with (
+            _brain_settings(db_path) as mock_settings,
+            patch("src.brain._embed", new_callable=AsyncMock) as mock_embed,
+        ):
+            mock_settings.OPERATOR_CHAT_ID = 999999
+            mock_embed.return_value = base
+            results = await search_links_scoped("some task", owner_chat_id=1)
+
+        assert [r["id"] for r in results] == ["mine"]
     finally:
         os.unlink(db_path)
 

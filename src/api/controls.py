@@ -54,6 +54,10 @@ class AccessibilitySettingsIn(BaseModel):
     voice_uri: str | None = Field(max_length=512)
 
 
+class ScoutSettingsIn(BaseModel):
+    autonomous_enabled: bool
+
+
 def _normalize_domain(raw: str) -> str:
     """Strip to hostname, lowercase, drop www. prefix."""
     s = raw.strip()
@@ -202,6 +206,20 @@ async def update_recovery_settings(body: RecoverySettingsIn, request: Request) -
         chat_id, body.telegram_notifications
     )
     return {"telegram_notifications": body.telegram_notifications}
+
+
+@controls_router.get("/scout-settings")
+async def get_scout_settings(request: Request) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    enabled = await database.get_scout_autonomous_enabled(chat_id)
+    return {"autonomous_enabled": enabled}
+
+
+@controls_router.put("/scout-settings")
+async def update_scout_settings(body: ScoutSettingsIn, request: Request) -> dict[str, bool]:
+    chat_id: int = request.state.user["id"]
+    await database.set_scout_autonomous_enabled(chat_id, body.autonomous_enabled)
+    return {"autonomous_enabled": body.autonomous_enabled}
 
 
 @controls_router.get("/accessibility-settings")
