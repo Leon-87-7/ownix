@@ -82,6 +82,7 @@ export function TagsPanel() {
     updateTag,
     toggleTagPinned,
   } = useTagList();
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -149,21 +150,30 @@ export function TagsPanel() {
 
   return (
     <div className="space-y-4">
-      {/* ponytail: native <details>, open by default. Mobile = collapsible
-          "Create tag" disclosure; desktop hides the summary entirely → plain card. */}
-      <details open className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-copy font-semibold text-ink [&::-webkit-details-marker]:hidden sm:hidden">
+      {/* ponytail: one TagForm mount. Mobile toggle defaults closed (`open`
+          state); desktop ignores it and forces the card visible via a plain
+          `sm:block` override — a regular display utility, not fighting
+          <details>'s UA-privileged content-visibility:hidden. */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setCreateOpen((o) => !o)}
+          aria-expanded={createOpen}
+          className="flex w-full cursor-pointer items-center justify-between p-4 text-copy font-semibold text-ink sm:hidden"
+        >
           Create tag
           <TagPlus className="h-4 w-4 text-muted" aria-hidden="true" />
-        </summary>
-        <div className="border-t border-line p-4 sm:border-t-0">
+        </button>
+        <div
+          className={`${createOpen ? 'block' : 'hidden'} border-t border-line p-4 sm:block sm:border-t-0`}
+        >
           <TagForm
             initial={{ name: '', meaning: '', color: DEFAULT_COLOR }}
             onSubmit={createTag}
             submitLabel="Create"
           />
         </div>
-      </details>
+      </div>
       {editingTag && (
         <div
           ref={editPanelRef}

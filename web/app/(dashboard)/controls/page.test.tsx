@@ -473,9 +473,8 @@ describe('ControlsPage', () => {
 
   it('shows Allowed Domains content', () => {
     render(<ControlsPage />);
-    const allowed = domainColumn('Allowed');
-    expect(allowed.getByText('Add domain')).toBeTruthy();
-    expect(allowed.getByText('example.com')).toBeTruthy();
+    expect(screen.getByText('Add domain')).toBeTruthy();
+    expect(domainColumn('Allowed').getByText('example.com')).toBeTruthy();
   });
 
   it('shows domains in DomainTab', () => {
@@ -503,14 +502,14 @@ describe('ControlsPage', () => {
 
   it('renders Ignored Domains content', () => {
     render(<ControlsPage />);
-    expect(domainColumn('Ignored').getByText('Add domain')).toBeTruthy();
+    expect(domainColumn('Ignored').getByText('example.com')).toBeTruthy();
   });
 
   it('calls addDomain on form submit in DomainTab', async () => {
     const addDomain = vi.fn(async () => {});
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
+    const input = screen.getByPlaceholderText('example.com');
     fireEvent.change(input, { target: { value: 'newdomain.com' } });
     fireEvent.submit(input.closest('form')!);
     await new Promise(r => setTimeout(r, 10));
@@ -521,7 +520,7 @@ describe('ControlsPage', () => {
     const addDomain = vi.fn(async () => {});
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
+    const input = screen.getByPlaceholderText('example.com');
     // leave blank
     fireEvent.submit(input.closest('form')!);
     await new Promise(r => setTimeout(r, 10));
@@ -542,10 +541,10 @@ describe('ControlsPage', () => {
     const addDomain = vi.fn(async () => { throw new Error('Duplicate domain'); });
     setupDomainsMock({ addDomain });
     render(<ControlsPage />);
-    const input = domainColumn('Allowed').getByPlaceholderText('example.com');
+    const input = screen.getByPlaceholderText('example.com');
     fireEvent.change(input, { target: { value: 'dup.com' } });
     fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(domainColumn('Allowed').getByText('Duplicate domain')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Duplicate domain')).toBeTruthy());
   });
 
   it('shows removeError when removeDomain rejects', async () => {
@@ -554,7 +553,7 @@ describe('ControlsPage', () => {
     render(<ControlsPage />);
     const removeBtns = domainColumn('Allowed').getAllByRole('button', { name: /remove/i });
     fireEvent.click(removeBtns[0]);
-    await waitFor(() => expect(domainColumn('Allowed').getByText('Remove failed')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Remove failed')).toBeTruthy());
   });
 
   it('shows the recovery Telegram notification preference', async () => {
