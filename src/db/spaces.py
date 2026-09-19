@@ -61,13 +61,13 @@ async def get_space(space_id: str) -> dict | None:
 
 
 async def update_space(
-    *, chat_id: int, space_id: str, name: str, color: str, icon: str | None = None
+    *, chat_id: int, space_id: str, name: str, color: str | None = None, icon: str | None = None
 ) -> bool:
-    """UPDATE name/color for a space owned by chat_id; icon only when provided. Returns True if updated."""
+    """UPDATE name for a space owned by chat_id; color/icon only when provided. Returns True if updated."""
     return (
         await _execute_rowcount(
-            "UPDATE spaces SET name = ?, color = ?, icon = COALESCE(?, icon), updated_at = CURRENT_TIMESTAMP "
-            "WHERE id = ? AND chat_id = ?",
+            "UPDATE spaces SET name = ?, color = COALESCE(?, color), icon = COALESCE(?, icon), "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ? AND chat_id = ?",
             (name, color, icon, space_id, chat_id),
         )
         > 0

@@ -2,7 +2,7 @@
 
 Ownix as an MCP server: exposes the user's indexed content ("the brain") to AI agents. User-initiated only — no background or autonomous execution. Nothing runs unless the user opens a session and asks for it.
 
-Three planned functions: **Gardener** (cleanup), **Connection-finding**, **Scouting**. They are not parallel workstreams — Phase 2 and 3 are gated on things Phase 1 hasn't yet produced, so treat this as sequential, not a fixed three-track plan.
+Four planned functions: **Gardener** (cleanup), **Connection-finding**, **Scouting**, **Space curation**. They are not parallel workstreams — later phases are gated on things earlier ones haven't yet produced, so treat this as sequential, not a fixed track plan. The first three operate on the Brain (Links); Space curation is the first phase over a different object (Spaces, the named collections built on top of the Brain).
 
 ---
 
@@ -67,6 +67,35 @@ No separate `flag_item` tool. Flagging is the agent narrating its reasoning in c
 
 ---
 
+## Phase 4 — Space curation
+
+**Goal:** let an agent manage a user's Spaces (`src/db/spaces.py`) — the named collections of jobs plus editorial context blobs described in `docs/seed/WEB-PRD.md` §4 — with the same human-in-the-loop shape as Gardener: the agent proposes a change in conversation, the user approves, then a dedicated tool executes it. Full editing surface, not just curation-lite: create/rename/delete a Space; add/remove/reorder its jobs; create/edit/delete/reorder its context blobs.
+
+**MCP tools needed (one per mutation, mirroring `delete_item`'s shape):**
+- `create_space(name, color, icon, confirm)`
+- `update_space(space_id, name, color=None, icon=None, confirm)` — omitting color/icon leaves them unchanged
+- `delete_space(space_id, confirm)`
+- `add_space_url(space_id, job_id, confirm)` — pins an existing job only, see Decisions below
+- `remove_space_url(space_id, job_id, confirm)`
+- `reorder_space_url(space_id, job_id, new_sort_order)` — **not** confirm-gated, see Decisions below
+- `create_context_blob(space_id, name, content, confirm)`
+- `update_context_blob(blob_id, name, content, confirm)`
+- `delete_context_blob(blob_id, confirm)`
+- `reorder_context_blob(blob_id, new_sort_order)` — **not** confirm-gated
+
+Plus the existing read tools (`list_items`-shaped listing of the caller's Spaces, and detail fetches) needed to give the agent something to act on.
+
+**Session flow:** same shape as Gardener — agent proposes a change with its reasoning stated, user approves per-item or in bulk, approved change executes via the matching confirm-gated tool. As with Phase 1's flagging, there's no separate "propose" tool call; the proposal is conversational.
+
+**Decisions (grilled 2026-09-19, see ADR-0063):**
+- **Approval granularity:** reordering (a job within a Space, or a context blob) executes immediately, no gate — it's low-stakes and trivially reversible. Every other mutation (create/rename/delete Space; add/remove URL; create/edit/delete blob) is confirm-gated, same bar as Gardener's delete.
+- **Tool shape:** one dedicated tool per mutation, not a single generic `apply_space_change(op, payload)` tool — consistent with `delete_item`'s existing shape, and keeps per-field schema validation instead of a loose payload dict.
+- **Scope: pin existing jobs only.** `add_space_url` never enqueues a new job — see ADR-0063.
+- **No optimistic-concurrency guard on context blobs** — MCP writes inherit the dashboard's existing last-write-wins semantics rather than getting bespoke protection the dashboard itself doesn't have. See ADR-0063.
+- **Ownership scoping** follows the same pattern as every existing tool: resolved from the MCP session's `_chat_id()`, not a caller-supplied parameter; a Space owned by another tenant reads as not-found, same as `_get_owned_space`'s 404 in the REST API.
+
+---
+
 ## Sequencing note
 
-This is not "ship all three, see what sticks." Phase 2 is complete — its infra blocker was already resolved by Phase 1's embeddings work, so it shipped without waiting on usage data. Phase 3 shipped without the usage-data validation this roadmap called for — a deliberate deviation, not evidence the gate was wrong for the next roadmap that follows this shape.
+This is not "ship all four, see what sticks." Phase 2 is complete — its infra blocker was already resolved by Phase 1's embeddings work, so it shipped without waiting on usage data. Phase 3 shipped without the usage-data validation this roadmap called for — a deliberate deviation, not evidence the gate was wrong for the next roadmap that follows this shape. Phase 4 is a different object (Spaces, not Links) rather than a continuation of the Brain-cleanup lineage, but follows the same phase discipline: propose-then-approve for anything destructive or judgment-based, narrow tool surface per operation, no scope creep into adjacent concerns (job ingestion) without its own grilling session.
