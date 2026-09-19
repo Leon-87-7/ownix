@@ -1226,6 +1226,39 @@ async def test_search_jobs_scoped_excludes_foreign_and_cancelled():
         os.unlink(db_path)
 
 
+@pytest.mark.asyncio
+async def test_search_jobs_scoped_email_digest_exclusion_is_literal():
+    """The `email_digest:%` exclusion must match that literal prefix only --
+    unescaped, SQL LIKE's `_` is a single-char wildcard, so 'emailXdigest:...'
+    would also get silently excluded from search results."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executemany(
+                "INSERT INTO jobs (id, chat_id, url, title, content_type, status) "
+                "VALUES (?, 1, ?, 'x', 'link', 'done')",
+                [
+                    ("digest", "email_digest:weekly"),
+                    ("lookalike", "emailXdigest:weekly"),
+                ],
+            )
+            await conn.commit()
+
+        with _brain_settings(db_path):
+            results = await search_jobs_scoped("digest", owner_chat_id=1)
+
+        assert [r["id"] for r in results] == ["lookalike"]
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # #385 — refresh loop repairs description IS NULL and re-embeds
 # ---------------------------------------------------------------------------

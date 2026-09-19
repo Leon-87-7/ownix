@@ -1070,7 +1070,7 @@ async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> 
             """SELECT id, title, url, content_type, status
                FROM jobs
                WHERE chat_id = ? AND status != 'cancelled'
-                 AND url NOT LIKE 'email_digest:%'
+                 AND url NOT LIKE 'email\\_digest:%' ESCAPE '\\'
                  AND (title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\')
                ORDER BY created_at DESC
                LIMIT ?""",
