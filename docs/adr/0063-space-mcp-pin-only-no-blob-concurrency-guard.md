@@ -34,9 +34,9 @@ a third writer to an existing race rather than a new failure mode.
 
 ## Decision
 
-**Space MCP tools only pin/unpin jobs that already exist in the Brain.**
-There is no MCP tool that enqueues a new job. Populating a Space with a URL
-that isn't in the Brain yet means ingesting it first through an existing
+**Space MCP tools only pin/unpin jobs that already exist in the caller's
+Index.** There is no MCP tool that enqueues a new job. Populating a Space
+with a URL that doesn't have a job yet means ingesting it first through an existing
 entry point, then pinning it — MCP-driven ingestion is out of scope for this
 phase and would need its own grilling session if wanted later.
 

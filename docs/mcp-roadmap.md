@@ -73,7 +73,7 @@ No separate `flag_item` tool. Flagging is the agent narrating its reasoning in c
 
 **MCP tools needed (one per mutation, mirroring `delete_item`'s shape):**
 - `create_space(name, color, icon, confirm)`
-- `update_space(space_id, name, color, icon, confirm)`
+- `update_space(space_id, name, color=None, icon=None, confirm)` — omitting color/icon leaves them unchanged
 - `delete_space(space_id, confirm)`
 - `add_space_url(space_id, job_id, confirm)` — pins an existing job only, see Decisions below
 - `remove_space_url(space_id, job_id, confirm)`

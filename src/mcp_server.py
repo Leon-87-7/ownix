@@ -131,8 +131,9 @@ mcp = FastMCP(
     instructions=(
         "Inspect and deliberately delete links in the caller's private Index. "
         "Manage the caller's Spaces (named collections of jobs plus context "
-        "blobs): propose a change, then only call a write tool with "
-        "confirm=true after the caller approves it in conversation."
+        "blobs): obtain the caller's conversational approval before calling "
+        "any confirm-gated write tool. Reorder tools execute immediately and "
+        "do not accept confirm."
     ),
     streamable_http_path="/",
     stateless_http=True,
@@ -265,18 +266,19 @@ async def create_space(
 async def update_space(
     space_id: str,
     name: str,
-    color: str = "#6366f1",
+    color: str | None = None,
     icon: SpaceIcon | None = None,
     confirm: bool = False,
 ) -> dict[str, Any]:
-    """Rename/recolor/re-icon a Space. Set confirm=true to perform the write."""
+    """Rename/recolor/re-icon a Space. Omit color/icon to leave them unchanged. Set confirm=true."""
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if confirm is not True:
         raise ToolError("Updating a space requires confirm=true")
     await _owned_space(space_id, chat_id)
     name = _validate_name(name, 120)
-    _validate_color(color)
+    if color is not None:
+        _validate_color(color)
     try:
         updated = await database.update_space(
             chat_id=chat_id, space_id=space_id, name=name, color=color, icon=icon
