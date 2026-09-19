@@ -127,7 +127,7 @@ def _allowed_hosts() -> list[str]:
 
 
 mcp = FastMCP(
-    "Ownix Gardener",
+    "Ownix",
     instructions=(
         "Inspect and deliberately delete links in the caller's private Index. "
         "Manage the caller's Spaces (named collections of jobs plus context "
