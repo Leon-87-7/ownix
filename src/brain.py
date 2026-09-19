@@ -1052,6 +1052,44 @@ async def search_links_scoped(
     return results
 
 
+async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict]:
+    """Owner-scoped substring search over the caller's own jobs (title/url).
+
+    Jobs carry no embedding, so this is plain substring matching (same escaping
+    as `list_links`'s `q` filter) rather than semantic search — enough to find
+    a job you just ingested so its real `id` can be pinned via `add_space_url`
+    (unlike a `search_links_scoped` hit, whose `id` is a Brain-link id, not a
+    job id).
+    """
+    top_k = min(top_k, 20)
+    escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    like = f"%{escaped}%"
+
+    async with database.connection() as conn:
+        cursor = await conn.execute(
+            """SELECT id, title, url, content_type, status
+               FROM jobs
+               WHERE chat_id = ? AND status != 'cancelled'
+                 AND url NOT LIKE 'email\\_digest:%' ESCAPE '\\'
+                 AND (title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\')
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (owner_chat_id, like, like, top_k),
+        )
+        rows = await cursor.fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"] or row["url"],
+            "url": row["url"],
+            "content_type": row["content_type"],
+            "status": row["status"],
+        }
+        for row in rows
+    ]
+
+
 async def rebuild_graph() -> int:
     """Recompute all related links and rewrite Drive .md for every node."""
     if _rebuild_lock.locked():

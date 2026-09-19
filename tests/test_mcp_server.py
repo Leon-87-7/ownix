@@ -111,21 +111,38 @@ async def test_find_related_foreign_and_missing_are_same_not_found(
 async def test_scout_passes_tenant_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, Any] = {}
 
-    async def fake_search(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict[str, Any]]:
-        seen["query"] = query
-        seen["owner_chat_id"] = owner_chat_id
-        seen["top_k"] = top_k
+    async def fake_search_links(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict[str, Any]]:
+        seen["links_query"] = query
+        seen["links_owner_chat_id"] = owner_chat_id
+        seen["links_top_k"] = top_k
         return [{"id": "a", "url": "https://a", "title": "A", "topic": "x", "score": 0.7}]
 
-    monkeypatch.setattr(mcp_server.brain, "search_links_scoped", fake_search)
+    async def fake_search_jobs(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict[str, Any]]:
+        seen["jobs_query"] = query
+        seen["jobs_owner_chat_id"] = owner_chat_id
+        seen["jobs_top_k"] = top_k
+        return [{"id": "j1", "url": "https://b", "title": "B", "content_type": "link", "status": "done"}]
+
+    monkeypatch.setattr(mcp_server.brain, "search_links_scoped", fake_search_links)
+    monkeypatch.setattr(mcp_server.brain, "search_jobs_scoped", fake_search_jobs)
     token = mcp_server._current_chat_id.set(60)
     try:
         result = await mcp_server.scout("some task", top_k=3)
     finally:
         mcp_server._current_chat_id.reset(token)
 
-    assert seen == {"query": "some task", "owner_chat_id": 60, "top_k": 3}
-    assert result == {"items": [{"id": "a", "url": "https://a", "title": "A", "topic": "x", "score": 0.7}]}
+    assert seen == {
+        "links_query": "some task",
+        "links_owner_chat_id": 60,
+        "links_top_k": 3,
+        "jobs_query": "some task",
+        "jobs_owner_chat_id": 60,
+        "jobs_top_k": 3,
+    }
+    assert result == {
+        "items": [{"id": "a", "url": "https://a", "title": "A", "topic": "x", "score": 0.7}],
+        "jobs": [{"id": "j1", "url": "https://b", "title": "B", "content_type": "link", "status": "done"}],
+    }
 
 
 @pytest.mark.asyncio
