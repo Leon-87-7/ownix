@@ -29,6 +29,7 @@ from src.brain import (
     refresh_stale_links,
     search_links,
     search_links_scoped,
+    search_jobs_scoped,
 )
 
 
@@ -1184,6 +1185,41 @@ async def test_search_links_scoped_excludes_foreign_and_cancelled():
             mock_settings.OPERATOR_CHAT_ID = 999999
             mock_embed.return_value = base
             results = await search_links_scoped("some task", owner_chat_id=1)
+
+        assert [r["id"] for r in results] == ["mine"]
+    finally:
+        os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_search_jobs_scoped_excludes_foreign_and_cancelled():
+    """search_jobs_scoped backs the scout tool's `jobs` results — unlike a Brain
+    link's id, a job's id here is directly pinnable via add_space_url, so it
+    must only ever surface the caller's own, non-cancelled jobs."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.executemany(
+                "INSERT INTO jobs (id, chat_id, url, title, content_type, status) "
+                "VALUES (?, ?, ?, ?, 'link', ?)",
+                [
+                    ("mine", 1, "https://mine.example", "Mine Supabase", "done"),
+                    ("theirs", 2, "https://theirs.example", "Theirs Supabase", "done"),
+                    ("cancelled", 1, "https://cancelled.example", "Cancelled Supabase", "cancelled"),
+                    ("unrelated", 1, "https://unrelated.example", "Neon", "done"),
+                ],
+            )
+            await conn.commit()
+
+        with _brain_settings(db_path):
+            results = await search_jobs_scoped("Supabase", owner_chat_id=1)
 
         assert [r["id"] for r in results] == ["mine"]
     finally:

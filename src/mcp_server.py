@@ -212,18 +212,24 @@ async def get_scout_settings() -> dict[str, Any]:
 
 @mcp.tool(name="scout")
 async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
-    """Search the caller's own Brain for saved items relevant to `query`.
+    """Search the caller's own Brain and jobs for items relevant to `query`.
 
     Reuse, not accumulation: this only surfaces what's already saved. Always
     fine to call when the user explicitly asks; see `get_scout_settings`
-    before calling it on your own initiative.
+    before calling it on your own initiative. `jobs` entries carry a real
+    job `id` — pin them straight into a Space with `add_space_url`. `items`
+    entries are Brain-graph mentions; their `id` is not a job id and can't be
+    pinned directly.
     """
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if not query.strip() or len(query) > 300 or not 1 <= top_k <= 20:
         raise ToolError("Invalid query or top_k")
-    items = await brain.search_links_scoped(query, chat_id, top_k=top_k)
-    return {"items": items}
+    items, jobs = await asyncio.gather(
+        brain.search_links_scoped(query, chat_id, top_k=top_k),
+        brain.search_jobs_scoped(query, chat_id, top_k=top_k),
+    )
+    return {"items": items, "jobs": jobs}
 
 
 @mcp.tool(name="list_spaces")
