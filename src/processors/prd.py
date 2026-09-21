@@ -27,6 +27,8 @@ def sample_transcript(text: str, cap: int = 60_000) -> str:
     output never exceeds ``cap`` — a caller passing a smaller cap gets a
     smaller sample, not the same ~60k output regardless of what it asked for.
     """
+    if cap < 0:
+        raise ValueError(f"cap must be non-negative, got {cap}")
     if len(text) <= cap:
         return text
     sep = "\n\n[...truncated...]\n\n"

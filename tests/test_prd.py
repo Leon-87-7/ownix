@@ -58,6 +58,14 @@ def test_sample_transcript_over_cap():
     assert len(result) < len(text)
 
 
+def test_sample_transcript_negative_cap_raises():
+    """A negative cap must raise, not silently slice with a negative index
+    (text[:cap] with cap<0 drops only the last |cap| chars — the opposite of
+    capping). CodeRabbit follow-up on PR #647."""
+    with pytest.raises(ValueError):
+        sample_transcript("a" * 100, cap=-1)
+
+
 def test_sample_transcript_respects_small_cap():
     """Sampled output (incl. separators) must never exceed cap — CodeRabbit
     flagged on PR #647 that the old fixed 20k/10k/20k windows ignored a
