@@ -827,8 +827,7 @@ async def _route_tagged_submission(
     chat_id: int, text: str, message_id: int | None, *, explicit: bool
 ) -> None:
     """Validate Telegram grammar, then invoke shared tagged intake mechanics."""
-    from src.intake import router as intake_router, tag_tokens
-    from src.intake.models import IntakeActor, IntakeMessage
+    from src.intake import tag_tokens
 
     candidate, names = tag_tokens.extract(text)
     parts = candidate.split()
@@ -837,9 +836,6 @@ async def _route_tagged_submission(
         await sender.send_message(chat_id, usage)
         return
     pipeline = detect_pipeline(parts[0], frozenset(await database.list_allowed_domains(chat_id)))
-    if pipeline == "rejected":
-        await sender.send_message(chat_id, "❌ Unsupported URL.")
-        return
     if pipeline == "document":
         # Preserve the established safe download/content-addressed document path.
         await _route_document_url(chat_id, parts[0], message_id, tag_names=names)
@@ -851,7 +847,11 @@ async def _route_tagged_submission(
         IntakeMessage(actor=actor, text=text, source_message_id=message_id)
     )
     if resp.job_id:
-        await sender.send_message(chat_id, _tagged_ack(resp))
+        ack = _tagged_ack(resp)
+        auto_allowed_host = (resp.state or {}).get("auto_allowed_host")
+        if auto_allowed_host:
+            ack = f"Added {auto_allowed_host} to your article allowlist.\n{ack}"
+        await sender.send_message(chat_id, ack)
     else:
         await sender.send_message(chat_id, resp.text)
 

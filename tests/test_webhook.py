@@ -2357,6 +2357,32 @@ async def test_tagged_document_job_attaches_tag_instead_of_dropping_it(
     assert "Read Later" in sent.await_args.args[1]
 
 
+@pytest.mark.asyncio
+async def test_tagged_rejected_url_gets_auto_allowlist_fallback(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """A #tag alongside an article-like unknown-domain URL is no longer a dead end."""
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    monkeypatch.setattr(
+        "src.services.jina.looks_like_article", AsyncMock(return_value=True)
+    )
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_message", sent)
+    monkeypatch.setattr("src.job_queue.enqueue", AsyncMock())
+
+    url = "https://news.example.com/tagged-post"
+    await _post_webhook(f"{url} #read_later")
+
+    job = await db.find_recent_job_by_url(100, url)
+    assert job is not None
+    assert job["content_type"] == "article"
+    sent.assert_awaited_once()
+    assert "Added news.example.com to your article allowlist" in sent.await_args.args[1]
+    assert await db.list_allowed_domains(100) == {"news.example.com"}
+
+
 # ---------------------------------------------------------------------------
 # /start and /help tests
 # ---------------------------------------------------------------------------

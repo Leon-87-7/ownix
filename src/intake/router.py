@@ -162,7 +162,11 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
     if auto_allowed_host:
         result = result.model_copy(
             update={
-                "text": f"Added {auto_allowed_host} to your article allowlist. {result.text}"
+                "text": f"Added {auto_allowed_host} to your article allowlist. {result.text}",
+                # Structured, not just prose in .text, so a channel that
+                # renders its own ack text (Telegram's _tagged_ack) can still
+                # surface this instead of silently dropping it.
+                "state": {"auto_allowed_host": auto_allowed_host},
             }
         )
     if tag_names:
