@@ -452,6 +452,9 @@ class TestArticleAutoAllowlist:
     ) -> None:
         _enqueue_noop(monkeypatch)
         _no_article_probe.return_value = True
+        monkeypatch.setattr(
+            "src.intake.router.is_public_url", AsyncMock(return_value=True)
+        )
 
         resp = asyncio.run(router.handle(_msg(url="https://news.example.com/a-real-post")))
 

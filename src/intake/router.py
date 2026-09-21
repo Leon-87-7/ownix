@@ -21,6 +21,7 @@ from src.intake.models import SCHEMA_VERSION, IntakeAction, IntakeMessage, Intak
 from src.services import jina
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
+from src.utils.public_html import is_public_url
 from src.utils.validators import (
     _ARTICLE_HINT,
     _REPO_HINT,
@@ -133,11 +134,12 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
         # (is_known_platform_host excludes hosts it *does* recognize, so a
         # mismatched video/repo URL shape never gets mistaken for an article).
         parsed_candidate = urlparse(candidate)
-        hostname = (parsed_candidate.hostname or "").lower()
+        hostname = (parsed_candidate.hostname or "").lower().removeprefix("www.")
         if (
             parsed_candidate.scheme in {"http", "https"}
             and hostname
             and not is_known_platform_host(hostname)
+            and await is_public_url(candidate)
             and await jina.looks_like_article(candidate)
         ):
             await database.add_allowed_domain(chat_id, hostname)

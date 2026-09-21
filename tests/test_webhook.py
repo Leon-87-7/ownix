@@ -197,6 +197,9 @@ async def test_webhook_rejects_unsupported_url(client) -> None:
 async def test_webhook_auto_allowlists_article_like_rejected_url(client, monkeypatch) -> None:
     c, fake_redis, fake_http = client
     monkeypatch.setattr(
+        "src.intake.router.is_public_url", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
         "src.services.jina.looks_like_article", AsyncMock(return_value=True)
     )
 
@@ -2365,6 +2368,9 @@ async def test_tagged_rejected_url_gets_auto_allowlist_fallback(
     from src import database as db
 
     await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    monkeypatch.setattr(
+        "src.intake.router.is_public_url", AsyncMock(return_value=True)
+    )
     monkeypatch.setattr(
         "src.services.jina.looks_like_article", AsyncMock(return_value=True)
     )
