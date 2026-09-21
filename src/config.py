@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     CHECKLISTS_MAX_TRANSCRIPT_CHARS: int = 60_000
     CHECKLISTS_MODEL: str = "gemini-2.5-flash"
 
+    # Enrichment (short/long video summary + template_analysis)
+    ENRICHMENT_MAX_TRANSCRIPT_CHARS: int = 60_000
+
     # Per-user export isolation (#202, ADR-0027). When set, only this chat's jobs
     # write to the operator's shared Drive/Sheets; everyone else's results stay in
     # Platform storage (GCS+DB) + Telegram + dashboard. Unset = export for all

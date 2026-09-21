@@ -332,6 +332,7 @@ when its key is missing.
 | `BRAIN_MIN_SCORE` | no | Cosine-similarity floor for `/find`. Default `0.5` |
 | `PRD_MAX_TRANSCRIPT_CHARS` | no | PRD transcript cap. Default `60000` |
 | `CHECKLISTS_MAX_TRANSCRIPT_CHARS` | no | Checklist transcript cap. Default `60000` |
+| `ENRICHMENT_MAX_TRANSCRIPT_CHARS` | no | Video summary/template enrichment transcript cap. Default `60000` |
 | `OPERATOR_CHAT_ID` | no | Per-user export isolation (ADR-0027). Unset means export for all |
 | `SESSION_BACKEND` | no | `redis` in production, `memory` for local auth loops |
 | `OPS_BOT_TOKEN` and the other `OPS_*` vars | no | The Ops bot (ADR-0036) |
