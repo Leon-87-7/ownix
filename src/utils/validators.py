@@ -213,6 +213,40 @@ def _match_article(host: str, extra_domains: frozenset[str]) -> bool:
     return any(_host_matches(host, d) for d in all_article_domains)
 
 
+_KNOWN_PLATFORM_HOSTS: frozenset[str] = frozenset(
+    {
+        "youtube.com",
+        "youtu.be",
+        "instagram.com",
+        "tiktok.com",
+        "vt.tiktok.com",
+        "facebook.com",
+        "x.com",
+        "twitter.com",
+        "github.com",
+        "gist.github.com",
+    }
+)
+
+
+def is_known_platform_host(host: str) -> bool:
+    """True when *host* belongs to a platform `detect_pipeline` already has
+    dedicated handling for — matched or not.
+
+    Used to keep the auto-article-probe fallback (router.py) scoped to hosts
+    `detect_pipeline` has no opinion about at all. Without this, a YouTube
+    channel page or a GitHub gist — rejected for a URL-*shape* reason, not a
+    domain reason — could read as a long article and get wrongly
+    auto-allowlisted as an article domain.
+    """
+    normalized = host.lower().removeprefix("www.")
+    if any(_host_matches(normalized, h) for h in _KNOWN_PLATFORM_HOSTS):
+        return True
+    # Enterprise/subdomain GitHub hosts (matches _match_github's own rule),
+    # excluding github.blog which is a legitimate article domain.
+    return normalized.startswith("github.") and normalized != "github.blog"
+
+
 def normalize_repo_url(url: str) -> str:
     """Strip subpaths from a github.com URL, returning canonical https://github.com/{owner}/{repo}."""
     segments = [s for s in urlparse(url.strip()).path.split("/") if s]

@@ -5,6 +5,7 @@ from src.utils.validators import (
     detect_pipeline,
     extract_description_links,
     is_fetchable_url,
+    is_known_platform_host,
     is_video_url,
     normalize_email,
     slugify,
@@ -442,3 +443,41 @@ def test_coerce_url_known_false_positives(token: str) -> None:
     """Documented ceiling, not a bug: separating these from real hosts needs a
     registry TLD list. ADR/CONTEXT.md "URL coercion" records the trade."""
     assert coerce_url(token) is not None
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+        "instagram.com",
+        "www.instagram.com",
+        "tiktok.com",
+        "www.tiktok.com",
+        "vt.tiktok.com",
+        "facebook.com",
+        "x.com",
+        "twitter.com",
+        "github.com",
+        "gist.github.com",
+        "enterprise.github.com",
+    ],
+)
+def test_is_known_platform_host_true_for_recognized_platforms(host: str) -> None:
+    assert is_known_platform_host(host) is True
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "example.com",
+        "news.example.com",
+        "medium.com",
+        "github.blog",
+        "some-random-blog.dev",
+    ],
+)
+def test_is_known_platform_host_false_for_unrecognized_hosts(host: str) -> None:
+    assert is_known_platform_host(host) is False
