@@ -71,8 +71,13 @@ class TestPostIntakeMessage:
         assert body["job_id"]
         assert body["job_url"] == f"/jobs/{body['job_id']}"
 
-    def test_unsupported_url_returns_clear_response(self, intake_client: TestClient) -> None:
+    def test_unsupported_url_returns_clear_response(
+        self, intake_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _login(intake_client)
+        monkeypatch.setattr(
+            "src.services.jina.looks_like_article", AsyncMock(return_value=False)
+        )
         resp = intake_client.post(
             "/api/intake/message", json={"url": "https://example.com/nothing"}
         )

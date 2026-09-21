@@ -330,3 +330,65 @@ async def test_fetch_raw_does_not_read_body_on_non_200(monkeypatch):
     assert status_code == 404
     assert text == ""
     assert read_called is False
+
+
+@pytest.mark.asyncio
+async def test_looks_like_article_true_for_long_body():
+    from src.services import jina
+
+    long_body = "Markdown Content:\n" + ("Real article content. " * 40)
+    async with _mock_client(_text_responder(200, long_body)) as client:
+        result = await jina.looks_like_article("https://example.com/post", client=client)
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_looks_like_article_false_for_short_body():
+    from src.services import jina
+
+    short_body = "Markdown Content:\nTiny page."
+    async with _mock_client(_text_responder(200, short_body)) as client:
+        result = await jina.looks_like_article("https://example.com/stub", client=client)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_looks_like_article_false_on_non_200():
+    from src.services import jina
+
+    async with _mock_client(_text_responder(404, "")) as client:
+        result = await jina.looks_like_article("https://example.com/missing", client=client)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_looks_like_article_false_on_timeout():
+    from src.services import jina
+
+    def _raise_timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timed out", request=request)
+
+    async with _mock_client(_raise_timeout) as client:
+        result = await jina.looks_like_article("https://example.com/slow", client=client)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_looks_like_article_false_on_oversize():
+    from src.services import jina
+
+    def _oversize_responder(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            status_code=200,
+            content=b"x" * (jina._MAX_JINA_BYTES + 1),
+            request=request,
+        )
+
+    async with _mock_client(_oversize_responder) as client:
+        result = await jina.looks_like_article("https://example.com/huge", client=client)
+
+    assert result is False

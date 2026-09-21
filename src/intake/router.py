@@ -18,9 +18,17 @@ from urllib.parse import urlparse
 from src import database
 from src.intake import commands, idempotency, responses, tag_tokens
 from src.intake.models import SCHEMA_VERSION, IntakeAction, IntakeMessage, IntakeResponse
+from src.services import jina
 from src.services.jobs import create_and_enqueue_job
 from src.utils.logger import get_logger
-from src.utils.validators import detect_pipeline, normalize_repo_url
+from src.utils.public_html import is_public_url
+from src.utils.validators import (
+    _ARTICLE_HINT,
+    _REPO_HINT,
+    detect_pipeline,
+    is_known_platform_host,
+    normalize_repo_url,
+)
 
 log = get_logger(__name__)
 
@@ -93,6 +101,7 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
         return responses.unsupported("Send a URL, a command, or upload a file.")
 
     pipeline = detect_pipeline(candidate, frozenset(await database.list_allowed_domains(chat_id)))
+    auto_allowed_host: str | None = None
     if pipeline == "document":
         return await _create_remote_document(chat_id, candidate)
     if pipeline == "rejected" and msg.intent == "article":
@@ -119,15 +128,49 @@ async def _route(msg: IntakeMessage) -> IntakeResponse:
         pipeline = "link"
     elif pipeline == "rejected" and msg.intent == "document":
         return await _create_remote_document(chat_id, candidate, require_document_path=False)
-    elif pipeline == "rejected":
-        return responses.unsupported(
-            "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
-            "Facebook/X video, allowlisted article domains, and GitHub repos."
-        )
+    elif pipeline == "rejected" and msg.intent == "automatic":
+        # A plain paste from any channel gets one live content check before
+        # giving up — a URL detect_pipeline has no domain opinion on at all
+        # (is_known_platform_host excludes hosts it *does* recognize, so a
+        # mismatched video/repo URL shape never gets mistaken for an article).
+        parsed_candidate = urlparse(candidate)
+        hostname = (parsed_candidate.hostname or "").lower().removeprefix("www.")
+        if (
+            parsed_candidate.scheme in {"http", "https"}
+            and hostname
+            and not is_known_platform_host(hostname)
+            and await is_public_url(candidate)
+            and await jina.looks_like_article(candidate)
+        ):
+            await database.add_allowed_domain(chat_id, hostname)
+            pipeline = "article"
+            auto_allowed_host = hostname
+        if pipeline == "rejected":
+            github_hint = (
+                f"\n{_REPO_HINT}"
+                if hostname == "github.com" or hostname.endswith(".github.com")
+                else ""
+            )
+            return responses.unsupported(
+                "Unsupported URL. Ownix accepts YouTube/Shorts, Reels, TikTok, "
+                "Facebook/X video, allowlisted article domains, and GitHub repos.\n"
+                + _ARTICLE_HINT
+                + github_hint
+            )
 
     url_for_job = normalize_repo_url(candidate) if pipeline == "repo" else candidate
     job = await create_and_enqueue_job(chat_id, url_for_job, pipeline)
     result = responses.job_created(job, deduped=bool(job.get("_deduped")))
+    if auto_allowed_host:
+        result = result.model_copy(
+            update={
+                "text": f"Added {auto_allowed_host} to your article allowlist. {result.text}",
+                # Structured, not just prose in .text, so a channel that
+                # renders its own ack text (Telegram's _tagged_ack) can still
+                # surface this instead of silently dropping it.
+                "state": {"auto_allowed_host": auto_allowed_host},
+            }
+        )
     if tag_names:
         result = await apply_tag_tokens(chat_id, job["id"], tag_names, result)
     return result

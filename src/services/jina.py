@@ -169,6 +169,32 @@ async def fetch_markdown(url: str, *, client: httpx.AsyncClient | None = None) -
     return title, body
 
 
+MIN_ARTICLE_CHARS = 500  # mirrors src/processors/article.py's _PAYWALL_MIN_CHARS
+
+
+async def looks_like_article(
+    url: str, *, timeout: float = 8.0, client: httpx.AsyncClient | None = None
+) -> bool:
+    """Best-effort "does this read like a real article" probe.
+
+    Used by the intake router's auto-allowlist fallback to decide whether an
+    unrecognized URL is worth adding to a chat's article allowlist. Never
+    raises: any fetch error, oversize response, or timeout resolves to
+    ``False`` so a slow or broken site just falls through to "Unsupported
+    URL" instead of hanging the caller.
+    """
+    owns_client = client is None
+    active_client = client or httpx.AsyncClient(timeout=timeout)
+    try:
+        _, body = await fetch_markdown(url, client=active_client)
+        return len(body.strip()) >= MIN_ARTICLE_CHARS
+    except (JinaFetchError, JinaOversizeError, httpx.HTTPError):
+        return False
+    finally:
+        if owns_client:
+            await active_client.aclose()
+
+
 async def fetch_html(url: str, *, client: httpx.AsyncClient | None = None) -> str:
     """Fetch *url* via Jina Reader requesting rendered HTML (``X-Return-Format: html``).
 

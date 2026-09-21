@@ -194,6 +194,47 @@ async def test_webhook_rejects_unsupported_url(client) -> None:
     assert "Unsupported" in fake_http.calls[0]["json"]["text"]
 
 
+async def test_webhook_auto_allowlists_article_like_rejected_url(client, monkeypatch) -> None:
+    c, fake_redis, fake_http = client
+    monkeypatch.setattr(
+        "src.intake.router.is_public_url", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        "src.services.jina.looks_like_article", AsyncMock(return_value=True)
+    )
+
+    response = c.post(
+        "/webhook",
+        json=_telegram_update("https://news.example.com/a-real-post"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    queued = fake_redis._lists.get("video_jobs", [])
+    assert len(queued) == 1
+    sent = fake_http.calls[0]["json"]["text"]
+    assert "Added news.example.com to your article allowlist" in sent
+    assert await database.list_allowed_domains(12345) == {"news.example.com"}
+
+
+async def test_webhook_still_unsupported_when_probe_says_no(client, monkeypatch) -> None:
+    c, fake_redis, fake_http = client
+    monkeypatch.setattr(
+        "src.services.jina.looks_like_article", AsyncMock(return_value=False)
+    )
+
+    response = c.post(
+        "/webhook",
+        json=_telegram_update("https://news.example.com/stub"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    assert fake_redis._lists.get("video_jobs", []) == []
+    assert "Unsupported" in fake_http.calls[0]["json"]["text"]
+    assert await database.list_allowed_domains(12345) == set()
+
+
 async def test_webhook_ignores_non_text_messages(client) -> None:
     c, fake_redis, fake_http = client
     update = {
@@ -2317,6 +2358,35 @@ async def test_tagged_document_job_attaches_tag_instead_of_dropping_it(
     assert [t["name"] for t in tags] == ["Read Later"]
     sent.assert_awaited_once()
     assert "Read Later" in sent.await_args.args[1]
+
+
+@pytest.mark.asyncio
+async def test_tagged_rejected_url_gets_auto_allowlist_fallback(
+    temp_db, _patch_webhook_secret, _patch_redis, monkeypatch
+):
+    """A #tag alongside an article-like unknown-domain URL is no longer a dead end."""
+    from src import database as db
+
+    await db.create_tag(chat_id=100, name="Read Later", meaning="", color="#8b5cf6")
+    monkeypatch.setattr(
+        "src.intake.router.is_public_url", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        "src.services.jina.looks_like_article", AsyncMock(return_value=True)
+    )
+    sent = AsyncMock()
+    monkeypatch.setattr("src.telegram.sender.send_message", sent)
+    monkeypatch.setattr("src.job_queue.enqueue", AsyncMock())
+
+    url = "https://news.example.com/tagged-post"
+    await _post_webhook(f"{url} #read_later")
+
+    job = await db.find_recent_job_by_url(100, url)
+    assert job is not None
+    assert job["content_type"] == "article"
+    sent.assert_awaited_once()
+    assert "Added news.example.com to your article allowlist" in sent.await_args.args[1]
+    assert await db.list_allowed_domains(100) == {"news.example.com"}
 
 
 # ---------------------------------------------------------------------------
