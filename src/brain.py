@@ -16,7 +16,7 @@ import numpy as np
 from src.config import settings
 from src import database
 from src.database import generate_id
-from src.services.drive import update_file, upload_file
+from src.services.drive import file_url_from_id, update_file, upload_file
 from src.utils.logger import get_logger
 from src.utils.og_image import extract_og_image_url
 from src.utils.public_html import fetch_public_html
@@ -741,7 +741,7 @@ async def list_links(
     rows_sql = " ".join(
         [
             "SELECT l.id, l.url, l.title, l.topic, l.description,"
-            " l.seen_count, l.created_at, l.last_seen_at",
+            " l.seen_count, l.created_at, l.last_seen_at, l.drive_file_id",
             from_clause,
             "WHERE",
             where,
@@ -791,6 +791,7 @@ async def list_links(
                 "seen_count": row.get("seen_count") or 1,
                 "first_seen": row["created_at"],
                 "last_seen": row["last_seen_at"],
+                "drive_url": file_url_from_id(row.get("drive_file_id")),
                 "tags": tags_by_link.get(row["id"], []),
             }
             for row in rows
@@ -802,7 +803,7 @@ async def list_links(
 
 
 _LINK_DETAIL_QUERY = """SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
-           l.created_at, l.last_seen_at, l.og_image_url
+           l.created_at, l.last_seen_at, l.og_image_url, l.drive_file_id
     FROM links l LEFT JOIN jobs j ON j.id = l.source_job
     WHERE l.id = ?"""
 
@@ -812,7 +813,7 @@ _LINK_DETAIL_QUERY = """SELECT l.id, l.url, l.title, l.topic, l.description, l.s
 # interpolation that reaches `execute()`, regardless of whether the pieces
 # are user input; every bound value here is already a `?` placeholder.
 _LINK_DETAIL_QUERY_OWNER_SCOPED = """SELECT l.id, l.url, l.title, l.topic, l.description, l.seen_count,
-           l.created_at, l.last_seen_at, l.og_image_url
+           l.created_at, l.last_seen_at, l.og_image_url, l.drive_file_id
     FROM links l LEFT JOIN jobs j ON j.id = l.source_job
     WHERE l.id = ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?"""
 
@@ -877,6 +878,7 @@ async def _fetch_link_with_og_image(
         "first_seen": link.get("created_at"),
         "last_seen": link.get("last_seen_at"),
         "og_image_url": og_image_url or None,
+        "drive_url": file_url_from_id(link.get("drive_file_id")),
     }
 
 

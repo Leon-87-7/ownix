@@ -194,6 +194,16 @@ def file_id_from_url(url: str | None) -> str | None:
     return match.group(1) if match else None
 
 
+def file_url_from_id(file_id: str | None) -> str | None:
+    """Inverse of `file_id_from_url` — a viewable link for a bare Drive file id.
+
+    Brain links only ever persist `drive_file_id` (the webViewLink itself is
+    discarded on upload, see `_upload_brain_md`), so anything surfacing a
+    link's Drive doc has to rebuild the URL from the id.
+    """
+    return f"https://drive.google.com/file/d/{file_id}/view" if file_id else None
+
+
 def _delete_sync(file_id: str, chat_id: int) -> None:
     _build_service(chat_id).files().delete(fileId=file_id, supportsAllDrives=True).execute()
 
