@@ -10,6 +10,7 @@ from json_repair import repair_json
 
 from src import database
 from src.config import settings
+from src.processors.prd import sample_transcript
 from src.services.drive import upload_file
 from src.telegram.sender import send_message, send_inline_keyboard
 from src.templates import PROMPT_TEMPLATES, validate_template_choice
@@ -19,8 +20,6 @@ from src.utils.markdown import format_promise_gap_section, format_tool_line
 from src.services.repo_followup import offer_repo_followups
 
 log = get_logger(__name__)
-
-MAX_TRANSCRIPT_CHARS = 12_000
 
 _PROMISE_GAP_SUFFIX = """
 
@@ -57,11 +56,7 @@ def _build_prompt(
     template: str = "summary",
     freestyle_prompt: str | None = None,
 ) -> str:
-    truncated = (
-        transcript[:MAX_TRANSCRIPT_CHARS] + "\n\n[transcript truncated]"
-        if len(transcript) > MAX_TRANSCRIPT_CHARS
-        else transcript
-    )
+    truncated = sample_transcript(transcript, settings.ENRICHMENT_MAX_TRANSCRIPT_CHARS)
     if freestyle_prompt:
         # STEP 5 below still mandates the fixed JSON schema, so a freeform ask
         # (e.g. "say hello and add a poem") has no field to land in and gets

@@ -23,15 +23,24 @@ log = get_logger(__name__)
 def sample_transcript(text: str, cap: int = 60_000) -> str:
     """Return text unchanged if within cap; otherwise sample head/middle/tail windows.
 
-    Uses three fixed 20k windows: head, middle (centred), and tail.
+    Windows are sized from ``cap`` (minus separator overhead) so the sampled
+    output never exceeds ``cap`` — a caller passing a smaller cap gets a
+    smaller sample, not the same ~60k output regardless of what it asked for.
     """
+    if cap < 0:
+        raise ValueError(f"cap must be non-negative, got {cap}")
     if len(text) <= cap:
         return text
-    head = text[:20_000]
+    sep = "\n\n[...truncated...]\n\n"
+    window = (cap - 2 * len(sep)) // 3
+    if window <= 0:
+        return text[:cap]
+    head = text[:window]
     mid = len(text) // 2
-    middle = text[mid - 10_000 : mid + 10_000]
-    tail = text[-20_000:]
-    return head + "\n\n[...truncated...]\n\n" + middle + "\n\n[...truncated...]\n\n" + tail
+    mid_start = max(0, mid - window // 2)
+    middle = text[mid_start : mid_start + window]
+    tail = text[-window:]
+    return head + sep + middle + sep + tail
 
 
 # ---------------------------------------------------------------------------

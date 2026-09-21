@@ -426,6 +426,29 @@ def test_build_prompt_contains_promise_gap_instruction() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Transcript truncation (long-video content past the cap must survive as a
+# head/middle/tail sample, not be silently dropped — see sample_transcript)
+# ---------------------------------------------------------------------------
+
+def test_build_prompt_long_transcript_samples_head_middle_and_tail() -> None:
+    """A transcript past the default 60k cap must still surface content from
+    late in the video (regression for the old transcript[:12_000] head-only
+    cut, which silently dropped anything mentioned after ~8-10 minutes)."""
+    total_len = 140_000
+    head = "HEAD_MARKER " + "a" * 20_000
+    mid_pos = total_len // 2
+    tail = "z" * 20_000 + " TAIL_MARKER"
+    filler_len = total_len - len(head) - len(tail)
+    filler = "b" * (mid_pos - len(head)) + " MID_MARKER " + "c" * (filler_len - (mid_pos - len(head)) - len(" MID_MARKER "))
+    transcript = head + filler + tail
+
+    prompt = _build_prompt("My Title", transcript)
+    assert "HEAD_MARKER" in prompt
+    assert "MID_MARKER" in prompt
+    assert "TAIL_MARKER" in prompt
+
+
+# ---------------------------------------------------------------------------
 # Freestyle prompt substitution (issue #52 / ADR-0012)
 # ---------------------------------------------------------------------------
 

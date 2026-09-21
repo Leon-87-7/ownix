@@ -58,6 +58,32 @@ def test_sample_transcript_over_cap():
     assert len(result) < len(text)
 
 
+def test_sample_transcript_negative_cap_raises():
+    """A negative cap must raise, not silently slice with a negative index
+    (text[:cap] with cap<0 drops only the last |cap| chars — the opposite of
+    capping). CodeRabbit follow-up on PR #647."""
+    with pytest.raises(ValueError):
+        sample_transcript("a" * 100, cap=-1)
+
+
+def test_sample_transcript_respects_small_cap():
+    """Sampled output (incl. separators) must never exceed cap — CodeRabbit
+    flagged on PR #647 that the old fixed 20k/10k/20k windows ignored a
+    smaller caller-supplied cap and always returned ~60,042 chars regardless."""
+    text = "a" * 50_000
+    cap = 12_000
+    result = sample_transcript(text, cap=cap)
+    assert len(result) <= cap
+
+
+def test_sample_transcript_tiny_cap_falls_back_to_head_slice():
+    """A cap too small to fit two separators must not crash or go negative —
+    fall back to a plain head slice."""
+    text = "a" * 1_000
+    result = sample_transcript(text, cap=10)
+    assert result == text[:10]
+
+
 def test_sample_transcript_three_windows():
     """Very long text contains head, middle, and tail portions with truncation markers."""
     # Build a text where head/middle/tail are distinguishable
