@@ -146,7 +146,11 @@ mcp = FastMCP(
 async def list_items(
     limit: int = 50, offset: int = 0, q: str = "", order: str = "desc"
 ) -> dict[str, Any]:
-    """List the caller's Brain links, with a fresh reachability signal for each."""
+    """List the caller's Brain links, with a fresh reachability signal for each.
+
+    Each item carries `drive_url` — the link's own Obsidian note in Drive, or
+    null if it hasn't been uploaded yet.
+    """
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if not 1 <= limit <= 100 or offset < 0 or len(q) > 300 or order not in {"asc", "desc"}:
@@ -166,7 +170,11 @@ async def list_items(
 
 @mcp.tool(name="get_item_detail")
 async def get_item_detail(link_id: str) -> dict[str, Any]:
-    """Get one caller-owned Brain link and its fresh reachability signal."""
+    """Get one caller-owned Brain link and its fresh reachability signal.
+
+    Carries `drive_url` — the link's own Obsidian note in Drive, or null if
+    it hasn't been uploaded yet.
+    """
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     item = await brain.get_owned_link_detail(link_id, chat_id)
@@ -242,7 +250,11 @@ async def list_spaces() -> dict[str, Any]:
 
 @mcp.tool(name="get_space_detail")
 async def get_space_detail(space_id: str) -> dict[str, Any]:
-    """One Space with its pinned jobs and context blobs."""
+    """One Space with its pinned jobs and context blobs.
+
+    Each pinned job carries `drive_url` — its enrichment doc in Drive, or
+    null if the job never produced one.
+    """
     chat_id = _chat_id()
     rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     space = await _owned_space(space_id, chat_id)
