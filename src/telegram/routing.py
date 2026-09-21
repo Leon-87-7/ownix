@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 
 from src import database, job_queue as queue
 from src.config import settings
+from src.intake import router as intake_router
+from src.intake.models import IntakeActor, IntakeMessage
 from src.services import storage
 from src.services.parse import (
     MIME_BY_EXT,
@@ -41,8 +43,6 @@ from src.utils.validators import (
     detect_pipeline,
     normalize_email,
     normalize_repo_url,
-    _ARTICLE_HINT,
-    _REPO_HINT,
 )
 from src.telegram.commands import _SLASH_TABLE, _dispatch_slash, _handle_freestyle_url
 from src.telegram.context import (
@@ -510,21 +510,6 @@ async def _enqueue_simple_job(
 
 
 
-async def _reject_url(chat_id: int, text: str) -> None:
-    try:
-        _host = (urlparse(text).hostname or "").lower().removeprefix("www.")
-    except Exception:
-        _host = ""
-    _github_hint = (
-        f"\n{_REPO_HINT}" if _host == "github.com" or _host.endswith(".github.com") else ""
-    )
-    await sender.send_message(
-        chat_id,
-        "❌ Unsupported URL. I accept YouTube videos, YouTube Shorts, "
-        "Instagram Reels (not /p/ carousels), TikTok videos, Facebook videos, "
-        "and X/Twitter videos.\n" + _ARTICLE_HINT + _github_hint,
-    )
-    log.info("url_rejected", chat_id=chat_id, url=text)
 
 
 
@@ -599,7 +584,7 @@ async def _route_url(chat_id: int, text: str, message_id: int | None) -> None:
     extra_domains = await database.list_allowed_domains(chat_id)
     pipeline = detect_pipeline(text, frozenset(extra_domains))
     if pipeline == "rejected":
-        await _reject_url(chat_id, text)
+        await _route_rejected_url(chat_id, text, message_id)
         return
     if pipeline == "document":
         await _route_document_url(chat_id, text, message_id)
@@ -611,6 +596,24 @@ async def _route_url(chat_id: int, text: str, message_id: int | None) -> None:
         await _route_repo(chat_id, text, message_id, pending_template, client)
         return
     await _route_video(chat_id, text, pipeline, message_id, pending_template)
+
+
+async def _route_rejected_url(chat_id: int, text: str, message_id: int | None) -> None:
+    """A URL `detect_pipeline` rejected: give the shared intake router (and its
+    article-auto-allowlist fallback) the one chance the old hardcoded
+    rejection message never gave it.
+
+    Any pending_template was already popped and discarded above in
+    `_route_url`, unchanged from before this fallback existed — there is no
+    resolved pipeline yet on a rejected URL for a template to apply to.
+    """
+    actor = IntakeActor(
+        user_id=chat_id, channel_id=str(chat_id), channel_type="telegram", legacy_chat_id=chat_id
+    )
+    resp = await intake_router.handle(
+        IntakeMessage(actor=actor, url=text, source_message_id=message_id)
+    )
+    await sender.send_message(chat_id, resp.text)
 
 
 
