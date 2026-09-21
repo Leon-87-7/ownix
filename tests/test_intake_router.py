@@ -24,6 +24,20 @@ def _memory_idempotency(monkeypatch: pytest.MonkeyPatch) -> None:
     idempotency._memory.clear()
 
 
+@pytest.fixture(autouse=True)
+def _no_article_probe(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    """Default every test to a probe that finds nothing article-like.
+
+    Every existing "unsupported" test in this file uses an example.com-style
+    host that isn't a known platform, so without this default they'd each
+    trigger a real network fetch. Tests that want the auto-allow path
+    override the return value explicitly.
+    """
+    probe = AsyncMock(return_value=False)
+    monkeypatch.setattr("src.services.jina.looks_like_article", probe)
+    return probe
+
+
 @pytest.fixture
 def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_file = tmp_path / "intake_router_test.db"
@@ -430,3 +444,58 @@ class TestUnknownTagOffer:
         assert [a.payload["tag_name"] for a in resp.actions] == ["GoTo", "Foo"]
         # Distinct ids, so the console can track which offer is open.
         assert len({a.action_id for a in resp.actions}) == 2
+
+
+class TestArticleAutoAllowlist:
+    def test_unrecognized_host_probed_and_allowlisted_when_article_like(
+        self, db, monkeypatch: pytest.MonkeyPatch, _no_article_probe: AsyncMock
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        _no_article_probe.return_value = True
+
+        resp = asyncio.run(router.handle(_msg(url="https://news.example.com/a-real-post")))
+
+        assert resp.kind == "job_created"
+        _no_article_probe.assert_awaited_once_with("https://news.example.com/a-real-post")
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == {"news.example.com"}
+        job = asyncio.run(db.get_job(resp.job_id))
+        assert job["content_type"] == "article"
+        assert "Added news.example.com to your article allowlist" in resp.text
+
+    def test_unrecognized_host_stays_unsupported_when_probe_says_no(
+        self, db, monkeypatch: pytest.MonkeyPatch, _no_article_probe: AsyncMock
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        # _no_article_probe already defaults to False
+
+        resp = asyncio.run(router.handle(_msg(url="https://news.example.com/not-an-article")))
+
+        assert resp.kind == "unsupported"
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == set()
+        assert "Unsupported URL" in resp.text
+
+    def test_known_platform_host_never_probed(
+        self, db, monkeypatch: pytest.MonkeyPatch, _no_article_probe: AsyncMock
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        # A GitHub gist: rejected for a URL-shape reason, not a domain reason.
+        resp = asyncio.run(router.handle(_msg(url="https://gist.github.com/someone/abc123")))
+
+        assert resp.kind == "unsupported"
+        _no_article_probe.assert_not_awaited()
+        assert asyncio.run(db.list_allowed_domains(CHAT_ID)) == set()
+
+    def test_non_automatic_intent_never_probed(
+        self, db, monkeypatch: pytest.MonkeyPatch, _no_article_probe: AsyncMock
+    ) -> None:
+        _enqueue_noop(monkeypatch)
+        # intent="link" already has its own fallback (router.py:106) — the
+        # probe must not fire and steal it.
+        resp = asyncio.run(
+            router.handle(_msg(url="https://news.example.com/thing", intent="link"))
+        )
+
+        assert resp.kind == "job_created"
+        _no_article_probe.assert_not_awaited()
+        job = asyncio.run(db.get_job(resp.job_id))
+        assert job["content_type"] == "link"
