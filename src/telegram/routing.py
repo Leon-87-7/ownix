@@ -510,9 +510,6 @@ async def _enqueue_simple_job(
 
 
 
-
-
-
 async def _route_article(
     chat_id: int, text: str, message_id: int | None, pending_template: str | None
 ) -> None:
