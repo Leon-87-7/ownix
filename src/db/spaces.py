@@ -148,7 +148,8 @@ async def reorder_space_url(*, space_id: str, job_id: str, new_sort_order: int) 
 async def list_space_urls(space_id: str, chat_id: int) -> list[dict]:
     """Return jobs pinned to a space, joined with key job fields, ordered by sort_order."""
     return await _fetch_dicts(
-        """SELECT j.id, j.title, j.url, j.content_type, j.status, j.drive_url,
+        """SELECT j.id, j.title, j.url, j.content_type, j.status,
+                  NULLIF(j.drive_url, '') AS drive_url,
                   su.sort_order, su.added_at
            FROM space_urls su
            JOIN jobs j ON j.id = su.job_id AND j.chat_id = ?
