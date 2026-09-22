@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 
 import pytest
 
@@ -43,3 +44,12 @@ async def test_list_is_tenant_scoped() -> None:
     assert len(await mcp_tokens.list_mcp_tokens(CHAT_ID)) == 1
     foreign_id = (await mcp_tokens.list_mcp_tokens(CHAT_ID + 1))[0]["id"]
     assert await mcp_tokens.revoke_mcp_token(CHAT_ID, foreign_id) is False
+
+
+@pytest.mark.asyncio
+async def test_kv_set_if_exists_treats_expired_memory_key_as_absent() -> None:
+    # Physically present but lazily-expired — only a _memory_get-style read
+    # evicts it. A raw `key in _memory` check would wrongly resurrect it.
+    session_store._memory["k"] = ("old", time.monotonic() - 1)
+    await session_store.kv_set_if_exists("k", "new")
+    assert await session_store.kv_get("k") is None

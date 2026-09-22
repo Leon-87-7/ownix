@@ -13,9 +13,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from src.api.preview import _preview_client_key
 from src.auth import extension_tokens
 from src.intake import rate_limit
+from src.intake.client_key import resolve_client_key
 
 extension_auth_router = APIRouter(prefix="/api/extension", tags=["extension"])
 
@@ -36,12 +36,10 @@ class PairingRedeemRequest(BaseModel):
 async def redeem_pairing_code(request: Request, body: PairingRedeemRequest) -> dict:
     # This endpoint is unauthenticated (the pairing code IS the credential),
     # so the rate-limit key is the only thing standing between a code-guessing
-    # attacker and every other user's bucket. Reuse preview.py's
-    # forwarded-for-aware peer resolution rather than the raw socket peer,
-    # which collapses to one shared bucket behind cloudflared/any reverse
-    # proxy — the setting name (PREVIEW_TRUSTED_PROXY_CIDRS) predates this
-    # call site but the trusted-proxy topology is the same for the whole app.
-    client_key = _preview_client_key(request)
+    # attacker and every other user's bucket. resolve_client_key is
+    # forwarded-for-aware; the raw socket peer would collapse to one shared
+    # bucket behind cloudflared/any reverse proxy.
+    client_key = resolve_client_key(request)
     rate_limit.enforce(f"extension_redeem:{client_key}", max_requests=20)
 
     chat_id = await extension_tokens.redeem_pairing_code(body.code)

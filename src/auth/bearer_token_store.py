@@ -15,9 +15,9 @@ its SHA-256 hash is ever stored, and the raw token is generated, returned
 once at issue time, and never persisted or logged again.
 
 Token metadata lives in Redis via `src.auth.session`'s existing dual
-Redis/memory backend (reusing its private `_client`/`_use_memory`/`_memory`
-helpers, the same way other modules in this codebase reach into
-`queue._client()` directly) rather than standing up a third parallel store.
+Redis/memory backend, reached through its public `kv_*`/`set_*` primitives
+(`session_store.kv_get`, `.set_add`, etc.) rather than standing up a third
+parallel store.
 """
 
 from __future__ import annotations
@@ -72,20 +72,10 @@ class BearerTokenStore:
             return None
 
     async def _store_metadata(self, token_hash: str, metadata: dict[str, Any]) -> None:
-        key = f"{self._token_prefix}{token_hash}"
-        raw = json.dumps(metadata)
-        if session_store._use_memory():
-            session_store._memory_set(key, raw)
-        else:
-            await session_store._client().set(key, raw)
+        await session_store.kv_set(f"{self._token_prefix}{token_hash}", json.dumps(metadata))
 
     async def _get_metadata(self, token_hash: str) -> dict[str, Any] | None:
-        key = f"{self._token_prefix}{token_hash}"
-        raw = (
-            session_store._memory_get(key)
-            if session_store._use_memory()
-            else await session_store._client().get(key)
-        )
+        raw = await session_store.kv_get(f"{self._token_prefix}{token_hash}")
         if raw is None:
             return None
         try:
@@ -100,50 +90,19 @@ class BearerTokenStore:
         `revoke_token` runs between `resolve_token`'s read and this write, the
         key must stay gone rather than being recreated here.
         """
-        key = f"{self._token_prefix}{token_hash}"
-        raw = json.dumps(metadata)
-        if session_store._use_memory():
-            if key in session_store._memory:
-                session_store._memory_set(key, raw)
-        else:
-            await session_store._client().set(key, raw, xx=True)
+        await session_store.kv_set_if_exists(f"{self._token_prefix}{token_hash}", json.dumps(metadata))
 
     async def _delete_metadata(self, token_hash: str) -> None:
-        key = f"{self._token_prefix}{token_hash}"
-        if session_store._use_memory():
-            session_store._memory.pop(key, None)
-        else:
-            await session_store._client().delete(key)
+        await session_store.kv_delete(f"{self._token_prefix}{token_hash}")
 
     async def _index_add(self, chat_id: int, token_hash: str) -> None:
-        key = f"{self._token_index_prefix}{chat_id}"
-        if session_store._use_memory():
-            raw = session_store._memory_get(key)
-            hashes = json.loads(raw) if raw else []
-            if token_hash not in hashes:
-                hashes.append(token_hash)
-            session_store._memory_set(key, json.dumps(hashes))
-        else:
-            await session_store._client().sadd(key, token_hash)
+        await session_store.set_add(f"{self._token_index_prefix}{chat_id}", token_hash)
 
     async def _index_remove(self, chat_id: int, token_hash: str) -> None:
-        key = f"{self._token_index_prefix}{chat_id}"
-        if session_store._use_memory():
-            raw = session_store._memory_get(key)
-            hashes = json.loads(raw) if raw else []
-            if token_hash in hashes:
-                hashes.remove(token_hash)
-                session_store._memory_set(key, json.dumps(hashes))
-        else:
-            await session_store._client().srem(key, token_hash)
+        await session_store.set_remove(f"{self._token_index_prefix}{chat_id}", token_hash)
 
     async def _index_members(self, chat_id: int) -> list[str]:
-        key = f"{self._token_index_prefix}{chat_id}"
-        if session_store._use_memory():
-            raw = session_store._memory_get(key)
-            return json.loads(raw) if raw else []
-        members = await session_store._client().smembers(key)
-        return list(members)
+        return await session_store.set_members(f"{self._token_index_prefix}{chat_id}")
 
     async def issue_token(self, chat_id: int, *, label: str | None = None) -> str:
         """Mint a new bearer token for chat_id. Returns the RAW token — the only
