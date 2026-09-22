@@ -359,35 +359,41 @@ named functions instead of inline `try/except`.
 
 ## Second Brain (dashboard API)
 
-`src/api/brain.py` — the dashboard's read/search/tag surface over the single,
-operator-wide Second Brain link graph (only `/links/view`, a display
-preference, is per-user-scoped).
+`src/api/brain.py` — the dashboard's read/search/tag surface over the Second
+Brain link graph. Every route is owner-scoped per tenant (ADR-0043): a caller
+sees, searches, previews, tags, or rebuilds only their own links; a miss is
+always 404, never 403.
 
 #### `search_links` / `get_graph` / `list_links` — `GET /api/brain/search`, `/graph`, `/links` — `src/api/brain.py`
-**Does:** Thin route wrappers over `brain.search_links`/`brain.get_graph`/`brain.list_links`
-(documented in `FUNCTION_INDEX.md`); `list_links` passes the caller's chat_id as
-`viewer_chat_id` for tag-payload scoping even though the link inventory itself is shared.
+**Does:** Thin route wrappers over `brain.search_links_scoped`/`brain.get_graph`/`brain.list_links`
+(documented in `FUNCTION_INDEX.md`), all passed the caller's `chat_id` as
+`owner_chat_id`; `list_links` additionally passes it as `viewer_chat_id` for
+tag-payload scoping.
 **Entry point:** dashboard Brain page fetches.
 
 #### `get_link_preview` / `get_link_preview_image` — `GET /api/brain/links/{id}/preview[/image]` — `src/api/brain.py`
-**Does:** Returns a link's cached OG preview, or (for `/image`) proxies the
-resolved OG image through our own origin via `fetch_public_image` — needed
-because some hosts reject hotlinking from the browser directly.
+**Does:** Returns a link's cached OG preview, scoped to the caller
+(`owner_chat_id`), or (for `/image`) proxies the resolved OG image through our
+own origin via `fetch_public_image` — needed because some hosts reject
+hotlinking from the browser directly. Ownership is proved *before* the remote
+fetch, closing an IDOR-plus-fetch-oracle on another tenant's link.
 **Entry point:** dashboard Brain link cards.
 
 #### `get_link_tags` / `attach_link_tag` / `detach_link_tag` — `GET/POST/DELETE /api/brain/links/{id}/tags[/{tag_id}]` — `src/api/brain.py`
-**Does:** Standard tag-attachment CRUD scoped to the caller's tags; `attach`
-maps an FK violation (link doesn't exist) to a 404 rather than a 500.
+**Does:** Tag-attachment CRUD scoped to both the caller's tags *and* the
+target link's ownership — `attach`/`detach` prove `link.chat_id == caller` in
+the same transaction as the mutation (`src/db/tags.py`), not just the tag.
 **Entry point:** dashboard Brain link tag picker.
 
 #### `get_links_view` / `update_links_view` — `GET/PUT /api/brain/links/view` — `src/api/brain.py`
-**Does:** Per-user display preference (sort order, page size) — the one
-per-user-scoped thing on this router.
+**Does:** Per-user display preference (sort order, page size).
 **Entry point:** dashboard Brain page load / sort-order change.
 
 #### `rebuild_graph()` — `POST /api/brain/rebuild` — `src/api/brain.py`
-**Does:** Triggers `brain.rebuild_graph()`; maps a `RuntimeError` (already
-rebuilding) to 409.
+**Does:** Triggers `brain.rebuild_graph(chat_id)`, scoped to the caller's own
+nodes; maps a `RuntimeError` (already rebuilding) to 409. The rate-limit key
+(`brain_rebuild`, 3/60s) is still process-local and shared across callers — a
+burst control, not a tenant boundary.
 **Entry point:** dashboard "Rebuild Graph" button; same underlying job as `/rebuild-graph` in the Telegram bot (`_cmd_rebuild_graph`).
 
 ---
@@ -524,6 +530,10 @@ domain from Vision-extracted links). Both normalize via `_normalize_domain`
 #### `get_recovery_settings` / `update_recovery_settings` — `GET/PUT /api/controls/recovery-settings` — `src/api/controls.py`
 **Does:** Toggles whether stuck-job recovery notifications are sent to Telegram.
 **Entry point:** dashboard Controls page.
+
+#### `get_spending` / `update_spending` — `GET /api/controls/spending`, `PUT /api/controls/spending/{chat_id}` — `src/api/controls.py`
+**Does:** GET returns the caller's own spending summary (`database.spend_summary`) — limits, today's/month's settled+reserved amounts, remaining headroom, paid-Gemini status. PUT sets another chat's limits and is Operator-only (`settings.is_operator(real_id)`, 403 otherwise) — ordinary users can only view their own summary. Handoff §2, ADR-0064.
+**Entry point:** dashboard Controls page "Spending" section (`web/components/controls/spending-panel.tsx`) reads GET; PUT has no admin UI yet, callable directly.
 
 #### `list_templates` / `create_template` / `update_template` / `delete_template` — `GET/POST/PUT/DELETE /api/templates[/{name}]` — `src/api/templates.py`
 **Does:** User-defined enrichment template CRUD, merged with built-ins
@@ -785,8 +795,9 @@ Handler groups (all in `commands.py`):
   4-char job-id suffix to a long-video job (rejects shorts with a specific
   message), then enqueues either `prd_intent` (if intent text given),
   `prd_auto_resend` (if already generated), or `prd_auto`.
-- **`_cmd_find`** — `/find <query>` — semantic search via `brain.search_links`
-  (0.58 similarity floor, top 5), GitHub-enriches results, formats stars/forks/language/age inline.
+- **`_cmd_find`** — `/find <query>` — semantic search scoped to the caller via
+  `brain.search_links_scoped` (0.58 similarity floor, top 5, ADR-0043),
+  GitHub-enriches results, formats stars/forks/language/age inline.
 - **`_cmd_rebuild_graph`** — `/rebuild-graph` — same underlying job as the
   dashboard's `POST /api/brain/rebuild`, guarded by `brain._rebuild_lock` so a second tap while running just reports "in progress."
 - **`_cmd_download_md`** — `/download_md <url>` — cache-or-fetch-via-Jina, same
@@ -905,7 +916,16 @@ once, then loops forever: `queue.dequeue()` (BRPOP-based, see `FUNCTION_INDEX.md
 **Does:** The task-discriminator dispatch table documented in this file's own
 module docstring (`video`/`enrichment`/`article`/`repo`/`document`/`link`/`prd_auto`/`prd_auto_resend`/`prd_intent`).
 Unknown discriminators are logged and dropped, not raised — a malformed
-envelope can't crash the loop.
+envelope can't crash the loop. Before any of that (handoff §2 "Queue lineage
+and execution bounds", ADR-0064): rejects an envelope whose `depth` exceeds
+`settings.MAX_TASK_DEPTH` or `attempt` exceeds `settings.MAX_TASK_ATTEMPTS`
+(marks the job `error` rather than looping forever on a mis-chained follow-up),
+then runs the handler inside `asyncio.timeout(settings.MAX_TASK_SECONDS)` —
+a hung handler is marked `error` ("Task timed out") instead of blocking the
+dequeue loop forever. A reservation left mid-flight by that cancellation is
+recovered later by `spending.release_stale_reservations`, not settled/released
+inline — `_dispatch` has no visibility into which provider call, if any, was
+in flight when the timeout fired.
 **Called from:** `loop`.
 
 #### `_make_handler(module_name, error_event, error_message, *, pass_skip_document=False, pass_job_id=False)` — `src/worker.py`

@@ -120,12 +120,14 @@ async def _report_photo_links(
 
 async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) -> None:
     from src.services.gemini import call_gemini_photo_links
+    from src.services.spending import CostContext
 
     await sender.send_message(chat_id, "🔍 Scanning image for links...")
     photo_bytes, mime_type = await sender.download_photo(file_id)
     result = await call_gemini_photo_links(
         [{"bytes": photo_bytes, "mime_type": mime_type}],
         caption=caption,
+        cost=CostContext(chat_id=chat_id, job_id=f"photo_{chat_id}", operation="photo_links"),
     )
     await _report_photo_links(chat_id, result, f"photo_{chat_id}", plural=False)
 
@@ -134,6 +136,7 @@ async def _handle_single_photo(chat_id: int, file_id: str, caption: str | None) 
 async def _process_media_group(chat_id: int, media_group_id: str) -> None:
     """Read all accumulated file IDs for a media group, download them, and run Gemini."""
     from src.services.gemini import call_gemini_photo_links
+    from src.services.spending import CostContext
 
     client = queue._client()
     file_ids: list[str] = await client.lrange(f"photo_group_files:{media_group_id}", 0, -1)  # pyright: ignore[reportGeneralTypeIssues]
@@ -145,7 +148,10 @@ async def _process_media_group(chat_id: int, media_group_id: str) -> None:
     for fid in file_ids:
         b, mt = await sender.download_photo(fid)
         images.append({"bytes": b, "mime_type": mt})
-    result = await call_gemini_photo_links(images, caption=None)
+    cost = CostContext(
+        chat_id=chat_id, job_id=f"photo_group_{media_group_id}", operation="photo_links"
+    )
+    result = await call_gemini_photo_links(images, caption=None, cost=cost)
     await _report_photo_links(chat_id, result, f"photo_group_{media_group_id}", plural=True)
 
 

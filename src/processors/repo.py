@@ -489,9 +489,14 @@ async def run(job: dict) -> None:
     flags = {"no_readme": bundle.get("no_readme", False)}
     prompt = _build_repo_prompt(bundle, freestyle_prompt=freestyle_prompt, flags=flags)
 
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
+    cost = CostContext(chat_id=chat_id, job_id=job_id, operation="repo_analysis")
     try:
-        raw = await gemini.generate(prompt, model="gemini-2.5-flash", schema=REPO_ANALYSIS_SCHEMA)
-    except GeminiUnavailableError as exc:
+        raw = await gemini.generate(
+            prompt, model="gemini-2.5-flash", schema=REPO_ANALYSIS_SCHEMA, cost=cost
+        )
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded) as exc:
         log.error("repo_gemini_failed", job_id=job_id)
         await database.update_job_status(job_id, "error", error_msg=str(exc)[:200])
         await send_message(chat_id, f"{tag}\n❌ Gemini unavailable, try /force later.")

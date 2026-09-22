@@ -9,6 +9,14 @@ Discriminators currently in use:
     {"task": "prd_auto",    "job_id": "..."}                              # slice #6
     {"task": "prd_intent",  "job_id": "...", "intent_text": "..."}        # slice #7
 
+Queue lineage (handoff §2 "Queue lineage and execution bounds"): every
+envelope also carries `root_task_id` (the first task in a chain — a follow-up
+task the worker auto-enqueues after another, like `bookmarks_enrich` after
+`bookmarks`, inherits its parent's), `depth` (hop count from the root, 0 for
+the root itself), and `attempt` (redelivery count of this exact task, 1 for a
+fresh enqueue). `_dispatch` in `src/worker.py` rejects envelopes past
+`settings.MAX_TASK_DEPTH`/`MAX_TASK_ATTEMPTS` rather than looping forever.
+
 See PRD §2.2.4 for the protocol contract.
 """
 
@@ -21,6 +29,7 @@ import redis.asyncio as redis
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from src.config import settings
+from src.db.core import generate_id
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -54,13 +63,42 @@ async def close() -> None:
         _redis = None
 
 
+def chained_envelope(parent: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
+    """Build a follow-up envelope that inherits *parent*'s lineage — same
+    `root_task_id`, `depth` + 1, fresh `attempt` of 1 (a new hop, not a
+    redelivery of the parent). Use this whenever a processor/worker chains
+    one task onto another (e.g. `bookmarks` → `bookmarks_enrich`)."""
+    return {
+        **task,
+        "root_task_id": parent.get("root_task_id") or parent.get("job_id"),
+        "depth": parent.get("depth", 0) + 1,
+        "attempt": 1,
+    }
+
+
 async def enqueue(task: dict[str, Any]) -> None:
-    """Push a task envelope onto the queue. Task must include 'task' and 'job_id' keys."""
+    """Push a task envelope onto the queue. Task must include 'task' and
+    'job_id' keys. A root task (no explicit lineage passed) gets a fresh
+    `root_task_id`, `depth=0`, `attempt=1` — use `chained_envelope` to enqueue
+    a follow-up that inherits its parent's lineage instead."""
     if "task" not in task or "job_id" not in task:
         raise ValueError(f"Invalid task envelope (missing 'task' or 'job_id'): {task!r}")
-    payload = json.dumps(task)
+    envelope = {
+        "root_task_id": task.get("root_task_id") or generate_id(),
+        "depth": task.get("depth", 0),
+        "attempt": task.get("attempt", 1),
+        **task,
+    }
+    payload = json.dumps(envelope)
     await _client().lpush(_QUEUE_KEY, payload)
-    log.info("task_queued", task=task["task"], job_id=task["job_id"])
+    log.info(
+        "task_queued",
+        task=envelope["task"],
+        job_id=envelope["job_id"],
+        root_task_id=envelope["root_task_id"],
+        depth=envelope["depth"],
+        attempt=envelope["attempt"],
+    )
 
 
 async def dequeue() -> dict[str, Any] | None:

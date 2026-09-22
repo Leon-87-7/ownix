@@ -66,7 +66,10 @@ async def run(job: dict) -> None:
         if result.get("error"):
             raise RuntimeError(result["error"].get("message", "Frame extraction failed"))
         frames = result.get("frames", [])
-        selections = await gemini.select_informative_screenshots(frames)
+        from src.services.spending import CostContext
+
+        cost = CostContext(chat_id=chat_id, job_id=job_id, operation="screenshots_select")
+        selections = await gemini.select_informative_screenshots(frames, cost=cost)
         valid_selections = [
             (number, selected)
             for number, selected in enumerate(selections, 1)

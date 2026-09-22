@@ -373,7 +373,7 @@ _ANALYSIS = {
 async def test_run_calls_gemini_flash_with_schema(monkeypatch: pytest.MonkeyPatch) -> None:
     gemini_calls: list[dict] = []
 
-    async def spy_generate(prompt, *, model, schema=None):
+    async def spy_generate(prompt, *, model, schema=None, cost=None):
         gemini_calls.append({"model": model, "schema": schema})
         return _json.dumps(_ANALYSIS)
 

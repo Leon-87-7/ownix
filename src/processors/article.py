@@ -215,9 +215,12 @@ async def run(job: dict, *, skip_document: bool = False) -> None:
 
     # 5. Gemini call
     from src.services.gemini import GeminiUnavailableError, generate
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
+    cost = CostContext(chat_id=chat_id, job_id=job_id, operation="article_analysis")
     try:
-        raw = await generate(prompt, model="gemini-2.5-flash")
-    except GeminiUnavailableError:
+        raw = await generate(prompt, model="gemini-2.5-flash", cost=cost)
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded):
         await database.update_job_status(job_id, "error")
         await send_inline_keyboard(
             chat_id,

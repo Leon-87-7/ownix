@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from src import database
+from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.validators import is_valid_domain_name
 
@@ -56,6 +57,16 @@ class AccessibilitySettingsIn(BaseModel):
 
 class ScoutSettingsIn(BaseModel):
     autonomous_enabled: bool
+
+
+class SpendLimitsIn(BaseModel):
+    # Operator-only write (handoff §2) — ordinary users cannot raise their own
+    # hard limit, so this model isn't reachable from a non-operator request.
+    daily_limit_micros: int | None = Field(default=None, ge=0)
+    monthly_limit_micros: int | None = Field(default=None, ge=0)
+    allow_paid_gemini: bool = False
+    enabled: bool = True
+    currency: str = Field(default="USD", min_length=3, max_length=3)
 
 
 def _normalize_domain(raw: str) -> str:
@@ -239,3 +250,29 @@ async def update_accessibility_settings(
         haptic_motion=body.haptic_motion,
         voice_uri=body.voice_uri,
     )
+
+
+@controls_router.get("/spending")
+async def get_spending(request: Request) -> dict:
+    """Own spending summary (handoff §2) — limits, today's/month's settled
+    and reserved amounts, remaining headroom, and paid-Gemini status."""
+    chat_id: int = request.state.user["id"]
+    return await database.spend_summary(chat_id)
+
+
+@controls_router.put("/spending/{chat_id}")
+async def update_spending(chat_id: int, body: SpendLimitsIn, request: Request) -> dict:
+    """Set another chat's spend limits — Operator-only (handoff §2). Ordinary
+    users may only view their own summary via `GET /spending`."""
+    real_id = int(request.state.user["real_id"])
+    if not settings.is_operator(real_id):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    await database.set_spend_limits(
+        chat_id,
+        daily_limit_micros=body.daily_limit_micros,
+        monthly_limit_micros=body.monthly_limit_micros,
+        allow_paid_gemini=body.allow_paid_gemini,
+        enabled=body.enabled,
+        currency=body.currency,
+    )
+    return await database.spend_summary(chat_id)

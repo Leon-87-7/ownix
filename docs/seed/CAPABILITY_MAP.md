@@ -22,7 +22,7 @@ the lookup the rest of `docs/seed/` doesn't provide. Same facts, opposite index.
 | Document parsing (.pdf, .docx, .xlsx, .pptx, .png) | `processors/document.py` | `storage` (GCS), `parse` (liteparse), `gemini_client`, `database` | `detect_pipeline` → `document` task (URL or upload); dashboard "Docs" surface | ADR-0023 |
 | Photo / screenshot link extraction | inline in `telegram/webhook.py` (no queue) | `gemini_photo`, `utils/markdown.py`, `github` (repo enrichment) | Telegram photo message → inline pipeline | ADR-0003, ADR-0005, ADR-0024 (batch) |
 | Direct link add (no processing) | `processors/link.py` (via `brain.ingest_links`) | `og_image`, `brain` | `/addlink <url>` or dashboard "Ingest Link" modal | ADR-0039 |
-| Second Brain (semantic search / link graph) | `brain.py` | Gemini embeddings, NumPy cosine similarity, Drive (Obsidian `.md`) | `/find`, `GET /api/brain/search`, `GET /api/brain/graph` | ADR-0027, ADR-0028 |
+| Second Brain (semantic search / link graph, per-tenant) | `brain.py` | Gemini embeddings, NumPy cosine similarity, Drive (Obsidian `.md`) | `/find`, `GET /api/brain/search`, `GET /api/brain/graph` | ADR-0027, ADR-0028, ADR-0043 |
 | Mini-PRD generation (auto + intent slots) | `processors/prd.py` | `gemini_client`, `drive`, `sheets`, `brain`, `telegram/sender` | auto-fires post-enrichment; `/spec <suffix> [intent]`; dashboard "Build Spec" | ADR-0004, PRD.md §14 |
 | Freestyle / custom-prompt reprocessing | `enrichment.py` / `article.py` via `chat_state` | `gemini_client` | `/freestyle <url>`, "✍️ Freestyle" button | — |
 | Recipes (named, saved custom prompts) | `db/templates.py` | `gemini_client` | `prompts` route, UI label **Recipes** | — |
@@ -39,6 +39,7 @@ the lookup the rest of `docs/seed/` doesn't provide. Same facts, opposite index.
 | Auth (Telegram Login + sessions) | `src/auth/` | Redis sessions | `POST /api/auth`, `/api/*` middleware | ADR-0016 |
 | Invite gate / onboarding | `services/invite_notifications.py` | `database` (users, invites) | Signup flow (Telegram + web) | ADR-0031 |
 | Ops bot (user/invite administration) | `services/ops_bot.py` | `database` | `POST /webhook/ops` | ADR-0036 |
+| Per-user spending guardrails (paid-Gemini budget ledger) | `services/spending.py`, `services/provider_pricing.py` | `database` (`usage_ledger`, `user_spend_limits`) | Gated inside `services/gemini.py`'s `_call_with_fallback`; `GET/PUT /api/controls/spending[/{chat_id}]` | ADR-0064 |
 | Web dashboard surfaces (Feed, Intake, Brain, Collections, Recipes, Settings, Docs, Newsletter Digest) | `web/app/(dashboard)/*`, `src/api/*` | session cookie → FastAPI `/api/*` | Next.js routes (Vercel) | WEB-PRD.md, ADR-0034 |
 
 ---

@@ -44,14 +44,56 @@ async def test_enqueue_dequeue_roundtrip() -> None:
     envelope = {"task": "video", "job_id": "20260517_120000_ABCD"}
     await queue_module.enqueue(envelope)
     got = await queue_module.dequeue()
-    assert got == envelope
+    assert got["task"] == "video"
+    assert got["job_id"] == "20260517_120000_ABCD"
 
 
 async def test_enqueue_with_extra_fields() -> None:
     envelope = {"task": "prd_intent", "job_id": "X", "intent_text": "desktop app"}
     await queue_module.enqueue(envelope)
     got = await queue_module.dequeue()
-    assert got == envelope
+    assert got["task"] == "prd_intent"
+    assert got["job_id"] == "X"
+    assert got["intent_text"] == "desktop app"
+
+
+# ---------------------------------------------------------------------------
+# Queue lineage (handoff §2 "Queue lineage and execution bounds")
+# ---------------------------------------------------------------------------
+
+
+async def test_enqueue_stamps_a_root_task_with_fresh_lineage() -> None:
+    await queue_module.enqueue({"task": "video", "job_id": "A"})
+    got = await queue_module.dequeue()
+    assert got["depth"] == 0
+    assert got["attempt"] == 1
+    assert got["root_task_id"]  # a fresh id, not job_id — no parent to inherit from
+
+
+async def test_enqueue_preserves_explicit_lineage() -> None:
+    await queue_module.enqueue(
+        {"task": "video", "job_id": "A", "root_task_id": "root-1", "depth": 2, "attempt": 3}
+    )
+    got = await queue_module.dequeue()
+    assert got["root_task_id"] == "root-1"
+    assert got["depth"] == 2
+    assert got["attempt"] == 3
+
+
+def test_chained_envelope_inherits_root_and_increments_depth() -> None:
+    parent = {"task": "bookmarks", "job_id": "job-1", "root_task_id": "job-1", "depth": 0, "attempt": 1}
+    child = queue_module.chained_envelope(parent, {"task": "bookmarks_enrich", "job_id": "job-1"})
+    assert child["root_task_id"] == "job-1"
+    assert child["depth"] == 1
+    assert child["attempt"] == 1  # a fresh hop, not a redelivery of the parent
+
+
+def test_chained_envelope_falls_back_to_parent_job_id_as_root() -> None:
+    """A root task (no root_task_id of its own yet) chains onto its own job_id."""
+    parent = {"task": "video", "job_id": "job-1"}
+    child = queue_module.chained_envelope(parent, {"task": "enrichment", "job_id": "job-1"})
+    assert child["root_task_id"] == "job-1"
+    assert child["depth"] == 1
 
 
 async def test_dequeue_empty_returns_none() -> None:

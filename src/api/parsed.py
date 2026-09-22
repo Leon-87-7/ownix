@@ -146,6 +146,8 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
             detail={"field": "job", "message": "Document text could not be extracted"},
         ) from exc
     from src.services.gemini import generate
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
     if kind == "clean":
         instruction = "Clean this parsed document text into well-formatted Markdown while preserving the same content."
         key = f"enriched/{sha}_clean.md"
@@ -155,7 +157,11 @@ async def _generate_output(job: dict, kind: str, prompt: str | None = None) -> d
         instruction = prompt or "Summarize this document."
         key = f"enriched/{sha}_freestyle_{ts}.md"
         title = "Freestyle"
-    md = await generate(f"{instruction}\n\nDOCUMENT:\n{text}", model="gemini-2.5-flash")
+    cost = CostContext(chat_id=job["chat_id"], job_id=job["id"], operation=f"doc_parser_{kind}")
+    try:
+        md = await generate(f"{instruction}\n\nDOCUMENT:\n{text}", model="gemini-2.5-flash", cost=cost)
+    except (PaidProviderDisabled, SpendingLimitExceeded) as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
     await storage.upload(key, md.encode("utf-8"), "text/markdown")
     output = await database.add_document_output(job["id"], kind, key, title)
     if job.get("telegram_delivery") == "on":

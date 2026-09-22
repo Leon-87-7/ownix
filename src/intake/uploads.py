@@ -78,10 +78,12 @@ async def ocr_image_links(chat_id: int, data: bytes, content_type: str) -> dict:
     """
     from src.services.gemini import call_gemini_photo_links
     from src.services.github import enrich_github_links
+    from src.services.spending import CostContext
 
     result = await call_gemini_photo_links(
         [{"bytes": data, "mime_type": content_type}],
         caption=None,
+        cost=CostContext(chat_id=chat_id, job_id=f"photo_{chat_id}", operation="photo_links"),
     )
     links = result.get("links", [])
     summary = result.get("summary", "")

@@ -253,30 +253,69 @@ The Ops Telegram bot's command handlers and Telegram-send wrappers (mirrors `src
 
 ### gemini.py
 
-#### `generate(prompt: str, *, model: str, schema=None) -> str`
-**Does:** The base text-generation call: tries `GEMINI_FREE_API_KEY` then `GEMINI_PAID_API_KEY` via `_call_with_fallback`, raising `GeminiUnavailableError` only if both keys fail. Every other Gemini call in this file is built on top of this fallback pattern.
-**Called from:** `resolve_tool_urls` (same file), `run` in `article.py`/`document.py`/`repo.py`, `enrich` in `enrichment.py`, `run_prd` in `prd.py`.
-**Usage:** `text = await generate(prompt, model="gemini-2.5-flash")`
+*Every public function below now requires a keyword-only `cost: CostContext`
+(`src/services/spending.py`) — the paid attempt inside `_call_with_fallback` is
+gated on a durable per-user reservation before it runs (ADR-0064, handoff §2).
+The free attempt is unmetered. `PaidProviderDisabled`/`SpendingLimitExceeded`
+propagate out of any of these if the paid fallback is blocked.*
 
-#### `call_gemini_vision(frames: list[dict]) -> dict`
+#### `generate(prompt: str, *, model: str, cost: CostContext, schema=None) -> str`
+**Does:** The base text-generation call: tries `GEMINI_FREE_API_KEY` then, if that fails, reserves budget for and tries `GEMINI_PAID_API_KEY` via `_call_with_fallback`, raising `GeminiUnavailableError` only if both keys fail (or the paid-gating exceptions if the paid attempt is blocked before it starts). Every other Gemini call in this file is built on top of this fallback pattern.
+**Called from:** `resolve_tool_urls` (same file), `run` in `article.py`/`document.py`/`repo.py`, `enrich` in `enrichment.py`, `run_auto`/`run_intent` in `prd.py`.
+**Usage:** `text = await generate(prompt, model="gemini-2.5-flash", cost=CostContext(chat_id=chat_id, job_id=job_id, operation="article_analysis"))`
+
+#### `call_gemini_vision(frames: list[dict], transcript_text=None, *, cost: CostContext) -> dict`
 **Does:** Sends inline JPEG frames (base64) to Gemini for short-video content analysis; returns `{main_frame_index, summary, links}`.
 **Called from:** `run` in `src/processors/short_video.py`.
-**Usage:** `vision = await call_gemini_vision(frames)`
+**Usage:** `vision = await call_gemini_vision(frames, cost=cost)`
 
-#### `call_gemini_photo_links(images: list[dict], *, caption=None) -> dict`
+#### `call_gemini_photo_links(images: list[dict], *, caption=None, cost: CostContext) -> dict`
 **Does:** OCR-style extraction of URLs/domains that are **verbatim visible** in one or more photos (screenshots). After the model call, runs `_filter_grounded_links` to drop any URL whose domain isn't literally present in the model's own quoted "verbatim" text or the summary — a guard against Gemini hallucinating plausible-looking URLs.
-**Called from:** `_handle_single_photo`, `_process_media_group` in `src/telegram/routing.py`.
-**Usage:** `result = await call_gemini_photo_links(images, caption=msg.caption)`
+**Called from:** `_handle_single_photo`, `_process_media_group` in `src/telegram/routing.py`; `ocr_image_links` in `src/intake/uploads.py`.
+**Usage:** `result = await call_gemini_photo_links(images, caption=msg.caption, cost=cost)`
 
-#### `resolve_tool_urls(tools: list[dict]) -> list[dict]`
-**Does:** Given a list of tool/product names Gemini extracted, asks Gemini a second time for each item's canonical homepage URL. Falls back to `url: None` on every item if Gemini is unavailable rather than raising.
+#### `resolve_tool_urls(tools: list[dict], *, cost: CostContext) -> list[dict]`
+**Does:** Given a list of tool/product names Gemini extracted, asks Gemini a second time for each item's canonical homepage URL. Falls back to `url: None` on every item if Gemini is unavailable, or if the paid fallback is blocked, rather than raising.
 **Called from:** Not called elsewhere in the codebase yet — available to use directly (zero real callers, even after grep verification; likely built for a not-yet-wired enrichment step).
-**Usage:** `resolved = await resolve_tool_urls([{"name": "Redis", "type": "tool"}])`
+**Usage:** `resolved = await resolve_tool_urls([{"name": "Redis", "type": "tool"}], cost=cost)`
 
 #### `extract_json(raw: str, *, root: str = "object") -> dict | list`
 **Does:** Strips ```` ```json ```` markdown fences and parses the first balanced `{...}` (or `[...]` if `root="array"`) out of a raw LLM text response — the single shared JSON-extraction routine every Gemini caller in the codebase uses instead of hand-rolling regex.
-**Called from:** `call_gemini_vision`, `call_gemini_photo_links`, `resolve_tool_urls` (same file); `run` in `article.py`/`document.py`; `_extract_json` in `enrichment.py`; `run_prd` in `prd.py`.
+**Called from:** `call_gemini_vision`, `call_gemini_photo_links`, `resolve_tool_urls` (same file); `run` in `article.py`/`document.py`; `_extract_json` in `enrichment.py`; `run_auto`/`run_intent` in `prd.py`.
 **Usage:** `data = extract_json(response.text, root="array")`
+
+### spending.py (handoff §2, ADR-0064)
+
+Per-user spending guardrail service — CostContext, price estimation, and the
+free→paid Gemini gate. Thin wrapper over the transactional ledger in
+`src/db/spending.py` (exported through `src.database`).
+
+#### `CostContext(chat_id, operation, job_id=None, root_task_id=None, attempt=1)`
+**Does:** The unit every paid-call site threads through to identify who to charge and why. `operation` is a short business-level tag (`"article_analysis"`, `"brain_embed"`, …), independent of the Gemini-layer's own `log_ok`/`log_fail` event names.
+**Called from:** Every `src/processors/*.py` Gemini call site, `src/brain.py`'s `_embed`, `src/telegram/routing.py`, `src/intake/uploads.py`, `src/api/parsed.py`.
+
+#### `reserve_paid_gemini(cost, *, model, estimated_micros) -> Reservation`
+**Does:** Raises `PaidProviderDisabled` if `PAID_AI_ENABLED=0` globally or the chat's `allow_paid_gemini` flag is off/missing (missing row = no paid access, never unlimited); otherwise reserves against the ledger, raising `SpendingLimitExceeded` if the reservation would exceed a hard daily/monthly limit.
+**Called from:** `_call_with_fallback` in `gemini.py`, immediately before the paid key is ever dialed.
+**Usage:** `resv = await spending.reserve_paid_gemini(cost, model="gemini-2.5-flash", estimated_micros=est)`
+
+#### `settle(reservation, *, actual_micros) -> None` / `release(reservation) -> None`
+**Does:** Settle records the real cost after a successful paid call (preferring the provider's own token usage via `provider_pricing.actual_micros_from_response` over the pre-call estimate); release un-reserves budget after a paid call that never actually happened (e.g. it raised before completing). Both are idempotent — see `src/db/spending.py`.
+**Called from:** `_call_with_fallback` in `gemini.py`.
+
+#### `summary(chat_id) -> dict` / `release_stale_reservations(older_than_seconds=1800) -> int`
+**Does:** `summary` backs `GET /api/controls/spending`. `release_stale_reservations` is the recovery sweep for a reservation a crashed/timed-out call never settled or released — registered with APScheduler in `src/main.py` (every 10 minutes) and is also what a `_dispatch` task-timeout (`src/worker.py`) relies on instead of settling/releasing inline, since the dispatch layer has no visibility into which provider call (if any) was in flight when the timeout fired.
+
+### provider_pricing.py (handoff §2)
+
+Versioned Gemini price catalog (USD micros per 1M tokens — verify against
+`ai.google.dev/pricing` before enabling paid fallback for real spend; this is
+a starting catalog, not a live feed) plus conservative pre-call cost
+estimators (`estimate_text_micros`, `estimate_vision_micros`,
+`estimate_embedding_micros`, `estimate_audio_micros`) and
+`actual_micros_from_response`, which prefers a Gemini response's own
+`usage_metadata` token counts over the pre-call estimate when the response
+reports them (text/vision/photo calls do; embeddings don't).
 
 ### github.py
 
@@ -608,6 +647,8 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 
 *Note: `src/api/brain.py` defines route handlers with the **same names** (`get_graph`, `list_links`, `get_link_preview`, `search_links`, `rebuild_graph`) that thinly wrap these — don't confuse the two when grepping.*
 
+*Every read/mutation below is owner-scoped per tenant (ADR-0043) — a caller sees, searches, previews, tags, or rebuilds only their own links. Legacy rows with no resolvable owner fall back to `settings.OPERATOR_CHAT_ID`, never to an arbitrary tenant.*
+
 #### `normalize_url(url: str) -> str`
 **Does:** Canonicalizes a URL for graph-node identity by stripping query string, fragment, and trailing slash.
 **Called from:** `ingest_links` (same file).
@@ -623,30 +664,30 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 **Called from:** `run` in `article.py`; `_deliver_prd` (`prd.py`); `_brain_ingest_safe` (`repo.py`); `_report_photo_links` (`webhook.py`).
 **Usage:** `await brain.ingest_links(extracted_links, topic, source_job_id)`
 
-#### `get_graph() -> dict[str, list[dict]]`
-**Does:** Returns the full graph as `{nodes, edges}` for the dashboard's force-graph visualization — nodes are every non-cancelled link, edges are derived on-request from pairwise cosine similarity (no persisted edge table).
+#### `get_graph(owner_chat_id: int) -> dict[str, list[dict]]`
+**Does:** Returns *owner_chat_id*'s own graph as `{nodes, edges}` for the dashboard's force-graph visualization — nodes are every non-cancelled link owned by the caller, edges are derived on-request from pairwise cosine similarity within that same owner's rows (no persisted edge table, and never a cross-tenant edge).
 **Called from:** `GET /graph` route wrapper in `src/api/brain.py`.
-**Usage:** `graph = await brain.get_graph()`
+**Usage:** `graph = await brain.get_graph(chat_id)`
 
-#### `list_links(limit=50, offset=0, q="", order="desc", viewer_chat_id=None) -> dict`
-**Does:** Paginated/searchable Brain links listing — `q` does a case-insensitive substring match across url/title/description plus exact tag-name match.
+#### `list_links(limit=50, offset=0, q="", order="desc", viewer_chat_id=None, owner_chat_id=None) -> dict`
+**Does:** Paginated/searchable Brain links listing — `q` does a case-insensitive substring match across url/title/description plus exact tag-name match. `owner_chat_id` scopes the returned rows; `viewer_chat_id` additionally scopes the attached-tag payload and `pinned_only` matching.
 **Called from:** `GET /links` route in `src/api/brain.py`.
-**Usage:** `page = await brain.list_links(limit=25, q="redis", viewer_chat_id=chat_id)`
+**Usage:** `page = await brain.list_links(limit=25, q="redis", viewer_chat_id=chat_id, owner_chat_id=chat_id)`
 
-#### `get_link_preview(link_id: str) -> dict | None`
-**Does:** Returns `{id, og_image_url}` for the Links table's hover/arrow-key preview panel, lazily resolving and caching `og_image_url` on first request.
-**Called from:** Preview route in `src/api/brain.py`.
-**Usage:** `preview = await brain.get_link_preview(link_id)`
+#### `get_link_preview(link_id: str, owner_chat_id: int) -> dict | None`
+**Does:** Returns `{id, og_image_url}` for the Links table's hover/arrow-key preview panel, lazily resolving and caching `og_image_url` on first request. `None` for a missing or not-owned link (404, never 403).
+**Called from:** Preview + preview-image routes in `src/api/brain.py`.
+**Usage:** `preview = await brain.get_link_preview(link_id, owner_chat_id=chat_id)`
 
-#### `search_links(query: str, top_k=5) -> list[dict]`
-**Does:** Embeds `query` and returns the top-k links by cosine similarity above `settings.BRAIN_MIN_SCORE`, capped at 20.
-**Called from:** `_cmd_find` in `src/telegram/commands.py`; `GET /search` route in `src/api/brain.py`.
-**Usage:** `hits = await brain.search_links("redis caching patterns", top_k=5)`
+#### `search_links_scoped(query: str, owner_chat_id: int, top_k=5, min_score=0.58) -> list[dict]`
+**Does:** Embeds `query` and returns the top-k links owned by `owner_chat_id`, by cosine similarity above `min_score`, capped at 20. Shared by the dashboard search route (`min_score=settings.BRAIN_MIN_SCORE`), Telegram/dashboard `/find` (`min_score=0.58`), and the Gardener MCP `scout` tool (default `min_score`). Formerly two functions — an unscoped `search_links` (issue #459) and this one — consolidated under ADR-0043.
+**Called from:** `find_command` in `src/intake/commands.py`; `GET /search` route in `src/api/brain.py`; `scout` MCP tool in `src/mcp_server.py`.
+**Usage:** `hits = await brain.search_links_scoped("redis caching patterns", owner_chat_id=chat_id, top_k=5)`
 
-#### `rebuild_graph() -> int`
-**Does:** Recomputes related-links for every node and rewrites every node's Drive `.md` file from scratch. Guarded by a module-level `asyncio.Lock` — raises `RuntimeError("rebuild_in_progress")` if already running. Returns the node count processed.
-**Called from:** `_do_rebuild` (`webhook.py`); `POST /rebuild` route in `src/api/brain.py`.
-**Usage:** `count = await brain.rebuild_graph()`
+#### `rebuild_graph(owner_chat_id: int) -> int`
+**Does:** Recomputes related-links and rewrites the Drive `.md` file for `owner_chat_id`'s own nodes only — relatedness and the written "Related" list never cross into another tenant's rows. Guarded by a module-level `asyncio.Lock` — raises `RuntimeError("rebuild_in_progress")` if already running. Returns the node count processed.
+**Called from:** `_do_rebuild` (`src/telegram/commands.py`); `POST /rebuild` route in `src/api/brain.py`.
+**Usage:** `count = await brain.rebuild_graph(chat_id)`
 
 #### `refresh_stale_links() -> None`
 **Does:** The scheduled maintenance job — repairs any links with `NULL` embeddings and refreshes the oldest Drive `.md` files, batch size scaled to corpus size (capped at 500). Same rebuild-lock guard as `rebuild_graph`.
@@ -655,12 +696,17 @@ The "Second Brain" semantic link graph: Gemini embeddings + NumPy cosine similar
 
 ### queue.py
 
-Redis-backed task queue (`video_jobs` list) — the handoff between the API/webhook process and the worker process.
+Redis-backed task queue (`video_jobs` list) — the handoff between the API/webhook process and the worker process. Every envelope also carries queue lineage (handoff §2, ADR-0064): `root_task_id`, `depth`, `attempt` — see the module docstring.
 
 #### `enqueue(task: dict) -> None`
-**Does:** Pushes a `{"task": ..., "job_id": ...}` envelope onto the Redis list; raises `ValueError` if either required key is missing.
+**Does:** Pushes a `{"task": ..., "job_id": ...}` envelope onto the Redis list; raises `ValueError` if either required key is missing. Stamps `root_task_id`/`depth`/`attempt` with fresh-root defaults (`depth=0`, `attempt=1`, a new `root_task_id`) unless the caller already supplied them (e.g. via `chained_envelope`).
 **Called from:** Nearly every job-creation path (`create_and_enqueue_job`, `job_recovery.py`, `repo_followup.py`, `webhook.py`, `worker.py`).
 **Usage:** `await queue.enqueue({"task": "article", "job_id": job_id})`
+
+#### `chained_envelope(parent: dict, task: dict) -> dict`
+**Does:** Builds a follow-up envelope that inherits *parent*'s `root_task_id`, increments `depth`, and resets `attempt` to 1 (a new hop, not a redelivery). Use whenever a processor/worker chains one task onto another.
+**Called from:** `_maybe_auto_enqueue_enrichment` (long-video → enrichment) and `_handle_bookmarks` (→ `bookmarks_enrich`) in `src/worker.py`.
+**Usage:** `await queue.enqueue(queue.chained_envelope(parent_task, {"task": "bookmarks_enrich", "job_id": job_id}))`
 
 #### `dequeue() -> dict | None`
 **Does:** Blocking pop with a 30s timeout; returns `None` on a normal idle timeout or a malformed envelope (logged). A real `ConnectionError` (Redis down) still propagates so the worker's retry/backoff path can react.

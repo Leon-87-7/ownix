@@ -269,12 +269,22 @@ async def _create_context_blob(space_id: str, subject: str, text: str, html: str
     body_text = text.strip() or strip_html_text(html)
     if not body_text:
         return
+    space = await database.get_space(space_id)
+    if space is None:
+        log.info("email_digest.context_skipped_space_missing", space_id=space_id)
+        return
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
+    cost = CostContext(
+        chat_id=space["chat_id"], job_id=f"space_context:{space_id}", operation="space_context"
+    )
     try:
         content = await gemini.generate(
             _build_context_prompt(subject, body_text),
             model="gemini-2.5-flash",
+            cost=cost,
         )
-    except GeminiUnavailableError:
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded):
         log.info("email_digest.context_gemini_unavailable", space_id=space_id)
         return
     except Exception as exc:

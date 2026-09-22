@@ -149,7 +149,7 @@ async def _acquire_transcript(
                     )
                 else:
                     transcript_text = await enrichment_proc.transcribe_audio(
-                        audio_b64, mime_audio, title
+                        audio_b64, mime_audio, title, chat_id=chat_id, job_id=job["id"]
                     )
                     if not transcript_text:
                         wordless = True
@@ -265,7 +265,10 @@ async def run(job: dict) -> None:
     )
 
     # 3. Gemini Vision analysis
-    vision = await gemini.call_gemini_vision(raw_frames, transcript_text=transcript_text)
+    from src.services.spending import CostContext
+
+    vision_cost = CostContext(chat_id=chat_id, job_id=job_id, operation="short_video_vision")
+    vision = await gemini.call_gemini_vision(raw_frames, transcript_text=transcript_text, cost=vision_cost)
     main_idx = max(0, min(vision.get("main_frame_index", 0), len(raw_frames) - 1))
     await _persist_best_frame_thumbnail(job_id, platform, raw_frames, main_idx)
     title = vision.get("title") or frame_resp.get("title", "")
