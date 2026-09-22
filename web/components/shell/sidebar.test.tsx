@@ -208,6 +208,21 @@ describe('Sidebar drawer focus containment (§3 accessibility handoff)', () => {
     expect(main).not.toHaveAttribute('inert');
   });
 
+  it("removes the collapsed desktop rail's logo button from tab order while the drawer is open", () => {
+    // Regression: every other rail control already drops out of tab order via
+    // tabIndex={open ? -1 : undefined} — this one was missed, so Shift+Tab
+    // could walk out of the open drawer onto it despite <main> being inert.
+    renderWithMain();
+    const [, railButton] = screen.getAllByRole('button', { name: 'Open navigation' });
+    expect(railButton).not.toHaveAttribute('tabindex');
+
+    fireEvent.click(railButton);
+    expect(railButton).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse navigation' }));
+    expect(railButton).not.toHaveAttribute('tabindex');
+  });
+
   it('has no axe violations closed or open', async () => {
     const { container } = renderWithMain();
     await expectNoAxeViolations(container);

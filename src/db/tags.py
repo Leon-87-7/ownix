@@ -396,8 +396,10 @@ async def sweep_job_tags_to_link(job_id: str, link_id: str, owner_chat_id: int) 
     chat_id-scoped, so this never sweeps onto another tenant's link.
     """
     for tag in await list_job_tags(job_id):
-        await attach_link_tag(link_id, tag["id"], owner_chat_id)
-        await detach_job_tag(job_id, tag["id"])
+        if await attach_link_tag(link_id, tag["id"], owner_chat_id):
+            await detach_job_tag(job_id, tag["id"])
+
+
 async def count_jobs_by_tag(chat_id: int) -> dict[str, int]:
     """Return {tag id: how many of this user's jobs carry it}.
 

@@ -77,6 +77,7 @@ export function SpendingPanel() {
       <div className="flex items-center gap-2 text-sm">
         <span className="text-ink">Paid Gemini</span>
         <span
+          role="status"
           className={`font-mono text-mono-label uppercase tracking-wider ${
             paidPaused ? 'text-status-error' : 'text-signal'
           }`}

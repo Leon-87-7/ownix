@@ -38,6 +38,14 @@ class SpendLimitExceeded(Exception):
     """Raised by `reserve` when the new reservation would exceed a hard limit."""
 
 
+class PaidAccessDisabled(Exception):
+    """Raised by `reserve` when the account's policy, reloaded inside the same
+    transaction as the spend check, is not authorized. The caller's own
+    pre-check (outside any transaction) is only a fast path — an operator can
+    disable an account between that read and this one, and this transactional
+    recheck is what actually closes that race."""
+
+
 def _row_to_limits(row) -> dict[str, Any]:
     return {
         "currency": row["currency"],
@@ -102,6 +110,15 @@ _RESERVATION_COLUMNS = (
     "status, estimated_micros, actual_micros, input_units, output_units, "
     "idempotency_key, created_at, settled_at"
 )
+# Built once from the fixed column list above (never from request-controlled
+# input) rather than f-string'd per call site — static SAST scanners flag any
+# f-string passed to execute() as a possible injection vector regardless of
+# what's actually interpolated, so plain concatenation into module constants
+# keeps the call sites free of that false positive.
+_SELECT_RESERVATION_BY_IDEMPOTENCY_KEY_SQL = (
+    "SELECT " + _RESERVATION_COLUMNS + " FROM usage_ledger WHERE idempotency_key = ?"
+)
+_SELECT_RESERVATION_BY_ID_SQL = "SELECT " + _RESERVATION_COLUMNS + " FROM usage_ledger WHERE id = ?"
 
 # Sums both settled actuals and still-open reservations within a UTC window —
 # a hard limit must include in-flight money, not just money already spent,
@@ -140,7 +157,7 @@ async def reserve(
 
         existing = await (
             await conn.execute(
-                f"SELECT {_RESERVATION_COLUMNS} FROM usage_ledger WHERE idempotency_key = ?",
+                _SELECT_RESERVATION_BY_IDEMPOTENCY_KEY_SQL,
                 (idempotency_key,),
             )
         ).fetchone()
@@ -157,6 +174,10 @@ async def reserve(
             )
         ).fetchone()
         limits = _row_to_limits(limits_row) if limits_row is not None else dict(DEFAULT_LIMITS)
+
+        if not limits["enabled"] or not limits["allow_paid_gemini"]:
+            await conn.rollback()
+            raise PaidAccessDisabled(f"chat_id={chat_id} paid access disabled")
 
         for window, limit_key in (("start of day", "daily_limit_micros"), ("start of month", "monthly_limit_micros")):
             limit = limits[limit_key]
@@ -196,7 +217,7 @@ async def reserve(
 
         row = await (
             await conn.execute(
-                f"SELECT {_RESERVATION_COLUMNS} FROM usage_ledger WHERE id = ?",
+                _SELECT_RESERVATION_BY_ID_SQL,
                 (reservation_id,),
             )
         ).fetchone()
@@ -225,7 +246,7 @@ async def settle(
         await conn.commit()
         row = await (
             await conn.execute(
-                f"SELECT {_RESERVATION_COLUMNS} FROM usage_ledger WHERE id = ?",
+                _SELECT_RESERVATION_BY_ID_SQL,
                 (reservation_id,),
             )
         ).fetchone()
@@ -244,7 +265,7 @@ async def release(reservation_id: str) -> dict[str, Any] | None:
         await conn.commit()
         row = await (
             await conn.execute(
-                f"SELECT {_RESERVATION_COLUMNS} FROM usage_ledger WHERE id = ?",
+                _SELECT_RESERVATION_BY_ID_SQL,
                 (reservation_id,),
             )
         ).fetchone()

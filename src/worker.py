@@ -401,6 +401,7 @@ async def _dispatch(task: dict) -> None:
             await database.update_job_status(
                 task["job_id"], "error", error_msg="Task timed out"
             )
+            await _notify_failure(job["chat_id"], task["job_id"], "❌ Processing timed out. Please try again.")
 
 
 async def reap_stale_jobs() -> None:

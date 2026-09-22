@@ -108,6 +108,8 @@ async def reserve_paid_gemini(
         )
     except database.SpendLimitExceeded as exc:
         raise SpendingLimitExceeded(str(exc)) from exc
+    except database.PaidAccessDisabled as exc:
+        raise PaidProviderDisabled(str(exc)) from exc
 
     return Reservation(
         id=row["id"], estimated_micros=row["estimated_micros"], idempotency_key=row["idempotency_key"]

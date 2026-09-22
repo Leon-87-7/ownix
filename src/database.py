@@ -203,6 +203,7 @@ from src.db.spaces import (
 from src.db.spending import (
     DEFAULT_DAILY_LIMIT_MICROS,
     DEFAULT_MONTHLY_LIMIT_MICROS,
+    PaidAccessDisabled,
     SpendLimitExceeded,
     get_spend_limits,
     release,
@@ -253,6 +254,7 @@ __all__ = [
     "DEFAULT_DAILY_LIMIT_MICROS",
     "DEFAULT_MONTHLY_LIMIT_MICROS",
     "MIGRATION_BACKUP_RETENTION",
+    "PaidAccessDisabled",
     "SCHEMA_SQL",
     "SpendLimitExceeded",
     "TagTokenCollisionError",

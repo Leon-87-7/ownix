@@ -175,16 +175,23 @@ def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict |
     from google import genai
     from google.genai import types
 
+    from src.services.provider_pricing import DEFAULT_MAX_OUTPUT_TOKENS
+
     client = genai.Client(
         api_key=api_key, http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS)
     )
+    # Every caller reserves against DEFAULT_MAX_OUTPUT_TOKENS (estimate_text_micros /
+    # estimate_vision_micros) — capping the real request to that same envelope keeps
+    # a response from ever costing more than what was reserved.
     if schema is not None:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=schema,
+            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
         )
-        return client.models.generate_content(model=model, contents=parts, config=config)
-    return client.models.generate_content(model=model, contents=parts)
+    else:
+        config = types.GenerateContentConfig(max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
+    return client.models.generate_content(model=model, contents=parts, config=config)
 
 
 async def _call_with_fallback(
@@ -231,16 +238,30 @@ async def _call_with_fallback(
     try:
         result = await asyncio.to_thread(fn, *args, api_key=settings.GEMINI_PAID_API_KEY, **fn_kwargs)
     except Exception as exc:
-        await spending.release(reservation)
         last_error = str(exc).splitlines()[0][:120]
         log.warning(log_fail, error=last_error, tier="paid")
+        try:
+            await spending.release(reservation)
+        except Exception:
+            # A ledger failure here must never mask the real provider error
+            # below — the stuck "reserved" row is reclaimed later by
+            # release_stale_reservations rather than retried inline.
+            log.exception("gemini.release_failed", reservation_id=reservation.id)
         await _maybe_alert_gemini_failures(last_error)
         raise GeminiUnavailableError(last_error)
 
     actual_micros = provider_pricing.actual_micros_from_response(
         price_model, result, fallback_micros=reservation.estimated_micros
     )
-    await spending.settle(reservation, actual_micros=actual_micros)
+    try:
+        await spending.settle(reservation, actual_micros=actual_micros)
+    except Exception:
+        # The paid call already succeeded and must be returned rather than
+        # thrown away — a failed settle just leaves the reservation
+        # "reserved" instead of recorded as spend; release_stale_reservations
+        # reclaims it later instead of this call reporting a billable
+        # success as a retryable failure.
+        log.exception("gemini.settle_failed", reservation_id=reservation.id)
     log.info(log_ok, tier="paid", actual_micros=actual_micros)
     return result
 

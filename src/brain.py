@@ -330,15 +330,18 @@ async def preflight() -> None:
 
 async def _rewrite_existing_md(
     conn, existing, url: str, topic: str, source_job_id: str, now_iso: str,
-    new_seen: int, last_seen: str,
+    new_seen: int, last_seen: str, owner_chat_id: int,
 ) -> None:
     """Re-upload the Obsidian .md for an already-known link with fresh counters."""
     existing_title = existing["title"] or url
     existing_topic = existing["topic"] or topic
 
-    # Load related links for the .md
+    # Load related links for the .md — scoped to owner_chat_id (ADR-0043) so a
+    # cross-tenant title never lands in this link's "Related" section.
     cursor2 = await conn.execute(
-        "SELECT id, embedding FROM links WHERE embedding IS NOT NULL"
+        "SELECT l.id, l.embedding FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
+        "WHERE l.embedding IS NOT NULL AND " + _OWNER_SCOPE_SQL,
+        _owner_scope_params(owner_chat_id),
     )
     all_rows = [dict(r) for r in await cursor2.fetchall()]
     ids_list, matrix = _load_embeddings(all_rows)
@@ -390,7 +393,7 @@ async def _rewrite_existing_md(
 
 async def _touch_existing_link(
     conn, existing, url: str, topic: str, source_job_id: str, now_iso: str,
-    og_image_url: str | None = None,
+    owner_chat_id: int, og_image_url: str | None = None,
 ) -> None:
     """Bump seen_count/last_seen and rewrite the Drive .md when one exists."""
     new_seen = existing["seen_count"] + 1
@@ -406,7 +409,8 @@ async def _touch_existing_link(
 
     if existing["drive_file_id"] and settings.GOOGLE_DRIVE_FOLDER_BRAIN:
         await _rewrite_existing_md(
-            conn, existing, url, topic, source_job_id, now_iso, new_seen, last_seen
+            conn, existing, url, topic, source_job_id, now_iso, new_seen, last_seen,
+            owner_chat_id,
         )
 
 
@@ -431,7 +435,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
         existing = await cursor.fetchone()
         if existing:
             await _touch_existing_link(
-                conn, existing, url, topic, source_job_id, now_iso,
+                conn, existing, url, topic, source_job_id, now_iso, chat_id,
                 og_image_url=link.get("og_image_url"),
             )
             return
@@ -634,10 +638,12 @@ async def get_graph(owner_chat_id: int) -> dict[str, list[dict]]:
     *owner_chat_id* (ADR-0043) — legacy-null rows resolve to the Operator only."""
     async with database.connection() as conn:
         cursor = await conn.execute(
-            f"""SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
+            """SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
                FROM links l
                LEFT JOIN jobs j ON j.id = l.source_job
-               WHERE COALESCE(j.status, '') != 'cancelled' AND {_OWNER_SCOPE_SQL}
+               WHERE COALESCE(j.status, '') != 'cancelled' AND """
+            + _OWNER_SCOPE_SQL
+            + """
                ORDER BY l.created_at ASC""",
             _owner_scope_params(owner_chat_id),
         )
@@ -1072,8 +1078,8 @@ async def rebuild_graph(owner_chat_id: int) -> int:
     async with _rebuild_lock:
         async with database.connection() as conn:
             cursor = await conn.execute(
-                f"""SELECT l.* FROM links l LEFT JOIN jobs j ON j.id = l.source_job
-                    WHERE {_OWNER_SCOPE_SQL}""",
+                "SELECT l.* FROM links l LEFT JOIN jobs j ON j.id = l.source_job WHERE "
+                + _OWNER_SCOPE_SQL,
                 _owner_scope_params(owner_chat_id),
             )
             all_links = [dict(r) for r in await cursor.fetchall()]
@@ -1146,7 +1152,8 @@ async def _select_refresh_batch(
 ) -> tuple[list[dict], set]:
     cursor2 = await conn.execute(
         """
-        SELECT * FROM links
+        SELECT links.*, jobs.chat_id AS job_chat_id FROM links
+        LEFT JOIN jobs ON jobs.id = links.source_job
         WHERE embedding IS NULL OR drive_file_id IS NULL OR description IS NULL
         ORDER BY updated_at ASC
         LIMIT ?
@@ -1163,8 +1170,9 @@ async def _select_refresh_batch(
         if repair_ids:
             cursor3 = await conn.execute(
                 f"""
-                SELECT * FROM links
-                WHERE id NOT IN ({placeholders})
+                SELECT links.*, jobs.chat_id AS job_chat_id FROM links
+                LEFT JOIN jobs ON jobs.id = links.source_job
+                WHERE links.id NOT IN ({placeholders})
                 ORDER BY updated_at ASC
                 LIMIT ?
                 """,
@@ -1172,7 +1180,11 @@ async def _select_refresh_batch(
             )
         else:
             cursor3 = await conn.execute(
-                "SELECT * FROM links ORDER BY updated_at ASC LIMIT ?",
+                """
+                SELECT links.*, jobs.chat_id AS job_chat_id FROM links
+                LEFT JOIN jobs ON jobs.id = links.source_job
+                ORDER BY updated_at ASC LIMIT ?
+                """,
                 (remaining,),
             )
         healthy_rows = [dict(r) for r in await cursor3.fetchall()]
@@ -1207,7 +1219,7 @@ async def _refresh_link_embedding(
     if embedding_blob is not None:
         return embedding_blob, matrix, 0
     embed_doc = _link_embedding_doc(lnk['url'], lnk.get('title'), lnk.get('description'))
-    owner_chat_id = lnk.get("chat_id") or settings.OPERATOR_CHAT_ID
+    owner_chat_id = lnk.get("chat_id") or lnk.get("job_chat_id") or settings.OPERATOR_CHAT_ID
     new_arr = await _embed(embed_doc, owner_chat_id=owner_chat_id)
     if new_arr is None:
         return embedding_blob, matrix, 0

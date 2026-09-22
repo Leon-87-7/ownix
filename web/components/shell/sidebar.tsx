@@ -355,6 +355,7 @@ export function Sidebar() {
           aria-label="Open navigation"
           aria-expanded={open}
           aria-controls="ownix-nav-panel"
+          tabIndex={open ? -1 : undefined}
           className="mb-6 flex h-9 w-9 items-center justify-center rounded-md transition-ui hover:bg-contrasignal-deep/60"
         >
           <LogoMark className="h-8 w-8  hover:text-signal-bright" />

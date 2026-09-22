@@ -99,7 +99,10 @@ async def get_link_preview_image(link_id: str, request: Request) -> Response:
         content=image.content,
         media_type=image.content_type,
         headers={
-            "Cache-Control": "private, max-age=86400",
+            # no-store, not a 24h max-age: the cache is keyed by URL+browser,
+            # not by request.state.user, so a max-age would let a browser
+            # replay another tenant's cached image after an account switch.
+            "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
             "X-Robots-Tag": "noindex, nofollow",
         },

@@ -30,6 +30,7 @@ class Price:
 GEMINI_PRICES: dict[str, Price] = {
     "gemini-2.5-flash": Price(input_per_million_micros=300_000, output_per_million_micros=2_500_000),
     "gemini-2.5-flash-lite": Price(input_per_million_micros=100_000, output_per_million_micros=400_000),
+    "gemini-2.5-pro": Price(input_per_million_micros=1_250_000, output_per_million_micros=10_000_000),
     "gemini-embedding-001": Price(input_per_million_micros=150_000, output_per_million_micros=0),
 }
 _DEFAULT_PRICE = GEMINI_PRICES["gemini-2.5-flash"]
@@ -92,6 +93,9 @@ def estimate_embedding_micros(*, model: str, input_chars: int) -> int:
 #: real duration) if audio ever becomes the dominant paid-call cost driver.
 _AUDIO_TOKENS_PER_RAW_BYTE = 0.016
 _AUDIO_DEFAULT_MAX_OUTPUT_TOKENS = 8192  # transcript output can run long
+#: Gemini 2.5 Flash prices audio input separately from its text/image/video
+#: rate (`Price.input_per_million_micros`) — $1.00/1M tokens vs. $0.30/1M.
+_AUDIO_INPUT_PER_MILLION_MICROS = 1_000_000
 
 
 def estimate_audio_micros(
@@ -100,7 +104,7 @@ def estimate_audio_micros(
     price = _price_for(model)
     raw_bytes = audio_b64_len * 3 // 4
     input_tokens = max(1, int(raw_bytes * _AUDIO_TOKENS_PER_RAW_BYTE))
-    return _micros(input_tokens, price.input_per_million_micros) + _micros(
+    return _micros(input_tokens, _AUDIO_INPUT_PER_MILLION_MICROS) + _micros(
         max_output_tokens, price.output_per_million_micros
     )
 
@@ -123,4 +127,10 @@ def actual_micros_from_response(model: str, response: object, *, fallback_micros
     output_tokens = getattr(usage, "candidates_token_count", None) if usage is not None else None
     if prompt_tokens is None or output_tokens is None:
         return fallback_micros
-    return actual_text_micros(model=model, prompt_tokens=prompt_tokens, output_tokens=output_tokens)
+    # Billed the same as regular output tokens, but reported separately from
+    # candidates_token_count whenever thinking is enabled — omitting them
+    # would settle for less than the provider actually charged.
+    thinking_tokens = getattr(usage, "thoughts_token_count", None) or 0
+    return actual_text_micros(
+        model=model, prompt_tokens=prompt_tokens, output_tokens=output_tokens + thinking_tokens
+    )
