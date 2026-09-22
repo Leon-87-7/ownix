@@ -56,6 +56,34 @@ async def test_list_items_passes_tenant_scope_and_preserves_health(
 
 
 @pytest.mark.asyncio
+async def test_list_tags_merges_job_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def fake_list_tags(chat_id: int) -> list[dict[str, Any]]:
+        seen["list_tags_chat_id"] = chat_id
+        return [
+            {"id": "t1", "name": "GoTo", "meaning": "", "color": "#fff", "icon": None, "pinned": True},
+            {"id": "t2", "name": "unused", "meaning": "", "color": "#fff", "icon": None, "pinned": False},
+        ]
+
+    async def fake_count_jobs_by_tag(chat_id: int) -> dict[str, int]:
+        seen["count_chat_id"] = chat_id
+        return {"t1": 4}
+
+    monkeypatch.setattr(mcp_server.database, "list_tags", fake_list_tags)
+    monkeypatch.setattr(mcp_server.database, "count_jobs_by_tag", fake_count_jobs_by_tag)
+    token = mcp_server._current_chat_id.set(70)
+    try:
+        result = await mcp_server.list_tags()
+    finally:
+        mcp_server._current_chat_id.reset(token)
+
+    assert seen == {"list_tags_chat_id": 70, "count_chat_id": 70}
+    assert result["items"][0]["job_count"] == 4
+    assert result["items"][1]["job_count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_detail_foreign_and_missing_are_same_not_found(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

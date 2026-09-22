@@ -1,6 +1,6 @@
 """In-process MCP Gardener server for tenant-owned Brain links and Spaces.
 
-Phase 1 (cleanup): list_items, get_item_detail, delete_item.
+Phase 1 (cleanup): list_items, get_item_detail, delete_item, list_tags.
 Phase 2 (connection-finding): find_related.
 Phase 3 (scouting): scout, get_scout_settings.
 Phase 4 (space curation): list_spaces, get_space_detail, create_space,
@@ -166,6 +166,20 @@ async def list_items(
 
     items = await asyncio.gather(*(_checked(item) for item in result["items"]))
     return {**result, "items": items}
+
+
+@mcp.tool(name="list_tags")
+async def list_tags() -> dict[str, Any]:
+    """List the caller's tags, each with `job_count` — how many of their jobs
+    carry it (jobs + swept-to-link jobs, deduped; see `count_jobs_by_tag`).
+    A tag with `job_count: 0` has no job attached, only links (or nothing).
+    """
+    chat_id = _chat_id()
+    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
+    tags, counts = await asyncio.gather(
+        database.list_tags(chat_id), database.count_jobs_by_tag(chat_id)
+    )
+    return {"items": [{**tag, "job_count": counts.get(tag["id"], 0)} for tag in tags]}
 
 
 @mcp.tool(name="get_item_detail")
