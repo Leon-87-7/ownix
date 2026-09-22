@@ -1763,10 +1763,10 @@ async def test_cmd_find_no_results_keeps_the_rebuild_graph_hint(monkeypatch):
     from src.telegram.commands import _cmd_find
     from src.telegram.context import SlashCtx
 
-    async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+    async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
         return []
 
-    monkeypatch.setattr("src.brain.search_links", _fake_search)
+    monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.sender.send_message", sent)
 
@@ -1784,13 +1784,13 @@ async def test_cmd_find_renders_results_via_the_shared_search(monkeypatch):
     from src.telegram.commands import _cmd_find
     from src.telegram.context import SlashCtx
 
-    async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+    async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
         return [{"url": "https://example.com/a", "title": "Result A", "topic": "", "score": 0.9}]
 
     async def _fake_enrich(links: list[dict]) -> list[dict]:
         return links
 
-    monkeypatch.setattr("src.brain.search_links", _fake_search)
+    monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
     monkeypatch.setattr("src.services.github.enrich_github_links", _fake_enrich)
     sent = AsyncMock()
     monkeypatch.setattr("src.telegram.sender.send_message", sent)

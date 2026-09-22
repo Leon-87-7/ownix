@@ -1092,8 +1092,8 @@ async def test_link_tags_attach_detach_round_trip(temp_db):
 
     async with aiosqlite.connect(temp_db) as conn:
         await conn.execute(
-            """INSERT INTO links (id, url, source_job, last_seen_at, created_at, updated_at)
-               VALUES ('l1', 'https://example.com', 'j1', 't', 't', 't')"""
+            """INSERT INTO links (id, url, chat_id, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com', 1, 'j1', 't', 't', 't')"""
         )
         await conn.commit()
 
@@ -1102,14 +1102,39 @@ async def test_link_tags_attach_detach_round_trip(temp_db):
     )
     assert tag["icon"] == "Code2"
 
-    await db.attach_link_tag("l1", tag["id"])
-    await db.attach_link_tag("l1", tag["id"])  # idempotent (INSERT OR IGNORE)
+    await db.attach_link_tag("l1", tag["id"], owner_chat_id=1)
+    await db.attach_link_tag("l1", tag["id"], owner_chat_id=1)  # idempotent (INSERT OR IGNORE)
     tags = await db.list_link_tags("l1")
     assert [(t["name"], t["icon"]) for t in tags] == [("svg", "Code2")]
 
-    assert await db.detach_link_tag("l1", tag["id"]) is True
-    assert await db.detach_link_tag("l1", tag["id"]) is False  # already gone
+    assert await db.detach_link_tag("l1", tag["id"], owner_chat_id=1) is True
+    assert await db.detach_link_tag("l1", tag["id"], owner_chat_id=1) is False  # already gone
     assert await db.list_link_tags("l1") == []
+
+
+@pytest.mark.asyncio
+async def test_attach_detach_link_tag_refuses_another_tenants_link(temp_db):
+    """ADR-0043: attach/detach must prove link ownership, not just tag ownership."""
+    from src import database as db
+
+    async with aiosqlite.connect(temp_db) as conn:
+        await conn.execute(
+            """INSERT INTO links (id, url, chat_id, source_job, last_seen_at, created_at, updated_at)
+               VALUES ('l1', 'https://example.com', 1, 'j1', 't', 't', 't')"""
+        )
+        await conn.commit()
+
+    tag = await db.create_tag(chat_id=1, name="svg", meaning="", color="#f87171")
+
+    # link isn't owned by chat_id=2, so neither mutation may touch it — even
+    # naming a tag_id chat_id=2 doesn't actually own (the route layer 404s on
+    # tag lookup first; this proves the db layer's own link-ownership check).
+    assert await db.attach_link_tag("l1", tag["id"], owner_chat_id=2) is False
+    assert await db.list_link_tags("l1") == []
+
+    assert await db.attach_link_tag("l1", tag["id"], owner_chat_id=1) is True  # actual owner
+    assert await db.detach_link_tag("l1", tag["id"], owner_chat_id=2) is None  # still not theirs
+    assert [t["name"] for t in await db.list_link_tags("l1")] == ["svg"]  # untouched
 
 
 @pytest.mark.asyncio
@@ -1126,7 +1151,7 @@ async def test_delete_link_cascades_tags(temp_db):
         await conn.commit()
 
     tag = await db.create_tag(chat_id=1, name="svg", meaning="", color="#f87171")
-    await db.attach_link_tag("l1", tag["id"])
+    await db.attach_link_tag("l1", tag["id"], owner_chat_id=1)
 
     assert await db.delete_link("l1", chat_id=1) is True
     assert await db.delete_link("l1", chat_id=1) is False  # already gone

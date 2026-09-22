@@ -53,19 +53,33 @@ def _embed_sync(text: str, *, api_key: str) -> np.ndarray:
     return np.array(response.embeddings[0].values, dtype=np.float32)
 
 
-async def _embed(text: str) -> np.ndarray | None:
-    """Free→paid key fallback via shared loop. Return None if all fail (NULL stored; refresh repairs)."""
+async def _embed(text: str, *, owner_chat_id: int) -> np.ndarray | None:
+    """Free→paid key fallback via shared loop, paid gated by the spending
+    ledger for *owner_chat_id* (handoff §2). Return None if all fail, or if
+    the paid fallback is blocked (disabled/over budget) — same "retry later"
+    contract as a total provider failure (NULL stored; refresh repairs)."""
+    from src.services import provider_pricing
     from src.services.gemini import GeminiUnavailableError, _call_with_fallback
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
 
+    cost = CostContext(chat_id=owner_chat_id, operation="brain_embed")
+    estimated_micros = provider_pricing.estimate_embedding_micros(
+        model=settings.GEMINI_EMBEDDING_MODEL, input_chars=len(text)
+    )
     try:
         return await _call_with_fallback(
             _embed_sync,
             text,
+            cost=cost,
+            price_model=settings.GEMINI_EMBEDDING_MODEL,
+            estimated_micros=estimated_micros,
             log_ok="brain.embed_ok",
             log_fail="brain.embed_key_failed",
         )
-    except GeminiUnavailableError:
-        log.error("brain.embed_all_keys_failed", text_preview=text[:60])
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded) as exc:
+        log.error(
+            "brain.embed_all_keys_failed", text_preview=text[:60], reason=type(exc).__name__
+        )
         return None
 
 
@@ -436,7 +450,7 @@ async def _ingest_one_link(url: str, link: dict, topic: str, source_job_id: str,
 
     # Embedding doc = link-own identity only (url+title+description, #384)
     embed_doc = _link_embedding_doc(url, title_str, description)
-    embedding_arr = await _embed(embed_doc)
+    embedding_arr = await _embed(embed_doc, owner_chat_id=chat_id)
     embedding_blob = embedding_arr.tobytes() if embedding_arr is not None else None
 
     async with database.connection() as conn:
@@ -615,15 +629,17 @@ def _build_obsidian_md(
     return "\n".join(lines)
 
 
-async def get_graph() -> dict[str, list[dict]]:
-    """Return Brain graph nodes and on-request derived cosine edges."""
+async def get_graph(owner_chat_id: int) -> dict[str, list[dict]]:
+    """Return Brain graph nodes and on-request derived cosine edges, scoped to
+    *owner_chat_id* (ADR-0043) — legacy-null rows resolve to the Operator only."""
     async with database.connection() as conn:
         cursor = await conn.execute(
-            """SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
+            f"""SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
                FROM links l
                LEFT JOIN jobs j ON j.id = l.source_job
-               WHERE COALESCE(j.status, '') != 'cancelled'
-               ORDER BY l.created_at ASC"""
+               WHERE COALESCE(j.status, '') != 'cancelled' AND {_OWNER_SCOPE_SQL}
+               ORDER BY l.created_at ASC""",
+            _owner_scope_params(owner_chat_id),
         )
         rows = [dict(r) for r in await cursor.fetchall()]
 
@@ -882,10 +898,11 @@ async def _fetch_link_with_og_image(
     }
 
 
-async def get_link_preview(link_id: str) -> dict[str, Any] | None:
-    """Operator-wide preview for the dashboard Links table's hover/arrow-key
-    panel — id and og_image_url only; see `_fetch_link_with_og_image`."""
-    link = await _fetch_link_with_og_image(link_id, None)
+async def get_link_preview(link_id: str, owner_chat_id: int) -> dict[str, Any] | None:
+    """Owner-scoped preview for the dashboard Links table's hover/arrow-key
+    panel — id and og_image_url only; see `_fetch_link_with_og_image`. `None`
+    for a missing or not-owned row (404, never 403 — ADR-0043)."""
+    link = await _fetch_link_with_og_image(link_id, owner_chat_id)
     if link is None:
         return None
     return {"id": link["id"], "og_image_url": link["og_image_url"]}
@@ -943,54 +960,6 @@ async def find_related_links(link_id: str, owner_chat_id: int) -> list[dict[str,
         return results
 
 
-async def search_links(query: str, top_k: int = 5) -> list[dict]:
-    """Embed query and return top-k semantically similar links."""
-    top_k = min(top_k, 20)
-    query_vec = await _embed(query)
-    if query_vec is None:
-        log.warning("brain.search_embed_failed", query=query[:60])
-        return []
-
-    async with database.connection() as conn:
-        cursor = await conn.execute(
-            """SELECT l.id, l.url, l.title, l.topic, l.embedding
-               FROM links l
-               LEFT JOIN jobs j ON j.id = l.source_job
-               WHERE l.embedding IS NOT NULL AND COALESCE(j.status, '') != 'cancelled'"""
-        )
-        rows = [dict(r) for r in await cursor.fetchall()]
-
-    if not rows:
-        return []
-
-    ids_list, matrix = _load_embeddings(rows)
-    if not ids_list:
-        return []
-
-    sims = [(ids_list[i], _cosine_similarity(query_vec, matrix[i])) for i in range(len(ids_list))]
-    sims.sort(key=lambda x: x[1], reverse=True)
-
-    # Build a quick lookup from id → row
-    id_to_row = {r["id"]: r for r in rows}
-    results = []
-    for rid, score in sims:
-        if score < settings.BRAIN_MIN_SCORE:
-            break
-        row = id_to_row.get(rid, {})
-        results.append(
-            {
-                "title": row.get("title") or row.get("url", ""),
-                "url": row.get("url", ""),
-                "topic": row.get("topic") or "",
-                "score": round(score, 4),
-            }
-        )
-        if len(results) >= top_k:
-            break
-
-    return results
-
-
 #: Mirrors `/find`'s tuned bar (`src/intake/commands.py:_FIND_MIN_SCORE`) —
 #: `settings.BRAIN_MIN_SCORE` is tuned for "related" suggestions, not a
 #: standalone results list, and is too loose for scout's noise risk.
@@ -1000,14 +969,15 @@ _SCOUT_MIN_SCORE = 0.58
 async def search_links_scoped(
     query: str, owner_chat_id: int, top_k: int = 5, min_score: float = _SCOUT_MIN_SCORE
 ) -> list[dict]:
-    """Owner-scoped semantic search for the Gardener MCP `scout` tool (Phase 3).
-
-    Unlike `search_links` (issue #459, used by the tenant-agnostic `/find`),
-    this only searches the caller's own links — same owner-scope rule as
-    `find_related_links`.
+    """Owner-scoped semantic search — same owner-scope rule as
+    `find_related_links`. Shared by the Gardener MCP `scout` tool (Phase 3,
+    default `min_score`), the dashboard `/api/brain/search` route
+    (`settings.BRAIN_MIN_SCORE`), and Telegram/dashboard `/find`
+    (`_FIND_MIN_SCORE`, ADR-0043 — formerly the unscoped `search_links`,
+    issue #459).
     """
     top_k = min(top_k, 20)
-    query_vec = await _embed(query)
+    query_vec = await _embed(query, owner_chat_id=owner_chat_id)
     if query_vec is None:
         log.warning("brain.scout_embed_failed", query=query[:60])
         return []
@@ -1092,14 +1062,20 @@ async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> 
     ]
 
 
-async def rebuild_graph() -> int:
-    """Recompute all related links and rewrite Drive .md for every node."""
+async def rebuild_graph(owner_chat_id: int) -> int:
+    """Recompute related links and rewrite Drive .md for *owner_chat_id*'s own
+    nodes only (ADR-0043) — relatedness and the written .md's "Related" list
+    never cross into another tenant's rows."""
     if _rebuild_lock.locked():
         raise RuntimeError("rebuild_in_progress")
 
     async with _rebuild_lock:
         async with database.connection() as conn:
-            cursor = await conn.execute("SELECT * FROM links")
+            cursor = await conn.execute(
+                f"""SELECT l.* FROM links l LEFT JOIN jobs j ON j.id = l.source_job
+                    WHERE {_OWNER_SCOPE_SQL}""",
+                _owner_scope_params(owner_chat_id),
+            )
             all_links = [dict(r) for r in await cursor.fetchall()]
 
         # Load all embeddings once
@@ -1231,7 +1207,8 @@ async def _refresh_link_embedding(
     if embedding_blob is not None:
         return embedding_blob, matrix, 0
     embed_doc = _link_embedding_doc(lnk['url'], lnk.get('title'), lnk.get('description'))
-    new_arr = await _embed(embed_doc)
+    owner_chat_id = lnk.get("chat_id") or settings.OPERATOR_CHAT_ID
+    new_arr = await _embed(embed_doc, owner_chat_id=owner_chat_id)
     if new_arr is None:
         return embedding_blob, matrix, 0
     embedding_blob = new_arr.tobytes()

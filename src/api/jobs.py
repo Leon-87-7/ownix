@@ -48,7 +48,7 @@ async def _add_link_ids(items: list[dict], chat_id: int) -> None:
     for item in resolved:
         item["link_id"] = links_by_url[normalized_by_job[item["id"]]]
         if item["id"] in sweepable:
-            await database.sweep_job_tags_to_link(item["id"], item["link_id"])
+            await database.sweep_job_tags_to_link(item["id"], item["link_id"], chat_id)
     # Persist what we just resolved. The key is computed here from
     # normalize_url(), which SQL can't call, so storing it is the only way tag
     # filtering gets a column to JOIN on past the client-mode cap. Writing it on

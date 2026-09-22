@@ -300,7 +300,7 @@ async def _cmd_rebuild_graph(ctx: SlashCtx) -> None:
 
     async def _do_rebuild() -> None:
         try:
-            n = await brain.rebuild_graph()
+            n = await brain.rebuild_graph(ctx.chat_id)
             await sender.send_message(ctx.chat_id, f"Graph rebuilt — {n} nodes written.")
         except Exception:
             await sender.send_message(ctx.chat_id, "Rebuild failed. Check logs.")

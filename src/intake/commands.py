@@ -97,19 +97,22 @@ async def find_command(chat_id: int, parts: list[str]) -> IntakeResponse:
     `src/telegram/webhook.py:_cmd_find` — this returns `artifacts`, not
     preformatted text, so each channel renders its own presentation.
 
-    Not tenant-scoped: neither was the Telegram command it replaces
-    (`src/brain.py:search_links` takes no `chat_id`). See issue #459.
+    Tenant-scoped (ADR-0043): searches only *chat_id*'s own Brain links —
+    formerly unscoped via the now-removed `src/brain.py:search_links`,
+    issue #459.
     """
-    del chat_id
     if len(parts) < 2:
         return responses.command_result("Usage: /find <query>")
 
     query = " ".join(parts[1:]).strip()
 
     from src import brain
+    from src.config import settings
     from src.services.github import enrich_github_links
 
-    candidates = await brain.search_links(query, top_k=10)
+    candidates = await brain.search_links_scoped(
+        query, owner_chat_id=chat_id, top_k=10, min_score=settings.BRAIN_MIN_SCORE
+    )
     results = [r for r in candidates if r["score"] >= _FIND_MIN_SCORE][:_FIND_MAX_RESULTS]
     if not results:
         return responses.command_result(f'Nothing found for "{query}".', actions=[])
