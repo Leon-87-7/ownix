@@ -60,11 +60,15 @@ export default function AccessibilityPage() {
 
           <LegalSection title="Known limitations">
             <p>
-              Some data-dense views - the Brain graph, especially -
-              are mostly visual and don&apos;t have a good non-visual
-              equivalent yet. Hit a screen that doesn&apos;t work with
-              your assistive technology? Tell us (see Contact below)
-              and we&apos;ll bump it up the list.
+              The Brain graph&apos;s force-directed map is a visual
+              canvas with no non-visual equivalent of its own, so
+              every node it draws is also listed in a plain,
+              keyboard- and screen-reader-navigable table right below
+              it - same nodes, same live topic/search filtering, real
+              links you can open directly. Hit a screen that
+              doesn&apos;t work with your assistive technology? Tell
+              us (see Contact below) and we&apos;ll bump it up the
+              list.
             </p>
           </LegalSection>
 

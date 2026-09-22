@@ -3,6 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrainGraph } from './brain-graph';
+import { expectNoAxeViolations } from '@/test/axe';
 
 const { graphMethods, latestGraphPropsRef } = vi.hoisted(() => ({
   graphMethods: {
@@ -148,5 +149,76 @@ describe('BrainGraph', () => {
 
     expect(graphMethods.zoom).toHaveBeenCalledWith(1.35, 450);
     expect(graphMethods.centerAt).toHaveBeenCalledWith(0, 0, 450);
+  });
+
+  describe('BrainNodeList (§3 accessibility handoff)', () => {
+    it('marks the canvas aria-hidden and lists every node as a real link', async () => {
+      render(<BrainGraph results={[]} searchState="idle" />);
+
+      const canvas = await screen.findByTestId('force-graph');
+      expect(canvas.closest('[aria-hidden="true"]')).toBeTruthy();
+
+      for (const node of payload.nodes) {
+        const link = screen.getByRole('link', { name: node.title });
+        expect(link).toHaveAttribute('href', node.url);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+      }
+    });
+
+    it('shows each node\'s relationship (edge) count', async () => {
+      render(<BrainGraph results={[]} searchState="idle" />);
+      await screen.findByTestId('force-graph');
+
+      const row = (title: string) =>
+        screen.getByRole('link', { name: title }).closest('tr')!;
+
+      // node 1 touches edge(1,2); node 2 touches edge(1,2) and edge(2,3); node 3 touches edge(2,3).
+      expect(row('AI Video').textContent).toContain('1');
+      expect(row('Docs Video').textContent).toContain('2');
+      expect(row('Loose Video').textContent).toContain('1');
+    });
+
+    it('hides a node from the list when its topic is toggled off, in sync with the canvas', async () => {
+      render(<BrainGraph results={[]} searchState="idle" />);
+      await screen.findByTestId('force-graph');
+
+      expect(screen.getByRole('link', { name: 'Docs Video' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: /docs/i }));
+      expect(screen.queryByRole('link', { name: 'Docs Video' })).toBeNull();
+    });
+
+    it('marks matched nodes and sorts them first while a search is active', async () => {
+      render(
+        <BrainGraph
+          results={[{ url: 'https://example.com/docs' }]}
+          searchState="results"
+        />,
+      );
+      await screen.findByTestId('force-graph');
+
+      const matchedRow = screen.getByRole('link', { name: 'Docs Video' }).closest('tr')!;
+      expect(matchedRow.textContent).toContain('Match');
+      const unmatchedRow = screen.getByRole('link', { name: 'AI Video' }).closest('tr')!;
+      expect(unmatchedRow.textContent).not.toContain('Match');
+
+      const rows = screen.getAllByRole('row');
+      const titleCells = rows.map((r) => r.textContent);
+      expect(titleCells.findIndex((t) => t?.includes('Docs Video'))).toBeLessThan(
+        titleCells.findIndex((t) => t?.includes('AI Video')),
+      );
+    });
+
+    it('has no axe violations, with or without active search matches', async () => {
+      const { container, rerender } = render(<BrainGraph results={[]} searchState="idle" />);
+      await screen.findByTestId('force-graph');
+      await expectNoAxeViolations(container);
+
+      rerender(
+        <BrainGraph results={[{ url: 'https://example.com/docs' }]} searchState="results" />,
+      );
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Docs Video' })).toBeTruthy());
+      await expectNoAxeViolations(container);
+    });
   });
 });

@@ -2,6 +2,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import SpacesPage from './page';
+import { expectNoAxeViolations } from '@/test/axe';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
@@ -116,5 +117,11 @@ describe('SpacesPage', () => {
     setupMocks({}, { showForm: true, submitting: true });
     render(<SpacesPage />);
     expect(screen.getByText('Creating…')).toBeTruthy();
+  });
+
+  it('has no axe violations with the create-space form open', async () => {
+    setupMocks({}, { showForm: true });
+    const { container } = render(<SpacesPage />);
+    await expectNoAxeViolations(container);
   });
 });

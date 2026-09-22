@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@/test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, visibleNav, ADMIN_ONLY_HREFS } from './sidebar';
 import type { InviteUser } from './invite-gate';
+import { expectNoAxeViolations } from '@/test/axe';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/feed',
@@ -166,5 +167,52 @@ describe('Sidebar nav visibility', () => {
     expect(
       screen.getAllByRole('link', { name: 'Digest', hidden: true }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('Sidebar drawer focus containment (§3 accessibility handoff)', () => {
+  // <Sidebar> only renders the drawer itself — the page's <main> is its
+  // sibling in the real dashboard layout, outside this component's tree, so
+  // the test renders one alongside it the same way.
+  function renderWithMain() {
+    return render(
+      <>
+        <Sidebar />
+        <main>
+          <button type="button">Page content button</button>
+        </main>
+      </>,
+    );
+  }
+
+  it('marks the page <main> inert while the drawer is open, and clears it on close', () => {
+    renderWithMain();
+    const main = document.querySelector('main')!;
+    expect(main).not.toHaveAttribute('inert');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open navigation' })[0]);
+    expect(main).toHaveAttribute('inert');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse navigation' }));
+    expect(main).not.toHaveAttribute('inert');
+  });
+
+  it('clears inert on unmount even if the drawer was left open', () => {
+    const { unmount } = renderWithMain();
+    const main = document.querySelector('main')!;
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open navigation' })[0]);
+    expect(main).toHaveAttribute('inert');
+
+    unmount();
+    expect(main).not.toHaveAttribute('inert');
+  });
+
+  it('has no axe violations closed or open', async () => {
+    const { container } = renderWithMain();
+    await expectNoAxeViolations(container);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open navigation' })[0]);
+    await expectNoAxeViolations(container);
   });
 });

@@ -9,6 +9,7 @@ import { AppHeader } from '@/components/shell/app-header';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import FeedPage from './page';
+import { expectNoAxeViolations } from '@/test/axe';
 
 const RECOVERY_SUMMARY = { stale_pending: 2, error_jobs: 1, stale_in_flight: 1 };
 
@@ -161,6 +162,15 @@ describe('FeedPage', () => {
     render(<FeedTree />);
     expect(screen.getByText('Jobs')).toBeTruthy();
   });
+
+  // axe-core walking this page's full job grid is slow enough under full-suite
+  // CPU contention to exceed vitest's default 5s test timeout (passes in ~5.1s
+  // in isolation already) — the explicit 20s is scan cost, not a hang budget.
+  it('has no axe violations on the default bento-grid view', async () => {
+    const { container } = render(<FeedTree />);
+    await screen.findByText('Ownix');
+    await expectNoAxeViolations(container);
+  }, 20000);
 
   it('shows the Connect Google nudge only while disconnected', () => {
     googleStatusMock.connected = false;

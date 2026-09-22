@@ -310,6 +310,21 @@ export function Sidebar() {
     };
   }, [open]);
 
+  // Trap Tab/Shift+Tab inside the open drawer (§3 accessibility handoff):
+  // mark the page's <main> — the dashboard layout's sibling of <Sidebar>,
+  // outside this component's own render tree — inert while open, so focus
+  // can't walk past the drawer's last control into the content behind it.
+  // Same direct-DOM pattern as the body-scroll lock above: <Sidebar> has no
+  // prop/ref path to that sibling, only the DOM itself.
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    if (open) main.setAttribute('inert', '');
+    return () => {
+      main.removeAttribute('inert');
+    };
+  }, [open]);
+
   return (
     <>
       {/* Mobile pull-tab — the rail is hidden < sm, so this slim edge handle is the
