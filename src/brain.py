@@ -340,7 +340,7 @@ async def _rewrite_existing_md(
     # cross-tenant title never lands in this link's "Related" section.
     cursor2 = await conn.execute(
         "SELECT l.id, l.embedding FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
-        "WHERE l.embedding IS NOT NULL AND " + _OWNER_SCOPE_SQL,
+        "WHERE l.embedding IS NOT NULL AND COALESCE(l.chat_id, j.chat_id, ?) = ?",
         _owner_scope_params(owner_chat_id),
     )
     all_rows = [dict(r) for r in await cursor2.fetchall()]
@@ -580,7 +580,7 @@ async def _fetch_related_titles(
         if owner_chat_id is not None:
             cursor = await conn.execute(
                 "SELECT l.title, l.url FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
-                "WHERE l.id = ? AND " + _OWNER_SCOPE_SQL,
+                "WHERE l.id = ? AND COALESCE(l.chat_id, j.chat_id, ?) = ?",
                 (r["id"], *_owner_scope_params(owner_chat_id)),
             )
         else:
@@ -653,9 +653,7 @@ async def get_graph(owner_chat_id: int) -> dict[str, list[dict]]:
             """SELECT l.id, l.url, l.title, l.topic, l.seen_count, l.embedding, l.stars, l.pushed_at, l.archived
                FROM links l
                LEFT JOIN jobs j ON j.id = l.source_job
-               WHERE COALESCE(j.status, '') != 'cancelled' AND """
-            + _OWNER_SCOPE_SQL
-            + """
+               WHERE COALESCE(j.status, '') != 'cancelled' AND COALESCE(l.chat_id, j.chat_id, ?) = ?
                ORDER BY l.created_at ASC""",
             _owner_scope_params(owner_chat_id),
         )
@@ -1090,8 +1088,8 @@ async def rebuild_graph(owner_chat_id: int) -> int:
     async with _rebuild_lock:
         async with database.connection() as conn:
             cursor = await conn.execute(
-                "SELECT l.* FROM links l LEFT JOIN jobs j ON j.id = l.source_job WHERE "
-                + _OWNER_SCOPE_SQL,
+                "SELECT l.* FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
+                "WHERE COALESCE(l.chat_id, j.chat_id, ?) = ?",
                 _owner_scope_params(owner_chat_id),
             )
             all_links = [dict(r) for r in await cursor.fetchall()]
