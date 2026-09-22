@@ -157,6 +157,9 @@ def _tool(**tool_kwargs: Any) -> Any:
     """
 
     def decorator(fn: Any) -> Any:
+        if not asyncio.iscoroutinefunction(fn):
+            raise TypeError(f"_tool only supports async tool functions, got sync {fn.__name__!r}")
+
         @functools.wraps(fn)
         async def wrapped(*args: Any, **kwargs: Any) -> Any:
             rate_limit.enforce(f"mcp_tools:{_chat_id()}", max_requests=60)

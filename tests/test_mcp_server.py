@@ -501,3 +501,8 @@ async def test_auth_and_rate_limit_happen_before_data_access(
         assert exc.value.status_code == 429
     finally:
         mcp_server._current_chat_id.reset(token)
+
+
+def test_tool_decorator_rejects_sync_function() -> None:
+    with pytest.raises(TypeError, match="only supports async tool functions"):
+        mcp_server._tool(name="broken")(lambda: "nope")

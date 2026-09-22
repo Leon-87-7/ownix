@@ -105,9 +105,16 @@ async def kv_set(key: str, value: str) -> None:
 
 async def kv_set_if_exists(key: str, value: str) -> None:
     """Write only if `key` is still present — no-op if it was deleted
-    concurrently (guards a revoke racing a read-then-write elsewhere)."""
+    concurrently (guards a revoke racing a read-then-write elsewhere).
+
+    Only valid for non-expiring keys: on the memory backend, a raw `key in
+    _memory` check would still see a lazily-expired entry (only
+    `_memory_get`'s read path evicts it), resurrecting it without a TTL —
+    unlike Redis's `XX`, which already treats an expired key as absent.
+    `_memory_get(key) is not None` matches that semantics.
+    """
     if _use_memory():
-        if key in _memory:
+        if _memory_get(key) is not None:
             _memory_set(key, value)
     else:
         await _client().set(key, value, xx=True)
