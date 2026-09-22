@@ -212,28 +212,36 @@ async def test_release_of_already_settled_reservation_is_a_noop(temp_db):
 
 @pytest.mark.asyncio
 async def test_user_with_no_settings_row_cannot_use_paid_key_by_default(temp_db):
+    """allow_paid_gemini stays the real access gate even though a missing row
+    now also carries the product-chosen default caps ($0.50/day, $3/month,
+    2026-09-22) — those caps mean nothing until an Operator opts the account in."""
     from src import database as db
 
     limits = await db.get_spend_limits(999)
     assert limits["allow_paid_gemini"] is False
     assert limits["enabled"] is True
+    assert limits["daily_limit_micros"] == db.DEFAULT_DAILY_LIMIT_MICROS
+    assert limits["monthly_limit_micros"] == db.DEFAULT_MONTHLY_LIMIT_MICROS
 
 
 @pytest.mark.asyncio
 async def test_operator_defaults_are_explicit_not_an_accidental_bypass(temp_db, monkeypatch):
-    """A missing row must read as 'no paid access', never 'unlimited'."""
+    """A missing row must read as 'no paid access', never 'unlimited' —
+    regardless of what its default numeric caps are."""
     from src import database as db
 
     monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 42)
     limits = await db.get_spend_limits(42)
     assert limits["allow_paid_gemini"] is False
-    assert limits["daily_limit_micros"] is None  # None = no cap only once explicitly set that way
-    # An explicit Operator row is the only way to grant unlimited spend.
+    # An explicit Operator row is the only way to grant unlimited spend —
+    # None here is deliberately requested, not a default that leaked through.
     await db.set_spend_limits(
         42, daily_limit_micros=None, monthly_limit_micros=None, allow_paid_gemini=True
     )
     limits = await db.get_spend_limits(42)
     assert limits["allow_paid_gemini"] is True
+    assert limits["daily_limit_micros"] is None
+    assert limits["monthly_limit_micros"] is None
 
 
 # ---------------------------------------------------------------------------

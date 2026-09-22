@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src import database
 from src.config import settings
+from src.database import DEFAULT_DAILY_LIMIT_MICROS, DEFAULT_MONTHLY_LIMIT_MICROS
 from src.utils.logger import get_logger
 from src.utils.validators import is_valid_domain_name
 
@@ -62,8 +63,11 @@ class ScoutSettingsIn(BaseModel):
 class SpendLimitsIn(BaseModel):
     # Operator-only write (handoff §2) — ordinary users cannot raise their own
     # hard limit, so this model isn't reachable from a non-operator request.
-    daily_limit_micros: int | None = Field(default=None, ge=0)
-    monthly_limit_micros: int | None = Field(default=None, ge=0)
+    # Defaults mirror db.spending.DEFAULT_LIMITS ($0.50/day, $3/month) — an
+    # Operator PUT that omits these must not silently mean "unlimited"; pass
+    # null explicitly to actually remove a cap.
+    daily_limit_micros: int | None = Field(default=DEFAULT_DAILY_LIMIT_MICROS, ge=0)
+    monthly_limit_micros: int | None = Field(default=DEFAULT_MONTHLY_LIMIT_MICROS, ge=0)
     allow_paid_gemini: bool = False
     enabled: bool = True
     currency: str = Field(default="USD", min_length=3, max_length=3)

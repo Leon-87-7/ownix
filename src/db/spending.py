@@ -15,12 +15,20 @@ from typing import Any
 from src.db import core
 from src.db.core import generate_id
 
+#: Product-chosen defaults (2026-09-22): $0.50/day, $3/month. These are the
+#: caps a user would have *if* paid Gemini were enabled for them — they don't
+#: by themselves grant paid access. `allow_paid_gemini` staying False below is
+#: the actual access gate; an Operator still opts an account in explicitly
+#: (handoff §6 rollout: paid fallback starts disabled, enabled per-account).
+DEFAULT_DAILY_LIMIT_MICROS = 500_000
+DEFAULT_MONTHLY_LIMIT_MICROS = 3_000_000
+
 #: Missing `user_spend_limits` row means no paid access, not unlimited —
 #: never interpret an absent row as an unlimited-spend bypass.
 DEFAULT_LIMITS: dict[str, Any] = {
     "currency": "USD",
-    "daily_limit_micros": None,
-    "monthly_limit_micros": None,
+    "daily_limit_micros": DEFAULT_DAILY_LIMIT_MICROS,
+    "monthly_limit_micros": DEFAULT_MONTHLY_LIMIT_MICROS,
     "allow_paid_gemini": False,
     "enabled": True,
 }

@@ -65,8 +65,16 @@ the model-choice question (still Gemini-only, no Anthropic).
 - `docs/seed/CAPABILITY_MAP.md`, `docs/seed/FUNCTION_INDEX.md`, and
   `docs/seed/GLUE_INDEX_BACKEND.md` describe the spending ledger and the gated
   provider boundary.
-- Deferred, not decided here (values live with the product owner, per the original
-  handoff's §7): default daily/monthly limits for a newly approved user, whether
-  newsletter automation should ever be charged per-subscriber instead of to the
-  Operator, and the exact reservation envelope per pipeline/model. Safe defaults
-  (paid disabled, UTC windows, Operator-only limit writes) apply until those are set.
+- Default daily/monthly caps, decided 2026-09-22: **$0.50/day, $3/month**
+  (`db.spending.DEFAULT_DAILY_LIMIT_MICROS`/`DEFAULT_MONTHLY_LIMIT_MICROS`).
+  These are the caps a user *would* have if paid Gemini were enabled for them —
+  `allow_paid_gemini` staying `False` by default is still the actual access
+  gate; an Operator opts an account in per the §6 rollout, and an
+  `SpendLimitsIn` PUT that omits the limit fields inherits these same
+  defaults rather than silently meaning unlimited (pass `null` explicitly to
+  remove a cap).
+- Still deferred (values live with the product owner, per the original
+  handoff's §7): whether newsletter automation should ever be charged
+  per-subscriber instead of to the Operator, and the exact reservation
+  envelope per pipeline/model. Safe defaults (paid disabled, UTC windows,
+  Operator-only limit writes) apply until those are set.
