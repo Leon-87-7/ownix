@@ -166,21 +166,62 @@ async def list_link_tags(link_id: str, chat_id: int | None = None) -> list[dict]
     )
 
 
-async def attach_link_tag(link_id: str, tag_id: str) -> bool:
-    await _execute(
-        "INSERT OR IGNORE INTO link_tags (link_id, tag_id) VALUES (?, ?)", (link_id, tag_id)
-    )
+async def _link_owner_chat_id(conn, link_id: str) -> int | None:
+    """Resolve *link_id*'s owner via the same legacy fallback as `delete_link`
+    (own chat_id, then source job's, then the Operator). `None` if the link
+    doesn't exist."""
+    row = await (
+        await conn.execute(
+            """SELECT COALESCE(
+                   links.chat_id,
+                   (SELECT j.chat_id FROM jobs j WHERE j.id = links.source_job),
+                   ?
+               ) AS owner_chat_id
+               FROM links WHERE id = ?""",
+            (settings.OPERATOR_CHAT_ID, link_id),
+        )
+    ).fetchone()
+    return row["owner_chat_id"] if row else None
+
+
+async def attach_link_tag(link_id: str, tag_id: str, owner_chat_id: int) -> bool:
+    """Attach *tag_id* to *link_id*, first proving *owner_chat_id* owns the
+    link (ADR-0043) — a tag-ownership check alone is not enough, since a tag
+    and the link it's applied to are separate resources. Ownership and
+    mutation share one transaction to avoid a check-then-mutate race.
+    Returns False (caller should 404) if the link isn't owned by *owner_chat_id*.
+    """
+    async with core.connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        actual_owner = await _link_owner_chat_id(conn, link_id)
+        if actual_owner is None or actual_owner != owner_chat_id:
+            await conn.rollback()
+            return False
+        await conn.execute(
+            "INSERT OR IGNORE INTO link_tags (link_id, tag_id) VALUES (?, ?)", (link_id, tag_id)
+        )
+        await conn.commit()
     return True
 
 
-async def detach_link_tag(link_id: str, tag_id: str) -> bool:
-    return (
-        await _execute_rowcount(
+async def detach_link_tag(link_id: str, tag_id: str, owner_chat_id: int) -> bool | None:
+    """Detach *tag_id* from *link_id*, first proving *owner_chat_id* owns the
+    link (ADR-0043); see `attach_link_tag`. Returns None (caller should 404
+    "Link not found") if the link isn't owned by *owner_chat_id*, else whether
+    a row was actually removed (caller 404s "not attached" on False).
+    """
+    async with core.connection() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        actual_owner = await _link_owner_chat_id(conn, link_id)
+        if actual_owner is None or actual_owner != owner_chat_id:
+            await conn.rollback()
+            return None
+        cursor = await conn.execute(
             "DELETE FROM link_tags WHERE link_id = ? AND tag_id = ?",
             (link_id, tag_id),
         )
-        > 0
-    )
+        await conn.commit()
+    return cursor.rowcount > 0
 
 
 async def resolve_link_ids(chat_id: int, urls: list[str]) -> dict[str, str]:
@@ -347,11 +388,18 @@ async def job_ids_with_tags(job_ids: list[str]) -> set[str]:
     return {row["job_id"] for row in rows}
 
 
-async def sweep_job_tags_to_link(job_id: str, link_id: str) -> None:
-    """Union a job's tag attachments onto a link, then remove the job copies."""
+async def sweep_job_tags_to_link(job_id: str, link_id: str, owner_chat_id: int) -> None:
+    """Union a job's tag attachments onto a link, then remove the job copies.
+
+    *link_id* must already be owned by *owner_chat_id* — callers resolve it
+    via `resolve_link_ids`/`database.get_job`, which are themselves
+    chat_id-scoped, so this never sweeps onto another tenant's link.
+    """
     for tag in await list_job_tags(job_id):
-        await attach_link_tag(link_id, tag["id"])
-        await detach_job_tag(job_id, tag["id"])
+        if await attach_link_tag(link_id, tag["id"], owner_chat_id):
+            await detach_job_tag(job_id, tag["id"])
+
+
 async def count_jobs_by_tag(chat_id: int) -> dict[str, int]:
     """Return {tag id: how many of this user's jobs carry it}.
 

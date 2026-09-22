@@ -31,6 +31,10 @@ async def _init_db(tmp_path, monkeypatch) -> "object":
     db_file = tmp_path / "newsletter_poll.db"
     monkeypatch.setattr("src.config.settings.DB_PATH", str(db_file))
     monkeypatch.setattr("src.database.settings.DB_PATH", str(db_file))
+    # Issue-context generation (ADR-0064) is skipped entirely with no Operator
+    # configured — tests need one set so the mocked `gemini.generate` in this
+    # file is actually exercised, matching production where it's always set.
+    monkeypatch.setattr("src.config.settings.OPERATOR_CHAT_ID", 999)
     from src import database
 
     await database.init_db()

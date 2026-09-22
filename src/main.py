@@ -173,6 +173,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         scheduler.add_job(_reap_intake_state, "interval", seconds=60)
         # Poll watched newsletter publications every 15 minutes (ADR-0060, #610).
         scheduler.add_job(_enqueue_due_newsletter_polls, "interval", minutes=15)
+        # Release spending-ledger reservations a crashed/hung call never
+        # settled or released (handoff §2 recovery policy).
+        from src.services import spending
+
+        scheduler.add_job(spending.release_stale_reservations, "interval", minutes=10)
         if settings.GOOGLE_DRIVE_FOLDER_BRAIN:
             await brain.preflight()
             scheduler.add_job(brain.refresh_stale_links, "cron", hour=9, day_of_week="sun,wed")

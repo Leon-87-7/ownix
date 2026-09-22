@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-# Scoping note (confirmed): /search, /graph, /links, and /rebuild intentionally
-# return the single shared Second Brain link graph, not a per-user view — the
-# Second Brain is one operator-wide knowledge graph (see docs/seed/PRD.md §5).
-# Only /links/view (display preferences, not data) is scoped per-user.
+# Every route below is scoped to the authenticated caller's own Brain rows
+# (ADR-0043) — a tenant may list, search, graph, preview, tag, or rebuild only
+# their own links. A miss (not owned / doesn't exist) is always 404, never 403.
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
+from src.config import settings
 from src import brain, database
 from src.intake import rate_limit
 from src.utils.logger import get_logger
@@ -26,15 +26,23 @@ class BrainLinksViewIn(BaseModel):
 
 
 @brain_router.get("/search")
-async def search_links(q: str = Query(..., max_length=300), k: int = Query(default=5, ge=1, le=20)) -> list[dict]:
+async def search_links(
+    request: Request,
+    q: str = Query(..., max_length=300),
+    k: int = Query(default=5, ge=1, le=20),
+) -> list[dict]:
     if not q.strip():
         raise HTTPException(status_code=400, detail="q must not be empty")
-    return await brain.search_links(q.strip(), top_k=k)
+    chat_id: int = request.state.user["id"]
+    return await brain.search_links_scoped(
+        q.strip(), owner_chat_id=chat_id, top_k=k, min_score=settings.BRAIN_MIN_SCORE
+    )
 
 
 @brain_router.get("/graph")
-async def get_graph() -> dict[str, list[dict]]:
-    return await brain.get_graph()
+async def get_graph(request: Request) -> dict[str, list[dict]]:
+    chat_id: int = request.state.user["id"]
+    return await brain.get_graph(chat_id)
 
 
 @brain_router.get("/links")
@@ -46,31 +54,39 @@ async def list_links(
     order: str = Query(default="desc"),
     pinned: bool = Query(default=False),
 ) -> dict:
-    # Link inventory stays operator-wide; tag matching/payload is viewer-private.
+    chat_id: int = request.state.user["id"]
     return await brain.list_links(
         limit=limit,
         offset=offset,
         q=q,
         order=order,
-        viewer_chat_id=request.state.user["id"],
+        viewer_chat_id=chat_id,
+        owner_chat_id=chat_id,
         pinned_only=pinned,
     )
 
 
 @brain_router.get("/links/{link_id}/preview")
-async def get_link_preview(link_id: str) -> dict:
-    preview = await brain.get_link_preview(link_id)
+async def get_link_preview(link_id: str, request: Request) -> dict:
+    chat_id: int = request.state.user["id"]
+    preview = await brain.get_link_preview(link_id, owner_chat_id=chat_id)
     if preview is None:
         raise HTTPException(status_code=404, detail="Link not found")
     return preview
 
 
 @brain_router.get("/links/{link_id}/preview/image")
-async def get_link_preview_image(link_id: str) -> Response:
-    """Serve a resolved OG image from our origin when external hosts reject hotlinking."""
+async def get_link_preview_image(link_id: str, request: Request) -> Response:
+    """Serve a resolved OG image from our origin when external hosts reject hotlinking.
+
+    Ownership is proved by the scoped `get_link_preview` call below *before*
+    any remote fetch happens — otherwise this is an IDOR plus a server-paid
+    fetch oracle onto an arbitrary tenant's link (ADR-0043).
+    """
     from src.utils.public_html import fetch_public_image
 
-    preview = await brain.get_link_preview(link_id)
+    chat_id: int = request.state.user["id"]
+    preview = await brain.get_link_preview(link_id, owner_chat_id=chat_id)
     if preview is None:
         raise HTTPException(status_code=404, detail="Link not found")
     image_url = preview.get("og_image_url")
@@ -83,7 +99,10 @@ async def get_link_preview_image(link_id: str) -> Response:
         content=image.content,
         media_type=image.content_type,
         headers={
-            "Cache-Control": "private, max-age=86400",
+            # no-store, not a 24h max-age: the cache is keyed by URL+browser,
+            # not by request.state.user, so a max-age would let a browser
+            # replay another tenant's cached image after an account switch.
+            "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
             "X-Robots-Tag": "noindex, nofollow",
         },
@@ -115,15 +134,15 @@ async def get_link_tags(link_id: str, request: Request) -> list[dict]:
 
 @brain_router.post("/links/{link_id}/tags/{tag_id}", status_code=201)
 async def attach_link_tag(link_id: str, tag_id: str, request: Request) -> dict:
+    # Both resources must be proven owned by the caller (ADR-0043) — a tag
+    # check alone lets any user attach their own tag to another tenant's link.
     chat_id: int = request.state.user["id"]
     tag = await database.get_tag(chat_id, tag_id)
     if tag is None:
         raise HTTPException(status_code=404, detail="Tag not found")
-    try:
-        await database.attach_link_tag(link_id, tag_id)
-    except Exception as exc:
-        # FK violation — the link row doesn't exist.
-        raise HTTPException(status_code=404, detail="Link not found") from exc
+    attached = await database.attach_link_tag(link_id, tag_id, owner_chat_id=chat_id)
+    if not attached:
+        raise HTTPException(status_code=404, detail="Link not found")
     return {
         "id": tag["id"],
         "name": tag["name"],
@@ -139,7 +158,9 @@ async def detach_link_tag(link_id: str, tag_id: str, request: Request):
     tag = await database.get_tag(chat_id, tag_id)
     if tag is None:
         raise HTTPException(status_code=404, detail="Tag not found")
-    deleted = await database.detach_link_tag(link_id, tag_id)
+    deleted = await database.detach_link_tag(link_id, tag_id, owner_chat_id=chat_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Link not found")
     if not deleted:
         raise HTTPException(status_code=404, detail="Tag not attached to this link")
     return Response(status_code=204)
@@ -162,12 +183,15 @@ async def update_links_view(body: BrainLinksViewIn, request: Request) -> dict[st
 
 
 @brain_router.post("/rebuild")
-async def rebuild_graph() -> dict[str, int]:
-    # Shared operator-wide resource (see scoping note above) — one key for
-    # every caller, not per-user.
+async def rebuild_graph(request: Request) -> dict[str, int]:
+    # ponytail: process-local key shared by every caller, not per-user — a
+    # burst control, not per-tenant isolation (isolation is `rebuild_graph`
+    # itself only touching the caller's own rows below). Move to Redis if/when
+    # the shared rate limiter migration (handoff §2/§4) lands.
     rate_limit.enforce("brain_rebuild", max_requests=3, window_seconds=60)
+    chat_id: int = request.state.user["id"]
     try:
-        n = await brain.rebuild_graph()
+        n = await brain.rebuild_graph(chat_id)
         return {"nodes": n}
     except RuntimeError as e:
         raise HTTPException(status_code=409, detail=str(e))

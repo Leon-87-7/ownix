@@ -24,6 +24,26 @@ from src.processors.enrichment import (
 )
 
 
+def _stub_spending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let a test that reaches the paid Gemini key exercise only the
+    free/paid fallback logic under test, not the real SQLite spending ledger
+    (that's covered by tests/test_spending.py) — no temp DB is set up here."""
+    from src.services import spending
+
+    async def _fake_reserve(cost, *, model, estimated_micros):
+        return spending.Reservation(id="resv-test", estimated_micros=estimated_micros, idempotency_key="k")
+
+    async def _fake_settle(reservation, *, actual_micros):
+        return None
+
+    async def _fake_release(reservation):
+        return None
+
+    monkeypatch.setattr(spending, "reserve_paid_gemini", _fake_reserve)
+    monkeypatch.setattr(spending, "settle", _fake_settle)
+    monkeypatch.setattr(spending, "release", _fake_release)
+
+
 def _utf16_units(s: str) -> int:
     return len(s.encode("utf-16-le")) // 2
 
@@ -175,13 +195,14 @@ async def test_enrich_both_keys_failed_raises(monkeypatch: pytest.MonkeyPatch) -
     """When both Gemini keys fail, enrich() raises EnrichmentUnavailableError."""
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     def _boom(parts, *, api_key: str, model: str, schema=None):
         raise RuntimeError("network error")
 
     with patch("src.services.gemini._call_sync", side_effect=_boom):
         with pytest.raises(EnrichmentUnavailableError):
-            await enrich({"title": "Test Video", "transcript": "some transcript"})
+            await enrich({"chat_id": 1, "title": "Test Video", "transcript": "some transcript"})
 
 
 @pytest.mark.asyncio
@@ -191,7 +212,7 @@ async def test_enrich_returns_enrichment_on_success(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch("src.services.gemini._call_sync", return_value=_make_response(_SAMPLE_GEMINI_JSON)):
-        result, template_analysis, promise_gap = await enrich({"title": "Test Video", "transcript": "some transcript"})
+        result, template_analysis, promise_gap = await enrich({"chat_id": 1, "title": "Test Video", "transcript": "some transcript"})
 
     assert isinstance(result, Enrichment)
     assert result.category == "Technical Tutorial"
@@ -212,7 +233,7 @@ async def test_enrich_pops_and_returns_promise_gap(monkeypatch: pytest.MonkeyPat
 
     with patch("src.services.gemini._call_sync", return_value=_make_response(_SAMPLE_GEMINI_JSON)):
         result, template_analysis, promise_gap = await enrich(
-            {"title": "Test Video", "transcript": "some transcript"}
+            {"chat_id": 1, "title": "Test Video", "transcript": "some transcript"}
         )
 
     assert promise_gap == {
@@ -250,6 +271,7 @@ async def test_enrich_returns_freestyle_output_via_template_analysis(
 
     job = {
         "id": "20260816_120000_ABCD",
+        "chat_id": 1,
         "title": "Cloudflare just slop forked Next.js",
         "transcript": "some transcript",
         "template": "freestyle",
@@ -308,7 +330,7 @@ async def test_enrich_audio_returns_tuple_of_template_analysis_and_transcript(mo
         return_value=_SAMPLE_AUDIO_JSON,
     ):
         template_analysis, transcript_text = await enrich_audio(
-            {"title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
+            {"chat_id": 1, "title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
         )
 
     assert template_analysis == {
@@ -329,7 +351,7 @@ async def test_enrich_audio_returns_none_template_analysis_when_missing(monkeypa
         return_value='{"transcript": "some words", "something_else": 1}',
     ):
         template_analysis, transcript_text = await enrich_audio(
-            {"title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
+            {"chat_id": 1, "title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
         )
 
     assert template_analysis is None
@@ -349,7 +371,7 @@ async def test_transcribe_audio_returns_spoken_text_on_success(monkeypatch: pyte
         "src.processors.enrichment._call_gemini_audio_sync",
         return_value="  Hello world, this is a test transcript.  ",
     ):
-        result = await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video")
+        result = await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video", chat_id=1)
 
     assert result == "Hello world, this is a test transcript."
 
@@ -358,19 +380,21 @@ async def test_transcribe_audio_returns_spoken_text_on_success(monkeypatch: pyte
 async def test_transcribe_audio_both_keys_fail_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     with patch(
         "src.processors.enrichment._call_gemini_audio_sync",
         side_effect=RuntimeError("network error"),
     ):
         with pytest.raises(EnrichmentUnavailableError):
-            await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video")
+            await transcribe_audio("YXVkaW8=", "audio/mp4", title="Test Video", chat_id=1)
 
 
 @pytest.mark.asyncio
 async def test_enrich_audio_both_keys_failed_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     def _boom(audio_b64: str, mime_type: str, prompt: str, api_key: str) -> str:
         raise RuntimeError("network error")
@@ -378,7 +402,7 @@ async def test_enrich_audio_both_keys_failed_raises(monkeypatch: pytest.MonkeyPa
     with patch("src.processors.enrichment._call_gemini_audio_sync", side_effect=_boom):
         with pytest.raises(EnrichmentUnavailableError):
             await enrich_audio(
-                {"title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
+                {"chat_id": 1, "title": "Test Reel", "template": "method"}, "YXVkaW8=", "audio/mp4"
             )
 
 
@@ -511,6 +535,7 @@ async def test_enrich_passes_freestyle_prompt_to_gemini(monkeypatch: pytest.Monk
 
     with patch("src.services.gemini._call_sync", side_effect=_capture):
         await enrich({
+            "chat_id": 1,
             "title": "Test",
             "transcript": "some content",
             "freestyle_prompt": "Summarise the key risks mentioned.",
@@ -536,6 +561,7 @@ async def test_enrich_without_freestyle_prompt_uses_template(monkeypatch: pytest
 
     with patch("src.services.gemini._call_sync", side_effect=_capture):
         await enrich({
+            "chat_id": 1,
             "title": "Test",
             "transcript": "some content",
             "template": "method",

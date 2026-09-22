@@ -48,7 +48,14 @@ async def test_handle_bookmarks_chains_enrich_task_on_success(temp_db, monkeypat
 
     await worker._handle_bookmarks({"task": "bookmarks", "job_id": job_id, "html_b64": ""})
 
-    assert enqueued == [{"task": "bookmarks_enrich", "job_id": job_id}]
+    assert len(enqueued) == 1
+    assert enqueued[0]["task"] == "bookmarks_enrich"
+    assert enqueued[0]["job_id"] == job_id
+    # Chained onto the parent's lineage (handoff §2 "Queue lineage") — its
+    # own hop of a fresh attempt, one level deeper than the root task.
+    assert enqueued[0]["root_task_id"] == job_id
+    assert enqueued[0]["depth"] == 1
+    assert enqueued[0]["attempt"] == 1
 
 
 @pytest.mark.asyncio

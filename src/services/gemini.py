@@ -10,6 +10,7 @@ import time
 from collections import deque
 
 from src.config import settings
+from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -174,34 +175,95 @@ def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict |
     from google import genai
     from google.genai import types
 
+    from src.services.provider_pricing import DEFAULT_MAX_OUTPUT_TOKENS
+
     client = genai.Client(
         api_key=api_key, http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS)
     )
+    # Every caller reserves against DEFAULT_MAX_OUTPUT_TOKENS (estimate_text_micros /
+    # estimate_vision_micros) — capping the real request to that same envelope keeps
+    # a response from ever costing more than what was reserved.
     if schema is not None:
         config = types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=schema,
+            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
         )
-        return client.models.generate_content(model=model, contents=parts, config=config)
-    return client.models.generate_content(model=model, contents=parts)
+    else:
+        config = types.GenerateContentConfig(max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
+    return client.models.generate_content(model=model, contents=parts, config=config)
 
 
-async def _call_with_fallback(fn, *args, log_ok: str, log_fail: str, **fn_kwargs):
-    """Try GEMINI_FREE_API_KEY then GEMINI_PAID_API_KEY. Raises GeminiUnavailableError if both fail."""
+async def _call_with_fallback(
+    fn,
+    *args,
+    cost: CostContext,
+    price_model: str,
+    estimated_micros: int,
+    log_ok: str,
+    log_fail: str,
+    **fn_kwargs,
+):
+    """Try GEMINI_FREE_API_KEY (unmetered), then GEMINI_PAID_API_KEY gated by
+    the per-user spending ledger (handoff §2) — a paid attempt requires a
+    durable reservation tied to `cost.chat_id` *before* the call is made.
+    Raises `GeminiUnavailableError` if both fail, or lets
+    `PaidProviderDisabled`/`SpendingLimitExceeded` propagate if the paid
+    fallback is blocked before it would even be attempted — never caught by
+    the generic `except Exception` below, so a budget denial can't be
+    silently retried as if it were an ordinary provider failure.
+    """
     last_error: str | None = None
-    for key in [settings.GEMINI_FREE_API_KEY, settings.GEMINI_PAID_API_KEY]:
-        if not key:
-            continue
+
+    if settings.GEMINI_FREE_API_KEY:
         try:
-            result = await asyncio.to_thread(fn, *args, api_key=key, **fn_kwargs)
-            log.info(log_ok)
+            result = await asyncio.to_thread(fn, *args, api_key=settings.GEMINI_FREE_API_KEY, **fn_kwargs)
+            log.info(log_ok, tier="free")
             return result
         except Exception as exc:
             last_error = str(exc).splitlines()[0][:120]
-            log.warning(log_fail, error=last_error)
-    error = last_error or "Both Gemini keys failed"
-    await _maybe_alert_gemini_failures(error)
-    raise GeminiUnavailableError(error)
+            log.warning(log_fail, error=last_error, tier="free")
+
+    if not settings.GEMINI_PAID_API_KEY:
+        error = last_error or "Both Gemini keys failed"
+        await _maybe_alert_gemini_failures(error)
+        raise GeminiUnavailableError(error)
+
+    from src.services import provider_pricing, spending
+
+    reservation = await spending.reserve_paid_gemini(
+        cost, model=price_model, estimated_micros=estimated_micros
+    )
+
+    try:
+        result = await asyncio.to_thread(fn, *args, api_key=settings.GEMINI_PAID_API_KEY, **fn_kwargs)
+    except Exception as exc:
+        last_error = str(exc).splitlines()[0][:120]
+        log.warning(log_fail, error=last_error, tier="paid")
+        try:
+            await spending.release(reservation)
+        except Exception:
+            # A ledger failure here must never mask the real provider error
+            # below — the stuck "reserved" row is reclaimed later by
+            # release_stale_reservations rather than retried inline.
+            log.exception("gemini.release_failed", reservation_id=reservation.id)
+        await _maybe_alert_gemini_failures(last_error)
+        raise GeminiUnavailableError(last_error)
+
+    actual_micros = provider_pricing.actual_micros_from_response(
+        price_model, result, fallback_micros=reservation.estimated_micros
+    )
+    try:
+        await spending.settle(reservation, actual_micros=actual_micros)
+    except Exception:
+        # The paid call already succeeded and must be returned rather than
+        # thrown away — a failed settle just leaves the reservation
+        # "reserved" instead of recorded as spend; release_stale_reservations
+        # reclaims it later instead of this call reporting a billable
+        # success as a retryable failure.
+        log.exception("gemini.settle_failed", reservation_id=reservation.id)
+    log.info(log_ok, tier="paid", actual_micros=actual_micros)
+    return result
 
 
 async def _maybe_alert_gemini_failures(error: str) -> None:
@@ -248,21 +310,33 @@ async def generate(
     prompt: str,
     *,
     model: str,
+    cost: CostContext,
     schema: type | dict | None = None,
 ) -> str:
-    """Text generation: free→paid fallback. Raises GeminiUnavailableError on total failure."""
+    """Text generation: free→paid fallback, paid gated by the spending ledger
+    (`cost`). Raises GeminiUnavailableError on total failure, or
+    PaidProviderDisabled/SpendingLimitExceeded if the paid fallback is
+    blocked before it's attempted."""
+    from src.services import provider_pricing
+
+    estimated_micros = provider_pricing.estimate_text_micros(model=model, input_chars=len(prompt))
     response = await _call_with_fallback(
         _call_sync,
         prompt,
         model=model,
         schema=schema,
+        cost=cost,
+        price_model=model,
+        estimated_micros=estimated_micros,
         log_ok="gemini.generate_ok",
         log_fail="gemini.generate_key_failed",
     )
     return (response.text or "").replace("—", "-")
 
 
-async def call_gemini_vision(frames: list[dict], transcript_text: str | None = None) -> dict:
+async def call_gemini_vision(
+    frames: list[dict], transcript_text: str | None = None, *, cost: CostContext
+) -> dict:
     """Analyze inline JPEG frames. Raises GeminiUnavailableError on total failure.
 
     frames: [{"base64": str, "mime_type": str}, ...]
@@ -272,6 +346,8 @@ async def call_gemini_vision(frames: list[dict], transcript_text: str | None = N
     """
     from google.genai import types
 
+    from src.services import provider_pricing
+
     prompt = _VISION_PROMPT
     if transcript_text:
         prompt += _TRANSCRIPT_GROUNDING.format(transcript=transcript_text)
@@ -280,10 +356,15 @@ async def call_gemini_vision(frames: list[dict], transcript_text: str | None = N
         types.Part.from_bytes(data=base64.b64decode(f["base64"]), mime_type=f["mime_type"])
         for f in frames
     ]
+    model = "gemini-2.5-flash"
+    estimated_micros = provider_pricing.estimate_vision_micros(model=model, image_count=len(frames))
     response = await _call_with_fallback(
         _call_sync,
         parts,
-        model="gemini-2.5-flash",
+        model=model,
+        cost=cost,
+        price_model=model,
+        estimated_micros=estimated_micros,
         log_ok="gemini.vision_ok",
         log_fail="gemini.vision_key_failed",
     )
@@ -294,6 +375,7 @@ async def call_gemini_photo_links(
     images: list[dict],
     *,
     caption: str | None = None,
+    cost: CostContext,
 ) -> dict:
     """Extract verbatim-grounded URLs from photos. Raises GeminiUnavailableError on total failure.
 
@@ -302,16 +384,23 @@ async def call_gemini_photo_links(
     """
     from google.genai import types
 
+    from src.services import provider_pricing
+
     parts: list = [_PHOTO_PROMPT]
     for img in images:
         parts.append(types.Part.from_bytes(data=img["bytes"], mime_type=img["mime_type"]))
     if caption:
         parts.append(f"User caption context: {caption}")
 
+    model = "gemini-2.5-flash"
+    estimated_micros = provider_pricing.estimate_vision_micros(model=model, image_count=len(images))
     response = await _call_with_fallback(
         _call_sync,
         parts,
-        model="gemini-2.5-flash",
+        model=model,
+        cost=cost,
+        price_model=model,
+        estimated_micros=estimated_micros,
         log_ok="gemini.photo_ok",
         log_fail="gemini.photo_key_failed",
     )
@@ -325,9 +414,11 @@ async def call_gemini_photo_links(
     return data
 
 
-async def select_informative_screenshots(frames: list[dict]) -> list[dict]:
+async def select_informative_screenshots(frames: list[dict], *, cost: CostContext) -> list[dict]:
     """Select and caption informative long-video frames (diagrams, code, UI, slides)."""
     from google.genai import types
+
+    from src.services import provider_pricing
 
     prompt = (
         "Select only frames that teach something useful: code, diagrams, slides, data, or "
@@ -337,10 +428,15 @@ async def select_informative_screenshots(frames: list[dict]) -> list[dict]:
     parts: list[object] = [prompt]
     for frame in frames:
         parts.append(types.Part.from_bytes(data=base64.b64decode(frame["data"]), mime_type="image/jpeg"))
+    model = "gemini-2.5-flash"
+    estimated_micros = provider_pricing.estimate_vision_micros(model=model, image_count=len(frames))
     response = await _call_with_fallback(
         _call_sync,
         parts,
-        model="gemini-2.5-flash",
+        model=model,
+        cost=cost,
+        price_model=model,
+        estimated_micros=estimated_micros,
         schema={
             "type": "object",
             "properties": {
@@ -362,7 +458,7 @@ async def select_informative_screenshots(frames: list[dict]) -> list[dict]:
     return data.get("selections", [])
 
 
-async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
+async def resolve_tool_urls(tools: list[dict], *, cost: CostContext) -> list[dict]:
     """Resolve canonical URLs for a tool/product list via Gemini. Returns tools with 'url' added."""
     if not tools:
         return tools
@@ -376,8 +472,8 @@ async def resolve_tool_urls(tools: list[dict]) -> list[dict]:
         f"Items:\n{lines}"
     )
     try:
-        raw = await generate(prompt, model="gemini-2.5-flash")
-    except GeminiUnavailableError:
+        raw = await generate(prompt, model="gemini-2.5-flash", cost=cost)
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded):
         log.error("gemini.resolve_urls_all_keys_failed")
         return [{**t, "url": None} for t in tools]
     try:

@@ -27,7 +27,6 @@ from src.brain import (
     normalize_url,
     refresh_links_for_job,
     refresh_stale_links,
-    search_links,
     search_links_scoped,
     search_jobs_scoped,
 )
@@ -56,6 +55,7 @@ def _brain_settings(db_path: str):
         patch.object(real_settings, "DB_PATH", db_path),
     ):
         mock_settings.DB_PATH = db_path
+        mock_settings.OPERATOR_CHAT_ID = 999999
         yield mock_settings
 
 
@@ -349,7 +349,7 @@ async def test_rebuild_lock_blocks_concurrent():
     """Calling rebuild_graph while lock is held must raise RuntimeError."""
     async with _rebuild_lock:
         with pytest.raises(RuntimeError, match="rebuild_in_progress"):
-            await rebuild_graph()
+            await rebuild_graph(owner_chat_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +374,7 @@ async def test_refresh_skips_when_lock_held():
 
 @pytest.mark.asyncio
 async def test_search_returns_empty_on_no_corpus():
-    """search_links should return [] when DB has no embeddings."""
+    """search_links_scoped should return [] when DB has no embeddings."""
     import tempfile
     import os
     import aiosqlite
@@ -395,7 +395,7 @@ async def test_search_returns_empty_on_no_corpus():
             mock_settings.BRAIN_MIN_SCORE = 0.5
             mock_embed.return_value = _rand_vec()
 
-            results = await search_links("some query", top_k=5)
+            results = await search_links_scoped("some query", owner_chat_id=1, top_k=5)
 
         assert results == []
 
@@ -467,7 +467,7 @@ async def test_get_graph_empty_corpus():
         with _brain_settings(db_path) as mock_settings:
             mock_settings.DB_PATH = db_path
             mock_settings.BRAIN_MIN_SCORE = 0.5
-            assert await get_graph() == {"nodes": [], "edges": []}
+            assert await get_graph(owner_chat_id=1) == {"nodes": [], "edges": []}
     finally:
         os.unlink(db_path)
 
@@ -587,7 +587,7 @@ async def test_link_preview_keeps_transient_fetch_failure_retryable() -> None:
             "src.brain.fetch_public_html", new=AsyncMock(return_value=None)
         ):
             mock_settings.DB_PATH = db_path
-            result = await get_link_preview("link-1")
+            result = await get_link_preview("link-1", owner_chat_id=mock_settings.OPERATOR_CHAT_ID)
 
         async with aiosqlite.connect(db_path) as conn:
             stored = await (
@@ -636,8 +636,8 @@ async def test_link_preview_rechecks_a_cached_empty_og_image() -> None:
             "src.brain.fetch_public_html", new=fetch
         ):
             mock_settings.DB_PATH = db_path
-            first = await get_link_preview("link-1")
-            second = await get_link_preview("link-1")
+            first = await get_link_preview("link-1", owner_chat_id=mock_settings.OPERATOR_CHAT_ID)
+            second = await get_link_preview("link-1", owner_chat_id=mock_settings.OPERATOR_CHAT_ID)
 
         async with aiosqlite.connect(db_path) as conn:
             stored = await (
@@ -652,27 +652,29 @@ async def test_link_preview_rechecks_a_cached_empty_og_image() -> None:
         os.unlink(db_path)
 
 
-@pytest.mark.asyncio
-async def test_link_preview_image_is_served_from_the_same_origin_proxy() -> None:
+def test_link_preview_image_is_served_from_the_same_origin_proxy(brain_client, monkeypatch) -> None:
     from src.api import brain as brain_api
     from src.utils.public_html import PublicImageResult
 
-    with patch.object(
-        brain_api.brain,
-        "get_link_preview",
-        new=AsyncMock(
-            return_value={"id": "link-1", "og_image_url": "https://cdn.example.com/og.png"}
-        ),
-    ), patch(
+    calls: list[tuple[str, int]] = []
+
+    async def fake_get_link_preview(link_id: str, owner_chat_id: int) -> dict:
+        calls.append((link_id, owner_chat_id))
+        return {"id": "link-1", "og_image_url": "https://cdn.example.com/og.png"}
+
+    monkeypatch.setattr(brain_api.brain, "get_link_preview", fake_get_link_preview)
+    monkeypatch.setattr(
         "src.utils.public_html.fetch_public_image",
-        new=AsyncMock(return_value=PublicImageResult(b"image", "image/png")),
-    ):
-        response = await brain_api.get_link_preview_image("link-1")
+        AsyncMock(return_value=PublicImageResult(b"image", "image/png")),
+    )
+
+    response = brain_client.get("/api/brain/links/link-1/preview/image")
 
     assert response.status_code == 200
-    assert response.media_type == "image/png"
-    assert response.body == b"image"
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == b"image"
     assert response.headers["x-content-type-options"] == "nosniff"
+    assert calls == [("link-1", 555)]  # ownership proved before the remote fetch
 
 
 @pytest.mark.asyncio
@@ -1289,7 +1291,7 @@ async def test_refresh_repairs_missing_description_and_reembeds():
         new_vec = _rand_vec()
         embed_calls: list[str] = []
 
-        async def fake_embed(doc: str):
+        async def fake_embed(doc: str, *, owner_chat_id: int | None = None):
             embed_calls.append(doc)
             return new_vec
 

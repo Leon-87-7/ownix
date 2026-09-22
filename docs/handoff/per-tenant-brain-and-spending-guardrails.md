@@ -1,6 +1,6 @@
 # Handoff — finish per-tenant Brain isolation, spending guardrails, keyboard accessibility, and traffic-cost hardening
 
-**Status:** not started. Privacy fix (§1) is release-blocking for multi-user use. The other three slices are independently shippable and do not block or depend on it.
+**Status:** §1 (minus restricted-mode), §2 (minus the Redis burst-control migration), and §3 shipped on `brain-tenant-isolation` (PR #650, squash-pending) 2026-09-22. §4 (traffic-cost hardening) has not been started. See [§0 below](#0-delivery-status) for the exact per-item breakdown — most sections below are now a record of what shipped plus the residual gaps, not a from-scratch plan.
 
 **Baseline reviewed:** `main` at `b0111a2b362fb038e2615ad2d358fd40c4134539` on 2026-09-21.
 
@@ -22,6 +22,27 @@ This handoff contains four related but independently shippable slices:
 4. **P3: traffic-cost hardening.** The backend's origin port is host-published directly in `docker-compose.yml`, there's no ops runbook for the Cloudflare/Vercel account-side settings this depends on, and the in-process rate limiter (same one referenced in §2) needs the same Redis migration either way.
 
 Do not combine the slices into one giant migration or one giant PR. Land Brain isolation first (release-blocking). §2–§4 touch disjoint files and can be built in parallel or in any order after that — but land the Redis rate-limiter change (shared by §2 and §4) once, not twice.
+
+In practice §1–§3 landed together on one branch (`brain-tenant-isolation`, PR #650) rather than as the seven separate PRs §5 originally proposed — see §0 immediately below for what that PR actually contains and what it doesn't.
+
+---
+
+## 0. Delivery status
+
+| Slice | Status | Commit(s) | Notes |
+| --- | --- | --- | --- |
+| §1 Brain read isolation | **Shipped** | `07d1a98` | Dashboard/Telegram/MCP reads, tag-mutation IDOR, and rebuild/relatedness scoping all closed. |
+| §1 Restricted preview mode | **Not started** | — | No Operator-only restricted-mode gate exists for Brain anywhere in `src/api/`; `src/api/preview.py`'s restricted-mode gate is a separate subsystem (public share-preview links) and was never wired into Brain. Still new work. |
+| §2 Ledger + reservation service (v53) | **Shipped** | `0cf64ea` | `usage_ledger`/`user_spend_limits`, atomic `reserve`/`settle`/`release`, `src/services/spending.py`. |
+| §2 Gemini paid-fallback enforcement | **Shipped** | `0cf64ea`, hardened in `2c00ddf` | `CostContext` threaded through every processor + `brain._embed` + Telegram photo + doc-parser + newsletter/space context. Follow-up review pass added the `max_output_tokens` envelope cap, `gemini-2.5-pro` pricing (was silently using Flash pricing), correct audio input pricing, and thinking-token cost accounting — all were reservation/settlement gaps the original PR shipped with. |
+| §2 Queue lineage + execution bounds | **Shipped** | `0cf64ea` | `root_task_id`/`attempt`/`depth` on every envelope, `MAX_TASK_DEPTH`/`MAX_TASK_ATTEMPTS` rejection, `asyncio.timeout(MAX_TASK_SECONDS)` around `_dispatch`, `release_stale_reservations` sweep. `3ea7d14` additionally fixed the timeout path to notify the owning chat, which the original commit missed. |
+| §2 Controls UI + kill switch | **Shipped** | `0cf64ea` | `PAID_AI_ENABLED`, `/api/controls/spending`, dashboard spending panel. |
+| §2 Default per-user caps (§7 decision) | **Shipped** | `94c7fe3` | Product chose $0.50/day, $3/month; closed a companion footgun where an omitted limit on `PUT` silently meant unlimited. |
+| §2 Redis burst-control migration | **Not started** | — | `src/intake/rate_limit.py`/`quota.py` are still the same in-process, per-worker-process limiter as the baseline; the ponytail comment documenting this as future work is unchanged. Shared dependency for §4 — still blocks that slice too. |
+| §3 Keyboard accessibility | **Shipped** | `4dda87f`, sidebar gap closed in `2c00ddf` | Accessible Brain table (aria-hidden canvas), sidebar `inert` fix, jest-axe wired into Brain/Feed/Spaces/shell, accessibility statement rewritten. A follow-up review pass found the collapsed desktop rail's logo button was the one control still missing `tabIndex={-1}` while the drawer was open — fixed in `2c00ddf`. `tab-bar.tsx`'s ARIA `tablist` migration (explicitly optional/low-priority in the original plan) was not done. |
+| §4 Traffic-cost hardening | **Not started** | — | `docker-compose.yml` still host-publishes `8000:8000`. `docs/ops/vercel-deploy.md` exists (predates this handoff) but covers Vercel/Cloudflare deploy topology only — no WAF, Spend Management, or per-provider billing-alert content as §4 step 4 asks for. No Redis rate-limiter, no `.env.example` additions. |
+
+A parallel code-review pass (CodeRabbit + Codacy, `3ea7d14`/`1e5fca8`/`2c00ddf`) also caught real bugs in the §1/§2 shipped code that weren't in the original plan or its acceptance criteria: two more cross-tenant Brain leaks (`_rewrite_existing_md`'s and the scheduled-refresh batch's "related links" queries both drew from every tenant's embeddings, not just the current link's owner), a legacy-null link's embedding cost being billed straight to the Operator instead of falling back through its source job's owner first, and a TOCTOU where `reserve()` re-checked spend limits inside its transaction but not the `enabled`/`allow_paid_gemini` policy flags, so a disabling operator could lose a race against an in-flight reservation.
 
 ---
 
@@ -542,34 +563,36 @@ Never display floating-point-derived totals; format integer micros at the presen
 
 ## 5. Delivery sequence
 
-### PR 1 — Brain read isolation
+**Actual delivery didn't follow this split** — PRs 1–2, 3–5 (minus the Redis migration), and 6 each landed as one commit apiece on a single branch (`brain-tenant-isolation`, PR #650) instead of six separate PRs, then went through an automated review pass that added three more fix commits on top. The sequencing below is kept as-written because PR 7 (traffic-cost hardening) hasn't started and may still benefit from it, and because the dependency ordering it documents (Brain isolation before anything else; Redis rate-limiter shared by §2/§4) held true regardless of how the commits were actually packaged.
+
+### PR 1 — Brain read isolation ✅ shipped (`07d1a98`)
 
 - Scope dashboard routes, graph, search, previews, Telegram `/find`, and tests.
 - Remove stale "shared graph" comments and update indexes/docs.
 - No spending schema in this PR.
 
-### PR 2 — Brain mutation/rebuild isolation
+### PR 2 — Brain mutation/rebuild isolation — ✅ mostly shipped (`07d1a98`, relatedness leaks closed by `1e5fca8`); restricted-mode behavior not started
 
-- Scope tag mutations, rebuild/refresh, Drive calls, and restricted-mode behavior.
+- Scope tag mutations, rebuild/refresh, Drive calls, and ~~restricted-mode behavior~~ (not implemented — see §0).
 - Complete ADR-0043 acceptance tests.
 
-### PR 3 — Ledger and reservation service
+### PR 3 — Ledger and reservation service ✅ shipped (`0cf64ea`)
 
 - Migration v53, DB module, service types, transaction logic, recovery policy, and unit tests.
 - No provider behavior change yet except unused service wiring.
 
-### PR 4 — Gemini paid-fallback enforcement
+### PR 4 — Gemini paid-fallback enforcement ✅ shipped (`0cf64ea`), hardened (`2c00ddf`)
 
 - Add `CostContext`, update all Gemini/embedding callers, gate paid fallback, settle usage, and add kill switches.
-- Update ADR-0006 with a superseding/addendum ADR because "paid key is a sufficient backstop" is no longer an adequate cost-control decision.
+- Update ADR-0006 with a superseding/addendum ADR because "paid key is a sufficient backstop" is no longer an adequate cost-control decision. — shipped as ADR-0064 (`supersedes: "0006"`), a new standalone ADR rather than an edit to ADR-0006's own file; ADR-0006's free→paid fallback order itself is explicitly called out as still current.
 
-### PR 5 — Queue bounds, Redis burst controls, and Controls UI
+### PR 5 — Queue bounds, Redis burst controls, and Controls UI — ✅ queue bounds + Controls UI shipped (`0cf64ea`); Redis burst controls not started
 
 - Task lineage/depth/attempt/timeout.
-- Redis per-user concurrency/outstanding limits — this is the same Redis rate-limiter migration §4 depends on; land it once.
+- ~~Redis per-user concurrency/outstanding limits~~ — not done; still the same in-process limiter. This is the same Redis rate-limiter migration §4 depends on; land it once.
 - Spending summary/admin endpoints and UI.
 
-### PR 6 — Brain keyboard accessibility
+### PR 6 — Brain keyboard accessibility ✅ shipped (`4dda87f`), one gap closed by `2c00ddf`
 
 - Accessible Brain list/table + `aria-hidden` canvas.
 - Sidebar `inert`/focus-containment fix.
@@ -609,14 +632,14 @@ Rollback:
 
 These values should not be invented by the implementing agent:
 
-- Default daily and monthly paid limits for a newly approved user.
-- Whether limits are denominated only in USD or need configurable currency.
-- Whether users may lower their own limits or only view them.
-- Whether a budget denial should offer a free-only retry, wait-until-reset message, or contact-Operator action.
-- The conservative reservation envelope for each pipeline/model.
-- Whether newsletter automation is charged per subscriber or entirely to the Operator during the invite-only phase.
-- Whether anything external genuinely depends on reaching the API on port 8000 directly (§4) — if unknown, default to closing it and adding it back only if something breaks.
-- Who owns enabling the account-side Cloudflare WAF/rate-limit rules and Vercel Spend Management (§4 step 2) — these cannot be done from a coding session and need an explicit owner and date.
+- ~~Default daily and monthly paid limits for a newly approved user.~~ **Decided and shipped (`94c7fe3`):** $0.50/day, $3/month.
+- ~~Whether limits are denominated only in USD or need configurable currency.~~ **Shipped as configurable, defaulting to USD** — `SpendLimitsIn.currency` (`src/api/controls.py`) accepts any 3-letter code; no product decision was needed to block this, since it cost nothing to make configurable from the start.
+- ~~Whether users may lower their own limits or only view them.~~ **Shipped as view-only** — `GET /api/controls/spending` is self-view, `PUT` is Operator-only. This matches the safe default below rather than resolving it as a distinct product call; revisit if self-service lowering is ever wanted.
+- Whether a budget denial should offer a free-only retry, wait-until-reset message, or contact-Operator action. — still open; shipped behavior is the safe default (typed exception, no retry, no UX copy beyond that) per the newsletter poll's and other callers' generic "context unavailable" fallback.
+- The conservative reservation envelope for each pipeline/model. — partially resolved: `DEFAULT_MAX_OUTPUT_TOKENS=2048` (text/vision) and a separate `_AUDIO_DEFAULT_MAX_OUTPUT_TOKENS=8192` shipped in `src/services/provider_pricing.py`, and `2c00ddf` closed the gap where the real Gemini call didn't actually cap output at that envelope (it could exceed what was reserved). Still open: whether 2048/8192 are the right numbers per pipeline, not just per modality.
+- ~~Whether newsletter automation is charged per subscriber or entirely to the Operator during the invite-only phase.~~ **Decided and shipped:** entirely to the Operator — `newsletter_poll._generate_issue_context` charges `OPERATOR_CHAT_ID` for the one shared per-issue generation, skipping entirely when no Operator is configured, never billing a subscriber.
+- Whether anything external genuinely depends on reaching the API on port 8000 directly (§4) — still open; `docker-compose.yml` still publishes it, so the safe default ("close it") hasn't been applied either.
+- Who owns enabling the account-side Cloudflare WAF/rate-limit rules and Vercel Spend Management (§4 step 2) — these cannot be done from a coding session and need an explicit owner and date. Still open — §4 hasn't started.
 
 Safe implementation defaults until those decisions are made:
 
@@ -630,12 +653,12 @@ Safe implementation defaults until those decisions are made:
 
 ## 8. Definition of done
 
-- ADR-0043 is actually true in dashboard, Telegram, worker, scheduled, and MCP paths.
-- Two approved unrelated accounts cannot infer or access one another's private Brain data.
-- Paid Gemini cannot be reached without a durable, owner-scoped reservation.
-- Tests cover concurrency, restart persistence, retries, ambiguous failures, and every cost-bearing entry surface.
-- Frontend tests, backend tests, lint, and build pass.
-- `CHANGELOG.md`, capability/function/glue indexes, ops documentation, and the ADR addendum are updated.
-- Production rollout starts with paid AI disabled and a verified database backup.
-- The Brain graph's keyboard gap is closed: every node is reachable via the new list; `axe` checks and the manual keyboard pass both pass.
-- The API is no longer reachable except through the intended Cloudflare path (or a documented, deliberate exception exists), and `docs/ops/vercel-deploy.md` exists and is accurate.
+- [x] ADR-0043 is actually true in dashboard, Telegram, worker, scheduled, and MCP paths — **except** the restricted (Operator-only) preview mode, which still doesn't exist for Brain (§0).
+- [x] Two approved unrelated accounts cannot infer or access one another's private Brain data — verified end-to-end by `tests/test_brain_api_tenant_isolation.py` plus the two relatedness-leak fixes in `1e5fca8`.
+- [x] Paid Gemini cannot be reached without a durable, owner-scoped reservation — and, since `2c00ddf`, that reservation's `enabled`/`allow_paid_gemini` check is re-verified transactionally, not just at the caller's pre-check.
+- [x] Tests cover concurrency, restart persistence, retries, ambiguous failures, and every cost-bearing entry surface — `tests/test_spending.py`, `tests/test_gemini_client.py`, `tests/test_worker.py`.
+- [x] Frontend tests, backend tests, lint, and build pass — full suites verified green as of `2c00ddf` (919 frontend tests, 1725 backend tests per CI, `ruff check src/` and `tsc --noEmit` both clean).
+- [ ] `CHANGELOG.md`, capability/function/glue indexes, ops documentation, and the ADR addendum are updated — indexes and the ADR shipped (`docs/adr/0064-per-user-spending-guardrails.md`, `docs/seed/{CAPABILITY_MAP,FUNCTION_INDEX,GLUE_INDEX_BACKEND}.md`, `CONTEXT.md`, all in `0cf64ea`); **`CHANGELOG.md` itself was not touched by any commit in this handoff's delivery** and still has no entry for Brain isolation, spending guardrails, or the a11y work.
+- [ ] Production rollout starts with paid AI disabled and a verified database backup — rollout itself (§6) hasn't happened yet; the code-side prerequisites (`PAID_AI_ENABLED` defaulting off, `allow_paid_gemini` defaulting off) are in place.
+- [x] The Brain graph's keyboard gap is closed: every node is reachable via the new list; `axe` checks and the manual keyboard pass both pass — `4dda87f`, sidebar rail gap closed in `2c00ddf`.
+- [ ] The API is no longer reachable except through the intended Cloudflare path (or a documented, deliberate exception exists), and `docs/ops/vercel-deploy.md` exists and is accurate — **not done.** `docker-compose.yml` still publishes `8000:8000`; `docs/ops/vercel-deploy.md` exists (predates this handoff) but doesn't cover the WAF/Spend-Management/billing-alert content this item actually asks for. This is all of §4, untouched.

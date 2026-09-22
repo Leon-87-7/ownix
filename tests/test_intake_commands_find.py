@@ -28,16 +28,16 @@ class TestFindCommand:
         assert "usage" in resp.text.lower()
 
     def test_no_results_below_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
             return [_candidate("https://example.com/a", "A", 0.3)]
 
-        monkeypatch.setattr("src.brain.search_links", _fake_search)
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
         resp = asyncio.run(commands.SHARED_COMMANDS["/find"].handler(CHAT_ID, ["/find", "svg"]))
         assert resp.artifacts == []
         assert "nothing found" in resp.text.lower()
 
     def test_results_ride_artifacts_not_flattened_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
             return [
                 _candidate("https://example.com/a", "Result A", 0.9, "topic a"),
                 _candidate("https://example.com/b", "Result B", 0.7, "topic b"),
@@ -46,7 +46,7 @@ class TestFindCommand:
         async def _fake_enrich(links: list[dict]) -> list[dict]:
             return links
 
-        monkeypatch.setattr("src.brain.search_links", _fake_search)
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
         monkeypatch.setattr("src.services.github.enrich_github_links", _fake_enrich)
 
         resp = asyncio.run(commands.SHARED_COMMANDS["/find"].handler(CHAT_ID, ["/find", "svg"]))
@@ -58,7 +58,7 @@ class TestFindCommand:
         assert "2 result" in resp.text
 
     def test_caps_at_five_and_filters_below_0_58(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
             return [_candidate(f"https://example.com/{i}", f"R{i}", 0.6) for i in range(8)] + [
                 _candidate("https://example.com/low", "Low", 0.5),
             ]
@@ -66,7 +66,7 @@ class TestFindCommand:
         async def _fake_enrich(links: list[dict]) -> list[dict]:
             return links
 
-        monkeypatch.setattr("src.brain.search_links", _fake_search)
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
         monkeypatch.setattr("src.services.github.enrich_github_links", _fake_enrich)
 
         resp = asyncio.run(commands.SHARED_COMMANDS["/find"].handler(CHAT_ID, ["/find", "x"]))
@@ -76,13 +76,25 @@ class TestFindCommand:
     def test_multi_word_query_is_joined(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: dict[str, str] = {}
 
-        async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
             seen["query"] = query
             return []
 
-        monkeypatch.setattr("src.brain.search_links", _fake_search)
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
         asyncio.run(commands.SHARED_COMMANDS["/find"].handler(CHAT_ID, ["/find", "react", "hooks"]))
         assert seen["query"] == "react hooks"
+
+    def test_passes_chat_id_as_owner_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ADR-0043: /find must search only the caller's own Brain links."""
+        seen: dict[str, int] = {}
+
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
+            seen["owner_chat_id"] = owner_chat_id
+            return []
+
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
+        asyncio.run(commands.SHARED_COMMANDS["/find"].handler(CHAT_ID, ["/find", "svg"]))
+        assert seen["owner_chat_id"] == CHAT_ID
 
     def test_dashboard_reaches_it_through_the_router(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
@@ -100,13 +112,13 @@ class TestFindCommand:
         asyncio.run(database.init_db())
         idempotency._memory.clear()
 
-        async def _fake_search(query: str, top_k: int = 10) -> list[dict]:
+        async def _fake_search(query: str, owner_chat_id: int, top_k: int = 10, min_score: float = 0.0) -> list[dict]:
             return [_candidate("https://example.com/a", "A", 0.9)]
 
         async def _fake_enrich(links: list[dict]) -> list[dict]:
             return links
 
-        monkeypatch.setattr("src.brain.search_links", _fake_search)
+        monkeypatch.setattr("src.brain.search_links_scoped", _fake_search)
         monkeypatch.setattr("src.services.github.enrich_github_links", _fake_enrich)
 
         actor = IntakeActor(

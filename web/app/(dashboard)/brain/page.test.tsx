@@ -2,6 +2,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import BrainPage from './page';
+import { expectNoAxeViolations } from '@/test/axe';
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({}),
@@ -108,4 +109,9 @@ describe('BrainPage', () => {
     expect(runSearch).toHaveBeenCalled();
   });
 
+  it('has no axe violations with results shown', async () => {
+    setupMocks({ searchState: 'results', results: RESULTS });
+    const { container } = render(<BrainPage />);
+    await expectNoAxeViolations(container);
+  });
 });

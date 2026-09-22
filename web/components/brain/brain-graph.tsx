@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode, Ref } from 'react';
 import dynamic from 'next/dynamic';
 import type { ForceGraphMethods, ForceGraphProps } from 'react-force-graph-2d';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { safeUrl } from '@/lib/url-utils';
 
 // react-force-graph touches `window` at import time — load it client-only (ADR-0028).
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false }) as ComponentType<
@@ -138,6 +139,35 @@ export function BrainGraph({ results, searchState }: { results: SearchResult[]; 
     [topics, hiddenTopics],
   );
 
+  // Relationship count per node — how many edges (of any endpoint) touch it.
+  // `graph.edges`' source/target are always plain node ids (the backend
+  // response, untouched by ForceGraph2D's in-place object mutation of
+  // `graphData.links`), so no `linkEndpointId` unwrapping is needed here.
+  const relationshipCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const edge of graph.edges) {
+      counts.set(edge.source, (counts.get(edge.source) ?? 0) + 1);
+      counts.set(edge.target, (counts.get(edge.target) ?? 0) + 1);
+    }
+    return counts;
+  }, [graph.edges]);
+
+  // The keyboard/screen-reader-primary view of the same node set the canvas
+  // draws (§3 accessibility handoff) — filtered by the same topic toggles,
+  // and sorted match-first while a search is active so Tab reaches the
+  // relevant rows first instead of an arbitrary graph-insertion order.
+  const visibleNodes = useMemo(() => {
+    const nodes = graph.nodes.filter(isNodeVisible);
+    return [...nodes].sort((a, b) => {
+      if (hasMatches) {
+        const aMatch = matchedIds.has(a.url) ? 0 : 1;
+        const bMatch = matchedIds.has(b.url) ? 0 : 1;
+        if (aMatch !== bMatch) return aMatch - bMatch;
+      }
+      return a.title.localeCompare(b.title);
+    });
+  }, [graph.nodes, isNodeVisible, hasMatches, matchedIds]);
+
   // Identity tracks visibleMatchCount/transitionMs/isVisibleMatch, so the auto-focus effect re-runs
   // whenever the match set changes - even when its size stays the same.
   const zoomToVisibleMatches = useCallback(() => {
@@ -233,25 +263,111 @@ export function BrainGraph({ results, searchState }: { results: SearchResult[]; 
             </div>
           </div>
         </div>
-        <ForceGraph2D
-          ref={graphRef}
-          graphData={graphData}
-          width={width || undefined}
-          height={GRAPH_HEIGHT}
-          backgroundColor="rgba(0,0,0,0)"
-          nodeRelSize={4}
-          nodeVal={(n: RenderNode) => Math.max(1, n.seen_count || 1)}
-          nodeLabel={(n: RenderNode) => `${escapeHtml(n.title)}${n.stars != null ? ` · ★${escapeHtml(n.stars)}` : ''}`}
-          nodeVisibility={isNodeVisible}
-          nodeColor={(n: RenderNode) => (hasMatches ? (matchedIds.has(n.url) ? MATCH : DIM) : topicColor(topicKey(n.topic)))}
-          linkVisibility={isLinkVisible}
-          linkColor={() => 'rgba(140,148,160,0.20)'}
-          linkWidth={(l: RenderLink) => Math.max(0.5, (l.score || 0) * 2)}
-          warmupTicks={20}
-          cooldownTicks={120}
-        />
+        {/* The canvas itself has no keyboard/non-visual equivalent of its own —
+            aria-hide it and let BrainNodeList below be the accessible
+            representation of this same data (§3 accessibility handoff). The
+            zoom/topic controls above are real buttons and stay outside this
+            wrapper; they're already keyboard/screen-reader operable. */}
+        <div aria-hidden="true">
+          <ForceGraph2D
+            ref={graphRef}
+            graphData={graphData}
+            width={width || undefined}
+            height={GRAPH_HEIGHT}
+            backgroundColor="rgba(0,0,0,0)"
+            nodeRelSize={4}
+            nodeVal={(n: RenderNode) => Math.max(1, n.seen_count || 1)}
+            nodeLabel={(n: RenderNode) => `${escapeHtml(n.title)}${n.stars != null ? ` · ★${escapeHtml(n.stars)}` : ''}`}
+            nodeVisibility={isNodeVisible}
+            nodeColor={(n: RenderNode) => (hasMatches ? (matchedIds.has(n.url) ? MATCH : DIM) : topicColor(topicKey(n.topic)))}
+            linkVisibility={isLinkVisible}
+            linkColor={() => 'rgba(140,148,160,0.20)'}
+            linkWidth={(l: RenderLink) => Math.max(0.5, (l.score || 0) * 2)}
+            warmupTicks={20}
+            cooldownTicks={120}
+          />
+        </div>
       </div>
+      <BrainNodeList
+        nodes={visibleNodes}
+        relationshipCounts={relationshipCounts}
+        matchedIds={matchedIds}
+        hasMatches={hasMatches}
+      />
     </section>
+  );
+}
+
+/** The primary keyboard/screen-reader representation of the Brain graph — not
+ * a degraded fallback (§3 accessibility handoff). Every node the canvas draws
+ * (after the same topic-visibility filter) is a real, Tab-reachable link
+ * here, so a keyboard-only or screen-reader user reaches everything a mouse
+ * user can pan/zoom to find, without depending on the canvas at all. */
+function BrainNodeList({
+  nodes,
+  relationshipCounts,
+  matchedIds,
+  hasMatches,
+}: {
+  nodes: GraphNode[];
+  relationshipCounts: Map<string, number>;
+  matchedIds: Set<string>;
+  hasMatches: boolean;
+}) {
+  return (
+    <div className="mt-3 max-h-64 overflow-auto rounded-md border border-line">
+      <table className="min-w-full divide-y divide-line text-left text-sm">
+        <caption className="sr-only">
+          Brain nodes, as a keyboard- and screen-reader-accessible
+          alternative to the graph map above.
+        </caption>
+        <thead className="sticky top-0 bg-raised text-xs text-muted">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-medium">Title</th>
+            <th scope="col" className="px-3 py-2 font-medium">Topic</th>
+            <th scope="col" className="px-3 py-2 font-medium">Relationships</th>
+            {hasMatches && <th scope="col" className="px-3 py-2 font-medium">Match</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {nodes.map((node) => {
+            const href = safeUrl(node.url);
+            const matched = hasMatches && matchedIds.has(node.url);
+            return (
+              <tr key={node.id}>
+                <td className="px-3 py-2">
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-ink underline-offset-2 hover:text-signal hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-signal-bright"
+                    >
+                      {node.title}
+                    </a>
+                  ) : (
+                    <span className="text-muted">{node.title}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-body">{topicLabel(topicKey(node.topic))}</td>
+                <td className="px-3 py-2 font-mono text-xs tabular-nums text-muted">
+                  {relationshipCounts.get(node.id) ?? 0}
+                </td>
+                {hasMatches && (
+                  <td className="px-3 py-2">
+                    {matched && (
+                      <span className="rounded border border-line px-1.5 py-0.5 text-mono-label font-medium text-signal">
+                        Match
+                      </span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

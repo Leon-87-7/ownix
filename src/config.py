@@ -83,6 +83,20 @@ class Settings(BaseSettings):
     BRAIN_REFRESH_BATCH: int = 50
     BRAIN_MIN_SCORE: float = 0.5
 
+    # Per-user spending guardrails (handoff §2). Global emergency kill switch,
+    # checked in addition to each user's own `allow_paid_gemini` — flip to
+    # False to stop every new paid Gemini reservation instantly, without
+    # touching per-user DB policy or blocking free-tier/local operations.
+    PAID_AI_ENABLED: bool = True
+
+    # Queue lineage / execution bounds (handoff §2 "Queue lineage and
+    # execution bounds"). MAX_TASK_SECONDS is generous — a legitimate long
+    # video's full pipeline (transcript, vision, Drive, Sheets, Brain) can run
+    # several minutes; this bounds a genuinely hung task, not a slow one.
+    MAX_TASK_ATTEMPTS: int = 3
+    MAX_TASK_DEPTH: int = 4
+    MAX_TASK_SECONDS: int = 900
+
     # Web dashboard (issue #84)
     SESSION_COOKIE_SECURE: bool = True  # set False only for local HTTP dev
     SESSION_BACKEND: str = "redis"  # "redis" in prod; "memory" for local browser auth loops

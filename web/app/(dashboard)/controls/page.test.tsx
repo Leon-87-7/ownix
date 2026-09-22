@@ -68,6 +68,19 @@ beforeEach(() => {
         voice_uri: null,
       }), { status: 200 });
     }
+    if (String(input).includes('/api/controls/spending')) {
+      return new Response(JSON.stringify({
+        currency: 'USD',
+        daily_limit_micros: null,
+        monthly_limit_micros: null,
+        allow_paid_gemini: false,
+        enabled: true,
+        daily_spent_micros: 0,
+        monthly_spent_micros: 0,
+        daily_remaining_micros: null,
+        monthly_remaining_micros: null,
+      }), { status: 200 });
+    }
     if (init?.method === 'PUT') {
       return new Response(JSON.stringify({ telegram_notifications: false }), { status: 200 });
     }

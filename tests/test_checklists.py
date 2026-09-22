@@ -108,7 +108,7 @@ async def test_run_checklists_returns_data_and_markdown(monkeypatch):
     )
     monkeypatch.setattr("src.services.gemini.generate", fake_generate)
 
-    job = {"title": "t", "transcript": "some transcript text"}
+    job = {"id": "job-1", "chat_id": 1, "title": "t", "transcript": "some transcript text"}
     data, md = await run_checklists(job)
 
     assert data["applicable"] is True
@@ -129,4 +129,4 @@ async def test_run_checklists_propagates_gemini_unavailable(monkeypatch):
     monkeypatch.setattr("src.services.gemini.generate", _fail)
 
     with pytest.raises(GeminiUnavailableError):
-        await run_checklists({"title": "t", "transcript": "x"})
+        await run_checklists({"id": "job-1", "chat_id": 1, "title": "t", "transcript": "x"})

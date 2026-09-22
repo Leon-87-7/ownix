@@ -120,19 +120,39 @@ def _group_by_issue(rows: list[dict]) -> list[tuple[str, list[dict]]]:
     return [(slug, grouped[slug]) for slug in order]
 
 
-async def _generate_issue_context(title: str | None, body_html: str) -> str | None:
+async def _generate_issue_context(
+    title: str | None, body_html: str, *, publication_id: str, slug: str
+) -> str | None:
     """One best-effort Gemini call per issue (PLAN.md §4 step 5). A failure —
     Gemini unavailable or any other error — sets `context_md = NULL` for
     every watcher of this issue rather than sinking the whole poll run,
     matching `_create_context_blob`'s existing non-fatal posture. There is no
-    per-watcher fallback generation."""
+    per-watcher fallback generation.
+
+    Charged to `OPERATOR_CHAT_ID` (handoff §2 "system work has an owner"):
+    this is one shared generation per issue reused by every watcher, not
+    tenant-specific work, so it is "truly global maintenance," not a
+    per-subscriber charge. Skipped entirely when no Operator is configured —
+    there is no one to charge, and system work never bills a random tenant.
+    """
+    from src.config import settings
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
+    if settings.OPERATOR_CHAT_ID is None:
+        log.info("newsletter_poll.context_skipped_no_operator")
+        return None
     body_text = strip_html_text(body_html)
     if not body_text.strip():
         return None
     prompt = _build_context_prompt(title or "Untitled", body_text)
+    cost = CostContext(
+        chat_id=settings.OPERATOR_CHAT_ID,
+        job_id=f"newsletter:{publication_id}:{slug}",
+        operation="newsletter_issue_context",
+    )
     try:
-        content = await gemini.generate(prompt, model="gemini-2.5-flash")
-    except GeminiUnavailableError:
+        content = await gemini.generate(prompt, model="gemini-2.5-flash", cost=cost)
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded):
         log.info("newsletter_poll.context_gemini_unavailable")
         return None
     except Exception as exc:
@@ -218,7 +238,9 @@ async def _fan_out_issue(publication_id: str, slug: str, watchers: list[dict]) -
             return
         await database.set_publication_issue_body(publication_id, slug, body_html)
 
-    context_md = await _generate_issue_context(issue.get("title"), body_html)
+    context_md = await _generate_issue_context(
+        issue.get("title"), body_html, publication_id=publication_id, slug=slug
+    )
 
     created: list[tuple[str, str]] = []
     for watcher in watchers:

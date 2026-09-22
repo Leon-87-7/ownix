@@ -176,3 +176,86 @@ async def test_dispatch_does_not_skip_rowless_job_purge(monkeypatch) -> None:
     monkeypatch.setitem(worker._TASK_HANDLERS, "job_purge", handler)
     await worker._dispatch({"task": "job_purge", "job_id": "gone"})
     assert called
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejects_envelope_past_max_depth(monkeypatch) -> None:
+    """A mis-chained loop (a bug that re-enqueues a follow-up onto itself)
+    must fail loudly instead of growing the queue forever."""
+    called = False
+
+    async def handler(_task):
+        nonlocal called
+        called = True
+
+    error = AsyncMock(return_value=None)
+    monkeypatch.setattr(worker.database, "get_job", AsyncMock(return_value={"id": "job-1"}))
+    monkeypatch.setattr(worker.database, "update_job_status", error)
+    monkeypatch.setitem(worker._TASK_HANDLERS, "video", handler)
+
+    await worker._dispatch(
+        {"task": "video", "job_id": "job-1", "depth": worker.settings.MAX_TASK_DEPTH + 1}
+    )
+
+    assert not called
+    error.assert_awaited_once()
+    assert error.await_args.args == ("job-1", "error")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejects_envelope_past_max_attempts(monkeypatch) -> None:
+    called = False
+
+    async def handler(_task):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(worker.database, "get_job", AsyncMock(return_value={"id": "job-1"}))
+    monkeypatch.setattr(worker.database, "update_job_status", AsyncMock())
+    monkeypatch.setitem(worker._TASK_HANDLERS, "video", handler)
+
+    await worker._dispatch(
+        {"task": "video", "job_id": "job-1", "attempt": worker.settings.MAX_TASK_ATTEMPTS + 1}
+    )
+
+    assert not called
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rowless_task_past_max_depth_skips_status_update(monkeypatch) -> None:
+    """A rowless task (e.g. job_purge) has no jobs row to mark 'error' on."""
+    update = AsyncMock()
+    monkeypatch.setattr(worker.database, "update_job_status", update)
+
+    await worker._dispatch(
+        {"task": "job_purge", "job_id": "gone", "depth": worker.settings.MAX_TASK_DEPTH + 1}
+    )
+
+    update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_times_out_a_hung_handler(monkeypatch) -> None:
+    """A handler that never returns must not block the dequeue loop forever —
+    _dispatch bounds it at settings.MAX_TASK_SECONDS, marks the job errored,
+    and notifies the owning chat the same way a normal processor failure does."""
+    monkeypatch.setattr(worker.settings, "MAX_TASK_SECONDS", 0.05)
+    monkeypatch.setattr(
+        worker.database, "get_job", AsyncMock(return_value={"id": "job-1", "chat_id": 42})
+    )
+    update = AsyncMock()
+    monkeypatch.setattr(worker.database, "update_job_status", update)
+    notify = AsyncMock()
+    monkeypatch.setattr(worker, "_notify_failure", notify)
+
+    async def hung_handler(_task):
+        await asyncio.sleep(10)
+
+    monkeypatch.setitem(worker._TASK_HANDLERS, "video", hung_handler)
+
+    await worker._dispatch({"task": "video", "job_id": "job-1"})
+
+    update.assert_awaited_once()
+    assert update.await_args.args == ("job-1", "error")
+    assert update.await_args.kwargs.get("error_msg") == "Task timed out"
+    notify.assert_awaited_once_with(42, "job-1", "❌ Processing timed out. Please try again.")

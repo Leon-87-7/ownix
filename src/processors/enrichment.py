@@ -169,16 +169,20 @@ def _parse_enrichment(data: dict) -> Enrichment:
 async def enrich(job: dict) -> tuple[Enrichment, dict | None, dict | None]:
     """Call Gemini with free→paid key fallback. Raises EnrichmentUnavailableError if both fail."""
     from src.services.gemini import generate, GeminiUnavailableError
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
 
     title = job.get("title", "") or "Untitled"
     transcript = job.get("transcript", "") or ""
     template = job.get("template") or "summary"
     freestyle_prompt = job.get("freestyle_prompt")
     prompt = _build_prompt(title, transcript, template, freestyle_prompt)
+    cost = CostContext(chat_id=job["chat_id"], job_id=job.get("id"), operation="enrichment")
 
     try:
-        raw = await generate(prompt, model="gemini-2.5-flash")
+        raw = await generate(prompt, model="gemini-2.5-flash", cost=cost)
     except GeminiUnavailableError as exc:
+        raise EnrichmentUnavailableError(str(exc)) from exc
+    except (PaidProviderDisabled, SpendingLimitExceeded) as exc:
         raise EnrichmentUnavailableError(str(exc)) from exc
     data = _extract_json(raw)
     template_analysis = data.pop("template_analysis", None)
@@ -241,16 +245,22 @@ def _call_gemini_audio_sync(audio_b64: str, mime_type: str, prompt: str, api_key
 async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> tuple[dict | None, str]:
     """Fused Gemini call: inline audio + template prompt → (template_analysis, transcript_text).
 
-    Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail.
+    Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail
+    or the paid fallback is blocked (disabled/over budget) for this chat.
     The returned transcript_text is the verbatim spoken content extracted alongside
     the template analysis — callers must not make a separate transcription call.
     """
+    from src.services import provider_pricing
     from src.services.gemini import GeminiUnavailableError, _call_with_fallback
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
 
     template = job.get("template") or "summary"
     title = job.get("title", "") or "Untitled"
     freestyle_prompt = job.get("freestyle_prompt")
     prompt = _build_audio_prompt(title, template, freestyle_prompt)
+    cost = CostContext(chat_id=job["chat_id"], job_id=job.get("id"), operation="enrichment_audio")
+    model = "gemini-2.5-flash"
+    estimated_micros = provider_pricing.estimate_audio_micros(model=model, audio_b64_len=len(audio_b64))
 
     try:
         raw = await _call_with_fallback(
@@ -258,24 +268,37 @@ async def enrich_audio(job: dict, audio_b64: str, mime_type: str) -> tuple[dict 
             audio_b64,
             mime_type,
             prompt,
+            cost=cost,
+            price_model=model,
+            estimated_micros=estimated_micros,
             log_ok="enrichment_audio_ok",
             log_fail="enrichment_audio_key_failed",
         )
     except GeminiUnavailableError as exc:
         raise EnrichmentUnavailableError("Both Gemini keys failed for audio enrichment") from exc
+    except (PaidProviderDisabled, SpendingLimitExceeded) as exc:
+        raise EnrichmentUnavailableError(str(exc)) from exc
     data = _extract_json(raw)
     return data.get("template_analysis"), data.get("transcript", "")
 
 
-async def transcribe_audio(audio_b64: str, mime_type: str, title: str = "") -> str:
+async def transcribe_audio(
+    audio_b64: str, mime_type: str, title: str = "", *, chat_id: int, job_id: str | None = None
+) -> str:
     """Transcription-only Gemini call: inline audio → plain transcript text.
 
-    Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail.
+    Free→paid key fallback. Raises EnrichmentUnavailableError if both keys fail
+    or the paid fallback is blocked (disabled/over budget) for this chat.
     Returns empty string when Gemini produces no output (silent/wordless clip).
     """
+    from src.services import provider_pricing
     from src.services.gemini import GeminiUnavailableError, _call_with_fallback
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
 
     prompt = _build_transcribe_prompt(title)
+    cost = CostContext(chat_id=chat_id, job_id=job_id, operation="transcription")
+    model = "gemini-2.5-flash"
+    estimated_micros = provider_pricing.estimate_audio_micros(model=model, audio_b64_len=len(audio_b64))
 
     try:
         raw = await _call_with_fallback(
@@ -283,11 +306,16 @@ async def transcribe_audio(audio_b64: str, mime_type: str, title: str = "") -> s
             audio_b64,
             mime_type,
             prompt,
+            cost=cost,
+            price_model=model,
+            estimated_micros=estimated_micros,
             log_ok="transcription_ok",
             log_fail="transcription_key_failed",
         )
     except GeminiUnavailableError as exc:
         raise EnrichmentUnavailableError("Both Gemini keys failed for audio transcription") from exc
+    except (PaidProviderDisabled, SpendingLimitExceeded) as exc:
+        raise EnrichmentUnavailableError(str(exc)) from exc
     return raw.strip()
 
 

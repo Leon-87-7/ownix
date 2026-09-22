@@ -28,6 +28,7 @@ import time
 from urllib.parse import urlparse
 
 from src import database, job_queue as queue
+from src.config import settings
 from src.utils import job_tag
 from src.utils.logger import configure_logging, get_logger
 
@@ -52,7 +53,7 @@ async def _notify_failure(chat_id: int, job_id: str, text: str) -> None:
         pass
 
 
-async def _maybe_auto_enqueue_enrichment(job: dict, job_id: str) -> None:
+async def _maybe_auto_enqueue_enrichment(job: dict, job_id: str, parent_task: dict) -> None:
     """After a long-video run with an explicit template, chain the enrichment task."""
     if job.get("template_detection_method") != "explicit_command":
         return
@@ -61,7 +62,9 @@ async def _maybe_auto_enqueue_enrichment(job: dict, job_id: str) -> None:
         if refreshed.get("template") == "freestyle" and not refreshed.get("freestyle_prompt"):
             log.info("enrichment_auto_enqueue_deferred_awaiting_freestyle", job_id=job_id)
         else:
-            await queue.enqueue({"task": "enrichment", "job_id": job_id})
+            await queue.enqueue(
+                queue.chained_envelope(parent_task, {"task": "enrichment", "job_id": job_id})
+            )
             log.info("enrichment_auto_enqueued", job_id=job_id)
 
 
@@ -108,7 +111,7 @@ async def _handle_video(task: dict) -> None:
             from src.processors import long_video
 
             await long_video.run(job)
-            await _maybe_auto_enqueue_enrichment(job, job_id)
+            await _maybe_auto_enqueue_enrichment(job, job_id, task)
         else:
             log.error("unknown_content_type", job_id=job_id, content_type=content_type)
     except Exception:
@@ -218,7 +221,9 @@ async def _handle_bookmarks(task: dict) -> None:
     # worker enqueues a follow-up task" shape as _maybe_auto_enqueue_enrichment
     # above. A separate task, not inline: the import job is already 'done'
     # and must not wait on hundreds of identity/embed/Drive calls.
-    await queue.enqueue({"task": "bookmarks_enrich", "job_id": job_id})
+    await queue.enqueue(
+        queue.chained_envelope(task, {"task": "bookmarks_enrich", "job_id": job_id})
+    )
 
 
 async def _handle_bookmarks_enrich(task: dict) -> None:
@@ -351,6 +356,25 @@ _ROWLESS_TASKS = {
 
 
 async def _dispatch(task: dict) -> None:
+    # Execution bounds (handoff §2 "Queue lineage") — a mis-chained loop
+    # (e.g. a bug that re-enqueues a follow-up onto itself) must fail loudly
+    # instead of growing the queue forever.
+    depth = task.get("depth", 0)
+    attempt = task.get("attempt", 1)
+    if depth > settings.MAX_TASK_DEPTH or attempt > settings.MAX_TASK_ATTEMPTS:
+        log.error(
+            "task_lineage_bound_exceeded",
+            task=task["task"],
+            job_id=task["job_id"],
+            depth=depth,
+            attempt=attempt,
+        )
+        if task["task"] not in _ROWLESS_TASKS:
+            await database.update_job_status(
+                task["job_id"], "error", error_msg="Task exceeded depth/attempt bounds"
+            )
+        return
+
     if task["task"] not in _ROWLESS_TASKS:
         job = await database.get_job(task["job_id"])
         if job is None:
@@ -360,7 +384,24 @@ async def _dispatch(task: dict) -> None:
     if handler is None:
         log.error("unknown_task", task=task["task"], job_id=task["job_id"])
         return
-    await handler(task)
+
+    try:
+        async with asyncio.timeout(settings.MAX_TASK_SECONDS):
+            await handler(task)
+    except TimeoutError:
+        # A reservation left mid-flight by the cancelled call is recovered by
+        # spending.release_stale_reservations (handoff §2 recovery policy),
+        # not settled/released here — the dispatch layer has no visibility
+        # into which provider call, if any, was in flight when this fired.
+        log.error(
+            "task_timed_out", task=task["task"], job_id=task["job_id"],
+            timeout_seconds=settings.MAX_TASK_SECONDS,
+        )
+        if task["task"] not in _ROWLESS_TASKS:
+            await database.update_job_status(
+                task["job_id"], "error", error_msg="Task timed out"
+            )
+            await _notify_failure(job["chat_id"], task["job_id"], "❌ Processing timed out. Please try again.")
 
 
 async def reap_stale_jobs() -> None:

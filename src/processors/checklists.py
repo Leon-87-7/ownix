@@ -89,9 +89,11 @@ async def run_checklists(job: dict) -> tuple[dict, str]:
     """Generate the checklist for *job*. Raises GeminiUnavailableError (both
     Gemini keys failed) or a JSON-decode error (malformed model output)."""
     from src.services.gemini import extract_json, generate
+    from src.services.spending import CostContext
 
     prompt = build_checklists_prompt(job)
-    raw = await generate(prompt, model=settings.CHECKLISTS_MODEL, schema=CHECKLISTS_JSON_SCHEMA)
+    cost = CostContext(chat_id=job["chat_id"], job_id=job["id"], operation="checklists")
+    raw = await generate(prompt, model=settings.CHECKLISTS_MODEL, schema=CHECKLISTS_JSON_SCHEMA, cost=cost)
     data = extract_json(raw)
     md = build_checklists_markdown(data, title=job.get("title"))
     return data, md

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -565,7 +565,7 @@ async def test_transcript_persisted_on_all_short_jobs() -> None:
     # The acquired transcript must reach the vision call, not just get persisted —
     # this is the whole point of fetching it before vision now runs.
     mocks["vision"].assert_awaited_once_with(
-        _FRAME_RESP["frames"], transcript_text=transcript_resp["text"]
+        _FRAME_RESP["frames"], transcript_text=transcript_resp["text"], cost=ANY
     )
 
     # Persisting the transcript must not prematurely flip status to "done" —

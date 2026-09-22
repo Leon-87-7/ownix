@@ -504,12 +504,15 @@ async def run_prd(
 
     # d. Call Gemini (free → paid fallback)
     from src.services.gemini import generate, GeminiUnavailableError
+    from src.services.spending import CostContext, PaidProviderDisabled, SpendingLimitExceeded
+
     raw_prd: str | None = None
     last_error: str | None = None
+    cost = CostContext(chat_id=chat_id, job_id=job_id, operation=f"prd_{slot}")
     try:
-        raw_prd = await generate(prompt, model=model, schema=PRD_JSON_SCHEMA)
+        raw_prd = await generate(prompt, model=model, schema=PRD_JSON_SCHEMA, cost=cost)
         log.info("prd.gemini.success", job_id=job_id, slot=slot)
-    except GeminiUnavailableError as exc:
+    except (GeminiUnavailableError, PaidProviderDisabled, SpendingLimitExceeded) as exc:
         last_error = str(exc)[:120]
         log.warning("prd.gemini.both_keys_failed", job_id=job_id, slot=slot)
     if raw_prd is None:

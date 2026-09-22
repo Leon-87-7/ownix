@@ -13,6 +13,7 @@ import { DeleteAccountPanel } from '@/components/controls/delete-account-panel';
 import { ExtensionTokensPanel } from '@/components/controls/extension-tokens-panel';
 import { McpTokensPanel } from '@/components/controls/mcp-tokens-panel';
 import { ScoutSettingsPanel } from '@/components/controls/scout-settings-panel';
+import { SpendingPanel } from '@/components/controls/spending-panel';
 import { DiscordPairingPanel } from '@/components/controls/discord-pairing-panel';
 
 export default function ControlsPage() {
@@ -50,6 +51,9 @@ export default function ControlsPage() {
         </Section>
         <Section title="Recovery notifications">
           <RecoveryNotificationsPanel />
+        </Section>
+        <Section title="Spending">
+          <SpendingPanel />
         </Section>
         <Section title="Chrome Extension">
           <ExtensionTokensPanel />

@@ -7,12 +7,35 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.services.gemini import GeminiUnavailableError, generate
+from src.services.spending import CostContext
+
+_COST = CostContext(chat_id=1, operation="test")
 
 
 def _make_response(text: str) -> MagicMock:
     r = MagicMock()
     r.text = text
     return r
+
+
+def _stub_spending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the paid-Gemini reservation lifecycle so a test that reaches the
+    paid key exercises only the fallback/alerting logic under test, not the
+    real SQLite ledger (that's covered by tests/test_spending.py)."""
+    from src.services import spending
+
+    async def _fake_reserve(cost, *, model, estimated_micros):
+        return spending.Reservation(id="resv-test", estimated_micros=estimated_micros, idempotency_key="k")
+
+    async def _fake_settle(reservation, *, actual_micros):
+        return None
+
+    async def _fake_release(reservation):
+        return None
+
+    monkeypatch.setattr(spending, "reserve_paid_gemini", _fake_reserve)
+    monkeypatch.setattr(spending, "settle", _fake_settle)
+    monkeypatch.setattr(spending, "release", _fake_release)
 
 
 # ---------------------------------------------------------------------------
@@ -26,7 +49,7 @@ async def test_generate_single_key_success(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch("src.services.gemini._call_sync", return_value=_make_response('{"result": "ok"}')):
-        result = await generate("Hello", model="gemini-2.5-flash")
+        result = await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
     assert result == '{"result": "ok"}'
 
@@ -40,10 +63,11 @@ async def test_generate_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     """When _call_sync always raises, generate() raises GeminiUnavailableError."""
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("network error")):
         with pytest.raises(GeminiUnavailableError):
-            await generate("Hello", model="gemini-2.5-flash")
+            await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +79,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
     """When first key fails and second succeeds, the successful result is returned."""
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     call_count = 0
 
@@ -66,7 +91,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
         return _make_response('{"result": "paid key success"}')
 
     with patch("src.services.gemini._call_sync", side_effect=_fake):
-        result = await generate("Hello", model="gemini-2.5-flash")
+        result = await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
     assert result == '{"result": "paid key success"}'
     assert call_count == 2
@@ -92,7 +117,7 @@ async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPat
 
     with patch("src.services.gemini._call_sync", side_effect=_spy):
         result = await generate(
-            "Hello", model="gemini-2.5-flash", schema=my_schema
+            "Hello", model="gemini-2.5-flash", schema=my_schema, cost=_COST
         )
 
     assert result == '{"ok": true}'
@@ -112,7 +137,7 @@ async def test_generate_no_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with patch("src.services.gemini._call_sync", side_effect=AssertionError("should not be called")):
         with pytest.raises(GeminiUnavailableError):
-            await generate("Hello", model="gemini-2.5-flash")
+            await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
 
 # ---------------------------------------------------------------------------
@@ -126,10 +151,11 @@ async def test_vision_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("quota")):
         with pytest.raises(GUE):
-            await call_gemini_vision([{"base64": "eA==", "mime_type": "image/jpeg"}])
+            await call_gemini_vision([{"base64": "eA==", "mime_type": "image/jpeg"}], cost=_COST)
 
 
 # ---------------------------------------------------------------------------
@@ -143,10 +169,11 @@ async def test_photo_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("quota")):
         with pytest.raises(GUE):
-            await call_gemini_photo_links([{"bytes": b"x", "mime_type": "image/jpeg"}])
+            await call_gemini_photo_links([{"bytes": b"x", "mime_type": "image/jpeg"}], cost=_COST)
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +235,7 @@ async def test_vision_transcript_is_delimited_as_untrusted_data(
         await call_gemini_vision(
             [{"base64": "eA==", "mime_type": "image/jpeg"}],
             transcript_text=adversarial_transcript,
+            cost=_COST,
         )
 
     prompt = captured_parts[0][0]
@@ -228,7 +256,7 @@ async def test_generate_strips_em_dashes(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
     with patch("src.services.gemini._call_sync", return_value=_make_response("path — purpose")):
-        result = await generate("Hello", model="gemini-2.5-flash")
+        result = await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
     assert result == "path - purpose"
     assert "—" not in result
@@ -259,11 +287,12 @@ async def test_generate_both_keys_fail_triggers_ops_alert_after_threshold(
 
     monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: (42,))
     monkeypatch.setattr("src.services.ops_bot.send_ops_message", fake_send_ops_message)
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
         for _ in range(2):
             with pytest.raises(GeminiUnavailableError):
-                await generate("prompt", model="gemini-2.5-flash")
+                await generate("prompt", model="gemini-2.5-flash", cost=_COST)
 
     assert len(sent) == 1
     assert sent[0][0] == 42
@@ -288,11 +317,12 @@ async def test_generate_failure_alert_has_cooldown(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: (42,))
     monkeypatch.setattr("src.services.ops_bot.send_ops_message", fake_send_ops_message)
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
         for _ in range(3):
             with pytest.raises(GeminiUnavailableError):
-                await generate("prompt", model="gemini-2.5-flash")
+                await generate("prompt", model="gemini-2.5-flash", cost=_COST)
 
     assert sent_count["n"] == 1
 
@@ -309,7 +339,8 @@ async def test_generate_failure_alert_skips_when_no_admins_configured(
     monkeypatch.setattr(gemini_module, "_gemini_last_alert_at", None)
     monkeypatch.setattr(gemini_module, "_GEMINI_FAILURE_THRESHOLD", 1)
     monkeypatch.setattr("src.services.ops_bot.admin_chat_ids", lambda: ())
+    _stub_spending(monkeypatch)
 
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
         with pytest.raises(GeminiUnavailableError):
-            await generate("prompt", model="gemini-2.5-flash")
+            await generate("prompt", model="gemini-2.5-flash", cost=_COST)

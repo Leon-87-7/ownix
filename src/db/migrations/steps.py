@@ -988,3 +988,49 @@ async def _migrate_jobs_link_id(conn: aiosqlite.Connection) -> None:
         )
     await conn.commit()
 
+
+# Per-user spending guardrails (handoff §2): a durable ledger so "may this user
+# spend another $0.20 today" survives a restart and is shared across multiple
+# API/worker processes — the in-process rate limiters in intake/rate_limit.py
+# and intake/quota.py answer "how fast" but never "how much money".
+# rollback: DROP TABLE usage_ledger; DROP TABLE user_spend_limits
+sql(53, [
+    """CREATE TABLE IF NOT EXISTS user_spend_limits (
+        chat_id                  INTEGER PRIMARY KEY,
+        currency                 TEXT NOT NULL DEFAULT 'USD',
+        daily_limit_micros       INTEGER,
+        monthly_limit_micros     INTEGER,
+        allow_paid_gemini        INTEGER NOT NULL DEFAULT 0,
+        enabled                  INTEGER NOT NULL DEFAULT 1,
+        updated_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CHECK (daily_limit_micros IS NULL OR daily_limit_micros >= 0),
+        CHECK (monthly_limit_micros IS NULL OR monthly_limit_micros >= 0),
+        CHECK (allow_paid_gemini IN (0, 1)),
+        CHECK (enabled IN (0, 1))
+    )""",
+    """CREATE TABLE IF NOT EXISTS usage_ledger (
+        id                       TEXT PRIMARY KEY,
+        chat_id                  INTEGER NOT NULL,
+        job_id                   TEXT,
+        root_task_id             TEXT,
+        provider                 TEXT NOT NULL,
+        operation                TEXT NOT NULL,
+        model                    TEXT,
+        currency                 TEXT NOT NULL DEFAULT 'USD',
+        status                   TEXT NOT NULL,
+        estimated_micros         INTEGER NOT NULL,
+        actual_micros            INTEGER,
+        input_units              INTEGER,
+        output_units             INTEGER,
+        idempotency_key          TEXT NOT NULL UNIQUE,
+        created_at               TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        settled_at               TIMESTAMP,
+        CHECK (status IN ('reserved', 'settled', 'released')),
+        CHECK (estimated_micros >= 0),
+        CHECK (actual_micros IS NULL OR actual_micros >= 0)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_usage_ledger_chat_created ON usage_ledger(chat_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_usage_ledger_status ON usage_ledger(status)",
+    "CREATE INDEX IF NOT EXISTS idx_usage_ledger_job ON usage_ledger(job_id)",
+])
+
