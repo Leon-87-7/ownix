@@ -568,11 +568,23 @@ def _compute_related(
 
 
 async def _fetch_related_titles(
-    conn: Any, related: list[dict], *, fallback_to_url: bool = False
+    conn: Any, related: list[dict], *, fallback_to_url: bool = False, owner_chat_id: int | None = None
 ) -> list[str]:
+    """*owner_chat_id* is only needed when *related* was computed from a
+    corpus that itself isn't already scoped to one tenant (the global
+    refresh-batch path, which mixes every tenant's links) — it drops any
+    candidate outside that owner rather than let its title leak into
+    another tenant's Drive .md (ADR-0043)."""
     titles: list[str] = []
     for r in related:
-        cursor = await conn.execute("SELECT title, url FROM links WHERE id = ?", (r["id"],))
+        if owner_chat_id is not None:
+            cursor = await conn.execute(
+                "SELECT l.title, l.url FROM links l LEFT JOIN jobs j ON j.id = l.source_job "
+                "WHERE l.id = ? AND " + _OWNER_SCOPE_SQL,
+                (r["id"], *_owner_scope_params(owner_chat_id)),
+            )
+        else:
+            cursor = await conn.execute("SELECT title, url FROM links WHERE id = ?", (r["id"],))
         row = await cursor.fetchone()
         if row and row["title"]:
             titles.append(row["title"])
@@ -1306,7 +1318,13 @@ async def _refresh_one_link(
     related_titles: list[str] = []
     if self_vec is not None and ids_list:
         related = _compute_related(lnk_id, self_vec, ids_list, matrix)
-        related_titles = await _fetch_related_titles(conn, related, fallback_to_url=True)
+        # The corpus this was computed from spans every tenant (both callers
+        # sweep the whole links table) — filter to this link's own owner so
+        # a scheduled refresh can't leak another tenant's title into its .md.
+        owner_chat_id = lnk.get("chat_id") or lnk.get("job_chat_id") or settings.OPERATOR_CHAT_ID
+        related_titles = await _fetch_related_titles(
+            conn, related, fallback_to_url=True, owner_chat_id=owner_chat_id
+        )
 
     src_url, src_drive_url = await _get_source_job_info(conn, lnk["source_job"])
 
