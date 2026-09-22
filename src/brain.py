@@ -1041,7 +1041,10 @@ async def search_links_scoped(
 
 
 async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> list[dict]:
-    """Owner-scoped substring search over the caller's own jobs (title/url).
+    """Owner-scoped substring search over the caller's own jobs (title/url),
+    plus exact tag-name matches (same as `list_links`'s `q` filter) — unioning
+    job_tags with link_tags via jobs.link_id the way `count_jobs_by_tag` does,
+    since a swept job's tags live on its link, not the job row.
 
     Jobs carry no embedding, so this is plain substring matching (same escaping
     as `list_links`'s `q` filter) rather than semantic search — enough to find
@@ -1050,7 +1053,8 @@ async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> 
     job id).
     """
     top_k = min(top_k, 20)
-    escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    query = query.strip()
+    escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     like = f"%{escaped}%"
 
     async with database.connection() as conn:
@@ -1059,10 +1063,21 @@ async def search_jobs_scoped(query: str, owner_chat_id: int, top_k: int = 5) -> 
                FROM jobs
                WHERE chat_id = ? AND status != 'cancelled'
                  AND url NOT LIKE 'email\\_digest:%' ESCAPE '\\'
-                 AND (title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\')
+                 AND (
+                   title LIKE ? ESCAPE '\\'
+                   OR url LIKE ? ESCAPE '\\'
+                   OR EXISTS (
+                       SELECT 1 FROM job_tags jt JOIN tags t ON t.id = jt.tag_id
+                       WHERE jt.job_id = jobs.id AND t.chat_id = ? AND lower(t.name) = lower(?)
+                   )
+                   OR EXISTS (
+                       SELECT 1 FROM link_tags lt JOIN tags t ON t.id = lt.tag_id
+                       WHERE lt.link_id = jobs.link_id AND t.chat_id = ? AND lower(t.name) = lower(?)
+                   )
+                 )
                ORDER BY created_at DESC
                LIMIT ?""",
-            (owner_chat_id, like, like, top_k),
+            (owner_chat_id, like, like, owner_chat_id, query, owner_chat_id, query, top_k),
         )
         rows = await cursor.fetchall()
 

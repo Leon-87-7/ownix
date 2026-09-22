@@ -1261,6 +1261,54 @@ async def test_search_jobs_scoped_email_digest_exclusion_is_literal():
         os.unlink(db_path)
 
 
+@pytest.mark.asyncio
+async def test_search_jobs_scoped_matches_tag_name():
+    """A tag name with no title/url overlap (e.g. "CTIU") must still surface
+    its jobs — both a job tagged directly (job_tags) and one swept onto its
+    link (link_tags, via jobs.link_id), scoped to the tag's own owner."""
+    import aiosqlite
+    import os
+    import tempfile
+    from src.db.schema import SCHEMA_SQL
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        db_path = tmp.name
+    try:
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.executescript(SCHEMA_SQL)
+            await conn.execute(
+                "INSERT INTO tags (id, chat_id, name, meaning, color) VALUES ('tag1', 1, 'CTIU', '', '#facc15')"
+            )
+            await conn.execute(
+                "INSERT INTO tags (id, chat_id, name, meaning, color) VALUES ('tag2', 2, 'CTIU', '', '#facc15')"
+            )
+            await conn.executemany(
+                "INSERT INTO jobs (id, chat_id, url, title, content_type, status, link_id) "
+                "VALUES (?, ?, ?, ?, 'link', 'done', ?)",
+                [
+                    ("direct", 1, "https://direct.example", "Direct Job", None),
+                    ("swept", 1, "https://swept.example", "Swept Job", None),
+                    ("theirs", 2, "https://theirs.example", "Theirs Job", None),
+                ],
+            )
+            await conn.execute(
+                "INSERT INTO links (id, chat_id, url, source_job, last_seen_at, created_at, updated_at) "
+                "VALUES ('link1', 1, 'https://link1.example', 'swept', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+            await conn.execute("UPDATE jobs SET link_id = 'link1' WHERE id = 'swept'")
+            await conn.execute("INSERT INTO job_tags (job_id, tag_id) VALUES ('direct', 'tag1')")
+            await conn.execute("INSERT INTO link_tags (link_id, tag_id) VALUES ('link1', 'tag1')")
+            await conn.execute("INSERT INTO job_tags (job_id, tag_id) VALUES ('theirs', 'tag2')")
+            await conn.commit()
+
+        with _brain_settings(db_path):
+            results = await search_jobs_scoped("CTIU", owner_chat_id=1)
+
+        assert {r["id"] for r in results} == {"direct", "swept"}
+    finally:
+        os.unlink(db_path)
+
+
 # ---------------------------------------------------------------------------
 # #385 — refresh loop repairs description IS NULL and re-embeds
 # ---------------------------------------------------------------------------

@@ -222,6 +222,10 @@ async def get_scout_settings() -> dict[str, Any]:
 async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
     """Search the caller's own Brain and jobs for items relevant to `query`.
 
+    `jobs` results also match `query` against an exact tag name (e.g.
+    "CTIU"), alongside the title/url substring match — `items` stays
+    semantic-only (use `list_items` with a tag name for exact link matches).
+
     Reuse, not accumulation: this only surfaces what's already saved. Always
     fine to call when the user explicitly asks; see `get_scout_settings`
     before calling it on your own initiative. `jobs` entries carry a real
