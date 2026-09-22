@@ -85,6 +85,67 @@ def _memory_get(key: str) -> str | None:
     return value
 
 
+# Public dual-backend (Redis/memory) primitives for callers that need their
+# own key namespace without standing up a third store — e.g.
+# `src.auth.bearer_token_store`. Session/handoff/OAuth-state logic above
+# keeps using the private helpers directly; these exist so a second module
+# never has to re-derive the `_use_memory()` branch itself.
+
+
+async def kv_get(key: str) -> str | None:
+    return _memory_get(key) if _use_memory() else await _client().get(key)
+
+
+async def kv_set(key: str, value: str) -> None:
+    if _use_memory():
+        _memory_set(key, value)
+    else:
+        await _client().set(key, value)
+
+
+async def kv_set_if_exists(key: str, value: str) -> None:
+    """Write only if `key` is still present — no-op if it was deleted
+    concurrently (guards a revoke racing a read-then-write elsewhere)."""
+    if _use_memory():
+        if key in _memory:
+            _memory_set(key, value)
+    else:
+        await _client().set(key, value, xx=True)
+
+
+async def kv_delete(key: str) -> None:
+    if _use_memory():
+        _memory.pop(key, None)
+    else:
+        await _client().delete(key)
+
+
+async def set_add(key: str, member: str) -> None:
+    if _use_memory():
+        members = json.loads(_memory_get(key) or "[]")
+        if member not in members:
+            members.append(member)
+        _memory_set(key, json.dumps(members))
+    else:
+        await _client().sadd(key, member)
+
+
+async def set_remove(key: str, member: str) -> None:
+    if _use_memory():
+        members = json.loads(_memory_get(key) or "[]")
+        if member in members:
+            members.remove(member)
+            _memory_set(key, json.dumps(members))
+    else:
+        await _client().srem(key, member)
+
+
+async def set_members(key: str) -> list[str]:
+    if _use_memory():
+        return json.loads(_memory_get(key) or "[]")
+    return list(await _client().smembers(key))
+
+
 async def close() -> None:
     global _redis
     if _redis is not None:

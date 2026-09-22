@@ -13,6 +13,7 @@ ADR-0063 (pin-existing-jobs-only, no blob concurrency guard).
 from __future__ import annotations
 
 import asyncio
+import functools
 import re
 from contextvars import ContextVar, Token
 from typing import Any
@@ -81,6 +82,11 @@ def _validate_content(content: str) -> None:
         raise ToolError("Content must be at most 20000 characters")
 
 
+def _require_confirm(confirm: bool, action: str) -> None:
+    if confirm is not True:
+        raise ToolError(f"{action} requires confirm=true")
+
+
 async def _owned_space(space_id: str, chat_id: int) -> dict[str, Any]:
     space = await database.get_space(space_id)
     if space is None or space["chat_id"] != chat_id:
@@ -142,7 +148,26 @@ mcp = FastMCP(
 )
 
 
-@mcp.tool(name="list_items")
+def _tool(**tool_kwargs: Any) -> Any:
+    """`@mcp.tool` plus the per-chat MCP rate limit, enforced before every call.
+
+    `functools.wraps` keeps `__wrapped__`, so `inspect.signature` (what FastMCP
+    uses to build the client-facing schema) still resolves to the wrapped
+    function — the tool's declared parameters are unaffected.
+    """
+
+    def decorator(fn: Any) -> Any:
+        @functools.wraps(fn)
+        async def wrapped(*args: Any, **kwargs: Any) -> Any:
+            rate_limit.enforce(f"mcp_tools:{_chat_id()}", max_requests=60)
+            return await fn(*args, **kwargs)
+
+        return mcp.tool(**tool_kwargs)(wrapped)
+
+    return decorator
+
+
+@_tool(name="list_items")
 async def list_items(
     limit: int = 50, offset: int = 0, q: str = "", order: str = "desc"
 ) -> dict[str, Any]:
@@ -152,7 +177,6 @@ async def list_items(
     null if it hasn't been uploaded yet.
     """
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if not 1 <= limit <= 100 or offset < 0 or len(q) > 300 or order not in {"asc", "desc"}:
         raise ToolError("Invalid pagination or search parameters")
     result = await brain.list_links(
@@ -168,21 +192,20 @@ async def list_items(
     return {**result, "items": items}
 
 
-@mcp.tool(name="list_tags")
+@_tool(name="list_tags")
 async def list_tags() -> dict[str, Any]:
     """List the caller's tags, each with `job_count` — how many of their jobs
     carry it (jobs + swept-to-link jobs, deduped; see `count_jobs_by_tag`).
     A tag with `job_count: 0` has no job attached, only links (or nothing).
     """
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     tags, counts = await asyncio.gather(
         database.list_tags(chat_id), database.count_jobs_by_tag(chat_id)
     )
     return {"items": [{**tag, "job_count": counts.get(tag["id"], 0)} for tag in tags]}
 
 
-@mcp.tool(name="get_item_detail")
+@_tool(name="get_item_detail")
 async def get_item_detail(link_id: str) -> dict[str, Any]:
     """Get one caller-owned Brain link and its fresh reachability signal.
 
@@ -190,37 +213,33 @@ async def get_item_detail(link_id: str) -> dict[str, Any]:
     it hasn't been uploaded yet.
     """
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     item = await brain.get_owned_link_detail(link_id, chat_id)
     if item is None:
         raise ToolError("Link not found")
     return await _with_health(item)
 
 
-@mcp.tool(name="find_related")
+@_tool(name="find_related")
 async def find_related(link_id: str) -> dict[str, Any]:
     """Up to 3 links from the caller's own Brain most semantically related to one link."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     related = await brain.find_related_links(link_id, chat_id)
     if related is None:
         raise ToolError("Link not found")
     return {"items": related}
 
 
-@mcp.tool(name="delete_item")
+@_tool(name="delete_item")
 async def delete_item(link_id: str, confirm: bool = False) -> dict[str, Any]:
     """Hard-delete exactly one link. Set confirm=true to perform the irreversible delete."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Deletion requires confirm=true")
+    _require_confirm(confirm, "Deletion")
     if not await database.delete_link(link_id, chat_id):
         raise ToolError("Link not found")
     return {"deleted": True, "id": link_id}
 
 
-@mcp.tool(name="get_scout_settings")
+@_tool(name="get_scout_settings")
 async def get_scout_settings() -> dict[str, Any]:
     """Whether the caller has opted in to autonomous scouting.
 
@@ -232,7 +251,7 @@ async def get_scout_settings() -> dict[str, Any]:
     return {"autonomous_enabled": enabled}
 
 
-@mcp.tool(name="scout")
+@_tool(name="scout")
 async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
     """Search the caller's own Brain and jobs for items relevant to `query`.
 
@@ -248,7 +267,6 @@ async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
     pinned directly.
     """
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     if not query.strip() or len(query) > 300 or not 1 <= top_k <= 20:
         raise ToolError("Invalid query or top_k")
     items, jobs = await asyncio.gather(
@@ -258,15 +276,14 @@ async def scout(query: str, top_k: int = 5) -> dict[str, Any]:
     return {"items": items, "jobs": jobs}
 
 
-@mcp.tool(name="list_spaces")
+@_tool(name="list_spaces")
 async def list_spaces() -> dict[str, Any]:
     """List the caller's Spaces — named collections of jobs plus context blobs."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     return {"items": await database.list_spaces(chat_id)}
 
 
-@mcp.tool(name="get_space_detail")
+@_tool(name="get_space_detail")
 async def get_space_detail(space_id: str) -> dict[str, Any]:
     """One Space with its pinned jobs and context blobs.
 
@@ -274,22 +291,19 @@ async def get_space_detail(space_id: str) -> dict[str, Any]:
     null if the job never produced one.
     """
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     space = await _owned_space(space_id, chat_id)
     urls = await database.list_space_urls(space_id, chat_id)
     blobs = await database.list_context_blobs(space_id)
     return {"space": space, "urls": urls, "blobs": blobs}
 
 
-@mcp.tool(name="create_space")
+@_tool(name="create_space")
 async def create_space(
     name: str, color: str = "#6366f1", icon: SpaceIcon = "folder", confirm: bool = False
 ) -> dict[str, Any]:
     """Create a new Space. Set confirm=true to perform the write."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Creating a space requires confirm=true")
+    _require_confirm(confirm, "Creating a space")
     name = _validate_name(name, 120)
     _validate_color(color)
     try:
@@ -298,7 +312,7 @@ async def create_space(
         raise ToolError("Space name already exists")
 
 
-@mcp.tool(name="update_space")
+@_tool(name="update_space")
 async def update_space(
     space_id: str,
     name: str,
@@ -308,9 +322,7 @@ async def update_space(
 ) -> dict[str, Any]:
     """Rename/recolor/re-icon a Space. Omit color/icon to leave them unchanged. Set confirm=true."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Updating a space requires confirm=true")
+    _require_confirm(confirm, "Updating a space")
     await _owned_space(space_id, chat_id)
     name = _validate_name(name, 120)
     if color is not None:
@@ -326,25 +338,21 @@ async def update_space(
     return await database.get_space(space_id)
 
 
-@mcp.tool(name="delete_space")
+@_tool(name="delete_space")
 async def delete_space(space_id: str, confirm: bool = False) -> dict[str, Any]:
     """Delete a Space — unpins jobs and cascades to context blobs. Set confirm=true."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Deletion requires confirm=true")
+    _require_confirm(confirm, "Deletion")
     await _owned_space(space_id, chat_id)
     await database.delete_space(chat_id=chat_id, space_id=space_id)
     return {"deleted": True, "id": space_id}
 
 
-@mcp.tool(name="add_space_url")
+@_tool(name="add_space_url")
 async def add_space_url(space_id: str, job_id: str, confirm: bool = False) -> dict[str, Any]:
     """Pin an existing job into a Space. Set confirm=true. Never creates a new job — see ADR-0063."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Adding a URL requires confirm=true")
+    _require_confirm(confirm, "Adding a URL")
     await _owned_space(space_id, chat_id)
     job = await database.get_job(job_id)
     if job is None or job["chat_id"] != chat_id:
@@ -353,24 +361,21 @@ async def add_space_url(space_id: str, job_id: str, confirm: bool = False) -> di
     return {"space_id": space_id, "job_id": job_id}
 
 
-@mcp.tool(name="remove_space_url")
+@_tool(name="remove_space_url")
 async def remove_space_url(space_id: str, job_id: str, confirm: bool = False) -> dict[str, Any]:
     """Unpin a job from a Space. Set confirm=true."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Removing a URL requires confirm=true")
+    _require_confirm(confirm, "Removing a URL")
     await _owned_space(space_id, chat_id)
     if not await database.remove_space_url(space_id=space_id, job_id=job_id):
         raise ToolError("URL not in space")
     return {"space_id": space_id, "job_id": job_id, "removed": True}
 
 
-@mcp.tool(name="reorder_space_url")
+@_tool(name="reorder_space_url")
 async def reorder_space_url(space_id: str, job_id: str, new_sort_order: int) -> dict[str, Any]:
     """Reorder a pinned job within a Space. Not confirm-gated — reordering is reversible."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     await _owned_space(space_id, chat_id)
     if not await database.reorder_space_url(
         space_id=space_id, job_id=job_id, new_sort_order=new_sort_order
@@ -379,30 +384,26 @@ async def reorder_space_url(space_id: str, job_id: str, new_sort_order: int) -> 
     return {"space_id": space_id, "job_id": job_id, "sort_order": new_sort_order}
 
 
-@mcp.tool(name="create_context_blob")
+@_tool(name="create_context_blob")
 async def create_context_blob(
     space_id: str, name: str, content: str = "", confirm: bool = False
 ) -> dict[str, Any]:
     """Create a context blob (editorial note) in a Space. Set confirm=true."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Creating a context blob requires confirm=true")
+    _require_confirm(confirm, "Creating a context blob")
     await _owned_space(space_id, chat_id)
     name = _validate_name(name, 200)
     _validate_content(content)
     return await database.create_context_blob(space_id=space_id, name=name, content=content)
 
 
-@mcp.tool(name="update_context_blob")
+@_tool(name="update_context_blob")
 async def update_context_blob(
     space_id: str, blob_id: str, name: str, content: str, confirm: bool = False
 ) -> dict[str, Any]:
     """Edit a context blob's name/content. Set confirm=true. Last write wins — see ADR-0063."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Editing a context blob requires confirm=true")
+    _require_confirm(confirm, "Editing a context blob")
     await _owned_space(space_id, chat_id)
     await _owned_blob(blob_id, space_id)
     name = _validate_name(name, 200)
@@ -412,26 +413,23 @@ async def update_context_blob(
     return await database.get_context_blob(blob_id)
 
 
-@mcp.tool(name="delete_context_blob")
+@_tool(name="delete_context_blob")
 async def delete_context_blob(
     space_id: str, blob_id: str, confirm: bool = False
 ) -> dict[str, Any]:
     """Delete a context blob. Set confirm=true."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
-    if confirm is not True:
-        raise ToolError("Deletion requires confirm=true")
+    _require_confirm(confirm, "Deletion")
     await _owned_space(space_id, chat_id)
     await _owned_blob(blob_id, space_id)
     await database.delete_context_blob(blob_id)
     return {"deleted": True, "id": blob_id}
 
 
-@mcp.tool(name="reorder_context_blob")
+@_tool(name="reorder_context_blob")
 async def reorder_context_blob(space_id: str, blob_id: str, new_sort_order: int) -> dict[str, Any]:
     """Reorder a context blob within a Space. Not confirm-gated."""
     chat_id = _chat_id()
-    rate_limit.enforce(f"mcp_tools:{chat_id}", max_requests=60)
     await _owned_space(space_id, chat_id)
     await _owned_blob(blob_id, space_id)
     if not await database.reorder_context_blob(blob_id=blob_id, new_sort_order=new_sort_order):

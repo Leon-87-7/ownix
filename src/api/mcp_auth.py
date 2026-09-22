@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from src.api.preview import _preview_client_key
 from src.auth import mcp_tokens
 from src.intake import rate_limit
+from src.intake.client_key import resolve_client_key
 
 mcp_auth_router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
@@ -40,7 +40,7 @@ class PairingRedeemRequest(BaseModel):
 
 @mcp_auth_router.post("/token")
 async def redeem_pairing_code(request: Request, body: PairingRedeemRequest) -> dict:
-    client_key = _preview_client_key(request)
+    client_key = resolve_client_key(request)
     rate_limit.enforce(f"mcp_redeem:{client_key}", max_requests=20)
     chat_id = await mcp_tokens.redeem_pairing_code(body.code)
     if chat_id is None:

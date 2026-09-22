@@ -305,10 +305,10 @@ class TestPreviewCorpus:
     def test_rate_limit_uses_forwarded_for_from_trusted_proxy(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from src.api import preview
+        from src.intake import client_key
 
         monkeypatch.setattr(
-            preview.settings,
+            client_key.settings,
             "PREVIEW_TRUSTED_PROXY_CIDRS",
             "127.0.0.1/32",
         )
@@ -320,15 +320,15 @@ class TestPreviewCorpus:
             }
         )
 
-        assert preview._preview_client_key(request) == "203.0.113.10"
+        assert client_key.resolve_client_key(request) == "203.0.113.10"
 
     def test_rate_limit_uses_real_ip_from_trusted_proxy(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from src.api import preview
+        from src.intake import client_key
 
         monkeypatch.setattr(
-            preview.settings,
+            client_key.settings,
             "PREVIEW_TRUSTED_PROXY_CIDRS",
             "127.0.0.1/32",
         )
@@ -340,7 +340,7 @@ class TestPreviewCorpus:
             }
         )
 
-        assert preview._preview_client_key(request) == "203.0.113.11"
+        assert client_key.resolve_client_key(request) == "203.0.113.11"
 
     def test_rate_limit_evicts_stale_client_buckets(
         self, monkeypatch: pytest.MonkeyPatch
