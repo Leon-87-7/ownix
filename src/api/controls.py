@@ -261,16 +261,30 @@ async def get_spending(request: Request) -> dict:
     """Own spending summary (handoff §2) — limits, today's/month's settled
     and reserved amounts, remaining headroom, and paid-Gemini status."""
     chat_id: int = request.state.user["id"]
-    return await database.spend_summary(chat_id)
+    return await _spending_view(chat_id, request)
 
 
-@controls_router.put("/spending/{chat_id}")
-async def update_spending(chat_id: int, body: SpendLimitsIn, request: Request) -> dict:
-    """Set another chat's spend limits — Operator-only (handoff §2). Ordinary
-    users may only view their own summary via `GET /spending`."""
-    real_id = int(request.state.user["real_id"])
-    if not settings.is_operator(real_id):
+@controls_router.put("/spending")
+async def update_own_spending(body: SpendLimitsIn, request: Request) -> dict:
+    """Operator-only write to the account being viewed — lets the Spending
+    panel save through the same URL it reads (while impersonating, that's the
+    impersonated user's limits)."""
+    if not _is_operator(request):
         raise HTTPException(status_code=403, detail="Operator access required")
+    chat_id: int = request.state.user["id"]
+    await _save_spend_limits(chat_id, body)
+    return await _spending_view(chat_id, request)
+
+
+def _is_operator(request: Request) -> bool:
+    return settings.is_operator(int(request.state.user["real_id"]))
+
+
+async def _spending_view(chat_id: int, request: Request) -> dict:
+    return {**await database.spend_summary(chat_id), "is_operator": _is_operator(request)}
+
+
+async def _save_spend_limits(chat_id: int, body: SpendLimitsIn) -> None:
     await database.set_spend_limits(
         chat_id,
         daily_limit_micros=body.daily_limit_micros,
@@ -279,4 +293,13 @@ async def update_spending(chat_id: int, body: SpendLimitsIn, request: Request) -
         enabled=body.enabled,
         currency=body.currency,
     )
+
+
+@controls_router.put("/spending/{chat_id}")
+async def update_spending(chat_id: int, body: SpendLimitsIn, request: Request) -> dict:
+    """Set another chat's spend limits — Operator-only (handoff §2). Ordinary
+    users may only view their own summary via `GET /spending`."""
+    if not _is_operator(request):
+        raise HTTPException(status_code=403, detail="Operator access required")
+    await _save_spend_limits(chat_id, body)
     return await database.spend_summary(chat_id)

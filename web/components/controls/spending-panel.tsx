@@ -12,6 +12,7 @@ interface SpendingSummary {
   monthly_spent_micros: number;
   daily_remaining_micros: number | null;
   monthly_remaining_micros: number | null;
+  is_operator: boolean;
 }
 
 const DEFAULT_SUMMARY: SpendingSummary = {
@@ -24,6 +25,7 @@ const DEFAULT_SUMMARY: SpendingSummary = {
   monthly_spent_micros: 0,
   daily_remaining_micros: null,
   monthly_remaining_micros: null,
+  is_operator: false,
 };
 
 function formatMicros(micros: number | undefined, currency: string | undefined): string {
@@ -63,8 +65,45 @@ function Row({ label, spent, remaining, limit, currency }: {
   );
 }
 
+/** Dollar input for one hard cap. Commits on blur/Enter; empty = no limit. */
+function LimitInput({ label, micros, disabled, onCommit }: {
+  label: string;
+  micros: number | null;
+  disabled: boolean;
+  onCommit: (micros: number | null) => void;
+}) {
+  const shown = micros === null ? '' : String(micros / 1_000_000);
+  const commit = (raw: string) => {
+    const trimmed = raw.trim();
+    const next = trimmed === '' ? null : Math.round(Number(trimmed) * 1_000_000);
+    if (next !== null && (!Number.isFinite(next) || next < 0)) return;
+    if (next !== micros) onCommit(next);
+  };
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-ink">{label}</span>
+      <input
+        // Remount when the saved value changes so defaultValue resyncs.
+        key={shown}
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={0.01}
+        placeholder="No limit"
+        defaultValue={shown}
+        disabled={disabled}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        className="h-8 w-28 rounded-md border border-line bg-canvas px-2 text-right font-mono text-mono-label tabular-nums text-ink outline-none transition-ui focus:border-signal disabled:opacity-70"
+      />
+    </label>
+  );
+}
+
 export function SpendingPanel() {
-  const { settings, loaded, error } = useSettingsResource<SpendingSummary>(
+  const { settings, loaded, saving, error, update } = useSettingsResource<SpendingSummary>(
     '/api/controls/spending',
     DEFAULT_SUMMARY,
     { errorLabel: 'spending summary' },
@@ -85,7 +124,38 @@ export function SpendingPanel() {
           {loaded ? (paidPaused ? 'Paused' : 'Enabled') : '—'}
         </span>
       </div>
-      {loaded && paidPaused && (
+      {loaded && settings.is_operator && (
+        <div className="space-y-2 rounded-md border border-line p-3">
+          <label className="flex items-center gap-3 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={settings.enabled && settings.allow_paid_gemini}
+              disabled={saving}
+              onChange={(e) =>
+                void update({ allow_paid_gemini: e.target.checked, enabled: true })
+              }
+              className="h-4 w-4 accent-signal"
+            />
+            <span className="font-medium">Allow paid Gemini</span>
+          </label>
+          <LimitInput
+            label="Daily limit (USD)"
+            micros={settings.daily_limit_micros}
+            disabled={saving}
+            onCommit={(micros) => void update({ daily_limit_micros: micros })}
+          />
+          <LimitInput
+            label="Monthly limit (USD)"
+            micros={settings.monthly_limit_micros}
+            disabled={saving}
+            onCommit={(micros) => void update({ monthly_limit_micros: micros })}
+          />
+          <p className="text-xs text-muted">
+            Used when the free-tier key fails. Leave a limit empty to remove that cap.
+          </p>
+        </div>
+      )}
+      {loaded && paidPaused && !settings.is_operator && (
         <p className="text-xs text-muted">
           Paid processing is paused for your account — only free-tier Gemini
           calls run. Contact the Operator to enable it.
