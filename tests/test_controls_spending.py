@@ -92,3 +92,39 @@ def test_operator_put_can_explicitly_remove_a_cap(spending_client) -> None:
     body = resp.json()
     assert body["daily_limit_micros"] is None
     assert body["monthly_limit_micros"] is None
+
+
+def test_get_spending_reports_operator_flag(spending_client) -> None:
+    operator_client, other_client = spending_client
+    assert operator_client.get("/api/controls/spending").json()["is_operator"] is True
+    assert other_client.get("/api/controls/spending").json()["is_operator"] is False
+
+
+def test_own_spending_put_is_operator_only_and_saves(spending_client) -> None:
+    operator_client, other_client = spending_client
+    assert other_client.put("/api/controls/spending", json={"allow_paid_gemini": True}).status_code == 403
+
+    # Operator impersonating TARGET_ID: the write lands on the viewed account.
+    app = FastAPI()
+
+    @app.middleware("http")
+    async def inject_user(request: Request, call_next):
+        request.state.user = {"id": TARGET_ID, "real_id": OPERATOR_ID}
+        return await call_next(request)
+
+    from src.api.controls import controls_router
+
+    app.include_router(controls_router)
+    impersonating = TestClient(app, raise_server_exceptions=True)
+
+    resp = impersonating.put(
+        "/api/controls/spending",
+        json={"allow_paid_gemini": True, "daily_limit_micros": 1_000_000, "monthly_limit_micros": None},
+    )
+    assert resp.status_code == 200
+    body = impersonating.get("/api/controls/spending").json()
+    assert body["allow_paid_gemini"] is True
+    assert body["daily_limit_micros"] == 1_000_000
+    assert body["monthly_limit_micros"] is None
+    assert body["is_operator"] is True
+    assert operator_client.get("/api/controls/spending").json()["allow_paid_gemini"] is False
