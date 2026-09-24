@@ -79,4 +79,15 @@ describe("SpendingPanel", () => {
     await waitFor(() => expect(puts).toHaveLength(2));
     expect(puts[1]).toMatchObject({ monthly_limit_micros: null });
   });
+
+  it('ignores a tiny negative limit instead of saving it as zero', async () => {
+    const puts = mockSpending(true);
+    render(<SpendingPanel />);
+    const daily = await screen.findByLabelText(/daily limit/i);
+    await userEvent.clear(daily);
+    await userEvent.type(daily, '-0.0000001{Enter}');
+    await userEvent.click(screen.getByLabelText(/allow paid gemini/i));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0]).toMatchObject({ daily_limit_micros: 500_000 });
+  });
 });

@@ -75,8 +75,10 @@ function LimitInput({ label, micros, disabled, onCommit }: {
   const shown = micros === null ? '' : String(micros / 1_000_000);
   const commit = (raw: string) => {
     const trimmed = raw.trim();
-    const next = trimmed === '' ? null : Math.round(Number(trimmed) * 1_000_000);
-    if (next !== null && (!Number.isFinite(next) || next < 0)) return;
+    const dollars = Number(trimmed);
+    // Reject negatives before rounding: -0.0000001 would round to -0 and save as 0.
+    if (trimmed !== '' && (!Number.isFinite(dollars) || dollars < 0)) return;
+    const next = trimmed === '' ? null : Math.round(dollars * 1_000_000);
     if (next !== micros) onCommit(next);
   };
   return (
