@@ -88,7 +88,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
 
     call_count = 0
 
-    def _fake(parts, *, api_key: str, model: str, schema=None, capped=True):
+    def _fake(parts, *, api_key: str, model: str, schema=None, max_output_tokens=None):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -115,8 +115,8 @@ async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPat
 
     received: list[dict] = []
 
-    def _spy(parts, *, api_key: str, model: str, schema=None, capped=True):
-        received.append({"schema": schema, "capped": capped})
+    def _spy(parts, *, api_key: str, model: str, schema=None, max_output_tokens=None):
+        received.append({"schema": schema, "max_output_tokens": max_output_tokens})
         return _make_response('{"ok": true}')
 
     my_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
@@ -127,7 +127,8 @@ async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPat
     assert result == '{"ok": true}'
     assert len(received) == 1
     assert received[0]["schema"] == my_schema
-    assert received[0]["capped"] is False  # generate() output is never truncated
+    # generate() gets the large text envelope so output (incl. thinking) isn't cut off.
+    assert received[0]["max_output_tokens"] == 32768
 
 
 # ---------------------------------------------------------------------------
@@ -390,8 +391,8 @@ async def test_generate_failure_alert_skips_when_no_admins_configured(
             await generate("prompt", model="gemini-2.5-flash", cost=_COST)
 
 
-def test_extract_json_failure_logs_excerpt_not_full_payload() -> None:
-    """Parse failures log a bounded excerpt around the error, never the whole response."""
+def test_extract_json_failure_logs_no_content() -> None:
+    """Parse failures log position/length only — responses carry user content."""
     import json
 
     from structlog.testing import capture_logs
@@ -404,5 +405,31 @@ def test_extract_json_failure_logs_excerpt_not_full_payload() -> None:
 
     (entry,) = [e for e in logs if e["event"] == "gemini.json_parse_failed"]
     assert entry["raw_len"] == len(raw)
-    assert len(entry["excerpt"]) <= 200
-    assert entry["excerpt"].endswith(", }")
+    assert "xxxx" not in str(entry)
+
+
+@pytest.mark.asyncio
+async def test_generate_reserves_its_full_output_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The reservation must be sized for the same cap the request runs with, or a
+    long paid response could overshoot the hard spending limit."""
+    from src.services import provider_pricing
+
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    estimate_caps: list[int] = []
+    real_estimate = provider_pricing.estimate_text_micros
+
+    def _spy_estimate(**kw):
+        estimate_caps.append(kw["max_output_tokens"])
+        return real_estimate(**kw)
+
+    call_caps: list[int] = []
+
+    def _spy_call(parts, *, api_key, model, schema=None, max_output_tokens=None):
+        call_caps.append(max_output_tokens)
+        return _make_response("ok")
+
+    monkeypatch.setattr(provider_pricing, "estimate_text_micros", _spy_estimate)
+    with patch("src.services.gemini._call_sync", side_effect=_spy_call):
+        await generate("Hello", model="gemini-2.5-pro", cost=_COST)
+
+    assert estimate_caps == call_caps == [provider_pricing.TEXT_MAX_OUTPUT_TOKENS]
