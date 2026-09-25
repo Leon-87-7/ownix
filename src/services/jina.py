@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import time
+import asyncio
 
 from urllib.parse import quote
 
@@ -15,9 +15,10 @@ log = get_logger(__name__)
 
 _JINA_BASE = "https://r.jina.ai/"
 # 402 = the Jina key's token balance is exhausted. Every fetch fails until someone
-# tops up, so tell ops — once per cooldown, not once per failed fetch.
+# tops up, so tell ops — once per cooldown, not once per failed fetch. The cooldown
+# lives in Redis so API + worker (separate processes) share it across restarts.
 _OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS = 6 * 60 * 60
-_out_of_credit_last_alert_at: float | None = None
+_OUT_OF_CREDIT_ALERT_KEY = "jina:out_of_credit_alerted"
 
 # Shared cap for every Jina fetch in the newsletter-digest feature (archive,
 # feed, and issue pages alike) — mirrors the 2 MB cap the email digest webhook
@@ -105,28 +106,34 @@ def _strip_preamble(text: str) -> tuple[str, str]:
 async def _alert_out_of_credit() -> None:
     """Ops-bot alert that Jina is out of credit. Never raises — the caller's
     JinaFetchError path must stay the only failure a fetch reports."""
-    global _out_of_credit_last_alert_at
-
-    now = time.monotonic()
     log.error("jina.out_of_credit")
-    if (
-        _out_of_credit_last_alert_at is not None
-        and now - _out_of_credit_last_alert_at < _OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS
-    ):
+    try:
+        from src.job_queue import _client
+
+        # SET NX claims the cooldown atomically *before* sending, so concurrent 402s
+        # in either process can't both alert.
+        claimed = await _client().set(
+            _OUT_OF_CREDIT_ALERT_KEY, "1", nx=True, ex=_OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS
+        )
+    except Exception:
+        log.exception("jina.out_of_credit_alert_failed")
         return
+    if not claimed:
+        return
+
     from src.services.ops_bot import admin_chat_ids, send_ops_message
 
     message = (
         "⚠️ Jina is out of credit (HTTP 402). Newsletter polls and article fetches "
         "fail until the Jina account is topped up or JINA_API_KEY is replaced."
     )
-    try:
-        for chat_id in admin_chat_ids():
-            await send_ops_message(chat_id, message)
-    except Exception:
-        log.exception("jina.out_of_credit_alert_failed")
-        return
-    _out_of_credit_last_alert_at = now
+    targets = admin_chat_ids()
+    results = await asyncio.gather(
+        *(send_ops_message(chat_id, message) for chat_id in targets), return_exceptions=True
+    )
+    for chat_id, result in zip(targets, results):
+        if isinstance(result, Exception):
+            log.error("jina.out_of_credit_alert_failed", chat_id=chat_id, error=str(result)[:120])
 
 
 async def fetch_raw(
