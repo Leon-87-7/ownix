@@ -392,3 +392,67 @@ async def test_looks_like_article_false_on_oversize():
         result = await jina.looks_like_article("https://example.com/huge", client=client)
 
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_402_alerts_ops_once_per_cooldown(monkeypatch: pytest.MonkeyPatch):
+    """Jina out of credit (402) still raises JinaFetchError, and alerts each admin
+    once per shared (Redis) cooldown — even when one admin's delivery fails."""
+    from src import job_queue
+    from src.services import jina, ops_bot
+
+    class _FakeRedis:
+        def __init__(self) -> None:
+            self.store: dict[str, tuple[str, int | None]] = {}
+
+        async def set(self, key, value, *, nx=False, ex=None):
+            if nx and key in self.store:
+                return None
+            self.store[key] = (value, ex)
+            return True
+
+    fake = _FakeRedis()
+    monkeypatch.setattr(job_queue, "_redis", fake)
+
+    attempts: list[int] = []
+
+    async def _send(chat_id, message):
+        attempts.append(chat_id)
+        assert "out of credit" in message
+        if chat_id == 1:
+            raise RuntimeError("telegram down")
+
+    monkeypatch.setattr(ops_bot, "admin_chat_ids", lambda: [1, 2])
+    monkeypatch.setattr(ops_bot, "send_ops_message", _send)
+
+    for _ in range(2):
+        async with _mock_client(_text_responder(402, "")) as client:
+            with pytest.raises(jina.JinaFetchError) as exc_info:
+                await jina.fetch_html("https://example.com/archive", client=client)
+        assert exc_info.value.status_code == 402
+
+    # Admin 2 still alerted despite admin 1 failing; second 402 is inside the cooldown.
+    assert sorted(attempts) == [1, 2]
+    assert fake.store[jina._OUT_OF_CREDIT_ALERT_KEY][1] == 6 * 60 * 60
+
+
+@pytest.mark.asyncio
+async def test_402_alert_failure_never_masks_jina_fetch_error(monkeypatch: pytest.MonkeyPatch):
+    """A broken alert path (e.g. bad OPS_ADMIN_CHAT_IDS) must still surface JinaFetchError(402)."""
+    from src import job_queue
+    from src.services import jina, ops_bot
+
+    class _FakeRedis:
+        async def set(self, key, value, *, nx=False, ex=None):
+            return True
+
+    def _bad_config():
+        raise ValueError("bad OPS_ADMIN_CHAT_IDS")
+
+    monkeypatch.setattr(job_queue, "_redis", _FakeRedis())
+    monkeypatch.setattr(ops_bot, "admin_chat_ids", _bad_config)
+
+    async with _mock_client(_text_responder(402, "")) as client:
+        with pytest.raises(jina.JinaFetchError) as exc_info:
+            await jina.fetch_html("https://example.com/archive", client=client)
+    assert exc_info.value.status_code == 402
