@@ -108,21 +108,23 @@ async def _alert_out_of_credit() -> None:
     JinaFetchError path must stay the only failure a fetch reports."""
     log.error("jina.out_of_credit")
     try:
-        from src.job_queue import _client
-
-        # SET NX claims the cooldown atomically *before* sending, so concurrent 402s
-        # in either process can't both alert.
-        claimed = await _client().set(
-            _OUT_OF_CREDIT_ALERT_KEY, "1", nx=True, ex=_OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS
-        )
+        await _send_out_of_credit_alert()
     except Exception:
+        # Redis, config (bad OPS_ADMIN_CHAT_IDS), anything — never change fetch semantics.
         log.exception("jina.out_of_credit_alert_failed")
-        return
-    if not claimed:
-        return
 
+
+async def _send_out_of_credit_alert() -> None:
+    from src.job_queue import _client
     from src.services.ops_bot import admin_chat_ids, send_ops_message
 
+    # SET NX claims the cooldown atomically *before* sending, so concurrent 402s
+    # in either process can't both alert.
+    claimed = await _client().set(
+        _OUT_OF_CREDIT_ALERT_KEY, "1", nx=True, ex=_OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS
+    )
+    if not claimed:
+        return
     message = (
         "⚠️ Jina is out of credit (HTTP 402). Newsletter polls and article fetches "
         "fail until the Jina account is topped up or JINA_API_KEY is replaced."
