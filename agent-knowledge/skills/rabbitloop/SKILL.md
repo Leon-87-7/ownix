@@ -2,37 +2,38 @@
 name: rabbitloop
 description: >
   Use when the user wants to fully optimize a GitHub PR against this repo's automated review
-  gates — CodeRabbit, Codacy, and the frontend/backend mutation-testing checks — iterating until
-  CodeRabbit reports zero actionable comments and every check-run gate concludes success.
+  gates — CodeRabbit, Codex, Codacy, and the frontend/backend mutation-testing checks — iterating
+  until CodeRabbit and Codex leave zero unresolved findings and every check-run gate concludes success.
   Triggers/waits for all gates, fixes all actionable findings, pushes, re-checks, and repeats.
 license: MIT
 compatibility: Requires git and gh (GitHub CLI) authenticated, and CodeRabbit and/or Codacy installed on the repo.
 metadata:
   author: LeonEidelman
-  version: "2.0"
+  version: "2.1"
 allowed-tools: Bash(gh:*) Bash(git:*)
 ---
 
 # Rabbitloop
 
 Iteratively fix a GitHub PR until **every gate** passes: CodeRabbit reports zero actionable
-comments (and zero unresolved threads), Codacy's check run concludes `success` with zero check-run
+comments (and zero unresolved threads), Codex leaves zero unresolved threads on the head commit, Codacy's check run concludes `success` with zero check-run
 annotations, and both mutation-testing check runs (`frontend-mutation`, `backend-mutation`)
 conclude `success`.
 
-> **Four gates, one loop.** Each iteration triggers CodeRabbit, waits for all four gates, gathers
+> **Five gates, one loop.** Each iteration triggers CodeRabbit and Codex, waits for all five gates, gathers
 > every actionable finding across them, fixes them in one batch, then pushes once so a single push
 > re-runs everything. The loop only exits when **all** gates pass. A gate not installed on this repo
 > (detect by whether its bot/check ever appears) is skipped rather than blocking on it.
 
 **How each gate signals:**
 
-| Gate                | Source                                          | Completion signal                                          | Pass condition |
-| ------------------- | ------------------------------------------------ | ---------------------------------------------------------- | -------------- |
-| CodeRabbit          | `coderabbitai[bot]`                              | Commit status context `CodeRabbit`; PR review whose body starts `Actionable comments posted: N` | `Actionable comments posted: 0` and no unresolved inline threads |
-| Codacy              | `codacy-production[bot]`                         | Check run `Codacy Static Code Analysis` completes; AI Reviewer posts a PR review whose body starts `### Pull Request Overview` | Check conclusion `success`, zero check-run annotations, and no unresolved inline threads — a `success` conclusion does not by itself mean zero annotations, see below |
-| Mutation — frontend | check run `frontend-mutation` (workflow "Mutation Testing") | Check run completes (Stryker on `web/`)         | Check conclusion `success` — mutation score at or above Stryker's `break: 50` threshold (`web/stryker.config.mjs`), **not** zero survivors |
-| Mutation — backend  | check run `backend-mutation` (workflow "Mutation Testing")  | Check run completes (cosmic-ray on `src/`)      | Check conclusion `success` — `cosmic-ray exec` finished without crashing; **there is no score threshold wired up for backend at all**, so this passes even with a high survival rate |
+| Gate                | Source                                                      | Completion signal                                                                                                              | Pass condition                                                                                                                                                                       |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CodeRabbit          | `coderabbitai[bot]`                                         | Commit status context `CodeRabbit`; PR review whose body starts `Actionable comments posted: N`                                | `Actionable comments posted: 0` and no unresolved inline threads                                                                                                                     |
+| Codex               | `chatgpt-codex-connector[bot]`                              | PR review whose `Reviewed commit:` line names the head SHA, or 👍 on the trigger comment                                       | Zero unresolved inline threads (each opens with a `P1`/`P2` badge)                                                                                                                   |
+| Codacy              | `codacy-production[bot]`                                    | Check run `Codacy Static Code Analysis` completes; AI Reviewer posts a PR review whose body starts `### Pull Request Overview` | Check conclusion `success`, zero check-run annotations, and no unresolved inline threads — a `success` conclusion does not by itself mean zero annotations, see below                |
+| Mutation — frontend | check run `frontend-mutation` (workflow "Mutation Testing") | Check run completes (Stryker on `web/`)                                                                                        | Check conclusion `success` — mutation score at or above Stryker's `break: 50` threshold (`web/stryker.config.mjs`), **not** zero survivors                                           |
+| Mutation — backend  | check run `backend-mutation` (workflow "Mutation Testing")  | Check run completes (cosmic-ray on `src/`)                                                                                     | Check conclusion `success` — `cosmic-ray exec` finished without crashing; **there is no score threshold wired up for backend at all**, so this passes even with a high survival rate |
 
 Codacy has **two channels** under the same bot: the static-analysis **check run** (the gate) and an
 **AI Reviewer** that submits a PR review with risk-tagged inline comments (`🔴 HIGH RISK` /
@@ -43,6 +44,11 @@ findings.
 > required check" — a leftover from before this repo started gating on it. Rabbitloop treats both
 > mutation jobs as **blocking gates** regardless: wait for them, fix surviving mutants, and don't
 > exit or offer merge until both conclude `success`.
+
+**Codex is a second angle of attack, not a duplicate of CodeRabbit.** It reasons about runtime
+behaviour — races, cross-process state, partial-failure paths — where CodeRabbit leans on style and
+local correctness. Weigh its findings on their own merits; agreement between the two bots is not
+required.
 
 **CodeRabbit needs a manual trigger on this repo.** Its automatic review-on-push is disabled here
 ("Review skipped: manual review required for this OSS repository"), so post the trigger comment
@@ -80,12 +86,15 @@ Push the latest changes (if any):
 git push
 ```
 
-Codacy and the two mutation-testing jobs auto-run on push. **CodeRabbit does not** — auto-review is
-disabled on this repo, so trigger it explicitly every iteration, pushed or not:
+Codacy and the two mutation-testing jobs auto-run on push. **CodeRabbit and Codex do not** —
+trigger both explicitly every iteration, pushed or not:
 
 ```bash
 gh pr comment <PR_NUMBER> --body "@coderabbitai review"
+CX_TRIGGER=$(gh pr comment <PR_NUMBER> --body "@codex review" | grep -oP 'issuecomment-\K\d+')
 ```
+
+Keep `CX_TRIGGER` — Codex signals "no findings" by reacting 👍 to that comment (step B).
 
 #### B. Wait for all gates
 
@@ -130,6 +139,25 @@ while true; do
 done
 ```
 
+**Codex** — no status or check run. It answers in one of two ways: a PR review naming the head
+commit (`Reviewed commit: <first 10 chars>`) when it has suggestions, or a 👍 reaction on the
+`@codex review` trigger comment when it has none. Poll for either (reviews take several minutes —
+poll every 30s):
+
+```bash
+SHORT=${HEAD_SHA:0:10}
+while true; do
+  CX=$(gh api --paginate "repos/{owner}/{repo}/pulls/<PR_NUMBER>/reviews" \
+    --jq ".[] | select(.user.login | test(\"codex\"; \"i\")) | select(.body | contains(\"$SHORT\")) | .id")
+  [ -n "$CX" ] && { echo "Codex: reviewed $SHORT"; break; }
+  THUMB=$(gh api "repos/{owner}/{repo}/issues/comments/$CX_TRIGGER/reactions" \
+    --jq '.[] | select(.user.login | test("codex"; "i")) | select(.content == "+1") | .id')
+  [ -n "$THUMB" ] && { echo "Codex: 👍 — no findings"; break; }
+  echo "Waiting for Codex on $SHORT..."
+  sleep 30
+done
+```
+
 If a gate never appears after a reasonable wait (~3–4 min), treat it as not installed and skip it
 for the rest of the loop.
 
@@ -152,7 +180,7 @@ gh api "repos/{owner}/{repo}/commits/$HEAD_SHA/check-runs" \
   --jq '.check_runs[] | select(.app.slug == "codacy-production") | .output | {title, summary}'
 ```
 
-A `success` conclusion titled "Your pull request is up to standards!" tolerates *complexity/clone*
+A `success` conclusion titled "Your pull request is up to standards!" tolerates _complexity/clone_
 deltas in the summary — those are informational regardless of conclusion. It does **not** mean
 there are no real findings: Codacy's own severity threshold for failing the check is higher than
 "this is a real issue," so a security/quality finding (SQL injection, hardcoded secret, etc.) can
@@ -195,11 +223,13 @@ but no review covers the latest push yet, wait for it (or use the review UI's "R
 trigger — there is no comment trigger). Each of its inline comments opens with a risk tag
 (`🔴 HIGH RISK` / `🟡 MEDIUM RISK`); treat them all as actionable unless clearly a false positive.
 
-**Inline comments from both** — one call covers the two bots:
+**Inline comments from all three review bots** — one call covers them. Codex comments open with a
+priority badge (`P1` = must fix, `P2` = should fix); treat both as actionable unless clearly a
+false positive:
 
 ```bash
 gh api --paginate "repos/{owner}/{repo}/pulls/<PR_NUMBER>/comments" \
-  --jq '.[] | select(.user.login | test("coderabbit|codacy"; "i")) | {user: .user.login, path, line, body}'
+  --jq '.[] | select(.user.login | test("coderabbit|codacy|codex"; "i")) | {user: .user.login, path, line, body}'
 ```
 
 **Mutation testing** — download the uploaded report regardless of pass or fail (the check-run
@@ -263,7 +293,7 @@ totals before comparing scores:
 Stop the loop if **any** of these are true:
 
 - **All** gates pass: CodeRabbit reports **`Actionable comments posted: 0`** with **zero unresolved
-  inline threads**; the Codacy check concluded **`success`** with **zero check-run annotations**
+  inline threads**; Codex reacted 👍 or reviewed the head commit with **zero unresolved inline threads**; the Codacy check concluded **`success`** with **zero check-run annotations**
   and **zero unresolved inline threads** — the conclusion color alone is not sufficient, an
   annotation is a real finding regardless of it; both mutation check runs concluded **`success`** —
   per their own CI-defined pass condition (§ How each gate signals): frontend at/above Stryker's
@@ -272,7 +302,7 @@ Stop the loop if **any** of these are true:
 - Max iterations reached (report current state).
 
 Do **not** exit while any gate's check run is still non-`success`, still carries an annotation
-(Codacy), or still has unresolved threads (CodeRabbit/Codacy) — e.g. a green Codacy check and zero
+(Codacy), or still has unresolved threads (CodeRabbit/Codex/Codacy) — e.g. a green Codacy check and zero
 CodeRabbit comments don't matter
 if `frontend-mutation` is still below the break threshold. But once a mutation check run itself
 concludes `success`, it counts — don't keep looping on it because survivors remain; survivor counts
@@ -280,7 +310,7 @@ only feed the informational baseline comparison above, never this exit check.
 
 #### E. Fix actionable comments
 
-Gather the unresolved findings from **all four** gates into one list, then for each:
+Gather the unresolved findings from **all five** gates into one list, then for each:
 
 1. Read the file and understand the comment (or surviving mutant) in context.
 2. Determine if it's actionable (code change needed) or informational/nitpick/false positive.
@@ -292,10 +322,10 @@ Fix everything in a single batch before pushing, so one push re-runs every gate 
 
 #### F. Resolve threads
 
-Both bots' inline comments are GitHub review threads, so one resolve flow handles both — when
-listing threads, match `author.login` against `coderabbit` **or** `codacy`. (As a shortcut, posting
-`@coderabbitai resolve` as a PR comment tells CodeRabbit to resolve all of its own threads at once;
-still resolve Codacy's via GraphQL.)
+All three bots' inline comments are GitHub review threads, so one resolve flow handles them — when
+listing threads, match `author.login` against `coderabbit`, `codex`, **or** `codacy`. (As a
+shortcut, posting `@coderabbitai resolve` as a PR comment tells CodeRabbit to resolve all of its own
+threads at once; still resolve Codex's and Codacy's via GraphQL.)
 
 Fetch unresolved review threads:
 
@@ -343,15 +373,16 @@ Then go back to step **A**.
 
 After exiting the loop, summarize:
 
-| Field                    | Value                                        |
-| ------------------------ | --------------------------------------------- |
-| Iterations               | N                                             |
-| CodeRabbit actionable    | N remaining (or n/a if not installed)         |
-| Codacy check             | success / failure (or n/a if not installed)   |
-| Mutation — frontend      | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
-| Mutation — backend       | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
-| Comments resolved        | N                                             |
-| Remaining comments       | N (if any)                                    |
+| Field                 | Value                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| Iterations            | N                                                                                              |
+| CodeRabbit actionable | N remaining (or n/a if not installed)                                                          |
+| Codex unresolved      | N remaining (or n/a if not installed)                                                          |
+| Codacy check          | success / failure (or n/a if not installed)                                                    |
+| Mutation — frontend   | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
+| Mutation — backend    | success / failure, score N% vs. baseline N% (regression / improvement / flat / not comparable) |
+| Comments resolved     | N                                                                                              |
+| Remaining comments    | N (if any)                                                                                     |
 
 If the loop exited due to max iterations, list any remaining unresolved comments (noting which
 gate raised each) and suggest next steps. The score/baseline comparison is reporting only — a
@@ -361,9 +392,9 @@ adds the trend on top of that.
 
 ### 4. Offer to merge on a full pass
 
-If the loop exited because **all four gates** passed (not max-iterations) and any CI/status checks
+If the loop exited because **all five gates** passed (not max-iterations) and any CI/status checks
 are green, proactively ask the user whether to merge — don't just report and stop. This is the one
-case worth interrupting for: 0-actionable CodeRabbit + green Codacy + green mutation checks + green
+case worth interrupting for: 0-actionable CodeRabbit + 0-unresolved Codex + green Codacy + green mutation checks + green
 CI is the signal the user is waiting on.
 
 - `gh pr merge <PR_NUMBER> --squash --delete-branch` (or the user's preferred merge strategy) once
@@ -379,6 +410,7 @@ on top.
 Rabbitloop complete.
   Iterations:      2
   CodeRabbit:      0 actionable
+  Codex:           0 unresolved
   Codacy:          success
   Mutation (fe):   success — 82.10% (baseline 78.57%, improvement)
   Mutation (be):   success — 53.10% (not comparable — filtered run, 40/612 mutants tested)
@@ -391,6 +423,7 @@ If not fully resolved:
 ```
 Rabbitloop stopped after 5 iterations.
   CodeRabbit:      2 actionable
+  Codex:           1 unresolved
   Codacy:          failure
   Mutation (fe):   success — 61.20% (baseline 78.57%, regression)
   Mutation (be):   failure
@@ -399,5 +432,6 @@ Rabbitloop stopped after 5 iterations.
 
 Remaining issues:
   - [coderabbit] src/db.ts:112 — "Missing index on user_id column"
+  - [codex]      src/queue.py:58 — "P1: Re-enqueue is not atomic across workers"
   - [codacy]     src/auth.ts:45 — "Avoid deeply nested control flow"
 ```

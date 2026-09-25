@@ -38,6 +38,10 @@ npm run build
 
 `NEXT_PUBLIC_API_MOCK=1` runs the dashboard in mock/demo mode (MSW handlers in `web/lib/mocks/`, auth gate skipped outside production). In production the frontend is served by Vercel — the local `web` service in `docker-compose.yml` is commented out.
 
+## Branches
+
+Ask the user before creating any branch, and wait for an explicit yes. This includes when a hook blocks a command on `main` — stop and ask rather than branching to get past it.
+
 ## Architecture
 
 Two long-running processes are built from the same image:
