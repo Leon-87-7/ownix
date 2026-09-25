@@ -388,3 +388,21 @@ async def test_generate_failure_alert_skips_when_no_admins_configured(
     with patch("src.services.gemini._call_sync", side_effect=RuntimeError("boom")):
         with pytest.raises(GeminiUnavailableError):
             await generate("prompt", model="gemini-2.5-flash", cost=_COST)
+
+
+def test_extract_json_failure_logs_excerpt_not_full_payload() -> None:
+    """Parse failures log a bounded excerpt around the error, never the whole response."""
+    import json
+
+    from structlog.testing import capture_logs
+
+    from src.services.gemini import extract_json
+
+    raw = '{"summary": "' + "x" * 5000 + '", }'
+    with capture_logs() as logs, pytest.raises(json.JSONDecodeError):
+        extract_json(raw)
+
+    (entry,) = [e for e in logs if e["event"] == "gemini.json_parse_failed"]
+    assert entry["raw_len"] == len(raw)
+    assert len(entry["excerpt"]) <= 200
+    assert entry["excerpt"].endswith(", }")

@@ -169,9 +169,16 @@ def extract_json(raw: str, *, root: str = "object") -> dict | list:
     m = re.search(pattern, clean)
     try:
         return json.loads(m.group(0) if m else clean)
-    except json.JSONDecodeError:
-        # Byte offsets alone are useless for diagnosing a bad payload — keep the raw text.
-        log.error("gemini.json_parse_failed", raw=raw[:4000], raw_len=len(raw))
+    except json.JSONDecodeError as exc:
+        # A byte offset alone is useless for diagnosis; log only the 200 chars around
+        # it (not the whole response — it can carry user transcripts/captions).
+        start = max(exc.pos - 100, 0)
+        log.error(
+            "gemini.json_parse_failed",
+            error_pos=exc.pos,
+            raw_len=len(raw),
+            excerpt=exc.doc[start : start + 200],
+        )
         raise
 
 
