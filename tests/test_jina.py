@@ -392,3 +392,29 @@ async def test_looks_like_article_false_on_oversize():
         result = await jina.looks_like_article("https://example.com/huge", client=client)
 
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_402_alerts_ops_once_per_cooldown(monkeypatch: pytest.MonkeyPatch):
+    """Jina out of credit (402) still raises JinaFetchError, and alerts ops once —
+    not once per failed fetch."""
+    from src.services import jina, ops_bot
+
+    sent: list[tuple[int, str]] = []
+
+    async def _send(chat_id, message):
+        sent.append((chat_id, message))
+
+    monkeypatch.setattr(ops_bot, "admin_chat_ids", lambda: [42])
+    monkeypatch.setattr(ops_bot, "send_ops_message", _send)
+    monkeypatch.setattr(jina, "_out_of_credit_last_alert_at", None)
+
+    for _ in range(2):
+        async with _mock_client(_text_responder(402, "")) as client:
+            with pytest.raises(jina.JinaFetchError) as exc_info:
+                await jina.fetch_html("https://example.com/archive", client=client)
+        assert exc_info.value.status_code == 402
+
+    assert len(sent) == 1
+    assert sent[0][0] == 42
+    assert "out of credit" in sent[0][1]

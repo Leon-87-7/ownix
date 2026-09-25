@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from urllib.parse import quote
 
 import httpx
@@ -12,6 +14,10 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 _JINA_BASE = "https://r.jina.ai/"
+# 402 = the Jina key's token balance is exhausted. Every fetch fails until someone
+# tops up, so tell ops — once per cooldown, not once per failed fetch.
+_OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS = 6 * 60 * 60
+_out_of_credit_last_alert_at: float | None = None
 
 # Shared cap for every Jina fetch in the newsletter-digest feature (archive,
 # feed, and issue pages alike) — mirrors the 2 MB cap the email digest webhook
@@ -96,6 +102,33 @@ def _strip_preamble(text: str) -> tuple[str, str]:
     return title, body
 
 
+async def _alert_out_of_credit() -> None:
+    """Ops-bot alert that Jina is out of credit. Never raises — the caller's
+    JinaFetchError path must stay the only failure a fetch reports."""
+    global _out_of_credit_last_alert_at
+
+    now = time.monotonic()
+    log.error("jina.out_of_credit")
+    if (
+        _out_of_credit_last_alert_at is not None
+        and now - _out_of_credit_last_alert_at < _OUT_OF_CREDIT_ALERT_COOLDOWN_SECONDS
+    ):
+        return
+    from src.services.ops_bot import admin_chat_ids, send_ops_message
+
+    message = (
+        "⚠️ Jina is out of credit (HTTP 402). Newsletter polls and article fetches "
+        "fail until the Jina account is topped up or JINA_API_KEY is replaced."
+    )
+    try:
+        for chat_id in admin_chat_ids():
+            await send_ops_message(chat_id, message)
+    except Exception:
+        log.exception("jina.out_of_credit_alert_failed")
+        return
+    _out_of_credit_last_alert_at = now
+
+
 async def fetch_raw(
     url: str,
     *,
@@ -135,6 +168,8 @@ async def fetch_raw(
     try:
         async with active_client.stream("GET", jina_url, headers=headers) as response:
             status_code = response.status_code
+            if status_code == 402:
+                await _alert_out_of_credit()
             if status_code != 200:
                 return status_code, ""
             total = 0
