@@ -288,13 +288,11 @@ async def _call_with_fallback(
 
 def _finish_info(result) -> dict:
     """Content-free truncation diagnostics: MAX_TOKENS + high thoughts = cut off by thinking."""
-    try:
-        return {
-            "finish_reason": str(result.candidates[0].finish_reason),
-            "thoughts_tokens": result.usage_metadata.thoughts_token_count,
-        }
-    except (AttributeError, IndexError, TypeError):
-        return {}
+    candidate = (getattr(result, "candidates", None) or [None])[0]
+    return {
+        "finish_reason": str(getattr(candidate, "finish_reason", None)),
+        "thoughts_tokens": getattr(getattr(result, "usage_metadata", None), "thoughts_token_count", None),
+    }
 
 
 async def _maybe_alert_gemini_failures(error: str) -> None:

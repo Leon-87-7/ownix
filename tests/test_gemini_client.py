@@ -433,3 +433,16 @@ async def test_generate_reserves_its_full_output_cap(monkeypatch: pytest.MonkeyP
         await generate("Hello", model="gemini-2.5-pro", cost=_COST)
 
     assert estimate_caps == call_caps == [provider_pricing.TEXT_MAX_OUTPUT_TOKENS]
+
+
+def test_finish_info_keeps_finish_reason_without_usage_metadata() -> None:
+    """Each diagnostic is read independently — missing usage must not drop finish_reason."""
+    from types import SimpleNamespace
+
+    from src.services.gemini import _finish_info
+
+    result = SimpleNamespace(
+        candidates=[SimpleNamespace(finish_reason="MAX_TOKENS")], usage_metadata=None
+    )
+    assert _finish_info(result) == {"finish_reason": "MAX_TOKENS", "thoughts_tokens": None}
+    assert _finish_info(SimpleNamespace(candidates=None))["finish_reason"] == "None"
