@@ -27,3 +27,15 @@ loose files at the components root. To find one, pick the folder by what it is:
 Files are kebab-case; a component's `.test.tsx` sits beside it. No barrel
 `index.ts` files (they hurt grep-ability) — import the file directly, e.g.
 `@/components/feed/job-card`.
+
+## Git Branch Safety
+
+Before any commit: run `git branch --show-current` and confirm it matches the intended feature branch. Never commit directly to main during a PR loop. Multiple Claude sessions may share this working directory — if the branch changed unexpectedly, stop and ask before proceeding.
+
+## Test Execution
+
+This machine is memory-constrained. Never run the full pytest/vitest suite in one background process. Run targeted tests first (`pytest path/to/test_x.py -q`), then the full suite in chunks with `-p no:cacheprovider -x`. All tests must mock outbound network calls — an unmocked HTTPS call has hung the suite before.
+
+## Review Gate Loop
+
+Standard ship sequence: branch → commit → PR → CodeRabbit + Codacy + Codex → fix all findings → typecheck + lint + tests green → squash-merge → delete branch. CodeRabbit is hourly rate-limited: never re-trigger a review until the previous one has posted. For Codacy SQL findings, use fully-static SQL literals — runtime string concatenation still trips the linter.

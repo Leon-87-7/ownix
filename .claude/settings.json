@@ -11,6 +11,11 @@
             "type": "command",
             "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | tr -d '\\r' | tr '\\134' '/' | { read -r f; case \"$f\" in */src/*.py|src/*.py) OUT=$(ruff check \"$f\" 2>&1); CODE=$?; if [ \"$CODE\" -ne 0 ]; then REASON=$(printf '%s' \"$OUT\" | jq -Rs .); printf '{\"decision\":\"block\",\"reason\":%s,\"continueOnBlock\":true}' \"$REASON\"; fi ;; esac; }",
             "statusMessage": "Running ruff check..."
+          },
+          {
+            "type": "command",
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | tr -d '\\r' | tr '\\134' '/' | { read -r f; case \"$f\" in *.py) ruff format \"$f\" ;; *.ts|*.tsx|*.js|*.jsx|*.json|*.css|*.md) npx prettier --write \"$f\" ;; esac; } >/dev/null 2>&1; true",
+            "statusMessage": "Formatting..."
           }
         ]
       }
@@ -22,6 +27,16 @@
           {
             "type": "command",
             "command": "jq -r '.tool_input.file_path' | tr -d '\\r' | tr '\\134' '/' | { read -r f; case \"$f\" in *.env|*.env.*|*/credentials/*|credentials/*) echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: .env and credentials/ files must not be edited via Edit/Write\"}}' ;; esac; }"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "b=$(git branch --show-current 2>/dev/null); if [ \"$b\" = \"main\" ] || [ \"$b\" = \"master\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: on %s branch, create a feature branch first\"}}' \"$b\"; fi"
           }
         ]
       }
