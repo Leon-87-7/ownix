@@ -217,7 +217,9 @@ async def _call_with_fallback(
 
     if settings.GEMINI_FREE_API_KEY:
         try:
-            result = await asyncio.to_thread(fn, *args, api_key=settings.GEMINI_FREE_API_KEY, **fn_kwargs)
+            result = await asyncio.to_thread(
+                fn, *args, api_key=settings.GEMINI_FREE_API_KEY, **fn_kwargs
+            )
             log.info(log_ok, tier="free")
             return result
         except Exception as exc:
@@ -236,7 +238,9 @@ async def _call_with_fallback(
     )
 
     try:
-        result = await asyncio.to_thread(fn, *args, api_key=settings.GEMINI_PAID_API_KEY, **fn_kwargs)
+        result = await asyncio.to_thread(
+            fn, *args, api_key=settings.GEMINI_PAID_API_KEY, **fn_kwargs
+        )
     except Exception as exc:
         last_error = str(exc).splitlines()[0][:120]
         log.warning(log_fail, error=last_error, tier="paid")
@@ -365,6 +369,32 @@ async def call_gemini_vision(
         cost=cost,
         price_model=model,
         estimated_micros=estimated_micros,
+        # response_mime_type=application/json forces the SDK to emit valid,
+        # properly-escaped JSON — the free-text path let an unescaped quote in a
+        # caption/description break json.loads nondeterministically (see error log).
+        schema={
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "main_frame_index": {"type": "integer"},
+                "summary": {"type": "string"},
+                "code": {"type": "string"},
+                "code_lang": {"type": "string"},
+                "links": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string"},
+                            "label": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["url", "label", "description"],
+                    },
+                },
+            },
+            "required": ["title", "main_frame_index", "summary", "code", "code_lang", "links"],
+        },
         log_ok="gemini.vision_ok",
         log_fail="gemini.vision_key_failed",
     )
@@ -427,7 +457,9 @@ async def select_informative_screenshots(frames: list[dict], *, cost: CostContex
     )
     parts: list[object] = [prompt]
     for frame in frames:
-        parts.append(types.Part.from_bytes(data=base64.b64decode(frame["data"]), mime_type="image/jpeg"))
+        parts.append(
+            types.Part.from_bytes(data=base64.b64decode(frame["data"]), mime_type="image/jpeg")
+        )
     model = "gemini-2.5-flash"
     estimated_micros = provider_pricing.estimate_vision_micros(model=model, image_count=len(frames))
     response = await _call_with_fallback(
