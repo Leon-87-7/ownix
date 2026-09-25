@@ -36,7 +36,7 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "b=$(git branch --show-current 2>/dev/null); if [ \"$b\" = \"main\" ] || [ \"$b\" = \"master\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: on %s branch, create a feature branch first\"}}' \"$b\"; fi"
+            "command": "b=$(git branch --show-current 2>/dev/null); s=$(git diff --cached --name-only 2>/dev/null); if { [ \"$b\" = \"main\" ] || [ \"$b\" = \"master\" ]; } && { [ -z \"$s\" ] || echo \"$s\" | grep -qvE '[.](md|txt)$'; }; then printf'{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Blocked: on %s branch, create a feature branch first\"}}' \"$b\"; fi"
           }
         ]
       }
