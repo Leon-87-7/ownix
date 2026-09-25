@@ -25,7 +25,9 @@ def _stub_spending(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services import spending
 
     async def _fake_reserve(cost, *, model, estimated_micros):
-        return spending.Reservation(id="resv-test", estimated_micros=estimated_micros, idempotency_key="k")
+        return spending.Reservation(
+            id="resv-test", estimated_micros=estimated_micros, idempotency_key="k"
+        )
 
     async def _fake_settle(reservation, *, actual_micros):
         return None
@@ -41,6 +43,7 @@ def _stub_spending(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 # Test 1: Single key success
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_single_key_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,6 +61,7 @@ async def test_generate_single_key_success(monkeypatch: pytest.MonkeyPatch) -> N
 # Test 2: Both keys fail → GeminiUnavailableError
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     """When _call_sync always raises, generate() raises GeminiUnavailableError."""
@@ -74,6 +78,7 @@ async def test_generate_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 # Test 3: First key fails, second succeeds
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     """When first key fails and second succeeds, the successful result is returned."""
@@ -83,7 +88,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
 
     call_count = 0
 
-    def _fake(parts, *, api_key: str, model: str, schema=None):
+    def _fake(parts, *, api_key: str, model: str, schema=None, capped=True):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -101,6 +106,7 @@ async def test_generate_first_key_fails_second_succeeds(monkeypatch: pytest.Monk
 # Test 4: Schema is forwarded to _call_sync
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     """When schema is provided, _call_sync receives it as the schema keyword arg."""
@@ -109,25 +115,25 @@ async def test_generate_passes_schema_to_call_sync(monkeypatch: pytest.MonkeyPat
 
     received: list[dict] = []
 
-    def _spy(parts, *, api_key: str, model: str, schema=None):
-        received.append({"schema": schema})
+    def _spy(parts, *, api_key: str, model: str, schema=None, capped=True):
+        received.append({"schema": schema, "capped": capped})
         return _make_response('{"ok": true}')
 
     my_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
 
     with patch("src.services.gemini._call_sync", side_effect=_spy):
-        result = await generate(
-            "Hello", model="gemini-2.5-flash", schema=my_schema, cost=_COST
-        )
+        result = await generate("Hello", model="gemini-2.5-flash", schema=my_schema, cost=_COST)
 
     assert result == '{"ok": true}'
     assert len(received) == 1
     assert received[0]["schema"] == my_schema
+    assert received[0]["capped"] is False  # generate() output is never truncated
 
 
 # ---------------------------------------------------------------------------
 # Test 5: No keys configured → GeminiUnavailableError (no calls attempted)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_no_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -135,7 +141,9 @@ async def test_generate_no_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "")
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "")
 
-    with patch("src.services.gemini._call_sync", side_effect=AssertionError("should not be called")):
+    with patch(
+        "src.services.gemini._call_sync", side_effect=AssertionError("should not be called")
+    ):
         with pytest.raises(GeminiUnavailableError):
             await generate("Hello", model="gemini-2.5-flash", cost=_COST)
 
@@ -143,6 +151,7 @@ async def test_generate_no_keys_raises(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 # Test 6: call_gemini_vision — both keys fail → GeminiUnavailableError
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_vision_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,6 +171,7 @@ async def test_vision_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 # Test 7: call_gemini_photo_links — both keys fail → GeminiUnavailableError
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_photo_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     """call_gemini_photo_links raises GeminiUnavailableError when _call_sync always raises."""
@@ -179,6 +189,7 @@ async def test_photo_both_keys_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 # Test 8: _call_sync builds the client with an explicit HttpOptions timeout
 # ---------------------------------------------------------------------------
+
 
 def test_call_sync_sets_explicit_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     """genai.Client must be constructed with a bounded http_options.timeout."""
@@ -205,9 +216,40 @@ def test_call_sync_sets_explicit_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
     assert http_options.timeout == 90_000
 
 
+@pytest.mark.asyncio
+async def test_vision_disables_thinking_so_json_is_not_truncated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """2.5-flash thinking tokens count against max_output_tokens; with them on, the
+    vision JSON got truncated and extract_json raised JSONDecodeError."""
+    from src.services.gemini import call_gemini_vision
+
+    monkeypatch.setattr("src.config.settings.GEMINI_FREE_API_KEY", "free-key")
+    captured: dict[str, object] = {}
+
+    class _FakeModels:
+        def generate_content(self, *, model, contents, config=None):
+            captured["config"] = config
+            return _make_response('{"summary": "s", "links": []}')
+
+    class _FakeClient:
+        def __init__(self, *, api_key, http_options=None):
+            self.models = _FakeModels()
+
+    monkeypatch.setattr("google.genai.Client", _FakeClient)
+
+    await call_gemini_vision([{"base64": "eA==", "mime_type": "image/jpeg"}], cost=_COST)
+
+    config = captured["config"]
+    assert config.thinking_config.thinking_budget == 0
+    assert config.response_mime_type == "application/json"
+    assert config.response_schema is not None
+
+
 # ---------------------------------------------------------------------------
 # Test 9: call_gemini_vision delimits transcript text as untrusted data
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_vision_transcript_is_delimited_as_untrusted_data(
@@ -227,7 +269,7 @@ async def test_vision_transcript_is_delimited_as_untrusted_data(
     )
     captured_parts: list = []
 
-    def _spy(parts, *, api_key: str, model: str, schema=None):
+    def _spy(parts, *, api_key: str, model: str, schema=None, thinking_budget=None):
         captured_parts.append(parts)
         return _make_response('{"title": "t", "summary": "s"}')
 
@@ -249,6 +291,7 @@ async def test_vision_transcript_is_delimited_as_untrusted_data(
 # Test 9: em-dashes are stripped so downstream .md files never mojibake (#317)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_generate_strips_em_dashes(monkeypatch: pytest.MonkeyPatch) -> None:
     """generate() replaces em-dashes with hyphens regardless of model prose."""
@@ -266,6 +309,7 @@ async def test_generate_strips_em_dashes(monkeypatch: pytest.MonkeyPatch) -> Non
 # Test 10: sustained failures alert the ops-admin channel (cloud-patch,
 # docs/superpowers/plans/2026-09-17-admin-viewer-visibility.md Task 9)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_both_keys_fail_triggers_ops_alert_after_threshold(

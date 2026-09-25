@@ -197,7 +197,7 @@ async def test_enrich_both_keys_failed_raises(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("src.config.settings.GEMINI_PAID_API_KEY", "paid-key")
     _stub_spending(monkeypatch)
 
-    def _boom(parts, *, api_key: str, model: str, schema=None):
+    def _boom(parts, *, api_key: str, model: str, schema=None, capped=True):
         raise RuntimeError("network error")
 
     with patch("src.services.gemini._call_sync", side_effect=_boom):
@@ -529,7 +529,7 @@ async def test_enrich_passes_freestyle_prompt_to_gemini(monkeypatch: pytest.Monk
 
     captured: list[str] = []
 
-    def _capture(parts, *, api_key: str, model: str, schema=None):
+    def _capture(parts, *, api_key: str, model: str, schema=None, capped=True):
         captured.append(parts)
         return _make_response(_SAMPLE_GEMINI_JSON)
 
@@ -555,7 +555,7 @@ async def test_enrich_without_freestyle_prompt_uses_template(monkeypatch: pytest
 
     captured: list[str] = []
 
-    def _capture(parts, *, api_key: str, model: str, schema=None):
+    def _capture(parts, *, api_key: str, model: str, schema=None, capped=True):
         captured.append(parts)
         return _make_response(_SAMPLE_GEMINI_JSON)
 

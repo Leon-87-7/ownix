@@ -167,10 +167,23 @@ def extract_json(raw: str, *, root: str = "object") -> dict | list:
     clean = re.sub(r"```\s*$", "", clean).strip()
     pattern = r"\{[\s\S]*\}" if root == "object" else r"\[[\s\S]*\]"
     m = re.search(pattern, clean)
-    return json.loads(m.group(0) if m else clean)
+    try:
+        return json.loads(m.group(0) if m else clean)
+    except json.JSONDecodeError:
+        # Byte offsets alone are useless for diagnosing a bad payload — keep the raw text.
+        log.error("gemini.json_parse_failed", raw=raw[:4000], raw_len=len(raw))
+        raise
 
 
-def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict | None = None):
+def _call_sync(
+    parts: object,
+    *,
+    api_key: str,
+    model: str,
+    schema: type | dict | None = None,
+    thinking_budget: int | None = None,
+    capped: bool = True,
+):
     """Sync generate_content call — run inside asyncio.to_thread by _call_with_fallback."""
     from google import genai
     from google.genai import types
@@ -182,15 +195,18 @@ def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict |
     )
     # Every caller reserves against DEFAULT_MAX_OUTPUT_TOKENS (estimate_text_micros /
     # estimate_vision_micros) — capping the real request to that same envelope keeps
-    # a response from ever costing more than what was reserved.
+    # a response from ever costing more than what was reserved. Thinking tokens count
+    # against that cap too, so 2.5-flash callers pass thinking_budget=0 or the answer
+    # gets truncated mid-JSON. generate() runs uncapped (long text outputs); its paid
+    # call can overshoot the reservation, but settle() books the real usage.
+    config = types.GenerateContentConfig(
+        max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS if capped else None
+    )
     if schema is not None:
-        config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=schema,
-            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
-        )
-    else:
-        config = types.GenerateContentConfig(max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
+        config.response_mime_type = "application/json"
+        config.response_schema = schema
+    if thinking_budget is not None:
+        config.thinking_config = types.ThinkingConfig(thinking_budget=thinking_budget)
     return client.models.generate_content(model=model, contents=parts, config=config)
 
 
@@ -329,6 +345,7 @@ async def generate(
         prompt,
         model=model,
         schema=schema,
+        capped=False,
         cost=cost,
         price_model=model,
         estimated_micros=estimated_micros,
@@ -368,6 +385,7 @@ async def call_gemini_vision(
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         # response_mime_type=application/json forces the SDK to emit valid,
         # properly-escaped JSON — the free-text path let an unescaped quote in a
@@ -430,6 +448,7 @@ async def call_gemini_photo_links(
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         log_ok="gemini.photo_ok",
         log_fail="gemini.photo_key_failed",
@@ -468,6 +487,7 @@ async def select_informative_screenshots(frames: list[dict], *, cost: CostContex
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         schema={
             "type": "object",
