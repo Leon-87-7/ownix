@@ -167,10 +167,24 @@ def extract_json(raw: str, *, root: str = "object") -> dict | list:
     clean = re.sub(r"```\s*$", "", clean).strip()
     pattern = r"\{[\s\S]*\}" if root == "object" else r"\[[\s\S]*\]"
     m = re.search(pattern, clean)
-    return json.loads(m.group(0) if m else clean)
+    try:
+        return json.loads(m.group(0) if m else clean)
+    except json.JSONDecodeError as exc:
+        # No content here — responses carry user transcripts/captions. finish_reason
+        # and thinking tokens are on the preceding gemini.*_ok log line.
+        log.error("gemini.json_parse_failed", error_pos=exc.pos, raw_len=len(raw))
+        raise
 
 
-def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict | None = None):
+def _call_sync(
+    parts: object,
+    *,
+    api_key: str,
+    model: str,
+    schema: type | dict | None = None,
+    thinking_budget: int | None = None,
+    max_output_tokens: int | None = None,
+):
     """Sync generate_content call — run inside asyncio.to_thread by _call_with_fallback."""
     from google import genai
     from google.genai import types
@@ -182,15 +196,17 @@ def _call_sync(parts: object, *, api_key: str, model: str, schema: type | dict |
     )
     # Every caller reserves against DEFAULT_MAX_OUTPUT_TOKENS (estimate_text_micros /
     # estimate_vision_micros) — capping the real request to that same envelope keeps
-    # a response from ever costing more than what was reserved.
+    # a response from ever costing more than what was reserved. Thinking tokens count
+    # against that cap too, so 2.5-flash callers pass thinking_budget=0 or the answer
+    # gets truncated mid-JSON. generate() passes its own larger, equally-reserved cap.
+    config = types.GenerateContentConfig(
+        max_output_tokens=max_output_tokens or DEFAULT_MAX_OUTPUT_TOKENS
+    )
     if schema is not None:
-        config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=schema,
-            max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
-        )
-    else:
-        config = types.GenerateContentConfig(max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS)
+        config.response_mime_type = "application/json"
+        config.response_schema = schema
+    if thinking_budget is not None:
+        config.thinking_config = types.ThinkingConfig(thinking_budget=thinking_budget)
     return client.models.generate_content(model=model, contents=parts, config=config)
 
 
@@ -220,7 +236,7 @@ async def _call_with_fallback(
             result = await asyncio.to_thread(
                 fn, *args, api_key=settings.GEMINI_FREE_API_KEY, **fn_kwargs
             )
-            log.info(log_ok, tier="free")
+            log.info(log_ok, tier="free", **_finish_info(result))
             return result
         except Exception as exc:
             last_error = str(exc).splitlines()[0][:120]
@@ -266,8 +282,17 @@ async def _call_with_fallback(
         # reclaims it later instead of this call reporting a billable
         # success as a retryable failure.
         log.exception("gemini.settle_failed", reservation_id=reservation.id)
-    log.info(log_ok, tier="paid", actual_micros=actual_micros)
+    log.info(log_ok, tier="paid", actual_micros=actual_micros, **_finish_info(result))
     return result
+
+
+def _finish_info(result) -> dict:
+    """Content-free truncation diagnostics: MAX_TOKENS + high thoughts = cut off by thinking."""
+    candidate = (getattr(result, "candidates", None) or [None])[0]
+    return {
+        "finish_reason": str(getattr(candidate, "finish_reason", None)),
+        "thoughts_tokens": getattr(getattr(result, "usage_metadata", None), "thoughts_token_count", None),
+    }
 
 
 async def _maybe_alert_gemini_failures(error: str) -> None:
@@ -323,12 +348,16 @@ async def generate(
     blocked before it's attempted."""
     from src.services import provider_pricing
 
-    estimated_micros = provider_pricing.estimate_text_micros(model=model, input_chars=len(prompt))
+    max_tokens = provider_pricing.TEXT_MAX_OUTPUT_TOKENS
+    estimated_micros = provider_pricing.estimate_text_micros(
+        model=model, input_chars=len(prompt), max_output_tokens=max_tokens
+    )
     response = await _call_with_fallback(
         _call_sync,
         prompt,
         model=model,
         schema=schema,
+        max_output_tokens=max_tokens,
         cost=cost,
         price_model=model,
         estimated_micros=estimated_micros,
@@ -368,6 +397,7 @@ async def call_gemini_vision(
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         # response_mime_type=application/json forces the SDK to emit valid,
         # properly-escaped JSON — the free-text path let an unescaped quote in a
@@ -430,6 +460,7 @@ async def call_gemini_photo_links(
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         log_ok="gemini.photo_ok",
         log_fail="gemini.photo_key_failed",
@@ -468,6 +499,7 @@ async def select_informative_screenshots(frames: list[dict], *, cost: CostContex
         model=model,
         cost=cost,
         price_model=model,
+        thinking_budget=0,
         estimated_micros=estimated_micros,
         schema={
             "type": "object",

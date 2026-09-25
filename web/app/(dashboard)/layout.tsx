@@ -1,6 +1,6 @@
 import { Sidebar } from '@/components/shell/sidebar';
 import { AppHeader } from '@/components/shell/app-header';
-import { ScrollToTop } from '@/components/shell/scroll-to-top';
+import { FloatingControls } from '@/components/shell/floating-controls';
 import { InviteGate } from '@/components/shell/invite-gate';
 import { GoogleStatusProvider } from '@/components/shell/google-status';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
@@ -8,7 +8,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { ToastHost } from '@/components/ui/toast-host';
 import { RestrictedModeProvider } from '@/lib/restricted/context';
 import DevPersonaSwitch from '@/components/ui/dev-persona-switch';
-import ViewAsSwitch from '@/components/shell/view-as-switch';
 import { isRestrictedRequest } from '@/lib/restricted/server';
 import { cookies, headers } from 'next/headers';
 
@@ -55,11 +54,10 @@ export default async function DashboardLayout({
                     className="relative z-10 flex-1 overflow-auto p-4 sm:p-6"
                   >
                     {children}
-                    <ScrollToTop />
                   </div>
                 </main>
               </div>
-              <ViewAsSwitch />
+              <FloatingControls />
             </SubmitJobProvider>
           </GoogleStatusProvider>
         </InviteGate>

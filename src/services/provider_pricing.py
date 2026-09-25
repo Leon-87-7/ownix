@@ -45,6 +45,10 @@ _IMAGE_TOKEN_EQUIVALENT = 258
 #: Conservative output envelope for the app's bounded-JSON Gemini calls
 #: (title/summary/links objects) — actual output is almost always far smaller.
 DEFAULT_MAX_OUTPUT_TOKENS = 2048
+#: Free-text generate() envelope — high enough that output (incl. 2.5-pro's
+#: mandatory thinking) is never cut off, and reserved in full so the paid
+#: spending limit can't be overshot.
+TEXT_MAX_OUTPUT_TOKENS = 32768
 
 
 def _price_for(model: str) -> Price:
