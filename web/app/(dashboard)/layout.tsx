@@ -63,12 +63,6 @@ export default async function DashboardLayout({
             </SubmitJobProvider>
           </GoogleStatusProvider>
         </InviteGate>
-        {/* Dashboard-only on purpose: it preventDefaults Chrome's native
-            install offer, so it must only load where InstallPrompt replaces
-            it. Outside InviteGate so it's in the SSR HTML while the gate is
-            checking. Deliberately not async: it must run during parse,
-            before hydration. It's a few bytes and cacheable. */}
-        <script src="/install-capture.js" />
         {/* Outside InviteGate so the dev switch survives the gate screen. */}
         <DevPersonaSwitch />
         <ToastHost />

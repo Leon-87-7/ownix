@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
+import InstallTracker from '@/components/shell/install-tracker';
 import { SITE_URL } from '@/lib/site-url';
 
 // Site-wide since it's cheap and every page benefits from rich-result
@@ -117,6 +118,16 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} ${montserrat.variable} ${merienda.variable}`}
     >
+      <head>
+        {/* Deliberately a plain, synchronous <script src>: it must register
+            during parse so Chromium's one-shot beforeinstallprompt can't fire
+            before it. next/script beforeInteractive and async both run later
+            (after DOMContentLoaded) and were measured losing early events.
+            In the root <head> it is server-rendered once and never
+            client-rendered. It only intercepts on dashboard routes. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- see above; ~0.5 KB, cacheable */}
+        <script src="/install-capture.js" />
+      </head>
       <body className="bg-canvas font-sans text-ink antialiased">
         {/* SITE_URL is env/deploy-controlled, not user input, but escape
             </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
@@ -132,6 +143,7 @@ export default function RootLayout({
         />
         <MockProvider>{children}</MockProvider>
         <SwRegister />
+        <InstallTracker />
         {/* impeccable-live-start */}
         {process.env.NODE_ENV === 'development' && (
           <script src="http://localhost:8400/live.js" async></script>

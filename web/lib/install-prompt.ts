@@ -34,8 +34,13 @@ export function detectInstallPlatform(nav: NavigatorLike): InstallPlatform {
   const ua = nav.userAgent;
   if (isInAppBrowser(ua)) return null;
   if (/iPhone|iPad|iPod/.test(ua)) return "ios";
-  // iPadOS 13+ reports a desktop Mac UA; touch points give it away.
-  if (nav.platform === "MacIntel" && (nav.maxTouchPoints ?? 0) > 1)
+  // iPadOS 13+ reports a desktop Mac UA; touch points give it away. Require
+  // the "Safari/" token here too: a desktop-mode iPad WKWebView omits it.
+  if (
+    nav.platform === "MacIntel" &&
+    (nav.maxTouchPoints ?? 0) > 1 &&
+    /Safari\//.test(ua)
+  )
     return "ios";
   if (/Android/i.test(ua)) return "android";
   return null;
@@ -53,7 +58,7 @@ export function isStandalone(win: Window): boolean {
 
 /**
  * Picks up a `beforeinstallprompt` stashed by public/install-capture.js, which
- * runs before hydration so the one-shot event isn't missed.
+ * the root layout loads before hydration so the one-shot event isn't missed.
  */
 export function takeEarlyInstallEvent(win: Window): BeforeInstallPromptEvent | null {
   const holder = win as Window & { __ownixInstallPrompt?: BeforeInstallPromptEvent };

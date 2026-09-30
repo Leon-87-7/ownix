@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, fireEvent, render, screen } from "@/test/render";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +17,9 @@ const ANDROID_UA =
   "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36";
 const DESKTOP_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+
+const IPAD_DESKTOP_SAFARI_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
 
 function setUserAgent(ua: string) {
   vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
@@ -50,20 +53,31 @@ describe("detectInstallPlatform", () => {
     [{ userAgent: IPHONE_UA }, "ios"],
     [{ userAgent: ANDROID_UA }, "android"],
     [{ userAgent: DESKTOP_UA }, null],
-    // iPadOS masquerades as desktop Safari
+    // iPadOS Safari masquerades as desktop Safari
     [
       {
-        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        userAgent: IPAD_DESKTOP_SAFARI_UA,
         platform: "MacIntel",
         maxTouchPoints: 5,
       },
       "ios",
     ],
+    // real Mac: no touch points
     [
       {
-        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        userAgent: IPAD_DESKTOP_SAFARI_UA,
         platform: "MacIntel",
         maxTouchPoints: 0,
+      },
+      null,
+    ],
+    // desktop-mode iPad WKWebView: Mac UA without the Safari/ token
+    [
+      {
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        platform: "MacIntel",
+        maxTouchPoints: 5,
       },
       null,
     ],
@@ -75,56 +89,82 @@ describe("detectInstallPlatform", () => {
 describe("public/install-capture.js", () => {
   const source = readFileSync(resolve(__dirname, "../../public/install-capture.js"), "utf8");
   const holder = window as { __ownixInstallPrompt?: unknown };
+  // Registers one listener for the whole describe; each test just moves the path.
+  new Function(source)();
 
-  function load() {
-    const tag = document.createElement("script");
-    document.body.appendChild(tag);
-    vi.spyOn(document, "currentScript", "get").mockReturnValue(tag);
-    new Function(source)();
-    vi.restoreAllMocks();
-    return tag;
-  }
-
-  function fire() {
+  function fireAt(path: string) {
+    window.history.replaceState(null, "", path);
     const event = new Event("beforeinstallprompt", { cancelable: true });
     window.dispatchEvent(event);
-    return event;
+    const stashed = holder.__ownixInstallPrompt === event;
+    delete holder.__ownixInstallPrompt;
+    return { prevented: event.defaultPrevented, stashed };
   }
 
-  afterEach(() => {
-    delete holder.__ownixInstallPrompt;
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("stashes the event and suppresses the native offer on dashboard routes", () => {
+    expect(fireAt("/feed")).toEqual({ prevented: true, stashed: true });
   });
 
-  it("stashes beforeinstallprompt and suppresses the native offer", () => {
-    const tag = load();
-    const event = fire();
-    expect(event.defaultPrevented).toBe(true);
-    expect(holder.__ownixInstallPrompt).toBe(event);
-    tag.remove();
-  });
+  it.each(["/", "/login", "/privacy", "/terms", "/restricted", "/mini", "/intake/share", "/feedback"])(
+    "leaves Chrome's native offer alone on public route %s",
+    (path) => {
+      expect(fireAt(path)).toEqual({ prevented: false, stashed: false });
+    },
+  );
 
-  it("stands down once its <script> leaves the page (client nav out of the dashboard)", () => {
-    load().remove();
-    const event = fire();
-    expect(event.defaultPrevented).toBe(false);
-    expect(holder.__ownixInstallPrompt).toBeUndefined();
+  // Guards the hand-written route list against drift: every page under
+  // app/(dashboard) must be intercepted.
+  it("covers every dashboard page", () => {
+    const root = resolve(__dirname, "../../app/(dashboard)");
+    const routes = (readdirSync(root, { recursive: true }) as string[])
+      .filter((f) => f.endsWith("page.tsx"))
+      .map((f) => "/" + f.replace(/\\/g, "/").replace(/\/?page\.tsx$/, "").replace(/\[[^\]]+\]/g, "x"));
+    expect(routes.length).toBeGreaterThan(5);
+    for (const route of routes) {
+      expect({ route, ...fireAt(route) }).toEqual({ route, prevented: true, stashed: true });
+    }
   });
 });
 
 describe("in-app browsers get no prompt", () => {
   it.each([
-    ["Android WebView (Telegram)", "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36 Telegram-Android/11.2.3"],
-    ["bare Android WebView", "Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36"],
-    ["iOS WKWebView", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"],
-    ["iOS Instagram", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 350.0"],
-    ["iOS Google app", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/350.0 Mobile/15E148 Safari/604.1"],
+    [
+      "Android WebView (Telegram)",
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36 Telegram-Android/11.2.3",
+    ],
+    [
+      "bare Android WebView",
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36",
+    ],
+    [
+      "iOS WKWebView",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+    ],
+    [
+      "iOS Instagram",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 350.0",
+    ],
+    [
+      "iOS Google app",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/350.0 Mobile/15E148 Safari/604.1",
+    ],
   ])("%s", (_label, userAgent) => {
     expect(detectInstallPlatform({ userAgent })).toBeNull();
   });
 
   it.each([
-    ["iOS Chrome", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/128.0 Mobile/15E148 Safari/604.1", "ios"],
-    ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36", "android"],
+    [
+      "iOS Chrome",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/128.0 Mobile/15E148 Safari/604.1",
+      "ios",
+    ],
+    [
+      "Samsung Internet",
+      "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36",
+      "android",
+    ],
   ])("still prompts in %s", (_label, userAgent, expected) => {
     expect(detectInstallPlatform({ userAgent })).toBe(expected);
   });
@@ -146,12 +186,12 @@ describe("InstallPrompt", () => {
   it("stays hidden until the page has settled", () => {
     setUserAgent(IPHONE_UA);
     render(<InstallPrompt />);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     act(() => {
       vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(
-      screen.getByRole("dialog", { name: /add ownix to your home screen/i }),
+      screen.getByRole("region", { name: /add ownix to your home screen/i }),
     ).toBeInTheDocument();
   });
 
@@ -168,14 +208,14 @@ describe("InstallPrompt", () => {
   it("never shows on desktop", () => {
     setUserAgent(DESKTOP_UA);
     renderAndWait();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
   });
 
   it("never shows when already launched from the Home Screen", () => {
     setUserAgent(ANDROID_UA);
     setStandalone(true);
     renderAndWait();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
   });
 
   it("shows browser-menu steps on Android before the install event arrives", () => {
@@ -202,7 +242,7 @@ describe("InstallPrompt", () => {
     });
 
     expect(event.prompt).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
   });
 
@@ -227,7 +267,7 @@ describe("InstallPrompt", () => {
         screen.getByRole("button", { name: /add to home screen/i }),
       );
     });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem(DISMISS_KEY)).not.toBeNull();
   });
 
@@ -236,7 +276,7 @@ describe("InstallPrompt", () => {
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     renderAndWait();
     fireEvent.click(screen.getByRole("button", { name: /not now/i }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem(DISMISS_KEY)).toBe(String(Date.now()));
   });
 
@@ -253,7 +293,7 @@ describe("InstallPrompt", () => {
     act(() => {
       vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     first.unmount();
 
     window.localStorage.setItem(
@@ -261,14 +301,14 @@ describe("InstallPrompt", () => {
       String(now - DISMISS_COOLDOWN_MS - 1000),
     );
     renderAndWait();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("region")).toBeInTheDocument();
   });
 
   it("never returns after an install", () => {
     setUserAgent(ANDROID_UA);
     window.localStorage.setItem(INSTALLED_KEY, "1");
     renderAndWait();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
   });
 
   it("records an install made while the card is snoozed", () => {
@@ -288,7 +328,7 @@ describe("InstallPrompt", () => {
       window.dispatchEvent(new Event("appinstalled"));
       vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
   });
 });

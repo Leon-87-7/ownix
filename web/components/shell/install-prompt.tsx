@@ -81,7 +81,7 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  if (!platform || !visible) return null;
+  const show = platform !== null && visible;
 
   function dismiss() {
     recordDismissal(safeStorage(), Date.now());
@@ -102,86 +102,96 @@ export default function InstallPrompt() {
     }
   }
 
+  // Not a dialog: it appears on its own and must not steal focus from what the
+  // user is doing. The always-mounted polite live region announces it to
+  // screen readers when it slides in; the labelled <section> makes it a
+  // landmark they can jump to.
   return (
-    <div
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby={titleId}
-      className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-in"
-    >
-      <button
-        type="button"
-        onClick={dismiss}
-        className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
-      >
-        <X className="h-4 w-4" aria-hidden="true" />
-        <span className="sr-only">Not now</span>
-      </button>
-
-      <div className="flex items-center gap-3 pr-10">
-        <OwnixLogo
-          aria-hidden="true"
-          focusable="false"
-          className="h-11 w-11 shrink-0"
-        />
-        <h2 id={titleId} className="text-base font-semibold text-ink">
-          Add Ownix to your Home Screen
-        </h2>
-      </div>
-
-      <p className="mt-3 border-t border-line pt-3 text-sm leading-6 text-body">
-        {platform === "android"
-          ? "Open Ownix in one tap, full screen, and share links to it straight from any app."
-          : "Open Ownix in one tap, full screen, like any other app."}
-      </p>
-
-      {platform === "android" && deferred ? (
-        <button
-          type="button"
-          onClick={() => void install()}
-          className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+    <div aria-live="polite">
+      {show && (
+        <section
+          aria-labelledby={titleId}
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-in"
         >
-          <SquarePlus className="h-4 w-4" aria-hidden="true" />
-          Add to Home Screen
-        </button>
-      ) : (
-        <ol className="mt-3 space-y-2 text-sm text-body">
-          {platform === "ios" ? (
-            <>
-              <Step n={1}>
-                Tap
-                <Share
-                  className="mx-1 inline h-4 w-4 text-ink"
-                  aria-label="Share"
-                />
-                in your browser&rsquo;s toolbar
-              </Step>
-              <Step n={2}>
-                Choose
-                <SquarePlus
-                  className="mx-1 inline h-4 w-4 text-ink"
-                  aria-hidden="true"
-                />
-                <span className="font-medium text-ink">Add to Home Screen</span>
-              </Step>
-            </>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md text-muted transition-ui hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">Not now</span>
+          </button>
+
+          <div className="flex items-center gap-3 pr-10">
+            <OwnixLogo
+              aria-hidden="true"
+              focusable="false"
+              className="h-11 w-11 shrink-0"
+            />
+            <h2 id={titleId} className="text-base font-semibold text-ink">
+              Add Ownix to your Home Screen
+            </h2>
+          </div>
+
+          <p className="mt-3 border-t border-line pt-3 text-sm leading-6 text-body">
+            {platform === "android"
+              ? "Open Ownix in one tap, full screen, and share links to it straight from any app."
+              : "Open Ownix in one tap, full screen, like any other app."}
+          </p>
+
+          {platform === "android" && deferred ? (
+            <button
+              type="button"
+              onClick={() => void install()}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            >
+              <SquarePlus className="h-4 w-4" aria-hidden="true" />
+              Add to Home Screen
+            </button>
           ) : (
-            <>
-              <Step n={1}>
-                Open the browser menu
-                <EllipsisVertical
-                  className="mx-1 inline h-4 w-4 text-ink"
-                  aria-hidden="true"
-                />
-              </Step>
-              <Step n={2}>
-                Choose <span className="font-medium text-ink">Install app</span>{" "}
-                or{" "}
-                <span className="font-medium text-ink">Add to Home screen</span>
-              </Step>
-            </>
+            <ol className="mt-3 space-y-2 text-sm text-body">
+              {platform === "ios" ? (
+                <>
+                  <Step n={1}>
+                    Tap
+                    <Share
+                      className="mx-1 inline h-4 w-4 text-ink"
+                      aria-label="Share"
+                    />
+                    in your browser&rsquo;s toolbar
+                  </Step>
+                  <Step n={2}>
+                    Choose
+                    <SquarePlus
+                      className="mx-1 inline h-4 w-4 text-ink"
+                      aria-hidden="true"
+                    />
+                    <span className="font-medium text-ink">
+                      Add to Home Screen
+                    </span>
+                  </Step>
+                </>
+              ) : (
+                <>
+                  <Step n={1}>
+                    Open the browser menu
+                    <EllipsisVertical
+                      className="mx-1 inline h-4 w-4 text-ink"
+                      aria-hidden="true"
+                    />
+                  </Step>
+                  <Step n={2}>
+                    Choose{" "}
+                    <span className="font-medium text-ink">Install app</span> or{" "}
+                    <span className="font-medium text-ink">
+                      Add to Home screen
+                    </span>
+                  </Step>
+                </>
+              )}
+            </ol>
           )}
-        </ol>
+        </section>
       )}
     </div>
   );
