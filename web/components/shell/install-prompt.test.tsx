@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, fireEvent, render, screen } from "@/test/render";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import InstallPrompt, { SHOW_DELAY_MS } from "./install-prompt";
@@ -67,6 +69,18 @@ describe("detectInstallPlatform", () => {
     ],
   ])("%o -> %s", (nav, expected) => {
     expect(detectInstallPlatform(nav)).toBe(expected);
+  });
+});
+
+describe("public/install-capture.js", () => {
+  it("stashes beforeinstallprompt and suppresses the native offer", () => {
+    const source = readFileSync(resolve(__dirname, "../../public/install-capture.js"), "utf8");
+    new Function(source)();
+    const event = new Event("beforeinstallprompt", { cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect((window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt).toBe(event);
+    delete (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt;
   });
 });
 

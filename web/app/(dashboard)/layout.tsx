@@ -2,7 +2,6 @@ import { Sidebar } from '@/components/shell/sidebar';
 import { AppHeader } from '@/components/shell/app-header';
 import { FloatingControls } from '@/components/shell/floating-controls';
 import InstallPrompt from '@/components/shell/install-prompt';
-import { EARLY_CAPTURE_SCRIPT } from '@/lib/install-prompt';
 import { InviteGate } from '@/components/shell/invite-gate';
 import { GoogleStatusProvider } from '@/components/shell/google-status';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
@@ -65,14 +64,11 @@ export default async function DashboardLayout({
           </GoogleStatusProvider>
         </InviteGate>
         {/* Dashboard-only on purpose: it preventDefaults Chrome's native
-            install offer, so it must only run where InstallPrompt
-            replaces it. Inline so it runs before hydration; outside InviteGate so
-            it is in the SSR HTML even while the gate is checking. Static
-            string, no user input. */}
-        <script
-          // nosemgrep -- static constant from lib/install-prompt, not user input
-          dangerouslySetInnerHTML={{ __html: EARLY_CAPTURE_SCRIPT }}
-        />
+            install offer, so it must only load where InstallPrompt replaces
+            it. Outside InviteGate so it's in the SSR HTML while the gate is
+            checking. Deliberately not async: it must run during parse,
+            before hydration. It's a few bytes and cacheable. */}
+        <script src="/install-capture.js" />
         {/* Outside InviteGate so the dev switch survives the gate screen. */}
         <DevPersonaSwitch />
         <ToastHost />

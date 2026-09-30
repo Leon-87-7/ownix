@@ -52,13 +52,9 @@ export function isStandalone(win: Window): boolean {
 }
 
 /**
- * Chromium fires `beforeinstallprompt` once per page load, often before React
- * hydrates. This inline snippet (rendered in the dashboard layout, the only
- * place InstallPrompt mounts) stashes it so the prompt can pick it up.
+ * Picks up a `beforeinstallprompt` stashed by public/install-capture.js, which
+ * runs before hydration so the one-shot event isn't missed.
  */
-export const EARLY_CAPTURE_SCRIPT =
-  "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__ownixInstallPrompt=e;});";
-
 export function takeEarlyInstallEvent(win: Window): BeforeInstallPromptEvent | null {
   const holder = win as Window & { __ownixInstallPrompt?: BeforeInstallPromptEvent };
   const event = holder.__ownixInstallPrompt ?? null;
