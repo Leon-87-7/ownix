@@ -88,6 +88,11 @@ export default function InstallPrompt() {
     setVisible(false);
   }
 
+  function markInstalled() {
+    recordInstalled(safeStorage());
+    setVisible(false);
+  }
+
   async function install() {
     if (!deferred) return;
     await deferred.prompt();
@@ -111,7 +116,7 @@ export default function InstallPrompt() {
       {show && (
         <section
           aria-labelledby={titleId}
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-in"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-settle"
         >
           <button
             type="button"
@@ -190,6 +195,19 @@ export default function InstallPrompt() {
                 </>
               )}
             </ol>
+          )}
+
+          {/* Manual installs (iOS Share sheet, Firefox's menu) are invisible
+              to the page — no appinstalled fires — so let the user close the
+              loop themselves. */}
+          {!(platform === "android" && deferred) && (
+            <button
+              type="button"
+              onClick={markInstalled}
+              className="mt-3 ml-auto flex min-h-10 items-center rounded-md px-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+            >
+              I&rsquo;ve added it
+            </button>
           )}
         </section>
       )}

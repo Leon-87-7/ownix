@@ -87,7 +87,10 @@ describe("detectInstallPlatform", () => {
 });
 
 describe("public/install-capture.js", () => {
-  const source = readFileSync(resolve(__dirname, "../../public/install-capture.js"), "utf8");
+  const source = readFileSync(
+    resolve(__dirname, "../../public/install-capture.js"),
+    "utf8",
+  );
   const holder = window as { __ownixInstallPrompt?: unknown };
   // Registers one listener for the whole describe; each test just moves the path.
   new Function(source)();
@@ -111,15 +114,24 @@ describe("public/install-capture.js", () => {
 
   // Desktop Chromium fires the event too, but the card never renders there.
   it("leaves Chrome's native offer alone on desktop, even on dashboard routes", () => {
-    expect(fireAt("/feed", DESKTOP_UA)).toEqual({ prevented: false, stashed: false });
+    expect(fireAt("/feed", DESKTOP_UA)).toEqual({
+      prevented: false,
+      stashed: false,
+    });
   });
 
-  it.each(["/", "/login", "/privacy", "/terms", "/restricted", "/mini", "/intake/share", "/feedback"])(
-    "leaves Chrome's native offer alone on public route %s",
-    (path) => {
-      expect(fireAt(path)).toEqual({ prevented: false, stashed: false });
-    },
-  );
+  it.each([
+    "/",
+    "/login",
+    "/privacy",
+    "/terms",
+    "/restricted",
+    "/mini",
+    "/intake/share",
+    "/feedback",
+  ])("leaves Chrome's native offer alone on public route %s", (path) => {
+    expect(fireAt(path)).toEqual({ prevented: false, stashed: false });
+  });
 
   // Guards the hand-written route list against drift: every page under
   // app/(dashboard) must be intercepted.
@@ -127,10 +139,21 @@ describe("public/install-capture.js", () => {
     const root = resolve(__dirname, "../../app/(dashboard)");
     const routes = (readdirSync(root, { recursive: true }) as string[])
       .filter((f) => f.endsWith("page.tsx"))
-      .map((f) => "/" + f.replace(/\\/g, "/").replace(/\/?page\.tsx$/, "").replace(/\[[^\]]+\]/g, "x"));
+      .map(
+        (f) =>
+          "/" +
+          f
+            .replace(/\\/g, "/")
+            .replace(/\/?page\.tsx$/, "")
+            .replace(/\[[^\]]+\]/g, "x"),
+      );
     expect(routes.length).toBeGreaterThan(5);
     for (const route of routes) {
-      expect({ route, ...fireAt(route) }).toEqual({ route, prevented: true, stashed: true });
+      expect({ route, ...fireAt(route) }).toEqual({
+        route,
+        prevented: true,
+        stashed: true,
+      });
     }
   });
 });
@@ -309,6 +332,31 @@ describe("InstallPrompt", () => {
     );
     renderAndWait();
     expect(screen.getByRole("region")).toBeInTheDocument();
+  });
+
+  it("lets iPhone users confirm a manual Share-sheet install", () => {
+    setUserAgent(IPHONE_UA);
+    renderAndWait();
+    fireEvent.click(screen.getByRole("button", { name: /i.ve added it/i }));
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
+  });
+
+  it("offers the manual confirmation on Android's menu-steps fallback too", () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    expect(
+      screen.getByRole("button", { name: /i.ve added it/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("omits the manual confirmation when the native install button is available", () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    act(() => {
+      window.dispatchEvent(fakeInstallEvent("accepted"));
+    });
+    expect(screen.queryByRole("button", { name: /i.ve added it/i })).toBeNull();
   });
 
   it("never returns after an install", () => {
