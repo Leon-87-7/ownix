@@ -286,6 +286,20 @@ describe("InstallPrompt", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears the capture script's copy when it receives the event live", () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    const event = fakeInstallEvent("dismissed");
+    // What public/install-capture.js does with the same dispatch.
+    (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt = event;
+    act(() => {
+      window.dispatchEvent(event);
+    });
+    expect(
+      (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt,
+    ).toBeUndefined();
+  });
+
   it("treats a declined native dialog as a dismissal", async () => {
     setUserAgent(ANDROID_UA);
     renderAndWait();

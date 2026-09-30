@@ -64,6 +64,9 @@ export default function InstallPrompt() {
     const onBeforeInstall = (event: Event) => {
       // Suppress Chrome's own mini-infobar; our card is the one offer.
       event.preventDefault();
+      // install-capture.js stashed this same event too; drop that copy so a
+      // later remount can't pick it up after prompt() has spent it.
+      takeEarlyInstallEvent(window);
       setDeferred(event as BeforeInstallPromptEvent);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
