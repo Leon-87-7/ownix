@@ -92,12 +92,14 @@ describe("public/install-capture.js", () => {
   // Registers one listener for the whole describe; each test just moves the path.
   new Function(source)();
 
-  function fireAt(path: string) {
+  function fireAt(path: string, ua = ANDROID_UA) {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
     window.history.replaceState(null, "", path);
     const event = new Event("beforeinstallprompt", { cancelable: true });
     window.dispatchEvent(event);
     const stashed = holder.__ownixInstallPrompt === event;
     delete holder.__ownixInstallPrompt;
+    vi.restoreAllMocks();
     return { prevented: event.defaultPrevented, stashed };
   }
 
@@ -105,6 +107,11 @@ describe("public/install-capture.js", () => {
 
   it("stashes the event and suppresses the native offer on dashboard routes", () => {
     expect(fireAt("/feed")).toEqual({ prevented: true, stashed: true });
+  });
+
+  // Desktop Chromium fires the event too, but the card never renders there.
+  it("leaves Chrome's native offer alone on desktop, even on dashboard routes", () => {
+    expect(fireAt("/feed", DESKTOP_UA)).toEqual({ prevented: false, stashed: false });
   });
 
   it.each(["/", "/login", "/privacy", "/terms", "/restricted", "/mini", "/intake/share", "/feedback"])(

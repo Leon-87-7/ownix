@@ -11,6 +11,11 @@
   var DASHBOARD =
     /^\/(?:(?:feed|brain|controls|doc-parser|jobs|newsletter-digest|prompts|spaces)(?:\/|$)|intake\/?$)/;
   window.addEventListener("beforeinstallprompt", function (e) {
+    // The card only ever replaces Chrome's offer on Android: desktop gets no
+    // card, iOS never fires this event, and Android in-app WebViews don't
+    // either. (While the card is snoozed, Chrome's offer stays suppressed too,
+    // which honours the user's "Not now".)
+    if (!/Android/i.test(navigator.userAgent)) return;
     if (!DASHBOARD.test(window.location.pathname)) return;
     e.preventDefault();
     window.__ownixInstallPrompt = e;
