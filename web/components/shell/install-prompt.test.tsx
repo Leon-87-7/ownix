@@ -73,14 +73,41 @@ describe("detectInstallPlatform", () => {
 });
 
 describe("public/install-capture.js", () => {
-  it("stashes beforeinstallprompt and suppresses the native offer", () => {
-    const source = readFileSync(resolve(__dirname, "../../public/install-capture.js"), "utf8");
+  const source = readFileSync(resolve(__dirname, "../../public/install-capture.js"), "utf8");
+  const holder = window as { __ownixInstallPrompt?: unknown };
+
+  function load() {
+    const tag = document.createElement("script");
+    document.body.appendChild(tag);
+    vi.spyOn(document, "currentScript", "get").mockReturnValue(tag);
     new Function(source)();
+    vi.restoreAllMocks();
+    return tag;
+  }
+
+  function fire() {
     const event = new Event("beforeinstallprompt", { cancelable: true });
     window.dispatchEvent(event);
+    return event;
+  }
+
+  afterEach(() => {
+    delete holder.__ownixInstallPrompt;
+  });
+
+  it("stashes beforeinstallprompt and suppresses the native offer", () => {
+    const tag = load();
+    const event = fire();
     expect(event.defaultPrevented).toBe(true);
-    expect((window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt).toBe(event);
-    delete (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt;
+    expect(holder.__ownixInstallPrompt).toBe(event);
+    tag.remove();
+  });
+
+  it("stands down once its <script> leaves the page (client nav out of the dashboard)", () => {
+    load().remove();
+    const event = fire();
+    expect(event.defaultPrevented).toBe(false);
+    expect(holder.__ownixInstallPrompt).toBeUndefined();
   });
 });
 
