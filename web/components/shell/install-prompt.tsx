@@ -84,10 +84,7 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  const modalOpen = useModalOpen();
-  // Step aside (not dismiss) while a modal is up: the card sits above page
-  // chrome, and Radix makes everything outside the modal unclickable anyway.
-  const show = platform !== null && visible && !modalOpen;
+  const show = platform !== null && visible;
 
   function dismiss() {
     recordDismissal(safeStorage(), Date.now());
@@ -113,6 +110,11 @@ export default function InstallPrompt() {
     }
   }
 
+  // Layering: z-30 keeps the card under every modal, sheet, drawer and
+  // backdrop (z-40/50), so it never covers them. The bottom-right floating
+  // controls (z-50) can overlap its corner, so its actions stop 3rem short of
+  // the right edge.
+  //
   // Not a dialog: it appears on its own and must not steal focus from what the
   // user is doing. The always-mounted polite live region announces it to
   // screen readers when it slides in; the labelled <section> makes it a
@@ -122,7 +124,7 @@ export default function InstallPrompt() {
       {show && (
         <section
           aria-labelledby={titleId}
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-settle"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-settle"
         >
           <button
             type="button"
@@ -154,7 +156,7 @@ export default function InstallPrompt() {
             <button
               type="button"
               onClick={() => void install()}
-              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              className="mt-4 inline-flex h-11 w-[calc(100%-3rem)] items-center justify-center gap-2 rounded-full bg-signal px-4 text-button font-medium text-onsignal transition-ui hover:bg-signal-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               <SquarePlus className="h-4 w-4" aria-hidden="true" />
               Add to Home Screen
@@ -210,7 +212,7 @@ export default function InstallPrompt() {
             <button
               type="button"
               onClick={markInstalled}
-              className="mt-3 ml-auto flex min-h-10 items-center rounded-md px-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+              className="mt-3 flex min-h-10 items-center rounded-md px-2 text-sm font-medium text-muted transition-ui hover:bg-raised hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
             >
               I&rsquo;ve added it
             </button>
@@ -219,29 +221,6 @@ export default function InstallPrompt() {
       )}
     </div>
   );
-}
-
-/**
- * True while a Radix modal (Dialog/Sheet) is open. Radix signals this by
- * setting `pointer-events: none` on <body> for the modal's lifetime.
- */
-function useModalOpen() {
-  // Lazy init covers a modal that's already open when the card mounts; it
-  // can't cause a hydration mismatch because nothing renders until the timer.
-  const [open, setOpen] = useState(
-    () =>
-      typeof document !== "undefined" &&
-      document.body.style.pointerEvents === "none",
-  );
-  useEffect(() => {
-    const body = document.body;
-    const observer = new MutationObserver(() =>
-      setOpen(body.style.pointerEvents === "none"),
-    );
-    observer.observe(body, { attributes: true, attributeFilter: ["style"] });
-    return () => observer.disconnect();
-  }, []);
-  return open;
 }
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
