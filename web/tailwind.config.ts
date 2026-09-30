@@ -141,6 +141,9 @@ const config: Config = {
         // exit stays critically damped, unchanged below.
         'slide-up-in': 'slide-up-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both',
         'slide-up-out': 'slide-up-out 140ms ease-out both',
+        // Same slide, critically damped: for surfaces that arrive on their
+        // own (timer, not a tap), where §4 Motion forbids overshoot.
+        'slide-up-settle': 'slide-up-in 220ms cubic-bezier(0.25, 1, 0.5, 1) both',
       },
     },
   },

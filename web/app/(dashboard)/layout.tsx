@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/shell/sidebar';
 import { AppHeader } from '@/components/shell/app-header';
 import { FloatingControls } from '@/components/shell/floating-controls';
+import InstallPrompt from '@/components/shell/install-prompt';
 import { InviteGate } from '@/components/shell/invite-gate';
 import { GoogleStatusProvider } from '@/components/shell/google-status';
 import { SubmitJobProvider } from '@/components/feed/submit-job';
@@ -58,6 +59,7 @@ export default async function DashboardLayout({
                 </main>
               </div>
               <FloatingControls />
+              <InstallPrompt />
             </SubmitJobProvider>
           </GoogleStatusProvider>
         </InviteGate>
