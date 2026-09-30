@@ -40,13 +40,25 @@ export default function InstallPrompt() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Installs can also happen through the browser's own menu, including
+    // while the card is snoozed — always record them so it never returns.
+    const onInstalled = () => {
+      recordInstalled(safeStorage());
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      setVisible(false);
+    };
+    window.addEventListener("appinstalled", onInstalled);
+
     const detected = detectInstallPlatform(navigator);
     if (
       !detected ||
       isStandalone(window) ||
       isSuppressed(safeStorage(), Date.now())
     ) {
-      return;
+      return () => window.removeEventListener("appinstalled", onInstalled);
     }
 
     const onBeforeInstall = (event: Event) => {
@@ -54,12 +66,7 @@ export default function InstallPrompt() {
       event.preventDefault();
       setDeferred(event as BeforeInstallPromptEvent);
     };
-    const onInstalled = () => {
-      recordInstalled(safeStorage());
-      setVisible(false);
-    };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
-    window.addEventListener("appinstalled", onInstalled);
     timer.current = setTimeout(() => {
       // An event that arrived live already won; only fall back to the stash.
       setDeferred((live) => live ?? takeEarlyInstallEvent(window));

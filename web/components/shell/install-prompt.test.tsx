@@ -210,4 +210,25 @@ describe("InstallPrompt", () => {
     renderAndWait();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it("records an install made while the card is snoozed", () => {
+    setUserAgent(ANDROID_UA);
+    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    render(<InstallPrompt />);
+    act(() => {
+      window.dispatchEvent(new Event("appinstalled"));
+    });
+    expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
+  });
+
+  it("never appears when the app is installed before the delay elapses", () => {
+    setUserAgent(ANDROID_UA);
+    render(<InstallPrompt />);
+    act(() => {
+      window.dispatchEvent(new Event("appinstalled"));
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
+  });
 });
