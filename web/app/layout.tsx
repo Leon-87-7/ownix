@@ -3,7 +3,6 @@ import localFont from 'next/font/local';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
-import { EARLY_CAPTURE_SCRIPT } from '@/lib/install-prompt';
 import { SITE_URL } from '@/lib/site-url';
 
 // Site-wide since it's cheap and every page benefits from rich-result
@@ -119,11 +118,6 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${montserrat.variable} ${merienda.variable}`}
     >
       <body className="bg-canvas font-sans text-ink antialiased">
-        {/* Must run before hydration — see EARLY_CAPTURE_SCRIPT. Static string, no user input. */}
-        <script
-          // nosemgrep -- static constant from lib/install-prompt, not user input
-          dangerouslySetInnerHTML={{ __html: EARLY_CAPTURE_SCRIPT }}
-        />
         {/* SITE_URL is env/deploy-controlled, not user input, but escape
             </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
         <script
