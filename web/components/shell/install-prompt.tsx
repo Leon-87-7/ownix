@@ -10,7 +10,9 @@ import {
   recordDismissal,
   recordInstalled,
   safeStorage,
-  takeEarlyInstallEvent,
+  peekInstallEvent,
+  storeInstallEvent,
+  clearInstallEvent,
   type BeforeInstallPromptEvent,
   type InstallPlatform,
 } from "@/lib/install-prompt";
@@ -64,15 +66,15 @@ export default function InstallPrompt() {
     const onBeforeInstall = (event: Event) => {
       // Suppress Chrome's own mini-infobar; our card is the one offer.
       event.preventDefault();
-      // install-capture.js stashed this same event too; drop that copy so a
-      // later remount can't pick it up after prompt() has spent it.
-      takeEarlyInstallEvent(window);
+      // Keep the page-level copy current so a remount (e.g. after a trip to
+      // a public route) can still offer it.
+      storeInstallEvent(window, event as BeforeInstallPromptEvent);
       setDeferred(event as BeforeInstallPromptEvent);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     timer.current = setTimeout(() => {
-      // An event that arrived live already won; only fall back to the stash.
-      setDeferred((live) => live ?? takeEarlyInstallEvent(window));
+      // An event that arrived live already won; else use the page-level one.
+      setDeferred((live) => live ?? peekInstallEvent(window));
       setPlatform(detected);
       setVisible(true);
     }, SHOW_DELAY_MS);
@@ -98,6 +100,9 @@ export default function InstallPrompt() {
 
   async function install() {
     if (!deferred) return;
+    // prompt() spends the event; drop the page-level copy so no later mount
+    // offers a button that can't open anything.
+    clearInstallEvent(window);
     await deferred.prompt();
     const { outcome } = await deferred.userChoice;
     // The event is single-use either way.

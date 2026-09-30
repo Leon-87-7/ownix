@@ -56,15 +56,27 @@ export function isStandalone(win: Window): boolean {
   );
 }
 
-/**
- * Picks up a `beforeinstallprompt` stashed by public/install-capture.js, which
- * the root layout loads before hydration so the one-shot event isn't missed.
- */
-export function takeEarlyInstallEvent(win: Window): BeforeInstallPromptEvent | null {
-  const holder = win as Window & { __ownixInstallPrompt?: BeforeInstallPromptEvent };
-  const event = holder.__ownixInstallPrompt ?? null;
-  delete holder.__ownixInstallPrompt;
-  return event;
+// The page-level home of the one-shot `beforeinstallprompt`: set by
+// public/install-capture.js (before hydration) or by InstallPrompt (live),
+// and kept across InstallPrompt unmounts/remounts until prompt() spends it.
+type InstallEventHolder = Window & {
+  __ownixInstallPrompt?: BeforeInstallPromptEvent;
+};
+
+export function peekInstallEvent(win: Window): BeforeInstallPromptEvent | null {
+  return (win as InstallEventHolder).__ownixInstallPrompt ?? null;
+}
+
+export function storeInstallEvent(
+  win: Window,
+  event: BeforeInstallPromptEvent,
+): void {
+  (win as InstallEventHolder).__ownixInstallPrompt = event;
+}
+
+/** Call as prompt() spends the event — it can't be prompted twice. */
+export function clearInstallEvent(win: Window): void {
+  delete (win as InstallEventHolder).__ownixInstallPrompt;
 }
 
 export const DISMISS_KEY = "ownix-install-prompt-dismissed-at";

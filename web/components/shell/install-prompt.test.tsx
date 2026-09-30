@@ -286,18 +286,37 @@ describe("InstallPrompt", () => {
     ).toBeInTheDocument();
   });
 
-  it("clears the capture script's copy when it receives the event live", () => {
+  it("keeps an unused install event across an unmount/remount", () => {
     setUserAgent(ANDROID_UA);
-    renderAndWait();
-    const event = fakeInstallEvent("dismissed");
-    // What public/install-capture.js does with the same dispatch.
-    (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt = event;
+    const holder = window as { __ownixInstallPrompt?: unknown };
+    holder.__ownixInstallPrompt = fakeInstallEvent("accepted");
+
+    const first = render(<InstallPrompt />);
     act(() => {
-      window.dispatchEvent(event);
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
     });
     expect(
-      (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt,
-    ).toBeUndefined();
+      screen.getByRole("button", { name: /add to home screen/i }),
+    ).toBeInTheDocument();
+    first.unmount(); // e.g. a trip to a public route and back
+
+    renderAndWait();
+    expect(
+      screen.getByRole("button", { name: /add to home screen/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("drops the page-level copy once prompt() has spent it", async () => {
+    setUserAgent(ANDROID_UA);
+    const holder = window as { __ownixInstallPrompt?: unknown };
+    holder.__ownixInstallPrompt = fakeInstallEvent("dismissed");
+    renderAndWait();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /add to home screen/i }),
+      );
+    });
+    expect(holder.__ownixInstallPrompt).toBeUndefined();
   });
 
   it("treats a declined native dialog as a dismissal", async () => {
