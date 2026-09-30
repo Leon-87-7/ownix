@@ -226,7 +226,13 @@ export default function InstallPrompt() {
  * setting `pointer-events: none` on <body> for the modal's lifetime.
  */
 function useModalOpen() {
-  const [open, setOpen] = useState(false);
+  // Lazy init covers a modal that's already open when the card mounts; it
+  // can't cause a hydration mismatch because nothing renders until the timer.
+  const [open, setOpen] = useState(
+    () =>
+      typeof document !== "undefined" &&
+      document.body.style.pointerEvents === "none",
+  );
   useEffect(() => {
     const body = document.body;
     const observer = new MutationObserver(() =>

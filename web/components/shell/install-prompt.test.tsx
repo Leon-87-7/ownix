@@ -390,6 +390,17 @@ describe("InstallPrompt", () => {
     expect(screen.getByRole("region")).toBeInTheDocument();
   });
 
+  it("stays hidden if a modal is already open when the delay elapses", async () => {
+    setUserAgent(IPHONE_UA);
+    document.body.style.pointerEvents = "none";
+    renderAndWait();
+    expect(screen.queryByRole("region")).toBeNull();
+    await act(async () => {
+      document.body.style.pointerEvents = "";
+    });
+    expect(screen.getByRole("region")).toBeInTheDocument();
+  });
+
   it("never returns after an install", () => {
     setUserAgent(ANDROID_UA);
     window.localStorage.setItem(INSTALLED_KEY, "1");
