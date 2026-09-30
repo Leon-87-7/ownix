@@ -2,12 +2,21 @@
 import { act, render } from "@/test/render";
 import { afterEach, describe, expect, it } from "vitest";
 import InstallTracker from "./install-tracker";
-import { INSTALLED_KEY } from "@/lib/install-prompt";
+import { DISMISS_KEY, INSTALLED_KEY } from "@/lib/install-prompt";
 
 describe("InstallTracker", () => {
   afterEach(() => window.localStorage.clear());
 
   it("records an install made through the browser's own UI", () => {
+    render(<InstallTracker />);
+    act(() => {
+      window.dispatchEvent(new Event("appinstalled"));
+    });
+    expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
+  });
+
+  it("records it even while the dashboard card is snoozed or not mounted", () => {
+    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
     render(<InstallTracker />);
     act(() => {
       window.dispatchEvent(new Event("appinstalled"));

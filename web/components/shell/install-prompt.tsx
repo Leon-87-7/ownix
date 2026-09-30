@@ -33,8 +33,8 @@ export const SHOW_DELAY_MS = 2500;
  * get the equivalent browser-menu steps.
  */
 export default function InstallPrompt() {
+  // The platform the card is showing for; null while hidden.
   const [platform, setPlatform] = useState<InstallPlatform>(null);
-  const [visible, setVisible] = useState(false);
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
     null,
   );
@@ -42,26 +42,25 @@ export default function InstallPrompt() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Installs can also happen through the browser's own menu, including
-    // while the card is snoozed — always record them so it never returns.
-    const onInstalled = () => {
-      recordInstalled(safeStorage());
-      if (timer.current) {
-        clearTimeout(timer.current);
-        timer.current = null;
-      }
-      setVisible(false);
-    };
-    window.addEventListener("appinstalled", onInstalled);
-
     const detected = detectInstallPlatform(navigator);
     if (
       !detected ||
       isStandalone(window) ||
       isSuppressed(safeStorage(), Date.now())
     ) {
-      return () => window.removeEventListener("appinstalled", onInstalled);
+      return;
     }
+
+    // An install through the browser's own UI (InstallTracker in the root
+    // layout records it) must also hide the card and cancel a pending show.
+    const onInstalled = () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      setPlatform(null);
+    };
+    window.addEventListener("appinstalled", onInstalled);
 
     const onBeforeInstall = (event: Event) => {
       // Suppress Chrome's own mini-infobar; our card is the one offer.
@@ -76,7 +75,6 @@ export default function InstallPrompt() {
       // An event that arrived live already won; else use the page-level one.
       setDeferred((live) => live ?? peekInstallEvent(window));
       setPlatform(detected);
-      setVisible(true);
     }, SHOW_DELAY_MS);
 
     return () => {
@@ -86,16 +84,14 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  const show = platform !== null && visible;
-
   function dismiss() {
     recordDismissal(safeStorage(), Date.now());
-    setVisible(false);
+    setPlatform(null);
   }
 
   function markInstalled() {
     recordInstalled(safeStorage());
-    setVisible(false);
+    setPlatform(null);
   }
 
   async function install() {
@@ -109,7 +105,7 @@ export default function InstallPrompt() {
     setDeferred(null);
     if (outcome === "accepted") {
       recordInstalled(safeStorage());
-      setVisible(false);
+      setPlatform(null);
     } else {
       dismiss();
     }
@@ -126,7 +122,7 @@ export default function InstallPrompt() {
   // landmark they can jump to.
   return (
     <div aria-live="polite">
-      {show && (
+      {platform && (
         <section
           aria-labelledby={titleId}
           className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-md rounded-2xl border border-line bg-surface p-4 shadow-overlay contrast-more:border-line-strong motion-safe:animate-slide-up-settle"
