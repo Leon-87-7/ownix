@@ -373,6 +373,23 @@ describe("InstallPrompt", () => {
     expect(screen.queryByRole("button", { name: /i.ve added it/i })).toBeNull();
   });
 
+  it("steps aside while a modal is open and comes back after", async () => {
+    setUserAgent(IPHONE_UA);
+    renderAndWait();
+    expect(screen.getByRole("region")).toBeInTheDocument();
+
+    // What Radix does for the lifetime of a modal Dialog/Sheet.
+    await act(async () => {
+      document.body.style.pointerEvents = "none";
+    });
+    expect(screen.queryByRole("region")).toBeNull();
+
+    await act(async () => {
+      document.body.style.pointerEvents = "";
+    });
+    expect(screen.getByRole("region")).toBeInTheDocument();
+  });
+
   it("never returns after an install", () => {
     setUserAgent(ANDROID_UA);
     window.localStorage.setItem(INSTALLED_KEY, "1");

@@ -84,7 +84,10 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  const show = platform !== null && visible;
+  const modalOpen = useModalOpen();
+  // Step aside (not dismiss) while a modal is up: the card sits above page
+  // chrome, and Radix makes everything outside the modal unclickable anyway.
+  const show = platform !== null && visible && !modalOpen;
 
   function dismiss() {
     recordDismissal(safeStorage(), Date.now());
@@ -216,6 +219,23 @@ export default function InstallPrompt() {
       )}
     </div>
   );
+}
+
+/**
+ * True while a Radix modal (Dialog/Sheet) is open. Radix signals this by
+ * setting `pointer-events: none` on <body> for the modal's lifetime.
+ */
+function useModalOpen() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const body = document.body;
+    const observer = new MutationObserver(() =>
+      setOpen(body.style.pointerEvents === "none"),
+    );
+    observer.observe(body, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+  return open;
 }
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
