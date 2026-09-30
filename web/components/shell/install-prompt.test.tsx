@@ -70,6 +70,25 @@ describe("detectInstallPlatform", () => {
   });
 });
 
+describe("in-app browsers get no prompt", () => {
+  it.each([
+    ["Android WebView (Telegram)", "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UQ1A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36 Telegram-Android/11.2.3"],
+    ["bare Android WebView", "Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36"],
+    ["iOS WKWebView", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"],
+    ["iOS Instagram", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 350.0"],
+    ["iOS Google app", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) GSA/350.0 Mobile/15E148 Safari/604.1"],
+  ])("%s", (_label, userAgent) => {
+    expect(detectInstallPlatform({ userAgent })).toBeNull();
+  });
+
+  it.each([
+    ["iOS Chrome", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/128.0 Mobile/15E148 Safari/604.1", "ios"],
+    ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36", "android"],
+  ])("still prompts in %s", (_label, userAgent, expected) => {
+    expect(detectInstallPlatform({ userAgent })).toBe(expected);
+  });
+});
+
 describe("InstallPrompt", () => {
   beforeEach(() => {
     vi.useFakeTimers();

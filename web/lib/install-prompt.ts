@@ -16,9 +16,23 @@ type NavigatorLike = {
   maxTouchPoints?: number;
 };
 
-/** Mobile platforms only — desktop browsers get no prompt. */
+// In-app browsers (Telegram, Instagram, Facebook, the Google app, …) expose
+// neither Add to Home Screen nor beforeinstallprompt, so the card's steps
+// would be unfollowable there.
+const IN_APP_BROWSER =
+  /; wv\)|Telegram|FBAN|FBAV|Instagram|Line\/|MicroMessenger|Twitter|GSA\//i;
+
+export function isInAppBrowser(ua: string): boolean {
+  if (IN_APP_BROWSER.test(ua)) return true;
+  // A bare iOS WKWebView omits the "Safari/" token every real iOS browser
+  // (Safari, Chrome, Firefox, Edge) sends.
+  return /iPhone|iPad|iPod/.test(ua) && !/Safari\//.test(ua);
+}
+
+/** Mobile platforms only — desktop browsers and in-app webviews get no prompt. */
 export function detectInstallPlatform(nav: NavigatorLike): InstallPlatform {
   const ua = nav.userAgent;
+  if (isInAppBrowser(ua)) return null;
   if (/iPhone|iPad|iPod/.test(ua)) return "ios";
   // iPadOS 13+ reports a desktop Mac UA; touch points give it away.
   if (nav.platform === "MacIntel" && (nav.maxTouchPoints ?? 0) > 1)
