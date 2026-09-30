@@ -1,0 +1,213 @@
+// @vitest-environment jsdom
+import { act, fireEvent, render, screen } from "@/test/render";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import InstallPrompt, { SHOW_DELAY_MS } from "./install-prompt";
+import {
+  DISMISS_COOLDOWN_MS,
+  DISMISS_KEY,
+  INSTALLED_KEY,
+  detectInstallPlatform,
+} from "@/lib/install-prompt";
+
+const IPHONE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const ANDROID_UA =
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36";
+const DESKTOP_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+
+function setUserAgent(ua: string) {
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
+}
+
+function setStandalone(matches: boolean) {
+  window.matchMedia = vi
+    .fn()
+    .mockReturnValue({ matches }) as unknown as typeof window.matchMedia;
+}
+
+function renderAndWait() {
+  render(<InstallPrompt />);
+  act(() => {
+    vi.advanceTimersByTime(SHOW_DELAY_MS);
+  });
+}
+
+function fakeInstallEvent(outcome: "accepted" | "dismissed") {
+  const event = new Event("beforeinstallprompt") as Event & {
+    prompt: ReturnType<typeof vi.fn>;
+    userChoice: Promise<{ outcome: string }>;
+  };
+  event.prompt = vi.fn().mockResolvedValue(undefined);
+  event.userChoice = Promise.resolve({ outcome });
+  return event;
+}
+
+describe("detectInstallPlatform", () => {
+  it.each([
+    [{ userAgent: IPHONE_UA }, "ios"],
+    [{ userAgent: ANDROID_UA }, "android"],
+    [{ userAgent: DESKTOP_UA }, null],
+    // iPadOS masquerades as desktop Safari
+    [
+      {
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        platform: "MacIntel",
+        maxTouchPoints: 5,
+      },
+      "ios",
+    ],
+    [
+      {
+        userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        platform: "MacIntel",
+        maxTouchPoints: 0,
+      },
+      null,
+    ],
+  ])("%o -> %s", (nav, expected) => {
+    expect(detectInstallPlatform(nav)).toBe(expected);
+  });
+});
+
+describe("InstallPrompt", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    window.localStorage.clear();
+    setStandalone(false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    delete (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt;
+  });
+
+  it("stays hidden until the page has settled", () => {
+    setUserAgent(IPHONE_UA);
+    render(<InstallPrompt />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
+    });
+    expect(
+      screen.getByRole("dialog", { name: /add ownix to your home screen/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows Share-sheet steps on iPhone (no install API exists there)", () => {
+    setUserAgent(IPHONE_UA);
+    renderAndWait();
+    expect(screen.getByLabelText("Share")).toBeInTheDocument();
+    expect(screen.getByText("Add to Home Screen")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add to home screen/i }),
+    ).toBeNull();
+  });
+
+  it("never shows on desktop", () => {
+    setUserAgent(DESKTOP_UA);
+    renderAndWait();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("never shows when already launched from the Home Screen", () => {
+    setUserAgent(ANDROID_UA);
+    setStandalone(true);
+    renderAndWait();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows browser-menu steps on Android before the install event arrives", () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    expect(screen.getByText("Install app")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add to home screen/i }),
+    ).toBeNull();
+  });
+
+  it("opens the native install dialog on Android and remembers an accepted install", async () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    const event = fakeInstallEvent("accepted");
+    act(() => {
+      window.dispatchEvent(event);
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /add to home screen/i }),
+      );
+    });
+
+    expect(event.prompt).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem(INSTALLED_KEY)).toBe("1");
+  });
+
+  it("picks up an install event captured before hydration", () => {
+    setUserAgent(ANDROID_UA);
+    (window as { __ownixInstallPrompt?: unknown }).__ownixInstallPrompt =
+      fakeInstallEvent("accepted");
+    renderAndWait();
+    expect(
+      screen.getByRole("button", { name: /add to home screen/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("treats a declined native dialog as a dismissal", async () => {
+    setUserAgent(ANDROID_UA);
+    renderAndWait();
+    act(() => {
+      window.dispatchEvent(fakeInstallEvent("dismissed"));
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /add to home screen/i }),
+      );
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem(DISMISS_KEY)).not.toBeNull();
+  });
+
+  it("closing it hides it and snoozes it for the cooldown window", () => {
+    setUserAgent(IPHONE_UA);
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    renderAndWait();
+    fireEvent.click(screen.getByRole("button", { name: /not now/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.localStorage.getItem(DISMISS_KEY)).toBe(String(Date.now()));
+  });
+
+  it("stays snoozed inside the cooldown and returns after it", () => {
+    setUserAgent(IPHONE_UA);
+    const now = new Date("2026-02-01T00:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    window.localStorage.setItem(
+      DISMISS_KEY,
+      String(now - DISMISS_COOLDOWN_MS + 1000),
+    );
+    const first = render(<InstallPrompt />);
+    act(() => {
+      vi.advanceTimersByTime(SHOW_DELAY_MS);
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    first.unmount();
+
+    window.localStorage.setItem(
+      DISMISS_KEY,
+      String(now - DISMISS_COOLDOWN_MS - 1000),
+    );
+    renderAndWait();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("never returns after an install", () => {
+    setUserAgent(ANDROID_UA);
+    window.localStorage.setItem(INSTALLED_KEY, "1");
+    renderAndWait();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});

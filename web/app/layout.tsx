@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 import MockProvider from '@/components/shell/mock-provider';
 import SwRegister from '@/components/shell/sw-register';
+import { EARLY_CAPTURE_SCRIPT } from '@/lib/install-prompt';
 import { SITE_URL } from '@/lib/site-url';
 
 // Site-wide since it's cheap and every page benefits from rich-result
@@ -103,6 +104,8 @@ export const metadata: Metadata = {
   title: 'Ownix - Your internet. Own it',
   description:
     'Collect what matters. Own your Index. Shape the Brain.',
+  // Home Screen label on iOS (the icon itself comes from app/apple-icon.png).
+  appleWebApp: { capable: true, title: 'Ownix' },
 };
 
 export default function RootLayout({
@@ -116,6 +119,11 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${montserrat.variable} ${merienda.variable}`}
     >
       <body className="bg-canvas font-sans text-ink antialiased">
+        {/* Must run before hydration — see EARLY_CAPTURE_SCRIPT. Static string, no user input. */}
+        <script
+          // nosemgrep -- static constant from lib/install-prompt, not user input
+          dangerouslySetInnerHTML={{ __html: EARLY_CAPTURE_SCRIPT }}
+        />
         {/* SITE_URL is env/deploy-controlled, not user input, but escape
             </script>-breaking chars anyway — cheap and standard for inline JSON-LD. */}
         <script
